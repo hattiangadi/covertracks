@@ -1,0 +1,37 @@
+# C++ / JUCE / Tracktion gitignore
+
+# Build files
+Builds/
+build/
+**/build/*
+*.build/
+
+# IDE specific files
+*.xcodeproj/
+*.sln
+*.vcxproj*
+*.suo
+*.user
+*.aps
+*.opensdf
+*.sdf
+*.xcworkspace/
+xcuserdata/
+
+# OS specific files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Misc
+*.pyc
+*.swp
+*~
+.Trash/
+*.bak
+
+# Projucer backup files
+*.jucer.bak
+
+# JUCE BinaryBuilder output
+**/BinaryData.*
