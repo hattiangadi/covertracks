@@ -8,6 +8,8 @@
 
 #include <JuceHeader.h>
 #include "MainComponent.h"
+#include "tracktion_engine/tracktion_engine.h"
+#include "Utilities.h"
 
 //==============================================================================
 class NewProjectApplication  : public juce::JUCEApplication
@@ -25,7 +27,10 @@ public:
     {
         // This method is where you should put your application's initialisation code..
 
-        mainWindow.reset (new MainWindow (getApplicationName()));
+        // Initialise Tracktion Engine - Removed explicit call, constructor handles it.
+        // engine.initialise();
+
+        mainWindow.reset (new MainWindow (getApplicationName(), engine));
     }
 
     void shutdown() override
@@ -33,6 +38,9 @@ public:
         // Add your application's shutdown code here..
 
         mainWindow = nullptr; // (deletes our window)
+
+        // Shut down Tracktion Engine - Removed explicit call, destructor handles it.
+        // engine.shutdown();
     }
 
     //==============================================================================
@@ -58,14 +66,15 @@ public:
     class MainWindow    : public juce::DocumentWindow
     {
     public:
-        MainWindow (juce::String name)
+        MainWindow (juce::String name, tracktion::Engine& engine)
             : DocumentWindow (name,
                               juce::Desktop::getInstance().getDefaultLookAndFeel()
                                                           .findColour (juce::ResizableWindow::backgroundColourId),
-                              DocumentWindow::allButtons)
+                              DocumentWindow::allButtons),
+              engine (engine)
         {
             setUsingNativeTitleBar (true);
-            setContentOwned (new MainComponent(), true);
+            setContentOwned (new MainComponent (engine), true);
 
            #if JUCE_IOS || JUCE_ANDROID
             setFullScreen (true);
@@ -93,11 +102,13 @@ public:
         */
 
     private:
+        tracktion::Engine& engine;
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainWindow)
     };
 
 private:
     std::unique_ptr<MainWindow> mainWindow;
+    tracktion::Engine engine { ProjectInfo::projectName }; // Use simpler engine constructor
 };
 
 //==============================================================================

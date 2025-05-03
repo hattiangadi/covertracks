@@ -6,6 +6,11 @@
     <GROUP id="{C22C9F6F-6B7B-7C8C-D346-7522592F4A23}" name="Source">
       <FILE id="phPVJC" name="Main.cpp" compile="1" resource="0" file="Source/Main.cpp"/>
       <FILE id="oUkTPt" name="MainComponent.h" compile="0" resource="0" file="Source/MainComponent.h"/>
+      <FILE id="KEjs26" name="PlaybackDemoAudio.cpp" compile="1" resource="0"
+            file="Source/PlaybackDemoAudio.cpp"/>
+      <FILE id="Zm9mCV" name="PlaybackDemoAudio.h" compile="0" resource="0"
+            file="Source/PlaybackDemoAudio.h"/>
+      <FILE id="mfsbmn" name="Utilities.h" compile="0" resource="0" file="Source/Utilities.h"/>
       <FILE id="Tn1V9B" name="MainComponent.cpp" compile="1" resource="0"
             file="Source/MainComponent.cpp"/>
     </GROUP>
@@ -26,11 +31,11 @@
     <MODULE id="juce_osc" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
     <MODULE id="tracktion_core" showAllCode="1" useLocalCopy="0" useGlobalPath="0"/>
     <MODULE id="tracktion_engine" showAllCode="1" useLocalCopy="0" useGlobalPath="0"/>
-    <MODULE id="tracktion_graph" showAllCode="1" useLocalCopy="1" useGlobalPath="0"/>
+    <MODULE id="tracktion_graph" showAllCode="1" useLocalCopy="0" useGlobalPath="0"/>
   </MODULES>
   <JUCEOPTIONS JUCE_STRICT_REFCOUNTEDPOINTER="1" JUCE_PLUGINHOST_VST3="1" JUCE_PLUGINHOST_AU="1"/>
   <EXPORTFORMATS>
-    <XCODE_MAC targetFolder="Builds/MacOSX">
+    <XCODE_MAC targetFolder="Builds/MacOSX" xcodeValidArchs="arm64">
       <CONFIGURATIONS>
         <CONFIGURATION isDebug="1" name="Debug" targetName="NewProject"/>
         <CONFIGURATION isDebug="0" name="Release" targetName="NewProject"/>
@@ -46,12 +51,12 @@
         <MODULEPATH id="juce_graphics" path="../../../Shared/JUCE/modules"/>
         <MODULEPATH id="juce_gui_basics" path="../../../Shared/JUCE/modules"/>
         <MODULEPATH id="juce_gui_extra" path="../../../Shared/JUCE/modules"/>
-        <MODULEPATH id="tracktion_core" path="modules/tracktion_engine/modules"/>
-        <MODULEPATH id="tracktion_engine" path="modules/tracktion_engine/modules"/>
         <MODULEPATH id="juce_audio_utils" path="../../../Shared/JUCE/modules"/>
         <MODULEPATH id="juce_dsp" path="../../../Shared/JUCE/modules"/>
         <MODULEPATH id="juce_osc" path="../../../Shared/JUCE/modules"/>
+        <MODULEPATH id="tracktion_core" path="modules/tracktion_engine/modules"/>
         <MODULEPATH id="tracktion_graph" path="modules/tracktion_engine/modules"/>
+        <MODULEPATH id="tracktion_engine" path="modules/tracktion_engine/modules"/>
       </MODULEPATHS>
     </XCODE_MAC>
   </EXPORTFORMATS>
