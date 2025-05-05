@@ -1,4 +1,5 @@
-// PlayerEditorComponent.cpp
+// PlayerEditorComponent.cpp - Update to properly save and load plugin states
+
 #include "PlayerEditorComponent.h"
 
 PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit)
@@ -8,7 +9,6 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
     {
         player = std::make_unique<PlayerManager::Player>();
         player->metadata = playerToEdit->metadata;
-        player->capabilities = playerToEdit->capabilities;
         
         if (playerToEdit->graphState != nullptr)
             player->graphState = std::make_unique<XmlElement>(*playerToEdit->graphState);
@@ -22,9 +22,6 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
         player->metadata.description = "A new player configuration";
         player->metadata.created = Time::getCurrentTime();
         player->metadata.lastModified = player->metadata.created;
-        
-        player->capabilities.pitchRange = {36, 96}; // MIDI range C2-C8
-        player->capabilities.techniques.add("legato");
         
         player->graphState = std::make_unique<XmlElement>("FILTERGRAPH");
     }
@@ -59,36 +56,59 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
     addAndMakeVisible(descriptionLabel);
     addAndMakeVisible(descriptionEditor);
     
-    // Set up techniques toggles
-    legatoToggle.setToggleState(player->capabilities.techniques.contains("legato"), dontSendNotification);
-    staccatoToggle.setToggleState(player->capabilities.techniques.contains("staccato"), dontSendNotification);
-    chordToggle.setToggleState(player->capabilities.techniques.contains("chord"), dontSendNotification);
+    // Techniques section has been removed
     
-    addAndMakeVisible(techniquesLabel);
-    addAndMakeVisible(legatoToggle);
-    addAndMakeVisible(staccatoToggle);
-    addAndMakeVisible(chordToggle);
+    // Set up plugin graph editor
+    addAndMakeVisible(pluginLabel);
     
-    // Set up pitch range sliders
-    lowPitchSlider.setRange(0, 127, 1);
-    lowPitchSlider.setValue(player->capabilities.pitchRange.getStart(), dontSendNotification);
-    lowPitchSlider.setSliderStyle(Slider::SliderStyle::LinearHorizontal);
-    lowPitchSlider.setTextBoxStyle(Slider::TextBoxRight, false, 50, 20);
-    lowPitchSlider.onValueChange = [this] { updateSliderLabels(); };
+    // Set up the graph editor
+    AudioPluginFormatManager formatManager;
+    formatManager.addDefaultFormats();
     
-    highPitchSlider.setRange(0, 127, 1);
-    highPitchSlider.setValue(player->capabilities.pitchRange.getEnd(), dontSendNotification);
-    highPitchSlider.setSliderStyle(Slider::SliderStyle::LinearHorizontal);
-    highPitchSlider.setTextBoxStyle(Slider::TextBoxRight, false, 50, 20);
-    highPitchSlider.onValueChange = [this] { updateSliderLabels(); };
+    // Get application properties for device manager
+    PropertiesFile* appProperties = nullptr;
+    std::unique_ptr<XmlElement> savedState;
     
-    addAndMakeVisible(pitchRangeLabel);
-    addAndMakeVisible(lowPitchSlider);
-    addAndMakeVisible(highPitchSlider);
-    addAndMakeVisible(lowPitchValueLabel);
-    addAndMakeVisible(highPitchValueLabel);
+    // Try to get audio device state from a file instead
+    File audioSettingsFile = File::getSpecialLocation(File::userApplicationDataDirectory)
+                             .getChildFile(JUCEApplication::getInstance()->getApplicationName())
+                             .getChildFile("AudioSettings.xml");
     
-    updateSliderLabels();
+    if (audioSettingsFile.existsAsFile())
+        savedState = XmlDocument::parse(audioSettingsFile);
+    
+    // Create audio device manager
+    auto* deviceManager = new AudioDeviceManager();
+    deviceManager->initialise(2, 2, savedState.get(), true);
+    
+    // Get plugin list
+    KnownPluginList knownPluginList;
+    
+    // Try to load plugin list from a file
+    File pluginListFile = File::getSpecialLocation(File::userApplicationDataDirectory)
+                         .getChildFile(JUCEApplication::getInstance()->getApplicationName())
+                         .getChildFile("PluginList.xml");
+    
+    if (pluginListFile.existsAsFile())
+    {
+        if (auto savedPluginList = XmlDocument::parse(pluginListFile))
+            knownPluginList.recreateFromXml(*savedPluginList);
+    }
+    
+    // Create graph editor
+    graphEditor = std::make_unique<GraphDocumentComponent>(formatManager, *deviceManager, knownPluginList);
+    
+    // If we have an existing graph state, load it
+    if (player->graphState != nullptr && player->graphState->hasTagName("FILTERGRAPH"))
+    {
+        if (auto* graph = graphEditor->graph.get())
+        {
+            // Restore the graph including plugin states
+            graph->restoreFromXml(*player->graphState);
+        }
+    }
+    
+    addAndMakeVisible(graphEditor.get());
     
     // Set up buttons
     addAndMakeVisible(saveButton);
@@ -107,56 +127,46 @@ PlayerEditorComponent::~PlayerEditorComponent()
 void PlayerEditorComponent::resized()
 {
     auto area = getLocalBounds().reduced(10);
-    auto fieldHeight = 24;
-    auto labelWidth = 100;
+    
+    // Header area
+    area.removeFromTop(40); // Header height
+    
+    area.removeFromTop(10); // Spacing after header
     
     // Name field
-    auto nameArea = area.removeFromTop(fieldHeight);
-    nameLabel.setBounds(nameArea.removeFromLeft(labelWidth));
+    auto nameArea = area.removeFromTop(24);
+    nameLabel.setBounds(nameArea.removeFromLeft(100));
     nameEditor.setBounds(nameArea);
     
     area.removeFromTop(10); // Spacing
     
     // Category field
-    auto categoryArea = area.removeFromTop(fieldHeight);
-    categoryLabel.setBounds(categoryArea.removeFromLeft(labelWidth));
+    auto categoryArea = area.removeFromTop(24);
+    categoryLabel.setBounds(categoryArea.removeFromLeft(100));
     categoryCombo.setBounds(categoryArea);
     
     area.removeFromTop(10); // Spacing
     
     // Description field
-    auto descriptionArea = area.removeFromTop(fieldHeight * 3);
-    descriptionLabel.setBounds(descriptionArea.removeFromLeft(labelWidth).withHeight(fieldHeight));
+    auto descriptionArea = area.removeFromTop(72); // Larger area for description
+    descriptionLabel.setBounds(descriptionArea.removeFromLeft(100).withHeight(24));
     descriptionEditor.setBounds(descriptionArea);
     
     area.removeFromTop(20); // Spacing
     
-    // Techniques
-    auto techniquesArea = area.removeFromTop(fieldHeight);
-    techniquesLabel.setBounds(techniquesArea.removeFromLeft(labelWidth));
-    auto toggleWidth = (techniquesArea.getWidth() - 20) / 3;
-    legatoToggle.setBounds(techniquesArea.removeFromLeft(toggleWidth));
-    techniquesArea.removeFromLeft(10); // Spacing
-    staccatoToggle.setBounds(techniquesArea.removeFromLeft(toggleWidth));
-    techniquesArea.removeFromLeft(10); // Spacing
-    chordToggle.setBounds(techniquesArea);
+    // Techniques section has been removed
+    // No need for extra spacing here
     
-    area.removeFromTop(20); // Spacing
+    // Plugin graph editor section
+    auto pluginLabelArea = area.removeFromTop(24);
+    pluginLabel.setBounds(pluginLabelArea);
     
-    // Pitch range
-    auto pitchRangeArea = area.removeFromTop(fieldHeight);
-    pitchRangeLabel.setBounds(pitchRangeArea.removeFromLeft(labelWidth));
-    auto sliderArea = pitchRangeArea.reduced(0, 2);
-    lowPitchValueLabel.setBounds(sliderArea.removeFromLeft(50));
-    lowPitchSlider.setBounds(sliderArea.removeFromLeft((sliderArea.getWidth() - 100) / 2));
-    highPitchValueLabel.setBounds(sliderArea.removeFromRight(50));
-    highPitchSlider.setBounds(sliderArea);
-    
-    area.removeFromTop(20); // Spacing
-    
-    // Buttons
+    // Graph editor takes the remaining space except for button area
     auto buttonHeight = 30;
     auto buttonArea = area.removeFromBottom(buttonHeight);
+    graphEditor->setBounds(area);
+    
+    // Buttons at the bottom
     auto buttonWidth = 100;
     
     cancelButton.setBounds(buttonArea.removeFromLeft(buttonWidth));
@@ -168,13 +178,16 @@ void PlayerEditorComponent::paint(Graphics& g)
 {
     g.fillAll(getLookAndFeel().findColour(ResizableWindow::backgroundColourId));
     
+    // Draw the header
     g.setColour(Colours::black);
     Font f;
-    f = f.withHeight(15.0f).withStyle(Font::bold);
+    f.setHeight(18.0f);
+    f.setBold(true);
     g.setFont(f);
     g.drawText("Player Details", getLocalBounds().reduced(10).removeFromTop(30),
                Justification::centredLeft, true);
     
+    // Draw a separator line
     g.drawLine(10, 40, getWidth() - 10, 40, 1.0f);
 }
 
@@ -188,19 +201,14 @@ void PlayerEditorComponent::buttonClicked(Button* button)
         player->metadata.description = descriptionEditor.getText();
         player->metadata.lastModified = Time::getCurrentTime();
         
-        // Update capabilities
-        player->capabilities.pitchRange = {
-            static_cast<int>(lowPitchSlider.getValue()),
-            static_cast<int>(highPitchSlider.getValue())
-        };
+        // Capabilities have been removed
         
-        player->capabilities.techniques.clear();
-        if (legatoToggle.getToggleState())
-            player->capabilities.techniques.add("legato");
-        if (staccatoToggle.getToggleState())
-            player->capabilities.techniques.add("staccato");
-        if (chordToggle.getToggleState())
-            player->capabilities.techniques.add("chord");
+        // Save the graph state including plugin states
+        if (auto* graph = graphEditor->graph.get())
+        {
+            // This will include both the graph structure and each plugin's state
+            player->graphState = graph->createXml();
+        }
         
         // Notify listeners
         listeners.call(&Listener::playerEditorSaveRequested, this);
@@ -215,20 +223,4 @@ void PlayerEditorComponent::buttonClicked(Button* button)
 std::unique_ptr<PlayerManager::Player> PlayerEditorComponent::getPlayer()
 {
     return std::move(player);
-}
-
-void PlayerEditorComponent::updateSliderLabels()
-{
-    lowPitchValueLabel.setText(getMidiNoteName(static_cast<int>(lowPitchSlider.getValue())), dontSendNotification);
-    highPitchValueLabel.setText(getMidiNoteName(static_cast<int>(highPitchSlider.getValue())), dontSendNotification);
-}
-
-String PlayerEditorComponent::getMidiNoteName(int midiNote)
-{
-    static const char* noteNames[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-    
-    String name = noteNames[midiNote % 12];
-    int octave = (midiNote / 12) - 1;  // MIDI note 0 is C-1
-    
-    return name + String(octave);
 }

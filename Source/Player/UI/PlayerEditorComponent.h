@@ -3,6 +3,7 @@
 
 #include <JuceHeader.h>
 #include "../Core/PlayerManager.h"
+#include "../../UI/GraphEditorPanel.h"
 
 class PlayerEditorComponent : public Component,
                               public Button::Listener
@@ -42,18 +43,11 @@ private:
     Label descriptionLabel {"descriptionLabel", "Description:"};
     TextEditor descriptionEditor;
     
-    // Techniques selection
-    Label techniquesLabel {"techniquesLabel", "Techniques:"};
-    ToggleButton legatoToggle {"Legato"};
-    ToggleButton staccatoToggle {"Staccato"};
-    ToggleButton chordToggle {"Chord"};
+    // Techniques section has been removed
     
-    // Pitch range selection
-    Label pitchRangeLabel {"pitchRangeLabel", "Pitch Range:"};
-    Slider lowPitchSlider;
-    Slider highPitchSlider;
-    Label lowPitchValueLabel {"lowPitchValueLabel", "C2"};
-    Label highPitchValueLabel {"highPitchValueLabel", "C7"};
+    // Plugin graph editor
+    Label pluginLabel {"pluginLabel", "Plugin Configuration:"};
+    std::unique_ptr<GraphDocumentComponent> graphEditor;
     
     TextButton saveButton {"Save"};
     TextButton cancelButton {"Cancel"};
@@ -61,9 +55,6 @@ private:
     std::unique_ptr<PlayerManager::Player> player;
     
     ListenerList<Listener> listeners;
-    
-    void updateSliderLabels();
-    String getMidiNoteName(int midiNote);
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PlayerEditorComponent)
 };

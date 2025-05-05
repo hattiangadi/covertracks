@@ -1,28 +1,16 @@
-// PlayerManager.h
+// PlayerManager.h - Update Player struct to ensure proper plugin state handling
 #pragma once
 
 #include <JuceHeader.h>
 #include "../../Plugins/PluginGraph.h"
 
-/**
- * A class that manages Player configurations, which consist of a PluginGraph
- * and associated metadata.
- */
 class PlayerManager
 {
 public:
     PlayerManager();
     ~PlayerManager();
     
-    struct PlayerCapabilities
-    {
-        Range<int> pitchRange = {36, 96}; // Default MIDI range
-        StringArray techniques;
-        
-        // Serialize to/from JSON
-        var toVar() const;
-        void fromVar(const var& v);
-    };
+    // PlayerCapabilities struct has been removed
     
     struct PlayerMetadata
     {
@@ -40,7 +28,8 @@ public:
     struct Player
     {
         PlayerMetadata metadata;
-        PlayerCapabilities capabilities;
+        
+        // Graph state (connections between plugins)
         std::unique_ptr<XmlElement> graphState;
         
         // Create a JSON representation of this player
@@ -64,6 +53,9 @@ public:
     
     // Delete a player
     bool deletePlayer(Player* player);
+    
+    // Add a player to the collection (takes ownership)
+    void addPlayer(std::unique_ptr<Player> player);
     
     // Get the directory where players are stored
     static File getPlayersDirectory();

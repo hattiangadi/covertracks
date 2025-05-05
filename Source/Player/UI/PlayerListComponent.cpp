@@ -11,6 +11,11 @@ PlayerListComponent::PlayerListComponent(PlayerManager& pm)
     table.getHeader().addColumn("Description", DescriptionColumn, 300);
     
     table.setMultipleSelectionEnabled(false);
+    table.setClickingTogglesRowSelection(true);
+    
+    // Set up the table to respond to double-clicks
+    table.getHeader().setPopupMenuActive(false);
+    table.setRowSelectedOnMouseDown(true);
     
     addAndMakeVisible(table);
     addAndMakeVisible(newButton);
@@ -188,4 +193,18 @@ void PlayerListComponent::updateButtonStates()
     bool hasSelection = table.getSelectedRow() >= 0;
     editButton.setEnabled(hasSelection);
     deleteButton.setEnabled(hasSelection);
+}
+
+void PlayerListComponent::cellClicked(int rowNumber, int columnId, const MouseEvent& event)
+{
+    // Check if this was a double-click
+    if (event.getNumberOfClicks() >= 2)
+    {
+        // If a valid row was double-clicked, request to edit that player
+        if (rowNumber >= 0 && rowNumber < displayedPlayers.size())
+        {
+            auto* player = displayedPlayers[rowNumber];
+            listeners.call(&Listener::editPlayerRequested, player);
+        }
+    }
 }

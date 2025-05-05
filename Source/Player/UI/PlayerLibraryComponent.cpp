@@ -72,16 +72,28 @@ void PlayerLibraryComponent::deletePlayerRequested(PlayerManager::Player* player
     );
 }
 
+// PlayerLibraryComponent.cpp - Update to ensure both graph structure and plugin states are preserved
+
 void PlayerLibraryComponent::playerEditorSaveRequested(PlayerEditorComponent* editor)
 {
-    // Get the player from the editor
-    auto player = editor->getPlayer();
+    // Get the player from the editor (includes graph and plugin states)
+    auto playerPtr = editor->getPlayer();
+    
+    if (playerPtr == nullptr)
+        return;
     
     // Save the player
-    playerManager.savePlayer(player.get());
+    bool saved = playerManager.savePlayer(playerPtr.get());
     
-    // Add to manager and refresh list
-    playerListComponent->refreshList();
+    if (saved)
+    {
+        // Add to manager's collection if it's not already there
+        playerManager.addPlayer(std::move(playerPtr));
+        
+        // Refresh the player list
+        if (playerListComponent != nullptr)
+            playerListComponent->refreshList();
+    }
     
     // Hide the editor
     hidePlayerEditor();

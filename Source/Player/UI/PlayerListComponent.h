@@ -24,6 +24,9 @@ public:
     // Button::Listener overrides
     void buttonClicked(Button* button) override;
     
+    // TableListBoxModel override for cell clicks
+    void cellClicked(int rowNumber, int columnId, const MouseEvent& event) override;
+    
     // Get the currently selected player
     PlayerManager::Player* getSelectedPlayer() const;
     

@@ -10,48 +10,6 @@ PlayerManager::~PlayerManager()
 {
 }
 
-var PlayerManager::PlayerCapabilities::toVar() const
-{
-    DynamicObject* obj = new DynamicObject();
-    
-    // Create pitch range object
-    DynamicObject* pitchRangeObj = new DynamicObject();
-    pitchRangeObj->setProperty("low", pitchRange.getStart());
-    pitchRangeObj->setProperty("high", pitchRange.getEnd());
-    
-    obj->setProperty("pitchRange", var(pitchRangeObj));
-    
-    // Add techniques as array
-    Array<var> techniquesArray;
-    for (auto& technique : techniques)
-        techniquesArray.add(technique);
-    
-    obj->setProperty("techniques", var(techniquesArray));
-    
-    return var(obj);
-}
-
-void PlayerManager::PlayerCapabilities::fromVar(const var& v)
-{
-    if (auto* obj = v.getDynamicObject())
-    {
-        // Parse pitch range
-        if (auto* rangeObj = obj->getProperty("pitchRange").getDynamicObject())
-        {
-            int low = rangeObj->getProperty("low");
-            int high = rangeObj->getProperty("high");
-            pitchRange = Range<int>(low, high);
-        }
-        
-        // Parse techniques
-        techniques.clear();
-        if (auto* techniquesArray = obj->getProperty("techniques").getArray())
-        {
-            for (auto& technique : *techniquesArray)
-                techniques.add(technique.toString());
-        }
-    }
-}
 
 var PlayerManager::PlayerMetadata::toVar() const
 {
@@ -66,6 +24,8 @@ var PlayerManager::PlayerMetadata::toVar() const
     return var(obj);
 }
 
+// PlayerCapabilities implementation has been removed
+
 void PlayerManager::PlayerMetadata::fromVar(const var& v)
 {
     if (auto* obj = v.getDynamicObject())
@@ -79,19 +39,20 @@ void PlayerManager::PlayerMetadata::fromVar(const var& v)
     }
 }
 
+// PlayerManager.cpp - Implement player save and load with proper graph state handling
+// Update toVar and fromVar methods
+
 var PlayerManager::Player::toVar() const
 {
     DynamicObject* obj = new DynamicObject();
     
     obj->setProperty("metadata", metadata.toVar());
-    obj->setProperty("capabilities", capabilities.toVar());
     
     if (graphState != nullptr)
     {
+        // Convert the graph state (which includes plugin states) to base64
         MemoryOutputStream mo;
-        graphState->writeToStream(mo, {});
-        
-        // Convert graph state XML to base64 for JSON storage
+        graphState->writeTo(mo, {});
         obj->setProperty("pluginGraph", mo.getMemoryBlock().toBase64Encoding());
     }
     
@@ -105,20 +66,21 @@ std::unique_ptr<PlayerManager::Player> PlayerManager::Player::fromVar(const var&
     if (auto* obj = v.getDynamicObject())
     {
         player->metadata.fromVar(obj->getProperty("metadata"));
-        player->capabilities.fromVar(obj->getProperty("capabilities"));
         
         auto graphBase64 = obj->getProperty("pluginGraph").toString();
         if (graphBase64.isNotEmpty())
         {
+            // Decode the graph state
             MemoryBlock mb;
             mb.fromBase64Encoding(graphBase64);
-            
             player->graphState = parseXML(mb.toString());
         }
     }
     
     return player;
 }
+
+
 
 Array<PlayerManager::Player*> PlayerManager::getPlayers() const
 {
@@ -127,6 +89,34 @@ Array<PlayerManager::Player*> PlayerManager::getPlayers() const
         result.add(player);
     
     return result;
+}
+
+void PlayerManager::addPlayer(std::unique_ptr<Player> player)
+{
+    // Check if the player already exists in the collection
+    bool found = false;
+    for (auto* existingPlayer : players)
+    {
+        if (existingPlayer->metadata.name == player->metadata.name)
+        {
+            // Update existing player
+            existingPlayer->metadata = player->metadata;
+            
+            if (player->graphState != nullptr)
+                existingPlayer->graphState = std::make_unique<XmlElement>(*player->graphState);
+            else
+                existingPlayer->graphState = nullptr;
+            
+            found = true;
+            break;
+        }
+    }
+    
+    // If not found, add it to the collection
+    if (!found)
+    {
+        players.add(player.release());
+    }
 }
 
 bool PlayerManager::savePlayer(Player* player)
@@ -159,10 +149,6 @@ std::unique_ptr<PlayerManager::Player> PlayerManager::createPlayer()
     player->metadata.description = "A new player configuration";
     player->metadata.created = Time::getCurrentTime();
     player->metadata.lastModified = player->metadata.created;
-    
-    // Set default capabilities
-    player->capabilities.pitchRange = {36, 96}; // MIDI range C2-C8
-    player->capabilities.techniques.add("legato");
     
     // Create an empty plugin graph state
     player->graphState = std::make_unique<XmlElement>("FILTERGRAPH");
