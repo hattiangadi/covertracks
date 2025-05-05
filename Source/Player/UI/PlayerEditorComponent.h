@@ -1,0 +1,69 @@
+// PlayerEditorComponent.h
+#pragma once
+
+#include <JuceHeader.h>
+#include "../Core/PlayerManager.h"
+
+class PlayerEditorComponent : public Component,
+                              public Button::Listener
+{
+public:
+    PlayerEditorComponent(PlayerManager::Player* playerToEdit = nullptr);
+    ~PlayerEditorComponent() override;
+    
+    void resized() override;
+    void paint(Graphics& g) override;
+    
+    // Button::Listener overrides
+    void buttonClicked(Button* button) override;
+    
+    // Get the edited player data
+    std::unique_ptr<PlayerManager::Player> getPlayer();
+    
+    class Listener
+    {
+    public:
+        virtual ~Listener() = default;
+        
+        virtual void playerEditorSaveRequested(PlayerEditorComponent* editor) = 0;
+        virtual void playerEditorCancelRequested(PlayerEditorComponent* editor) = 0;
+    };
+    
+    void addListener(Listener* listener) { listeners.add(listener); }
+    void removeListener(Listener* listener) { listeners.remove(listener); }
+    
+private:
+    Label nameLabel {"nameLabel", "Name:"};
+    TextEditor nameEditor;
+    
+    Label categoryLabel {"categoryLabel", "Category:"};
+    ComboBox categoryCombo;
+    
+    Label descriptionLabel {"descriptionLabel", "Description:"};
+    TextEditor descriptionEditor;
+    
+    // Techniques selection
+    Label techniquesLabel {"techniquesLabel", "Techniques:"};
+    ToggleButton legatoToggle {"Legato"};
+    ToggleButton staccatoToggle {"Staccato"};
+    ToggleButton chordToggle {"Chord"};
+    
+    // Pitch range selection
+    Label pitchRangeLabel {"pitchRangeLabel", "Pitch Range:"};
+    Slider lowPitchSlider;
+    Slider highPitchSlider;
+    Label lowPitchValueLabel {"lowPitchValueLabel", "C2"};
+    Label highPitchValueLabel {"highPitchValueLabel", "C7"};
+    
+    TextButton saveButton {"Save"};
+    TextButton cancelButton {"Cancel"};
+    
+    std::unique_ptr<PlayerManager::Player> player;
+    
+    ListenerList<Listener> listeners;
+    
+    void updateSliderLabels();
+    String getMidiNoteName(int midiNote);
+    
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PlayerEditorComponent)
+};

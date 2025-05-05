@@ -35,6 +35,7 @@
 #include <JuceHeader.h>
 #include "MainHostWindow.h"
 #include "../Plugins/InternalPlugins.h"
+#include "../Player/UI/PlayerLibraryComponent.h"
 
 constexpr const char* scanModeKey = "pluginScanMode";
 
@@ -482,7 +483,7 @@ void MainHostWindow::changeListenerCallback (ChangeBroadcaster* changed)
         if (auto savedPluginList = std::unique_ptr<XmlElement> (knownPluginList.createXml()))
         {
             getAppProperties().getUserSettings()->setValue ("pluginList", savedPluginList.get());
-            getAppProperties().saveIfNeeded();
+            getAppProperties().getUserSettings()->saveIfNeeded();
         }
     }
     else if (graphHolder != nullptr && changed == graphHolder->graph.get())
@@ -564,7 +565,10 @@ PopupMenu MainHostWindow::getMenuForIndex (int topLevelMenuIndex, const String& 
 
         if (autoScaleOptionAvailable)
             menu.addCommandItem (&getCommandManager(), CommandIDs::autoScalePluginWindows);
-
+        
+        menu.addSeparator();
+        menu.addCommandItem(&getCommandManager(), CommandIDs::showPlayerLibrary);
+        
         menu.addSeparator();
         menu.addCommandItem (&getCommandManager(), CommandIDs::aboutBox);
     }
@@ -753,7 +757,8 @@ void MainHostWindow::getAllCommands (Array<CommandID>& commands)
                               CommandIDs::toggleDoublePrecision,
                               CommandIDs::aboutBox,
                               CommandIDs::allWindowsForward,
-                              CommandIDs::autoScalePluginWindows
+                              CommandIDs::autoScalePluginWindows,
+                              CommandIDs::showPlayerLibrary
                             };
 
     commands.addArray (ids, numElementsInArray (ids));
@@ -814,6 +819,11 @@ void MainHostWindow::getCommandInfo (const CommandID commandID, ApplicationComma
 
     case CommandIDs::autoScalePluginWindows:
         updateAutoScaleMenuItem (result);
+        break;
+
+    case CommandIDs::showPlayerLibrary:
+        result.setInfo("Player Library", "Manage player configurations", category, 0);
+        result.addDefaultKeypress('l', ModifierKeys::commandModifier);
         break;
 
     default:
@@ -916,6 +926,28 @@ bool MainHostWindow::perform (const InvocationInfo& info)
         for (int i = 0; i < desktop.getNumComponents(); ++i)
             desktop.getComponent (i)->toBehind (this);
 
+        break;
+    }
+
+    case CommandIDs::showPlayerLibrary:
+    {
+        // Create the component
+        auto* component = new PlayerLibraryComponent();
+        component->setSize(800, 600);
+        
+        DialogWindow::LaunchOptions o;
+        o.content.setNonOwned(component);
+        o.dialogTitle = "Player Library";
+        o.componentToCentreAround = this;
+        o.dialogBackgroundColour = getLookAndFeel().findColour(ResizableWindow::backgroundColourId);
+        o.escapeKeyTriggersCloseButton = true;
+        o.useNativeTitleBar = false;
+        o.resizable = true;
+        
+        // Launch the dialog and have it delete the component when closed
+        DialogWindow* dialog = o.launchAsync();
+        if (dialog != nullptr)
+            dialog->setVisible(true);
         break;
     }
 

@@ -59,6 +59,20 @@
               file="Source/UI/MainHostWindow.h"/>
         <FILE id="ygZQZ1" name="PluginWindow.h" compile="0" resource="0" file="Source/UI/PluginWindow.h"/>
       </GROUP>
+      <GROUP id="{A3F7F3C9-8C9E-4F3F-8D67-B2A810D057EF}" name="Player">
+        <GROUP id="{B3F7F3C9-8C9E-4F3F-8D67-B2A810D057EF}" name="Core">
+          <FILE id="NEW_FILE_ID_1" name="PlayerManager.cpp" compile="1" resource="0" file="Source/Player/Core/PlayerManager.cpp"/>
+          <FILE id="NEW_FILE_ID_2" name="PlayerManager.h" compile="0" resource="0" file="Source/Player/Core/PlayerManager.h"/>
+        </GROUP>
+        <GROUP id="{C3F7F3C9-8C9E-4F3F-8D67-B2A810D057EF}" name="UI">
+          <FILE id="NEW_FILE_ID_3" name="PlayerEditorComponent.cpp" compile="1" resource="0" file="Source/Player/UI/PlayerEditorComponent.cpp"/>
+          <FILE id="NEW_FILE_ID_4" name="PlayerEditorComponent.h" compile="0" resource="0" file="Source/Player/UI/PlayerEditorComponent.h"/>
+          <FILE id="NEW_FILE_ID_5" name="PlayerLibraryComponent.cpp" compile="1" resource="0" file="Source/Player/UI/PlayerLibraryComponent.cpp"/>
+          <FILE id="NEW_FILE_ID_6" name="PlayerLibraryComponent.h" compile="0" resource="0" file="Source/Player/UI/PlayerLibraryComponent.h"/>
+          <FILE id="NEW_FILE_ID_7" name="PlayerListComponent.cpp" compile="1" resource="0" file="Source/Player/UI/PlayerListComponent.cpp"/>
+          <FILE id="NEW_FILE_ID_8" name="PlayerListComponent.h" compile="0" resource="0" file="Source/Player/UI/PlayerListComponent.h"/>
+        </GROUP>
+      </GROUP>
       <FILE id="OmIhwQ" name="HostStartup.cpp" compile="1" resource="0" file="Source/HostStartup.cpp"/>
     </GROUP>
     <FILE id="BQ9j28" name="cassette_recorder.wav" compile="0" resource="1"

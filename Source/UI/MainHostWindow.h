@@ -53,6 +53,7 @@ namespace CommandIDs
     static const int allWindowsForward      = 0x30400;
     static const int toggleDoublePrecision  = 0x30500;
     static const int autoScalePluginWindows = 0x30600;
+    static const int showPlayerLibrary      = 0x30700;
 }
 
 //==============================================================================
@@ -81,6 +82,8 @@ bool shouldAutoScalePlugin (const PluginDescription&);
 void addPluginAutoScaleOptionsSubMenu (AudioPluginInstance*, PopupMenu&);
 
 constexpr const char* processUID = "juceaudiopluginhost";
+
+class PlayerLibraryComponent; // Forward declaration
 
 //==============================================================================
 class MainHostWindow final : public DocumentWindow,
@@ -122,6 +125,8 @@ public:
     std::optional<PluginDescriptionAndPreference> getChosenType (int menuID) const;
 
     std::unique_ptr<GraphDocumentComponent> graphHolder;
+    std::unique_ptr<PlayerLibraryComponent> playerLibraryWindow;
+
 
 private:
     //==============================================================================
