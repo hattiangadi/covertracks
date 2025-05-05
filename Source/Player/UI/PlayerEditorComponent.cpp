@@ -65,17 +65,29 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
     AudioPluginFormatManager formatManager;
     formatManager.addDefaultFormats();
     
-    // Get application properties for device manager
-    PropertiesFile* appProperties = nullptr;
-    std::unique_ptr<XmlElement> savedState;
-    
-    // Try to get audio device state from a file instead
+    // Create a default audio settings file if it doesn't exist
     File audioSettingsFile = File::getSpecialLocation(File::userApplicationDataDirectory)
                              .getChildFile(JUCEApplication::getInstance()->getApplicationName())
                              .getChildFile("AudioSettings.xml");
     
+    std::unique_ptr<XmlElement> savedState;
     if (audioSettingsFile.existsAsFile())
+    {
         savedState = XmlDocument::parse(audioSettingsFile);
+    }
+    else
+    {
+        // Create a default audio settings configuration
+        savedState = std::make_unique<XmlElement>("DEVICESETUP");
+        savedState->setAttribute("audioOutputDeviceName", "");
+        savedState->setAttribute("audioInputDeviceName", "");
+        savedState->setAttribute("audioDeviceRate", 44100.0);
+        savedState->setAttribute("audioDeviceBufferSize", 512);
+        
+        // Save the default settings
+        audioSettingsFile.create();
+        savedState->writeToFile(audioSettingsFile, "");
+    }
     
     // Create audio device manager
     auto* deviceManager = new AudioDeviceManager();
@@ -94,17 +106,36 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
         if (auto savedPluginList = XmlDocument::parse(pluginListFile))
             knownPluginList.recreateFromXml(*savedPluginList);
     }
+    else
+    {
+        // Create a default empty plugin list
+        auto emptyList = std::make_unique<XmlElement>("KNOWNPLUGINS");
+        pluginListFile.create();
+        emptyList->writeToFile(pluginListFile, "");
+    }
     
     // Create graph editor
     graphEditor = std::make_unique<GraphDocumentComponent>(formatManager, *deviceManager, knownPluginList);
     
-    // If we have an existing graph state, load it
-    if (player->graphState != nullptr && player->graphState->hasTagName("FILTERGRAPH"))
+    // Initialize the graph with a safe approach
+    if (auto* graph = graphEditor->graph.get())
     {
-        if (auto* graph = graphEditor->graph.get())
+        // First clear the graph to start with a clean state
+        graph->clear();
+        
+        // If we have an existing graph state, try to load it
+        if (player->graphState != nullptr && player->graphState->hasTagName("FILTERGRAPH"))
         {
-            // Restore the graph including plugin states
-            graph->restoreFromXml(*player->graphState);
+            // Check if the graph state has the necessary structure
+            bool hasValidStructure = player->graphState->getChildByName("CONNECTIONS") != nullptr &&
+                                    player->graphState->getChildByName("INPUTS") != nullptr &&
+                                    player->graphState->getChildByName("OUTPUTS") != nullptr;
+            
+            if (hasValidStructure)
+            {
+                // Only try to restore if the structure is valid
+                graph->restoreFromXml(*player->graphState);
+            }
         }
     }
     

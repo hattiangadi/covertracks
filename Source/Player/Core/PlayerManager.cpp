@@ -150,8 +150,25 @@ std::unique_ptr<PlayerManager::Player> PlayerManager::createPlayer()
     player->metadata.created = Time::getCurrentTime();
     player->metadata.lastModified = player->metadata.created;
     
-    // Create an empty plugin graph state
-    player->graphState = std::make_unique<XmlElement>("FILTERGRAPH");
+    // Create a properly structured empty plugin graph state
+    auto* filtergraph = new XmlElement("FILTERGRAPH");
+    
+    // Add necessary attributes for a valid empty graph
+    filtergraph->setAttribute("name", "New Graph");
+    
+    // Add connections element (empty)
+    auto* connections = new XmlElement("CONNECTIONS");
+    filtergraph->addChildElement(connections);
+    
+    // Add inputs element
+    auto* inputs = new XmlElement("INPUTS");
+    filtergraph->addChildElement(inputs);
+    
+    // Add outputs element
+    auto* outputs = new XmlElement("OUTPUTS");
+    filtergraph->addChildElement(outputs);
+    
+    player->graphState = std::unique_ptr<XmlElement>(filtergraph);
     
     return player;
 }
