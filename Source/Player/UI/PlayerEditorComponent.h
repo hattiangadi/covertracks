@@ -19,6 +19,9 @@ public:
     // Button::Listener overrides
     void buttonClicked(Button* button) override;
     
+    // Handle mouse events
+    void mouseDown(const MouseEvent& e);
+    
     // Get the edited player data
     std::unique_ptr<PlayerManager::Player> getPlayer();
     
@@ -36,6 +39,8 @@ public:
     
 private:
     void makeDefaultConnections(PluginGraph* graph);
+    bool mouseDownOnGraphEditor(const MouseEvent& e);
+
 
     Label nameLabel {"nameLabel", "Name:"};
     TextEditor nameEditor;

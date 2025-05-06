@@ -105,6 +105,8 @@ void PlayerLibraryComponent::playerEditorCancelRequested(PlayerEditorComponent* 
     hidePlayerEditor();
 }
 
+// In PlayerLibraryComponent.cpp, update the showPlayerEditor method:
+
 void PlayerLibraryComponent::showPlayerEditor(PlayerManager::Player* playerToEdit)
 {
     // Remove existing editor if any
@@ -124,8 +126,25 @@ void PlayerLibraryComponent::showPlayerEditor(PlayerManager::Player* playerToEdi
     if (playerListComponent != nullptr)
         playerListComponent->setVisible(false);
     
-    // Resize to fit
+    // Resize to fit - ensure the editor has enough space
     resized();
+    
+    // Resize parent window if needed to give enough space for the graph editor
+    if (auto* parentComponent = getParentComponent())
+    {
+        if (auto* dialogWindow = dynamic_cast<DialogWindow*>(parentComponent))
+        {
+            // Make sure the dialog is large enough
+            const int minWidth = 800;
+            const int minHeight = 700;
+            
+            auto currentBounds = dialogWindow->getBounds();
+            if (currentBounds.getWidth() < minWidth || currentBounds.getHeight() < minHeight)
+            {
+                dialogWindow->centreWithSize(minWidth, minHeight);
+            }
+        }
+    }
 }
 
 void PlayerLibraryComponent::hidePlayerEditor()

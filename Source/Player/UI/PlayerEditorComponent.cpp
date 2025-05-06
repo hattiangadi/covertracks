@@ -1,7 +1,6 @@
-// PlayerEditorComponent.cpp - Fix implementation with proper includes and method definitions
-
+// PlayerEditorComponent.cpp with fixes
 #include "PlayerEditorComponent.h"
-#include "../../Plugins/InternalPlugins.h" // Make sure this include is here
+#include "../../Plugins/InternalPlugins.h"
 
 PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit)
 {
@@ -84,7 +83,7 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
         savedState->setAttribute("audioDeviceRate", 44100.0);
         savedState->setAttribute("audioDeviceBufferSize", 512);
         
-        // Save the default settings - update to use writeTo instead of deprecated writeToFile
+        // Save the default settings
         audioSettingsFile.create();
         FileOutputStream stream(audioSettingsFile);
         if (stream.openedOk())
@@ -110,7 +109,7 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
     }
     else
     {
-        // Create a default empty plugin list - update to use writeTo
+        // Create a default empty plugin list
         auto emptyList = std::make_unique<XmlElement>("KNOWNPLUGINS");
         pluginListFile.create();
         FileOutputStream stream(pluginListFile);
@@ -121,6 +120,9 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
     // Create graph editor
     graphEditor = std::make_unique<GraphDocumentComponent>(formatManager, *deviceManager, knownPluginList);
     
+    // Make the graph editor visually distinct
+    graphEditor->setColour(ResizableWindow::backgroundColourId, Colours::lightgrey);
+    
     // Initialize the graph with a safe approach
     if (auto* graph = graphEditor->graph.get())
     {
@@ -130,48 +132,44 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
         // If we have an existing graph state, try to load it
         if (player->graphState != nullptr && player->graphState->hasTagName("FILTERGRAPH"))
         {
-            // Check if the graph state has the necessary structure
-            bool hasValidStructure = true; // Simplified check for now
+            // Only try to restore if the structure is valid
+            graph->restoreFromXml(*player->graphState);
             
-            if (hasValidStructure)
-            {
-                // Only try to restore if the structure is valid
-                graph->restoreFromXml(*player->graphState);
-            }
+            // Make sure the graph panel updates to show the loaded configuration
+            if (graphEditor->graphPanel != nullptr)
+                graphEditor->graphPanel->updateComponents();
         }
         else
         {
             // Set up a new default graph
-            // Get internal plugin formats
             InternalPluginFormat internalFormat;
             auto internalTypes = internalFormat.getAllTypes();
             
-            // Add standard plugins (input, output, MIDI)
-            // Note: getAllTypes() returns in this order: [0]=AudioIn, [1]=MidiIn, [2]=AudioOut, [3]=MidiOut
-            if (internalTypes.size() > 3) 
+            if (internalTypes.size() > 4)
             {
-                // Add audio input node
-                graph->addPlugin(PluginDescriptionAndPreference{internalTypes[0]}, {0.25, 0.1});
+                // Add standard nodes: Audio Input, Audio Output, and Sine Wave Synth
+                graph->addPlugin(PluginDescriptionAndPreference{internalTypes[0]}, {0.25, 0.1});  // Audio Input
+                graph->addPlugin(PluginDescriptionAndPreference{internalTypes[2]}, {0.25, 0.9});  // Audio Output
+                graph->addPlugin(PluginDescriptionAndPreference{internalTypes[4]}, {0.5, 0.5});   // Sine Wave Synth
                 
-                // Add audio output node
-                graph->addPlugin(PluginDescriptionAndPreference{internalTypes[2]}, {0.25, 0.9});
+                // Use regular sleep instead of runDispatchLoopUntil
+                Thread::sleep(500);
                 
-                // Add a synth in between (for example, SineWaveSynth which is typically at index 4)
-                if (internalTypes.size() > 4)
-                {
-                    graph->addPlugin(PluginDescriptionAndPreference{internalTypes[4]}, {0.5, 0.5});
-                    
-                    // Wait a bit to allow plugins to initialize
-                    Thread::sleep(500);
-                    
-                    // Now connect the plugins
-                    makeDefaultConnections(graph);
-                }
+                // Create the default connections between components
+                makeDefaultConnections(graph);
+                
+                // Ensure the graph panel updates to show the nodes
+                if (graphEditor->graphPanel != nullptr)
+                    graphEditor->graphPanel->updateComponents();
             }
         }
     }
     
     addAndMakeVisible(graphEditor.get());
+    
+    // Add a mouse listener to the graph panel to handle right-clicks
+    if (graphEditor->graphPanel != nullptr)
+        graphEditor->graphPanel->addMouseListener(this, false);
     
     // Set up buttons
     addAndMakeVisible(saveButton);
@@ -179,6 +177,16 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
     
     saveButton.addListener(this);
     cancelButton.addListener(this);
+}
+
+PlayerEditorComponent::~PlayerEditorComponent()
+{
+    saveButton.removeListener(this);
+    cancelButton.removeListener(this);
+    
+    // Remove mouse listener
+    if (graphEditor != nullptr && graphEditor->graphPanel != nullptr)
+        graphEditor->graphPanel->removeMouseListener(this);
 }
 
 void PlayerEditorComponent::makeDefaultConnections(PluginGraph* graph)
@@ -208,17 +216,44 @@ void PlayerEditorComponent::makeDefaultConnections(PluginGraph* graph)
             {audioOutputNode->nodeID, 0}  // Audio output input channel 0
         });
         
-        graph->graph.addConnection({
-            {synthNode->nodeID, 1}, // Synth output channel 1
-            {audioOutputNode->nodeID, 1}  // Audio output input channel 1
-        });
+        if (synthNode->getProcessor()->getNumOutputChannels() > 1 &&
+            audioOutputNode->getProcessor()->getNumInputChannels() > 1)
+        {
+            graph->graph.addConnection({
+                {synthNode->nodeID, 1}, // Synth output channel 1
+                {audioOutputNode->nodeID, 1}  // Audio output input channel 1
+            });
+        }
     }
 }
 
-PlayerEditorComponent::~PlayerEditorComponent()
+bool PlayerEditorComponent::mouseDownOnGraphEditor(const MouseEvent& e)
 {
-    saveButton.removeListener(this);
-    cancelButton.removeListener(this);
+    // Check if right mouse button was pressed
+    if (e.mods.isPopupMenu() && graphEditor != nullptr && graphEditor->graphPanel != nullptr)
+    {
+        // Convert the mouse position to graph panel coordinates
+        Point<int> position = graphEditor->graphPanel->getLocalPoint(nullptr, e.getScreenPosition());
+        
+        // Show the plugin list popup menu
+        graphEditor->graphPanel->showPopupMenu(position);
+        return true;
+    }
+    
+    return false;
+}
+
+void PlayerEditorComponent::mouseDown(const MouseEvent& e)
+{
+    // Handle right-click on graph editor
+    auto* component = getComponentAt(e.getPosition());
+    if (component != nullptr && (component == graphEditor.get() || 
+        component->isParentOf(graphEditor.get()) ||
+        (graphEditor != nullptr && graphEditor->isParentOf(component))))
+    {
+        // Convert event to graph editor coordinates and handle it
+        mouseDownOnGraphEditor(e.getEventRelativeTo(graphEditor.get()));
+    }
 }
 
 void PlayerEditorComponent::resized()
@@ -226,46 +261,49 @@ void PlayerEditorComponent::resized()
     auto area = getLocalBounds().reduced(10);
     
     // Header area
-    area.removeFromTop(40); // Header height
+    auto headerArea = area.removeFromTop(40); // Header height
     
     area.removeFromTop(10); // Spacing after header
     
+    // Form fields section - limit this to a reasonable height
+    auto formArea = area.removeFromTop(150); // Fixed height for form fields
+    
     // Name field
-    auto nameArea = area.removeFromTop(24);
+    auto nameArea = formArea.removeFromTop(24);
     nameLabel.setBounds(nameArea.removeFromLeft(100));
     nameEditor.setBounds(nameArea);
     
-    area.removeFromTop(10); // Spacing
+    formArea.removeFromTop(10); // Spacing
     
     // Category field
-    auto categoryArea = area.removeFromTop(24);
+    auto categoryArea = formArea.removeFromTop(24);
     categoryLabel.setBounds(categoryArea.removeFromLeft(100));
     categoryCombo.setBounds(categoryArea);
     
-    area.removeFromTop(10); // Spacing
+    formArea.removeFromTop(10); // Spacing
     
     // Description field
-    auto descriptionArea = area.removeFromTop(72); // Larger area for description
+    auto descriptionArea = formArea.removeFromTop(72); // Larger area for description
     descriptionLabel.setBounds(descriptionArea.removeFromLeft(100).withHeight(24));
     descriptionEditor.setBounds(descriptionArea);
     
+    // Plugin graph section - give this MUCH more space
     area.removeFromTop(20); // Spacing
     
-    // Plugin graph editor section
-    auto pluginLabelArea = area.removeFromTop(24);
-    pluginLabel.setBounds(pluginLabelArea);
-    
-    // Graph editor takes the remaining space except for button area
-    auto buttonHeight = 30;
-    auto buttonArea = area.removeFromBottom(buttonHeight);
-    graphEditor->setBounds(area);
+    // Plugin label
+    pluginLabel.setBounds(area.removeFromTop(24));
     
     // Buttons at the bottom
-    auto buttonWidth = 100;
+    auto buttonHeight = 30;
+    auto buttonArea = area.removeFromBottom(buttonHeight + 10);
     
-    cancelButton.setBounds(buttonArea.removeFromLeft(buttonWidth));
+    // Graph editor gets all remaining space
+    graphEditor->setBounds(area);
+    
+    // Position buttons
+    cancelButton.setBounds(buttonArea.removeFromLeft(100).withHeight(buttonHeight));
     buttonArea.removeFromLeft(10); // Spacing
-    saveButton.setBounds(buttonArea.removeFromLeft(buttonWidth));
+    saveButton.setBounds(buttonArea.removeFromLeft(100).withHeight(buttonHeight));
 }
 
 void PlayerEditorComponent::paint(Graphics& g)
@@ -274,15 +312,28 @@ void PlayerEditorComponent::paint(Graphics& g)
     
     // Draw the header
     g.setColour(Colours::black);
-    Font f;
-    f.setHeight(18.0f);
-    f.setBold(true);
+    FontOptions f(Font::getDefaultSansSerifFontName(), 18.0f, Font::bold);
     g.setFont(f);
     g.drawText("Player Details", getLocalBounds().reduced(10).removeFromTop(30),
                Justification::centredLeft, true);
     
     // Draw a separator line
     g.drawLine(10, 40, getWidth() - 10, 40, 1.0f);
+    
+    // Draw a border around the graph editor area to make it more prominent
+    auto graphBounds = graphEditor->getBounds().expanded(2);
+    g.setColour(Colours::darkgrey);
+    g.drawRect(graphBounds, 2);
+    
+    // Add an instructional label
+    g.setColour(Colours::black);
+    FontOptions labelFont(Font::getDefaultSansSerifFontName(), 14.0f, Font::plain);
+    g.setFont(labelFont);
+    
+    auto instructionRect = Rectangle<int>(graphBounds.getX(), graphBounds.getY() - 30, 
+                                         graphBounds.getWidth(), 25);
+    g.drawText("Right-click to add plugins, drag between pins to connect them",
+               instructionRect, Justification::centred, true);
 }
 
 void PlayerEditorComponent::buttonClicked(Button* button)
