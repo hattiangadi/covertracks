@@ -197,19 +197,7 @@ public:
         }
        #endif
 
-        if (! fileToOpen.existsAsFile())
-        {
-            RecentlyOpenedFilesList recentFiles;
-            recentFiles.restoreFromString (getAppProperties().getUserSettings()->getValue ("recentFilterGraphFiles"));
-
-            if (recentFiles.getNumFiles() > 0)
-                fileToOpen = recentFiles.getFile (0);
-        }
-
-        if (fileToOpen.existsAsFile())
-            if (auto* graph = mainWindow->graphHolder.get())
-                if (auto* ioGraph = graph->graph.get())
-                    ioGraph->loadFrom (fileToOpen, true);
+        // Each player has its own graph file, so we don't need to load a graph file at startup
     }
 
     void shutdown() override
@@ -222,9 +210,7 @@ public:
     void suspended() override
     {
        #if JUCE_ANDROID || JUCE_IOS
-        if (auto graph = mainWindow->graphHolder.get())
-            if (auto ioGraph = graph->graph.get())
-                ioGraph->saveDocument (PluginGraph::getDefaultGraphDocumentOnMobile());
+        // Mobile saving will be handled when a player is opened
        #endif
     }
 
@@ -238,9 +224,7 @@ public:
 
     bool backButtonPressed() override
     {
-        if (mainWindow->graphHolder != nullptr)
-            mainWindow->graphHolder->hideLastSidePanel();
-
+        // Handle back button press
         return true;
     }
 

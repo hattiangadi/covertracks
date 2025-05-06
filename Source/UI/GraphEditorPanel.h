@@ -67,7 +67,7 @@ public:
     void updateComponents();
 
     //==============================================================================
-    void showPopupMenu (Point<int> position, PlayerEditorComponent* playerEditorComponent = nullptr);
+    void showPopupMenu (Point<int> position, PlayerEditorComponent* playerEditorComponent);
 
     //==============================================================================
     void beginConnectorDrag (AudioProcessorGraph::NodeAndChannel source,

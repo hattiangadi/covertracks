@@ -119,12 +119,11 @@ public:
 
     void tryToQuitApplication();
 
-    void createPlugin (const PluginDescriptionAndPreference&, Point<int> pos);
+    // Returns a pointer to the PlayerLibraryComponent
+    PlayerLibraryComponent* getPlayerLibraryComponent() const { return playerLibraryWindow.get(); }
+    
+    // Graph operations are now handled by PlayerEditorComponent
 
-    void addPluginsToMenu (PopupMenu&);
-    std::optional<PluginDescriptionAndPreference> getChosenType (int menuID) const;
-
-    std::unique_ptr<GraphDocumentComponent> graphHolder;
     std::unique_ptr<PlayerLibraryComponent> playerLibraryWindow;
 
 
@@ -149,6 +148,8 @@ private:
 
     class PluginListWindow;
     std::unique_ptr<PluginListWindow> pluginListWindow;
+    
+
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainHostWindow)
 };

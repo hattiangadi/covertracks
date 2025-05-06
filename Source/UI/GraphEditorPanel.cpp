@@ -180,7 +180,7 @@ struct GraphEditorPanel::PinComponent final : public Component,
 };
 
 //==============================================================================
-struct GraphEditorPanel::PluginComponent final : public Component,
+struct GraphEditorPanel::PluginComponent : public Component,
                                                  public Timer,
                                                  private AudioProcessorParameter::Listener,
                                                  private AsyncUpdater
@@ -466,27 +466,12 @@ struct GraphEditorPanel::PluginComponent final : public Component,
             playerEditorComponent->addPluginsToMenu(*menu);
 
             menu->showMenuAsync({},
-                            ModalCallbackFunction::create([this, playerEditorComponent, position](int r)
+                            ModalCallbackFunction::create([playerEditorComponent, position](int r)
                             {
                                 if (playerEditorComponent != nullptr)
                                     if (const auto chosen = playerEditorComponent->getChosenType(r))
                                         playerEditorComponent->createPlugin(*chosen, position);
                             }));
-        }
-        else
-        {
-            if (auto* mainWindow = findParentComponentOfClass<MainHostWindow>())
-            {
-                mainWindow->addPluginsToMenu(*menu);
-
-                menu->showMenuAsync({},
-                                ModalCallbackFunction::create([this, mainWindow, position](int r)
-                                {
-                                    if (mainWindow != nullptr)
-                                        if (const auto chosen = mainWindow->getChosenType(r))
-                                            mainWindow->createPlugin(*chosen, position);
-                                }));
-            }
         }
     }  
 
@@ -513,7 +498,13 @@ struct GraphEditorPanel::PluginComponent final : public Component,
         jassert (isOnTouchDevice());
 
         stopTimer();
-        showPopupMenu();
+        
+        // Find the PlayerEditorComponent to pass to showPopupMenu
+        if (auto* editor = dynamic_cast<PlayerEditorComponent*>(getTopLevelComponent()))
+        {
+            // Use the center of the component as the position for the popup menu
+            panel.showPopupMenu(getBounds().getCentre(), editor);
+        }
     }
 
     void parameterValueChanged (int, float) override
@@ -822,15 +813,10 @@ void GraphEditorPanel::mouseDown(const MouseEvent& e)
 
     if (e.mods.isPopupMenu())
     {
-        // Check if this was called from the PlayerEditorComponent
+        // Get the PlayerEditorComponent
         if (auto* editor = dynamic_cast<PlayerEditorComponent*>(getTopLevelComponent()))
         {
             showPopupMenu(e.position.toInt(), editor);
-        }
-        else
-        {
-            // Default behavior for MainHostWindow
-            showPopupMenu(e.position.toInt());
         }
     }
 }
@@ -852,34 +838,18 @@ void GraphEditorPanel::mouseDrag (const MouseEvent& e)
 
 void GraphEditorPanel::showPopupMenu(Point<int> position, PlayerEditorComponent* playerEditorComponent)
 {
-    PopupMenu menu;
-    
     if (playerEditorComponent != nullptr)
     {
-        playerEditorComponent->addPluginsToMenu(menu);
+        PopupMenu pluginMenu;
+        playerEditorComponent->addPluginsToMenu(pluginMenu);
         
-        menu.showMenuAsync({},
-                        ModalCallbackFunction::create([this, playerEditorComponent, position](int r)
+        pluginMenu.showMenuAsync({},
+                        ModalCallbackFunction::create([playerEditorComponent, position](int r)
                         {
                             if (playerEditorComponent != nullptr)
                                 if (const auto chosen = playerEditorComponent->getChosenType(r))
                                     playerEditorComponent->createPlugin(*chosen, position);
                         }));
-    }
-    else
-    {
-        if (auto* mainWindow = findParentComponentOfClass<MainHostWindow>())
-        {
-            mainWindow->addPluginsToMenu(menu);
-            
-            menu.showMenuAsync({},
-                            ModalCallbackFunction::create([this, mainWindow, position](int r)
-                            {
-                                if (mainWindow != nullptr)
-                                    if (const auto chosen = mainWindow->getChosenType(r))
-                                        mainWindow->createPlugin(*chosen, position);
-                            }));
-        }
     }
 }
 
@@ -1067,7 +1037,12 @@ void GraphEditorPanel::timerCallback()
     jassert (isOnTouchDevice());
 
     stopTimer();
-    showPopupMenu (originalTouchPos);
+    
+    // Find the PlayerEditorComponent to pass to showPopupMenu
+    if (auto* editor = dynamic_cast<PlayerEditorComponent*>(getTopLevelComponent()))
+    {
+        showPopupMenu(originalTouchPos, editor);
+    }
 }
 
 //==============================================================================

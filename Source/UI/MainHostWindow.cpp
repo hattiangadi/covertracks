@@ -336,9 +336,9 @@ MainHostWindow::MainHostWindow()
 
     knownPluginList.setCustomScanner (std::make_unique<CustomPluginScanner>());
 
-    graphHolder.reset (new GraphDocumentComponent (formatManager, deviceManager, knownPluginList));
+    playerLibraryWindow.reset (new PlayerLibraryComponent());
 
-    setContentNonOwned (graphHolder.get(), false);
+    setContentNonOwned (playerLibraryWindow.get(), false);
 
     setUsingNativeTitleBar (true);
 
@@ -360,16 +360,11 @@ MainHostWindow::MainHostWindow()
 
     knownPluginList.addChangeListener (this);
 
-    if (auto* g = graphHolder->graph.get())
-        g->addChangeListener (this);
-
     addKeyListener (getCommandManager().getKeyMappings());
 
     Process::setPriority (Process::HighPriority);
 
-  #if JUCE_IOS || JUCE_ANDROID
-    graphHolder->burgerMenu.setModel (this);
-  #else
+  #if ! (JUCE_IOS || JUCE_ANDROID)
    #if JUCE_MAC
     setMacMainMenu (this);
    #else
@@ -385,22 +380,18 @@ MainHostWindow::~MainHostWindow()
     pluginListWindow = nullptr;
     knownPluginList.removeChangeListener (this);
 
-    if (auto* g = graphHolder->graph.get())
-        g->removeChangeListener (this);
+    setLookAndFeel (nullptr);
 
-    getAppProperties().getUserSettings()->setValue ("mainWindowPos", getWindowStateAsString());
-    clearContentComponent();
-
-  #if ! (JUCE_ANDROID || JUCE_IOS)
-   #if JUCE_MAC
-    setMacMainMenu (nullptr);
-   #else
+  #if JUCE_MAC
+    MenuBarModel::setMacMainMenu (nullptr);
+  #else
     setMenuBar (nullptr);
-   #endif
   #endif
 
-    graphHolder = nullptr;
+    deviceManager.closeAudioDevice();
 }
+
+// These methods have been removed as part of the graph editor removal
 
 void MainHostWindow::closeButtonPressed()
 {
@@ -423,55 +414,15 @@ struct AsyncQuitRetrier final : private Timer
 
 void MainHostWindow::tryToQuitApplication()
 {
-    if (graphHolder->closeAnyOpenPluginWindows())
-    {
-        // Really important thing to note here: if the last call just deleted any plugin windows,
-        // we won't exit immediately - instead we'll use our AsyncQuitRetrier to let the message
-        // loop run for another brief moment, then try again. This will give any plugins a chance
-        // to flush any GUI events that may have been in transit before the app forces them to
-        // be unloaded
-        new AsyncQuitRetrier();
-        return;
-    }
-
     if (ModalComponentManager::getInstance()->cancelAllModalComponents())
     {
         new AsyncQuitRetrier();
         return;
     }
 
-    if (graphHolder != nullptr)
-    {
-        auto releaseAndQuit = [this]
-        {
-            // Some plug-ins do not want [NSApp stop] to be called
-            // before the plug-ins are not deallocated.
-            graphHolder->releaseGraph();
-
-            JUCEApplication::quit();
-        };
-
-       #if JUCE_ANDROID || JUCE_IOS
-        if (graphHolder->graph->saveDocument (PluginGraph::getDefaultGraphDocumentOnMobile()))
-            releaseAndQuit();
-       #else
-        SafePointer<MainHostWindow> parent { this };
-        graphHolder->graph->saveIfNeededAndUserAgreesAsync ([parent, releaseAndQuit] (FileBasedDocument::SaveResult r)
-        {
-            if (parent == nullptr)
-                return;
-
-            if (r == FileBasedDocument::savedOk)
-                releaseAndQuit();
-        });
-       #endif
-
-        return;
-    }
-
+    // Simply quit the application
     JUCEApplication::quit();
 }
-
 void MainHostWindow::changeListenerCallback (ChangeBroadcaster* changed)
 {
     if (changed == &knownPluginList)
@@ -485,16 +436,6 @@ void MainHostWindow::changeListenerCallback (ChangeBroadcaster* changed)
             getAppProperties().getUserSettings()->setValue ("pluginList", savedPluginList.get());
             getAppProperties().getUserSettings()->saveIfNeeded();
         }
-    }
-    else if (graphHolder != nullptr && changed == graphHolder->graph.get())
-    {
-        auto title = JUCEApplication::getInstance()->getApplicationName();
-        auto f = graphHolder->graph->getFile();
-
-        if (f.existsAsFile())
-            title = f.getFileName() + " - " + title;
-
-        setName (title);
     }
 }
 
@@ -539,17 +480,11 @@ PopupMenu MainHostWindow::getMenuForIndex (int topLevelMenuIndex, const String& 
     else if (topLevelMenuIndex == 1)
     {
         // "Plugins" menu
-        PopupMenu pluginsMenu;
-        addPluginsToMenu (pluginsMenu);
-        menu.addSubMenu ("Create Plug-in", pluginsMenu);
-        menu.addSeparator();
-        menu.addItem (250, "Delete All Plug-ins");
+        menu.addCommandItem (&getCommandManager(), CommandIDs::showPluginListEditor);
     }
     else if (topLevelMenuIndex == 2)
     {
         // "Options" menu
-
-        menu.addCommandItem (&getCommandManager(), CommandIDs::showPluginListEditor);
 
         PopupMenu sortTypeMenu;
         sortTypeMenu.addItem (200, "List Plug-ins in Default Order",      true, pluginSortMethod == KnownPluginList::defaultOrder);
@@ -582,37 +517,15 @@ PopupMenu MainHostWindow::getMenuForIndex (int topLevelMenuIndex, const String& 
 
 void MainHostWindow::menuItemSelected (int menuItemID, int /*topLevelMenuIndex*/)
 {
-    if (menuItemID == 250)
-    {
-        if (graphHolder != nullptr)
-            if (auto* graph = graphHolder->graph.get())
-                graph->clear();
-    }
+    // Graph operations are now handled by PlayerEditorComponent
    #if ! (JUCE_ANDROID || JUCE_IOS)
-    else if (menuItemID >= 100 && menuItemID < 200)
+    if (menuItemID >= 100 && menuItemID < 200)
     {
-        RecentlyOpenedFilesList recentFiles;
-        recentFiles.restoreFromString (getAppProperties().getUserSettings()
-                                            ->getValue ("recentFilterGraphFiles"));
-
-        if (graphHolder != nullptr)
-        {
-            if (auto* graph = graphHolder->graph.get())
-            {
-                SafePointer<MainHostWindow> parent { this };
-                graph->saveIfNeededAndUserAgreesAsync ([parent, recentFiles, menuItemID] (FileBasedDocument::SaveResult r)
-                {
-                    if (parent == nullptr)
-                        return;
-
-                    if (r == FileBasedDocument::savedOk)
-                        parent->graphHolder->graph->loadFrom (recentFiles.getFile (menuItemID - 100), true);
-                });
-            }
-        }
+        // Recent files are now handled per player
     }
    #endif
-    else if (menuItemID >= 200 && menuItemID < 210)
+    
+    if (menuItemID >= 200 && menuItemID < 210)
     {
              if (menuItemID == 200)     pluginSortMethod = KnownPluginList::defaultOrder;
         else if (menuItemID == 201)     pluginSortMethod = KnownPluginList::sortAlphabetically;
@@ -624,25 +537,16 @@ void MainHostWindow::menuItemSelected (int menuItemID, int /*topLevelMenuIndex*/
 
         menuItemsChanged();
     }
-    else
-    {
-        if (const auto chosen = getChosenType (menuItemID))
-            createPlugin (*chosen, { proportionOfWidth  (0.3f + Random::getSystemRandom().nextFloat() * 0.6f),
-                                     proportionOfHeight (0.3f + Random::getSystemRandom().nextFloat() * 0.6f) });
-    }
+    // Plugin creation is now handled by PlayerEditorComponent
 }
 
 void MainHostWindow::menuBarActivated (bool isActivated)
 {
-    if (isActivated && graphHolder != nullptr)
+    if (isActivated)
         Component::unfocusAllComponents();
 }
 
-void MainHostWindow::createPlugin (const PluginDescriptionAndPreference& desc, Point<int> pos)
-{
-    if (graphHolder != nullptr)
-        graphHolder->createNewPlugin (desc, pos);
-}
+// Plugin creation is now handled by PlayerEditorComponent
 
 static bool containsDuplicateNames (const Array<PluginDescription>& plugins, const String& name)
 {
@@ -694,46 +598,6 @@ static void addToMenu (const KnownPluginList::PluginTree& tree,
         }
        #endif
     }
-}
-
-void MainHostWindow::addPluginsToMenu (PopupMenu& m)
-{
-    if (graphHolder != nullptr)
-    {
-        int i = 0;
-
-        for (auto& t : internalTypes)
-            m.addItem (++i, t.name + " (" + t.pluginFormatName + ")");
-    }
-
-    m.addSeparator();
-
-    auto pluginDescriptions = knownPluginList.getTypes();
-
-    // This avoids showing the internal types again later on in the list
-    pluginDescriptions.removeIf ([] (PluginDescription& desc)
-    {
-        return desc.pluginFormatName == InternalPluginFormat::getIdentifier();
-    });
-
-    auto tree = KnownPluginList::createTree (pluginDescriptions, pluginSortMethod);
-    pluginDescriptionsAndPreference = {};
-    addToMenu (*tree, m, pluginDescriptions, pluginDescriptionsAndPreference);
-}
-
-std::optional<PluginDescriptionAndPreference> MainHostWindow::getChosenType (const int menuID) const
-{
-    const auto internalIndex = menuID - 1;
-
-    if (isPositiveAndBelow (internalIndex, internalTypes.size()))
-        return PluginDescriptionAndPreference { internalTypes[(size_t) internalIndex] };
-
-    const auto externalIndex = menuID - menuIDBase;
-
-    if (isPositiveAndBelow (externalIndex, pluginDescriptionsAndPreference.size()))
-        return pluginDescriptionsAndPreference[externalIndex];
-
-    return {};
 }
 
 //==============================================================================
@@ -835,45 +699,12 @@ bool MainHostWindow::perform (const InvocationInfo& info)
 {
     switch (info.commandID)
     {
-   #if ! (JUCE_IOS || JUCE_ANDROID)
+    #if ! (JUCE_IOS || JUCE_ANDROID)
     case CommandIDs::newFile:
-        if (graphHolder != nullptr && graphHolder->graph != nullptr)
-        {
-            SafePointer<MainHostWindow> parent { this };
-            graphHolder->graph->saveIfNeededAndUserAgreesAsync ([parent] (FileBasedDocument::SaveResult r)
-            {
-                if (parent == nullptr)
-                    return;
-
-                if (r == FileBasedDocument::savedOk)
-                    parent->graphHolder->graph->newDocument();
-            });
-        }
-        break;
-
     case CommandIDs::open:
-         if (graphHolder != nullptr && graphHolder->graph != nullptr)
-         {
-             SafePointer<MainHostWindow> parent { this };
-             graphHolder->graph->saveIfNeededAndUserAgreesAsync ([parent] (FileBasedDocument::SaveResult r)
-             {
-                 if (parent == nullptr)
-                     return;
-
-                 if (r == FileBasedDocument::savedOk)
-                     parent->graphHolder->graph->loadFromUserSpecifiedFileAsync (true, [] (Result) {});
-             });
-         }
-        break;
-
     case CommandIDs::save:
-        if (graphHolder != nullptr && graphHolder->graph != nullptr)
-            graphHolder->graph->saveAsync (true, true, nullptr);
-        break;
-
     case CommandIDs::saveAs:
-        if (graphHolder != nullptr && graphHolder->graph != nullptr)
-            graphHolder->graph->saveAsAsync ({}, true, true, true, nullptr);
+        // File operations are now handled by PlayerEditorComponent
         break;
    #endif
 
@@ -898,8 +729,7 @@ bool MainHostWindow::perform (const InvocationInfo& info)
             updatePrecisionMenuItem (cmdInfo);
             menuItemsChanged();
 
-            if (graphHolder != nullptr)
-                graphHolder->setDoublePrecision (newIsDoublePrecision);
+            // Double precision setting is now only relevant for PlayerEditorComponent
         }
         break;
 
@@ -989,9 +819,7 @@ void MainHostWindow::showAudioSettings()
                              getAppProperties().getUserSettings()->setValue ("audioDeviceState", audioState.get());
                              getAppProperties().getUserSettings()->saveIfNeeded();
 
-                             if (safeThis->graphHolder != nullptr)
-                                 if (safeThis->graphHolder->graph != nullptr)
-                                     safeThis->graphHolder->graph->graph.removeIllegalConnections();
+                              // Graph connections are now handled by PlayerEditorComponent
                          }), true);
 }
 
@@ -1014,39 +842,7 @@ void MainHostWindow::fileDragExit (const StringArray&)
 
 void MainHostWindow::filesDropped (const StringArray& files, int x, int y)
 {
-    if (graphHolder != nullptr)
-    {
-       #if ! (JUCE_ANDROID || JUCE_IOS)
-        File firstFile { files[0] };
-
-        if (files.size() == 1 && firstFile.hasFileExtension (PluginGraph::getFilenameSuffix()))
-        {
-            if (auto* g = graphHolder->graph.get())
-            {
-                SafePointer<MainHostWindow> parent;
-                g->saveIfNeededAndUserAgreesAsync ([parent, g, firstFile] (FileBasedDocument::SaveResult r)
-                {
-                    if (parent == nullptr)
-                        return;
-
-                    if (r == FileBasedDocument::savedOk)
-                        g->loadFrom (firstFile, true);
-                });
-            }
-        }
-        else
-       #endif
-        {
-            OwnedArray<PluginDescription> typesFound;
-            knownPluginList.scanAndAddDragAndDroppedFiles (formatManager, files, typesFound);
-
-            auto pos = graphHolder->getLocalPoint (this, Point<int> (x, y));
-
-            for (int i = 0; i < jmin (5, typesFound.size()); ++i)
-                if (auto* desc = typesFound.getUnchecked (i))
-                    createPlugin (PluginDescriptionAndPreference { *desc }, pos);
-        }
-    }
+    // File drops are now handled by PlayerEditorComponent
 }
 
 bool MainHostWindow::isDoublePrecisionProcessingEnabled()

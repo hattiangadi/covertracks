@@ -528,16 +528,7 @@ AudioProcessorGraph::NodeID IOConfigurationWindow::getNodeID() const
     return {};
 }
 
-MainHostWindow* IOConfigurationWindow::getMainWindow() const
-{
-    auto& desktop = Desktop::getInstance();
-
-    for (int i = desktop.getNumComponents(); --i >= 0;)
-        if (auto* mainWindow = dynamic_cast<MainHostWindow*> (desktop.getComponent (i)))
-            return mainWindow;
-
-    return nullptr;
-}
+// MainHostWindow is no longer used for plugin configuration
 
 PlayerEditorComponent* IOConfigurationWindow::getPlayerEditor() const
 {
@@ -552,11 +543,7 @@ PlayerEditorComponent* IOConfigurationWindow::getPlayerEditor() const
 
 GraphDocumentComponent* IOConfigurationWindow::getGraphEditor() const
 {
-    // First try to get it from MainHostWindow
-    if (auto* mainWindow = getMainWindow())
-        return mainWindow->graphHolder.get();
-    
-    // If that fails, try to get it from PlayerEditorComponent
+    // Get the graph editor from PlayerEditorComponent
     if (auto* playerEditor = getPlayerEditor())
         return playerEditor->getGraphEditor();
 
