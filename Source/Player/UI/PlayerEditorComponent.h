@@ -20,7 +20,7 @@ public:
     void buttonClicked(Button* button) override;
     
     // Handle mouse events
-    void mouseDown(const MouseEvent& e);
+    void mouseDown(const MouseEvent& e) override;
     
     // Get the edited player data
     std::unique_ptr<PlayerManager::Player> getPlayer();
@@ -39,7 +39,14 @@ public:
     
 private:
     void makeDefaultConnections(PluginGraph* graph);
-    bool mouseDownOnGraphEditor(const MouseEvent& e);
+    void createDefaultGraph(PluginGraph* graph);
+    void showPluginMenu(Point<int> position);
+    
+    void addPluginsToMenu(const KnownPluginList::PluginTree& tree,
+                         PopupMenu& menu,
+                         const Array<PluginDescription>& allPlugins,
+                         Array<PluginDescriptionAndPreference>& addedPlugins,
+                         int& nextMenuID);
 
 
     Label nameLabel {"nameLabel", "Name:"};
