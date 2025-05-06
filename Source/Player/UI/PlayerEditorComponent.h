@@ -4,6 +4,7 @@
 #include <JuceHeader.h>
 #include "../Core/PlayerManager.h"
 #include "../../UI/GraphEditorPanel.h"
+#include "../../Plugins/InternalPlugins.h" 
 
 class PlayerEditorComponent : public Component,
                               public Button::Listener
@@ -34,6 +35,8 @@ public:
     void removeListener(Listener* listener) { listeners.remove(listener); }
     
 private:
+    void makeDefaultConnections(PluginGraph* graph);
+
     Label nameLabel {"nameLabel", "Name:"};
     TextEditor nameEditor;
     

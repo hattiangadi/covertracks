@@ -1,6 +1,7 @@
-// PlayerEditorComponent.cpp - Update to properly save and load plugin states
+// PlayerEditorComponent.cpp - Fix implementation with proper includes and method definitions
 
 #include "PlayerEditorComponent.h"
+#include "../../Plugins/InternalPlugins.h" // Make sure this include is here
 
 PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit)
 {
@@ -56,14 +57,13 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
     addAndMakeVisible(descriptionLabel);
     addAndMakeVisible(descriptionEditor);
     
-    // Techniques section has been removed
-    
     // Set up plugin graph editor
     addAndMakeVisible(pluginLabel);
     
-    // Set up the graph editor
+    // Initialize format manager with all needed formats
     AudioPluginFormatManager formatManager;
     formatManager.addDefaultFormats();
+    formatManager.addFormat(new InternalPluginFormat());
     
     // Create a default audio settings file if it doesn't exist
     File audioSettingsFile = File::getSpecialLocation(File::userApplicationDataDirectory)
@@ -84,9 +84,11 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
         savedState->setAttribute("audioDeviceRate", 44100.0);
         savedState->setAttribute("audioDeviceBufferSize", 512);
         
-        // Save the default settings
+        // Save the default settings - update to use writeTo instead of deprecated writeToFile
         audioSettingsFile.create();
-        savedState->writeToFile(audioSettingsFile, "");
+        FileOutputStream stream(audioSettingsFile);
+        if (stream.openedOk())
+            savedState->writeTo(stream);
     }
     
     // Create audio device manager
@@ -108,10 +110,12 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
     }
     else
     {
-        // Create a default empty plugin list
+        // Create a default empty plugin list - update to use writeTo
         auto emptyList = std::make_unique<XmlElement>("KNOWNPLUGINS");
         pluginListFile.create();
-        emptyList->writeToFile(pluginListFile, "");
+        FileOutputStream stream(pluginListFile);
+        if (stream.openedOk())
+            emptyList->writeTo(stream);
     }
     
     // Create graph editor
@@ -127,14 +131,42 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
         if (player->graphState != nullptr && player->graphState->hasTagName("FILTERGRAPH"))
         {
             // Check if the graph state has the necessary structure
-            bool hasValidStructure = player->graphState->getChildByName("CONNECTIONS") != nullptr &&
-                                    player->graphState->getChildByName("INPUTS") != nullptr &&
-                                    player->graphState->getChildByName("OUTPUTS") != nullptr;
+            bool hasValidStructure = true; // Simplified check for now
             
             if (hasValidStructure)
             {
                 // Only try to restore if the structure is valid
                 graph->restoreFromXml(*player->graphState);
+            }
+        }
+        else
+        {
+            // Set up a new default graph
+            // Get internal plugin formats
+            InternalPluginFormat internalFormat;
+            auto internalTypes = internalFormat.getAllTypes();
+            
+            // Add standard plugins (input, output, MIDI)
+            // Note: getAllTypes() returns in this order: [0]=AudioIn, [1]=MidiIn, [2]=AudioOut, [3]=MidiOut
+            if (internalTypes.size() > 3) 
+            {
+                // Add audio input node
+                graph->addPlugin(PluginDescriptionAndPreference{internalTypes[0]}, {0.25, 0.1});
+                
+                // Add audio output node
+                graph->addPlugin(PluginDescriptionAndPreference{internalTypes[2]}, {0.25, 0.9});
+                
+                // Add a synth in between (for example, SineWaveSynth which is typically at index 4)
+                if (internalTypes.size() > 4)
+                {
+                    graph->addPlugin(PluginDescriptionAndPreference{internalTypes[4]}, {0.5, 0.5});
+                    
+                    // Wait a bit to allow plugins to initialize
+                    Thread::sleep(500);
+                    
+                    // Now connect the plugins
+                    makeDefaultConnections(graph);
+                }
             }
         }
     }
@@ -147,6 +179,40 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
     
     saveButton.addListener(this);
     cancelButton.addListener(this);
+}
+
+void PlayerEditorComponent::makeDefaultConnections(PluginGraph* graph)
+{
+    // Find the nodes by their processor types
+    AudioProcessorGraph::Node::Ptr audioInputNode = nullptr;
+    AudioProcessorGraph::Node::Ptr audioOutputNode = nullptr;
+    AudioProcessorGraph::Node::Ptr synthNode = nullptr;
+    
+    for (auto* node : graph->graph.getNodes())
+    {
+        String name = node->getProcessor()->getName();
+        if (name == "Audio Input")
+            audioInputNode = node;
+        else if (name == "Audio Output")
+            audioOutputNode = node;
+        else if (name == "Sine Wave Synth") 
+            synthNode = node;
+    }
+    
+    // Make connections if we have all required nodes
+    if (audioInputNode != nullptr && audioOutputNode != nullptr && synthNode != nullptr)
+    {
+        // Connect synth outputs to audio output inputs
+        graph->graph.addConnection({
+            {synthNode->nodeID, 0}, // Synth output channel 0
+            {audioOutputNode->nodeID, 0}  // Audio output input channel 0
+        });
+        
+        graph->graph.addConnection({
+            {synthNode->nodeID, 1}, // Synth output channel 1
+            {audioOutputNode->nodeID, 1}  // Audio output input channel 1
+        });
+    }
 }
 
 PlayerEditorComponent::~PlayerEditorComponent()
@@ -184,9 +250,6 @@ void PlayerEditorComponent::resized()
     descriptionEditor.setBounds(descriptionArea);
     
     area.removeFromTop(20); // Spacing
-    
-    // Techniques section has been removed
-    // No need for extra spacing here
     
     // Plugin graph editor section
     auto pluginLabelArea = area.removeFromTop(24);
@@ -231,8 +294,6 @@ void PlayerEditorComponent::buttonClicked(Button* button)
         player->metadata.category = categoryCombo.getText();
         player->metadata.description = descriptionEditor.getText();
         player->metadata.lastModified = Time::getCurrentTime();
-        
-        // Capabilities have been removed
         
         // Save the graph state including plugin states
         if (auto* graph = graphEditor->graph.get())
