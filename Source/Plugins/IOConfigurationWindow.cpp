@@ -33,10 +33,10 @@
 */
 
 #include <JuceHeader.h>
-#include "../UI/GraphEditorPanel.h"
-#include "InternalPlugins.h"
-#include "../UI/MainHostWindow.h"
 #include "IOConfigurationWindow.h"
+#include "../UI/GraphEditorPanel.h"
+#include "../UI/MainHostWindow.h"
+#include "../Player/UI/PlayerEditorComponent.h"
 
 
 //==============================================================================
@@ -539,10 +539,26 @@ MainHostWindow* IOConfigurationWindow::getMainWindow() const
     return nullptr;
 }
 
+PlayerEditorComponent* IOConfigurationWindow::getPlayerEditor() const
+{
+    auto& desktop = Desktop::getInstance();
+
+    for (int i = desktop.getNumComponents(); --i >= 0;)
+        if (auto* playerEditor = dynamic_cast<PlayerEditorComponent*> (desktop.getComponent (i)))
+            return playerEditor;
+
+    return nullptr;
+}
+
 GraphDocumentComponent* IOConfigurationWindow::getGraphEditor() const
 {
+    // First try to get it from MainHostWindow
     if (auto* mainWindow = getMainWindow())
         return mainWindow->graphHolder.get();
+    
+    // If that fails, try to get it from PlayerEditorComponent
+    if (auto* playerEditor = getPlayerEditor())
+        return playerEditor->getGraphEditor();
 
     return nullptr;
 }

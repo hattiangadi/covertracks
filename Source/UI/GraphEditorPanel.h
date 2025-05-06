@@ -37,6 +37,7 @@
 #include "../Plugins/PluginGraph.h"
 
 class MainHostWindow;
+class PlayerEditorComponent; // Forward declaration
 
 //==============================================================================
 /**
@@ -66,7 +67,7 @@ public:
     void updateComponents();
 
     //==============================================================================
-    void showPopupMenu (Point<int> position);
+    void showPopupMenu (Point<int> position, PlayerEditorComponent* playerEditorComponent = nullptr);
 
     //==============================================================================
     void beginConnectorDrag (AudioProcessorGraph::NodeAndChannel source,

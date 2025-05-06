@@ -35,6 +35,7 @@
 #include <JuceHeader.h>
 #include "GraphEditorPanel.h"
 #include "../Plugins/InternalPlugins.h"
+#include "../Player/UI/PlayerEditorComponent.h"
 #include "MainHostWindow.h"
 
 //==============================================================================
@@ -456,6 +457,39 @@ struct GraphEditorPanel::PluginComponent final : public Component,
         menu->showMenuAsync ({});
     }
 
+    void showPopupMenu(Point<int> position, PlayerEditorComponent* playerEditorComponent)
+    {
+        menu.reset(new PopupMenu);
+
+        if (playerEditorComponent != nullptr)
+        {
+            playerEditorComponent->addPluginsToMenu(*menu);
+
+            menu->showMenuAsync({},
+                            ModalCallbackFunction::create([this, playerEditorComponent, position](int r)
+                            {
+                                if (playerEditorComponent != nullptr)
+                                    if (const auto chosen = playerEditorComponent->getChosenType(r))
+                                        playerEditorComponent->createPlugin(*chosen, position);
+                            }));
+        }
+        else
+        {
+            if (auto* mainWindow = findParentComponentOfClass<MainHostWindow>())
+            {
+                mainWindow->addPluginsToMenu(*menu);
+
+                menu->showMenuAsync({},
+                                ModalCallbackFunction::create([this, mainWindow, position](int r)
+                                {
+                                    if (mainWindow != nullptr)
+                                        if (const auto chosen = mainWindow->getChosenType(r))
+                                            mainWindow->createPlugin(*chosen, position);
+                                }));
+            }
+        }
+    }  
+
     void testStateSaveLoad()
     {
         if (auto* processor = getProcessor())
@@ -778,16 +812,27 @@ void GraphEditorPanel::paint (Graphics& g)
     g.fillAll (getLookAndFeel().findColour (ResizableWindow::backgroundColourId));
 }
 
-void GraphEditorPanel::mouseDown (const MouseEvent& e)
+void GraphEditorPanel::mouseDown(const MouseEvent& e)
 {
     if (isOnTouchDevice())
     {
         originalTouchPos = e.position.toInt();
-        startTimer (750);
+        startTimer(750);
     }
 
     if (e.mods.isPopupMenu())
-        showPopupMenu (e.position.toInt());
+    {
+        // Check if this was called from the PlayerEditorComponent
+        if (auto* editor = dynamic_cast<PlayerEditorComponent*>(getTopLevelComponent()))
+        {
+            showPopupMenu(e.position.toInt(), editor);
+        }
+        else
+        {
+            // Default behavior for MainHostWindow
+            showPopupMenu(e.position.toInt());
+        }
+    }
 }
 
 void GraphEditorPanel::mouseUp (const MouseEvent&)
@@ -803,6 +848,39 @@ void GraphEditorPanel::mouseDrag (const MouseEvent& e)
 {
     if (isOnTouchDevice() && e.getDistanceFromDragStart() > 5)
         stopTimer();
+}
+
+void GraphEditorPanel::showPopupMenu(Point<int> position, PlayerEditorComponent* playerEditorComponent)
+{
+    PopupMenu menu;
+    
+    if (playerEditorComponent != nullptr)
+    {
+        playerEditorComponent->addPluginsToMenu(menu);
+        
+        menu.showMenuAsync({},
+                        ModalCallbackFunction::create([this, playerEditorComponent, position](int r)
+                        {
+                            if (playerEditorComponent != nullptr)
+                                if (const auto chosen = playerEditorComponent->getChosenType(r))
+                                    playerEditorComponent->createPlugin(*chosen, position);
+                        }));
+    }
+    else
+    {
+        if (auto* mainWindow = findParentComponentOfClass<MainHostWindow>())
+        {
+            mainWindow->addPluginsToMenu(menu);
+            
+            menu.showMenuAsync({},
+                            ModalCallbackFunction::create([this, mainWindow, position](int r)
+                            {
+                                if (mainWindow != nullptr)
+                                    if (const auto chosen = mainWindow->getChosenType(r))
+                                        mainWindow->createPlugin(*chosen, position);
+                            }));
+        }
+    }
 }
 
 void GraphEditorPanel::createNewPlugin (const PluginDescriptionAndPreference& desc, Point<int> position)
@@ -892,23 +970,6 @@ void GraphEditorPanel::updateComponents()
     }
 }
 
-void GraphEditorPanel::showPopupMenu (Point<int> mousePos)
-{
-    menu.reset (new PopupMenu);
-
-    if (auto* mainWindow = findParentComponentOfClass<MainHostWindow>())
-    {
-        mainWindow->addPluginsToMenu (*menu);
-
-        menu->showMenuAsync ({},
-                             ModalCallbackFunction::create ([this, mousePos] (int r)
-                                                            {
-                                                                if (auto* mainWin = findParentComponentOfClass<MainHostWindow>())
-                                                                    if (const auto chosen = mainWin->getChosenType (r))
-                                                                        createNewPlugin (*chosen, mousePos);
-                                                            }));
-    }
-}
 
 void GraphEditorPanel::beginConnectorDrag (AudioProcessorGraph::NodeAndChannel source,
                                            AudioProcessorGraph::NodeAndChannel dest,

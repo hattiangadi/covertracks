@@ -15,13 +15,22 @@ public:
     
     void resized() override;
     void paint(Graphics& g) override;
+    void mouseDown(const MouseEvent& e) override;
     
     // Button::Listener overrides
     void buttonClicked(Button* button) override;
     
-    // Handle mouse events
-    void mouseDown(const MouseEvent& e) override;
+    void createPlugin(const PluginDescriptionAndPreference& desc, Point<int> pos);
     
+    void addPluginsToMenu(PopupMenu& menu);
+    
+    void addToMenu(const KnownPluginList::PluginTree& tree,
+                  PopupMenu& m,
+                  const Array<PluginDescription>& allPlugins,
+                  Array<PluginDescriptionAndPreference>& addedPlugins);
+
+    std::optional<PluginDescriptionAndPreference> getChosenType(int menuID) const;
+
     // Get the edited player data
     std::unique_ptr<PlayerManager::Player> getPlayer();
     
@@ -37,18 +46,21 @@ public:
     void addListener(Listener* listener) { listeners.add(listener); }
     void removeListener(Listener* listener) { listeners.remove(listener); }
     
+    // Getter for the graph editor component
+    GraphDocumentComponent* getGraphEditor() const { return graphEditor.get(); }
+    
 private:
     void makeDefaultConnections(PluginGraph* graph);
     void createDefaultGraph(PluginGraph* graph);
-    void showPluginMenu(Point<int> position);
+
+    Array<PluginDescriptionAndPreference> pluginDescriptionsAndPreference;
+    std::vector<PluginDescription> internalTypes;
+    static constexpr int menuIDBase = 0x324503f4;
     
-    void addPluginsToMenu(const KnownPluginList::PluginTree& tree,
-                         PopupMenu& menu,
-                         const Array<PluginDescription>& allPlugins,
-                         Array<PluginDescriptionAndPreference>& addedPlugins,
-                         int& nextMenuID);
-
-
+    // Plugin system components
+    AudioPluginFormatManager formatManager;
+    AudioDeviceManager deviceManager;
+    KnownPluginList knownPluginList;
     Label nameLabel {"nameLabel", "Name:"};
     TextEditor nameEditor;
     
@@ -58,8 +70,8 @@ private:
     Label descriptionLabel {"descriptionLabel", "Description:"};
     TextEditor descriptionEditor;
     
-    // Techniques section has been removed
-    
+    static bool containsDuplicateNames(const Array<PluginDescription>& plugins, const String& name);
+
     // Plugin graph editor
     Label pluginLabel {"pluginLabel", "Plugin Configuration:"};
     std::unique_ptr<GraphDocumentComponent> graphEditor;

@@ -1,6 +1,7 @@
 // PlayerEditorComponent.cpp with fixes
 #include "PlayerEditorComponent.h"
 #include "../../Plugins/InternalPlugins.h"
+#include "../../UI/MainHostWindow.h"
 
 PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit)
 {
@@ -59,66 +60,19 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
     // Set up plugin graph editor
     addAndMakeVisible(pluginLabel);
     
-    // Initialize format manager with all needed formats
-    AudioPluginFormatManager formatManager;
+    // Set up format manager and internal format types
+    InternalPluginFormat internalFormat;
+    internalTypes = internalFormat.getAllTypes();
+    
+    // Create our own plugin system components
     formatManager.addDefaultFormats();
     formatManager.addFormat(new InternalPluginFormat());
     
-    // Create a default audio settings file if it doesn't exist
-    File audioSettingsFile = File::getSpecialLocation(File::userApplicationDataDirectory)
-                             .getChildFile(JUCEApplication::getInstance()->getApplicationName())
-                             .getChildFile("AudioSettings.xml");
+    // Initialize the device manager
+    deviceManager.initialise(2, 2, nullptr, true);
     
-    std::unique_ptr<XmlElement> savedState;
-    if (audioSettingsFile.existsAsFile())
-    {
-        savedState = XmlDocument::parse(audioSettingsFile);
-    }
-    else
-    {
-        // Create a default audio settings configuration
-        savedState = std::make_unique<XmlElement>("DEVICESETUP");
-        savedState->setAttribute("audioOutputDeviceName", "");
-        savedState->setAttribute("audioInputDeviceName", "");
-        savedState->setAttribute("audioDeviceRate", 44100.0);
-        savedState->setAttribute("audioDeviceBufferSize", 512);
-        
-        // Save the default settings
-        audioSettingsFile.create();
-        FileOutputStream stream(audioSettingsFile);
-        if (stream.openedOk())
-            savedState->writeTo(stream);
-    }
-    
-    // Create audio device manager
-    auto* deviceManager = new AudioDeviceManager();
-    deviceManager->initialise(2, 2, savedState.get(), true);
-    
-    // Get plugin list
-    KnownPluginList knownPluginList;
-    
-    // Try to load plugin list from a file
-    File pluginListFile = File::getSpecialLocation(File::userApplicationDataDirectory)
-                         .getChildFile(JUCEApplication::getInstance()->getApplicationName())
-                         .getChildFile("PluginList.xml");
-    
-    if (pluginListFile.existsAsFile())
-    {
-        if (auto savedPluginList = XmlDocument::parse(pluginListFile))
-            knownPluginList.recreateFromXml(*savedPluginList);
-    }
-    else
-    {
-        // Create a default empty plugin list
-        auto emptyList = std::make_unique<XmlElement>("KNOWNPLUGINS");
-        pluginListFile.create();
-        FileOutputStream stream(pluginListFile);
-        if (stream.openedOk())
-            emptyList->writeTo(stream);
-    }
-    
-    // Create graph editor
-    graphEditor = std::make_unique<GraphDocumentComponent>(formatManager, *deviceManager, knownPluginList);
+    // Create the graph editor with our components
+    graphEditor = std::make_unique<GraphDocumentComponent>(formatManager, deviceManager, knownPluginList);
     
     // Make the graph editor visually distinct
     graphEditor->setColour(ResizableWindow::backgroundColourId, Colours::lightgrey);
@@ -133,9 +87,7 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
         if (player->graphState != nullptr && player->graphState->hasTagName("FILTERGRAPH"))
         {
             // Check if the graph state has the necessary structure
-            bool hasValidStructure = player->graphState->getChildByName("CONNECTIONS") != nullptr &&
-                                    player->graphState->getChildByName("INPUTS") != nullptr &&
-                                    player->graphState->getChildByName("OUTPUTS") != nullptr;
+            bool hasValidStructure = player->graphState->getChildByName("CONNECTIONS") != nullptr;
             
             if (hasValidStructure)
             {
@@ -161,11 +113,6 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
     
     addAndMakeVisible(graphEditor.get());
     
-    // We don't need to add a mouse listener since the GraphEditorPanel already handles right-clicks
-    // Just make sure we set up the graph panel correctly
-    if (graphEditor->graphPanel != nullptr)
-        graphEditor->graphPanel->updateComponents();
-    
     // Set up buttons
     addAndMakeVisible(saveButton);
     addAndMakeVisible(cancelButton);
@@ -184,14 +131,14 @@ void PlayerEditorComponent::createDefaultGraph(PluginGraph* graph)
 {
     // Set up a new default graph
     InternalPluginFormat internalFormat;
-    auto internalTypes = internalFormat.getAllTypes();
+    auto pluginTypes = internalFormat.getAllTypes();
     
-    if (internalTypes.size() > 4)
+    if (pluginTypes.size() > 4)
     {
         // Add standard nodes: Audio Input, Audio Output, and Sine Wave Synth
-        graph->addPlugin(PluginDescriptionAndPreference{internalTypes[0]}, {0.25, 0.1});  // Audio Input
-        graph->addPlugin(PluginDescriptionAndPreference{internalTypes[2]}, {0.25, 0.9});  // Audio Output
-        graph->addPlugin(PluginDescriptionAndPreference{internalTypes[4]}, {0.5, 0.5});   // Sine Wave Synth
+        graph->addPlugin(PluginDescriptionAndPreference{pluginTypes[0]}, {0.25, 0.1});  // Audio Input
+        graph->addPlugin(PluginDescriptionAndPreference{pluginTypes[2]}, {0.25, 0.9});  // Audio Output
+        graph->addPlugin(PluginDescriptionAndPreference{pluginTypes[4]}, {0.5, 0.5});   // Sine Wave Synth
         
         // Wait for plugins to initialize
         Thread::sleep(500);
@@ -252,128 +199,81 @@ void PlayerEditorComponent::makeDefaultConnections(PluginGraph* graph)
     }
 }
 
-
-
-void PlayerEditorComponent::mouseDown(const MouseEvent& e)
+void PlayerEditorComponent::createPlugin(const PluginDescriptionAndPreference& desc, Point<int> pos)
 {
-    // Check if this is a right-click on the graph editor area
-    if (e.mods.isPopupMenu() && graphEditor != nullptr && graphEditor->graphPanel != nullptr)
-    {
-        // Find the component that was clicked
-        auto* component = getComponentAt(e.getPosition());
-        
-        // Check if the click was on the graph editor or one of its children
-        if (component == graphEditor.get() || 
-            (component != nullptr && graphEditor->isParentOf(component)))
-        {
-            // Convert the mouse position to graph panel coordinates
-            auto graphPanelPos = graphEditor->graphPanel->getLocalPoint(this, e.getPosition());
-            
-            // Show the plugin menu
-            showPluginMenu(graphPanelPos);
-        }
-    }
+    if (graphEditor != nullptr)
+        graphEditor->createNewPlugin(desc, pos);
 }
 
-void PlayerEditorComponent::showPluginMenu(Point<int> position)
+
+
+// Replace the old addPluginsToMenu method with this new version:
+
+void PlayerEditorComponent::addPluginsToMenu(PopupMenu& m)
 {
-    if (graphEditor == nullptr || graphEditor->graphPanel == nullptr)
-        return;
-    
-    PopupMenu menu;
-    
-    // Add internal plugins
-    InternalPluginFormat internalFormat;
-    auto internalTypes = internalFormat.getAllTypes();
-    
-    // First add internal plugins directly to the menu
-    int menuID = 1;
-    for (auto& type : internalTypes)
+    if (graphEditor != nullptr)
     {
-        menu.addItem(menuID++, type.name + " (" + type.pluginFormatName + ")");
+        int i = 0;
+        
+        // Use the class member internalTypes instead of creating a local variable
+        for (auto& t : internalTypes)
+            m.addItem(++i, t.name + " (" + t.pluginFormatName + ")");
     }
-    
-    menu.addSeparator();
-    
-    // Get the plugin list from the AudioPluginFormatManager
-    KnownPluginList knownPluginList;
-    
+        
+    m.addSeparator();
+        
+    // Get plugin list
+    KnownPluginList tempKnownPluginList;
+        
     // Try to load plugin list from a file
     File pluginListFile = File::getSpecialLocation(File::userApplicationDataDirectory)
                          .getChildFile(JUCEApplication::getInstance()->getApplicationName())
                          .getChildFile("PluginList.xml");
-    
+        
     if (pluginListFile.existsAsFile())
     {
         if (auto savedPluginList = XmlDocument::parse(pluginListFile))
-            knownPluginList.recreateFromXml(*savedPluginList);
+            tempKnownPluginList.recreateFromXml(*savedPluginList);
     }
-    
-    auto pluginDescriptions = knownPluginList.getTypes();
-    
+        
+    auto pluginDescriptions = tempKnownPluginList.getTypes();
+        
     // This avoids showing the internal types again later on in the list
     pluginDescriptions.removeIf([](PluginDescription& desc)
     {
         return desc.pluginFormatName == InternalPluginFormat::getIdentifier();
     });
-    
+        
     // Create a tree structure for the plugins
-    auto tree = KnownPluginList::createTree(pluginDescriptions, KnownPluginList::sortByCategory);
-    Array<PluginDescriptionAndPreference> pluginDescriptionsAndPreference;
-    
-    // Add the plugins to the menu
-    addPluginsToMenu(*tree, menu, pluginDescriptions, pluginDescriptionsAndPreference, menuID);
-    
-    menu.showMenuAsync(PopupMenu::Options(),
-                      [this, position, internalTypes, pluginDescriptionsAndPreference](int result)
-                      {
-                          // Handle internal plugins (first in the menu)
-                          int internalIndex = result - 1;
-                          
-                          if (isPositiveAndBelow(internalIndex, internalTypes.size()))
-                          {
-                              // Add the selected internal plugin to the graph
-                              if (graphEditor != nullptr && graphEditor->graph != nullptr)
-                              {
-                                  graphEditor->createNewPlugin(PluginDescriptionAndPreference{internalTypes[(size_t)internalIndex]}, position);
-                              }
-                              return;
-                          }
-                          
-                          // Handle external plugins
-                          int externalIndex = result - (int)internalTypes.size() - 1;
-                          
-                          if (isPositiveAndBelow(externalIndex, pluginDescriptionsAndPreference.size()))
-                          {
-                              // Add the selected external plugin to the graph
-                              if (graphEditor != nullptr && graphEditor->graph != nullptr)
-                              {
-                                  graphEditor->createNewPlugin(pluginDescriptionsAndPreference[externalIndex], position);
-                              }
-                          }
-                      });
+    auto tree = KnownPluginList::createTree(pluginDescriptions, KnownPluginList::sortByManufacturer);
+    pluginDescriptionsAndPreference.clear();
+        
+    addToMenu(*tree, m, pluginDescriptions, pluginDescriptionsAndPreference);
 }
 
-void PlayerEditorComponent::addPluginsToMenu(const KnownPluginList::PluginTree& tree,
-                                      PopupMenu& menu,
-                                      const Array<PluginDescription>& allPlugins,
-                                      Array<PluginDescriptionAndPreference>& addedPlugins,
-                                      int& nextMenuID)
+void PlayerEditorComponent::addToMenu(const KnownPluginList::PluginTree& tree,
+                                   PopupMenu& m,
+                                   const Array<PluginDescription>& allPlugins,
+                                   Array<PluginDescriptionAndPreference>& addedPlugins)
 {
-    // Add subfolders first
-    for (auto* subFolder : tree.subFolders)
+    for (auto* sub : tree.subFolders)
     {
         PopupMenu subMenu;
-        addPluginsToMenu(*subFolder, subMenu, allPlugins, addedPlugins, nextMenuID);
+        addToMenu(*sub, subMenu, allPlugins, addedPlugins);
         
-        menu.addSubMenu(subFolder->folder, subMenu, true, nullptr, false, 0);
+        m.addSubMenu(sub->folder, subMenu, true, nullptr, false, 0);
     }
     
-    // Then add plugins in this folder
-    for (const auto& plugin : tree.plugins)
+    auto addPlugin = [&] (const auto& descriptionAndPreference, const auto& pluginName)
     {
-        // Create a descriptive name for the plugin
-        String name = plugin.name;
+        addedPlugins.add(descriptionAndPreference);
+        const auto menuID = addedPlugins.size() + 1000; // Use 1000 as base ID for menu items
+        m.addItem(menuID, pluginName, true, false);
+    };
+    
+    for (auto& plugin : tree.plugins)
+    {
+        auto name = plugin.name;
         
         // Check if there are duplicate names in this folder
         bool hasDuplicates = false;
@@ -388,13 +288,33 @@ void PlayerEditorComponent::addPluginsToMenu(const KnownPluginList::PluginTree& 
         
         // If there are duplicates, add the format name to distinguish them
         if (hasDuplicates)
-            name << " (" << plugin.pluginFormatName << ")";
+            name << " (" << plugin.pluginFormatName << ')';
         
-        // Add the plugin to the menu and store its description
-        menu.addItem(nextMenuID, name);
-        addedPlugins.add(PluginDescriptionAndPreference{plugin});
-        ++nextMenuID;
+        addPlugin(PluginDescriptionAndPreference{plugin, PluginDescriptionAndPreference::UseARA::no}, name);
+        
+       #if JUCE_PLUGINHOST_ARA && (JUCE_MAC || JUCE_WINDOWS || JUCE_LINUX)
+        if (plugin.hasARAExtension)
+        {
+            name << " (ARA)";
+            addPlugin(PluginDescriptionAndPreference{plugin}, name);
+        }
+       #endif
     }
+}
+
+std::optional<PluginDescriptionAndPreference> PlayerEditorComponent::getChosenType(const int menuID) const
+{
+    const auto internalIndex = menuID - 1;
+    
+    if (isPositiveAndBelow(internalIndex, internalTypes.size()))
+        return PluginDescriptionAndPreference{internalTypes[(size_t)internalIndex]};
+    
+    const auto externalIndex = menuID - 1000; // 1000 is the base ID for external plugins
+    
+    if (isPositiveAndBelow(externalIndex, pluginDescriptionsAndPreference.size()))
+        return pluginDescriptionsAndPreference[externalIndex];
+    
+    return {};
 }
 
 void PlayerEditorComponent::resized()
@@ -475,6 +395,17 @@ void PlayerEditorComponent::paint(Graphics& g)
                                          graphBounds.getWidth(), 25);
     g.drawText("Right-click to add plugins, drag between pins to connect them",
                instructionRect, Justification::centred, true);
+}
+
+void PlayerEditorComponent::mouseDown(const MouseEvent& e)
+{
+    // Handle right-click to show the plugin menu
+    if (e.mods.isPopupMenu() && graphEditor != nullptr && graphEditor->graphPanel != nullptr)
+    {
+        // Convert the mouse position to the graph panel's coordinate space
+        auto positionInGraph = e.getEventRelativeTo(graphEditor->graphPanel.get()).getPosition();
+        graphEditor->graphPanel->showPopupMenu(positionInGraph, this);
+    }
 }
 
 void PlayerEditorComponent::buttonClicked(Button* button)

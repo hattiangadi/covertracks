@@ -35,6 +35,7 @@
 #pragma once
 
 class MainHostWindow;
+class PlayerEditorComponent;
 class GraphDocumentComponent;
 
 
@@ -60,6 +61,7 @@ private:
     void update();
 
     MainHostWindow* getMainWindow() const;
+    PlayerEditorComponent* getPlayerEditor() const;
     GraphDocumentComponent* getGraphEditor() const;
     AudioProcessorGraph* getGraph() const;
     AudioProcessorGraph::NodeID getNodeID() const;
