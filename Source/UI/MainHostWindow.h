@@ -126,6 +126,14 @@ public:
 
     std::unique_ptr<PlayerLibraryComponent> playerLibraryWindow;
 
+    KnownPluginList& getKnownPluginList() { return knownPluginList; }
+    AudioPluginFormatManager& getFormatManager() { return formatManager; }
+    const std::vector<PluginDescription>& getInternalPluginTypes() const { return internalTypes; }
+    AudioDeviceManager& getDeviceManager() { return deviceManager; }
+
+    void addPluginsToMenu(PopupMenu& menu);
+    std::optional<PluginDescriptionAndPreference> getChosenType(int menuID) const;
+
 
 private:
     //==============================================================================
@@ -148,8 +156,12 @@ private:
 
     class PluginListWindow;
     std::unique_ptr<PluginListWindow> pluginListWindow;
-    
 
+    void addPluginTreeToMenu(const KnownPluginList::PluginTree& tree, 
+        PopupMenu& m,
+        const Array<PluginDescription>& allPlugins);
+    
+    static constexpr int menuIDBase = 0x324503f4;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainHostWindow)
 };

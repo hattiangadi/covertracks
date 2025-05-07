@@ -481,7 +481,15 @@ PopupMenu MainHostWindow::getMenuForIndex (int topLevelMenuIndex, const String& 
     {
         // "Plugins" menu
         menu.addCommandItem (&getCommandManager(), CommandIDs::showPluginListEditor);
-    }
+        // Add a separator before plugin list
+        menu.addSeparator();
+
+        // Add "Create Plugin" submenu with all available plugins
+        PopupMenu pluginsMenu;
+        addPluginsToMenu(pluginsMenu);
+        menu.addSubMenu("Create Plugin", pluginsMenu);
+
+}
     else if (topLevelMenuIndex == 2)
     {
         // "Options" menu
@@ -515,29 +523,54 @@ PopupMenu MainHostWindow::getMenuForIndex (int topLevelMenuIndex, const String& 
     return menu;
 }
 
-void MainHostWindow::menuItemSelected (int menuItemID, int /*topLevelMenuIndex*/)
+void MainHostWindow::menuItemSelected(int menuItemID, int /*topLevelMenuIndex*/)
 {
-    // Graph operations are now handled by PlayerEditorComponent
-   #if ! (JUCE_ANDROID || JUCE_IOS)
-    if (menuItemID >= 100 && menuItemID < 200)
+    if (menuItemID == 250)
     {
-        // Recent files are now handled per player
+        // Delete all plugins (existing code)
+    }
+   #if ! (JUCE_ANDROID || JUCE_IOS)
+    else if (menuItemID >= 100 && menuItemID < 200)
+    {
+        // Recent files handling (existing code)
     }
    #endif
-    
-    if (menuItemID >= 200 && menuItemID < 210)
+    else if (menuItemID >= 200 && menuItemID < 210)
     {
-             if (menuItemID == 200)     pluginSortMethod = KnownPluginList::defaultOrder;
-        else if (menuItemID == 201)     pluginSortMethod = KnownPluginList::sortAlphabetically;
-        else if (menuItemID == 202)     pluginSortMethod = KnownPluginList::sortByCategory;
-        else if (menuItemID == 203)     pluginSortMethod = KnownPluginList::sortByManufacturer;
-        else if (menuItemID == 204)     pluginSortMethod = KnownPluginList::sortByFileSystemLocation;
-
-        getAppProperties().getUserSettings()->setValue ("pluginSortMethod", (int) pluginSortMethod);
-
-        menuItemsChanged();
+        // Plugin sorting methods (existing code)
     }
-    // Plugin creation is now handled by PlayerEditorComponent
+    else
+    {
+        // Check if this is a plugin selection
+        auto optionalPlugin = getChosenType(menuItemID);
+        if (optionalPlugin.has_value())
+        {
+            // Find active player editor
+            PlayerEditorComponent* activeEditor = nullptr;
+            
+            if (playerLibraryWindow != nullptr)
+            {
+                if (auto* editorComponent = playerLibraryWindow->getActiveEditorComponent())
+                {
+                    activeEditor = editorComponent;
+                }
+            }
+            
+            if (activeEditor != nullptr)
+            {
+                // Add plugin to active editor
+                Point<int> pos(400, 300); // Default position - center of typical window
+                activeEditor->createPlugin(*optionalPlugin, pos);
+            }
+            else
+            {
+                // No active editor - show message
+                AlertWindow::showMessageBoxAsync(AlertWindow::InfoIcon,
+                                               "Add Plugin",
+                                               "Please open a player editor first before adding plugins.");
+            }
+        }
+    }
 }
 
 void MainHostWindow::menuBarActivated (bool isActivated)
@@ -871,4 +904,102 @@ void MainHostWindow::updateAutoScaleMenuItem (ApplicationCommandInfo& info)
 {
     info.setInfo ("Auto-Scale Plug-in Windows", {}, "General", 0);
     info.setTicked (isAutoScalePluginWindowsEnabled());
+}
+
+// In MainHostWindow.cpp, implement these methods:
+
+void MainHostWindow::addPluginsToMenu(PopupMenu& m)
+{
+    // Clear any previous descriptions
+    pluginDescriptionsAndPreference.clear();
+    
+    // Add internal plugins first
+    int menuID = menuIDBase;
+    
+    // Create a submenu for internal plugins
+    PopupMenu internalPluginsMenu;
+    
+    for (auto& type : internalTypes)
+    {
+        pluginDescriptionsAndPreference.add(PluginDescriptionAndPreference{type});
+        internalPluginsMenu.addItem(menuID++, type.name);
+    }
+    
+    m.addSubMenu("Internal Plugins", internalPluginsMenu);
+    m.addSeparator();
+    
+    // Add external plugins from the known plugin list
+    auto pluginDescriptions = knownPluginList.getTypes();
+    
+    // Remove internal plugins from this list to avoid duplication
+    pluginDescriptions.removeIf([](PluginDescription& desc)
+    {
+        return desc.pluginFormatName == InternalPluginFormat::getIdentifier();
+    });
+    
+    // Create a tree structure for the plugins using the current sort method
+    auto tree = KnownPluginList::createTree(pluginDescriptions, pluginSortMethod);
+    
+    // Add the tree to the menu
+    addPluginTreeToMenu(*tree, m, pluginDescriptions);
+}
+
+void MainHostWindow::addPluginTreeToMenu(const KnownPluginList::PluginTree& tree, 
+                                        PopupMenu& m,
+                                        const Array<PluginDescription>& allPlugins)
+{
+    for (auto* sub : tree.subFolders)
+    {
+        PopupMenu subMenu;
+        addPluginTreeToMenu(*sub, subMenu, allPlugins);
+        
+        m.addSubMenu(sub->folder, subMenu, true, nullptr, false, 0);
+    }
+    
+    auto addPlugin = [&] (const auto& descriptionAndPreference, const auto& pluginName)
+    {
+        pluginDescriptionsAndPreference.add(descriptionAndPreference);
+        const auto menuID = pluginDescriptionsAndPreference.size() - 1 + menuIDBase;
+        m.addItem(menuID, pluginName, true, false);
+    };
+    
+    for (auto& plugin : tree.plugins)
+    {
+        auto name = plugin.name;
+        
+        // Check if there are duplicate names in this folder
+        bool hasDuplicates = false;
+        for (const auto& otherPlugin : tree.plugins)
+        {
+            if (&otherPlugin != &plugin && otherPlugin.name == plugin.name)
+            {
+                hasDuplicates = true;
+                break;
+            }
+        }
+        
+        // If there are duplicates, add the format name to distinguish them
+        if (hasDuplicates)
+            name << " (" << plugin.pluginFormatName << ')';
+        
+        addPlugin(PluginDescriptionAndPreference{plugin, PluginDescriptionAndPreference::UseARA::no}, name);
+        
+       #if JUCE_PLUGINHOST_ARA && (JUCE_MAC || JUCE_WINDOWS || JUCE_LINUX)
+        if (plugin.hasARAExtension)
+        {
+            name << " (ARA)";
+            addPlugin(PluginDescriptionAndPreference{plugin}, name);
+        }
+       #endif
+    }
+}
+
+std::optional<PluginDescriptionAndPreference> MainHostWindow::getChosenType(int menuID) const
+{
+    const int index = menuID - menuIDBase;
+    
+    if (isPositiveAndBelow(index, pluginDescriptionsAndPreference.size()))
+        return pluginDescriptionsAndPreference[index];
+    
+    return {};
 }

@@ -10,11 +10,9 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
     {
         player = std::make_unique<PlayerManager::Player>();
         player->metadata = playerToEdit->metadata;
-        player->graphFilePath = playerToEdit->graphFilePath;
         
-        // Copy the graph state (as a backup in case file loading fails)
-        if (playerToEdit->graphState != nullptr)
-            player->graphState = std::make_unique<XmlElement>(*playerToEdit->graphState);
+        // Copy the graph file path
+        player->graphFilePath = playerToEdit->graphFilePath;
     }
     else
     {
@@ -25,9 +23,59 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
         player->metadata.description = "A new player configuration";
         player->metadata.created = Time::getCurrentTime();
         player->metadata.lastModified = player->metadata.created;
+    }
+    
+    MainHostWindow* mainWindow = nullptr;
+    
+    // Try to find MainHostWindow by traversing parent components
+    Component* parent = getParentComponent();
+    while (parent != nullptr) {
+        if (auto* mw = dynamic_cast<MainHostWindow*>(parent)) {
+            mainWindow = mw;
+            break;
+        }
+        parent = parent->getParentComponent();
+    }
+    
+    // If not found via parents, try getting it from the application window
+    if (mainWindow == nullptr) {
+        auto& desktop = Desktop::getInstance();
+        for (int i = 0; i < desktop.getNumComponents(); ++i) {
+            if (auto* mw = dynamic_cast<MainHostWindow*>(desktop.getComponent(i))) {
+                mainWindow = mw;
+                break;
+            }
+        }
+    }
+    
+    // Now safely use the mainWindow if found
+    if (mainWindow != nullptr) {
+        formatManager = &mainWindow->getFormatManager();
+        knownPluginList = &mainWindow->getKnownPluginList();
+        internalTypes = &mainWindow->getInternalPluginTypes();
+        deviceManager = &mainWindow->getDeviceManager();
+    } else {
+        // Fallback to local resources if MainHostWindow not found
+        static AudioPluginFormatManager fallbackFormatManager;
+        fallbackFormatManager.addDefaultFormats();
+        fallbackFormatManager.addFormat(new InternalPluginFormat());
         
-        // Create an empty graph state
-        player->graphState = std::make_unique<XmlElement>("FILTERGRAPH");
+        static KnownPluginList fallbackPluginList;
+        static AudioDeviceManager fallbackDeviceManager;
+        fallbackDeviceManager.initialise(2, 2, nullptr, true);
+        
+        // Create internal types
+        InternalPluginFormat internalFormat;
+        static std::vector<PluginDescription> fallbackInternalTypes = internalFormat.getAllTypes();
+        
+        // Use local resources
+        formatManager = &fallbackFormatManager;
+        knownPluginList = &fallbackPluginList;
+        internalTypes = &fallbackInternalTypes;
+        deviceManager = &fallbackDeviceManager;
+        
+        // Log warning
+        DBG("Warning: MainHostWindow not found, using local plugin resources.");
     }
     
     // Set up name editor
@@ -36,7 +84,7 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
     addAndMakeVisible(nameLabel);
     addAndMakeVisible(nameEditor);
     
-    // Set up category combo
+    // Set up category combo (rest of UI setup remains the same)
     categoryCombo.addItem("Keyboard", 1);
     categoryCombo.addItem("Guitar", 2);
     categoryCombo.addItem("Bass", 3);
@@ -63,30 +111,10 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
     // Set up plugin graph editor
     addAndMakeVisible(pluginLabel);
     
-    // Create our own plugin system components
-    formatManager.addDefaultFormats();
-    formatManager.addFormat(new InternalPluginFormat());
-    
-    // Initialize internal plugin types
-    InternalPluginFormat internalFormat;
-    internalTypes = internalFormat.getAllTypes();
-    
-    // Load the plugin list from file
-    File pluginListFile = File::getSpecialLocation(File::userApplicationDataDirectory)
-                          .getChildFile(JUCEApplication::getInstance()->getApplicationName())
-                          .getChildFile("PluginList.xml");
-    
-    if (pluginListFile.existsAsFile())
-    {
-        if (auto savedPluginList = XmlDocument::parse(pluginListFile))
-            knownPluginList.recreateFromXml(*savedPluginList);
-    }
-    
-    // Initialize the device manager
-    deviceManager.initialise(2, 2, nullptr, true);
-    
-    // Create the graph editor with our components
-    graphEditor = std::make_unique<GraphDocumentComponent>(formatManager, deviceManager, knownPluginList);
+    // Create the graph editor with global components
+    graphEditor = std::make_unique<GraphDocumentComponent>(*formatManager, 
+                                                          *deviceManager, 
+                                                          *knownPluginList);
     
     // Make the graph editor visually distinct
     graphEditor->setColour(ResizableWindow::backgroundColourId, Colours::lightgrey);
@@ -241,8 +269,6 @@ void PlayerEditorComponent::createPlugin(const PluginDescriptionAndPreference& d
 
 
 
-// Replace the old addPluginsToMenu method with this new version:
-
 void PlayerEditorComponent::addPluginsToMenu(PopupMenu& m)
 {
     // Clear any previous plugin descriptions
@@ -254,29 +280,35 @@ void PlayerEditorComponent::addPluginsToMenu(PopupMenu& m)
     // Create a submenu for internal plugins
     PopupMenu internalPluginsMenu;
     
-    for (auto& type : internalTypes)
+    if (internalTypes != nullptr)
     {
-        pluginDescriptionsAndPreference.add(PluginDescriptionAndPreference{type});
-        internalPluginsMenu.addItem(menuID++, type.name);
+        for (auto& type : *internalTypes)
+        {
+            pluginDescriptionsAndPreference.add(PluginDescriptionAndPreference{type});
+            internalPluginsMenu.addItem(menuID++, type.name);
+        }
+        
+        m.addSubMenu("Internal Plugins", internalPluginsMenu);
+        m.addSeparator();
     }
     
-    m.addSubMenu("Internal Plugins", internalPluginsMenu);
-    m.addSeparator();
-    
-    // Add external plugins from the known plugin list
-    auto pluginDescriptions = knownPluginList.getTypes();
-    
-    // Remove internal plugins from this list to avoid duplication
-    pluginDescriptions.removeIf([](PluginDescription& desc)
+    // Add external plugins from the central known plugin list
+    if (knownPluginList != nullptr)
     {
-        return desc.pluginFormatName == InternalPluginFormat::getIdentifier();
-    });
-    
-    // Create a tree structure for the plugins
-    auto tree = KnownPluginList::createTree(pluginDescriptions, KnownPluginList::sortByManufacturer);
-    
-    // Add the tree to the menu
-    addToMenu(*tree, m, pluginDescriptions, pluginDescriptionsAndPreference);
+        auto pluginDescriptions = knownPluginList->getTypes();
+        
+        // Remove internal plugins from this list to avoid duplication
+        pluginDescriptions.removeIf([](PluginDescription& desc)
+        {
+            return desc.pluginFormatName == InternalPluginFormat::getIdentifier();
+        });
+        
+        // Create a tree structure for the plugins
+        auto tree = KnownPluginList::createTree(pluginDescriptions, KnownPluginList::sortByManufacturer);
+        
+        // Add the tree to the menu
+        addToMenu(*tree, m, pluginDescriptions, pluginDescriptionsAndPreference);
+    }
     
     // Add option to scan for plugins
     m.addSeparator();
@@ -345,12 +377,12 @@ std::optional<PluginDescriptionAndPreference> PlayerEditorComponent::getChosenTy
             return pluginDescriptionsAndPreference[i];
     }
     // If it's an internal plugin
-    else if (menuID >= menuIDBase && menuID < menuIDBase + internalTypes.size())
+    else if (internalTypes != nullptr && menuID >= menuIDBase && menuID < menuIDBase + static_cast<int>(internalTypes->size()))
     {
         const int i = menuID - menuIDBase;
         
-        if (isPositiveAndBelow(i, internalTypes.size()))
-            return PluginDescriptionAndPreference{internalTypes[i]};
+        if (isPositiveAndBelow(i, static_cast<int>(internalTypes->size())))
+            return PluginDescriptionAndPreference{(*internalTypes)[i]};
     }
     
     return {};
@@ -445,7 +477,8 @@ void PlayerEditorComponent::paint(Graphics& g)
                        "Graph not saved yet";
     
     g.setColour(player->graphFilePath.existsAsFile() ? Colours::darkgreen : Colours::darkred);
-    g.setFont(Font(12.0f));
+    FontOptions statusFont(Font::getDefaultSansSerifFontName(), 12.0f, Font::plain);
+    g.setFont(statusFont);
     g.drawText(saveStatus, getWidth() - 250, getHeight() - 20, 240, 20, Justification::right, true);
 }
 

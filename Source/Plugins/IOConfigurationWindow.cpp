@@ -518,6 +518,44 @@ void IOConfigurationWindow::update()
             panel->updateComponents();
 }
 
+// In IOConfigurationWindow.cpp, update the getPlayerEditor method:
+
+PlayerEditorComponent* IOConfigurationWindow::getPlayerEditor() const
+{
+    // Go through the desktop components to find the PlayerEditorComponent
+    auto& desktop = Desktop::getInstance();
+
+    for (int i = desktop.getNumComponents(); --i >= 0;)
+        if (auto* playerEditor = dynamic_cast<PlayerEditorComponent*>(desktop.getComponent(i)))
+            return playerEditor;
+
+    return nullptr;
+}
+
+// Update the getGraphEditor method:
+GraphDocumentComponent* IOConfigurationWindow::getGraphEditor() const
+{
+    // First try to get the graph editor from PlayerEditorComponent
+    if (auto* playerEditor = getPlayerEditor())
+        return playerEditor->getGraphEditor();
+
+    // No fallback to MainHostWindow needed anymore as all graph editing is done in PlayerEditorComponent
+    // The MainHostWindow doesn't have a direct graph editor component
+
+    return nullptr;
+}
+
+// Update the getGraph method:
+AudioProcessorGraph* IOConfigurationWindow::getGraph() const
+{
+    if (auto* graphEditor = getGraphEditor())
+        if (auto* graph = graphEditor->graph.get())
+            return &graph->graph;
+
+    return nullptr;
+}
+
+// Update getNodeID method:
 AudioProcessorGraph::NodeID IOConfigurationWindow::getNodeID() const
 {
     if (auto* graph = getGraph())
@@ -526,35 +564,4 @@ AudioProcessorGraph::NodeID IOConfigurationWindow::getNodeID() const
                 return node->nodeID;
 
     return {};
-}
-
-// MainHostWindow is no longer used for plugin configuration
-
-PlayerEditorComponent* IOConfigurationWindow::getPlayerEditor() const
-{
-    auto& desktop = Desktop::getInstance();
-
-    for (int i = desktop.getNumComponents(); --i >= 0;)
-        if (auto* playerEditor = dynamic_cast<PlayerEditorComponent*> (desktop.getComponent (i)))
-            return playerEditor;
-
-    return nullptr;
-}
-
-GraphDocumentComponent* IOConfigurationWindow::getGraphEditor() const
-{
-    // Get the graph editor from PlayerEditorComponent
-    if (auto* playerEditor = getPlayerEditor())
-        return playerEditor->getGraphEditor();
-
-    return nullptr;
-}
-
-AudioProcessorGraph* IOConfigurationWindow::getGraph() const
-{
-    if (auto* graphEditor = getGraphEditor())
-        if (auto* panel = graphEditor->graph.get())
-            return &panel->graph;
-
-    return nullptr;
 }

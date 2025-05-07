@@ -16,6 +16,8 @@ public:
     
     void resized() override;
     void paint(Graphics& g) override;
+   // In PlayerLibraryComponent.h:
+    PlayerEditorComponent* getActiveEditorComponent() const { return playerEditorComponent.get(); } 
     
 private:
     // PlayerListComponent::Listener implementation

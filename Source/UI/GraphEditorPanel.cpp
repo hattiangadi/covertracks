@@ -813,17 +813,22 @@ void GraphEditorPanel::mouseDown(const MouseEvent& e)
 
     if (e.mods.isPopupMenu())
     {
-        // Get the PlayerEditorComponent
-        if (auto* editor = dynamic_cast<PlayerEditorComponent*>(getTopLevelComponent()))
+        // Trace up the component hierarchy to find PlayerEditorComponent
+        Component* parent = this;
+        while ((parent = parent->getParentComponent()) != nullptr)
         {
-            // Pass correct position to showPopupMenu
-            showPopupMenu(e.position.toInt(), editor);
+            if (auto* editor = dynamic_cast<PlayerEditorComponent*>(parent))
+            {
+                // Found the editor, show its popup menu
+                Point<int> position = e.position.toInt();
+                editor->showPopupMenu(position);
+                return;
+            }
         }
-        else
-        {
-            // Fall back to original behavior for other contexts
-            showPopupMenu(e.position.toInt(), nullptr);
-        }
+        
+        // If no PlayerEditorComponent was found, we can't show the popup menu
+        // because we need a PlayerEditorComponent to provide the plugins
+        // No need to call showPopupMenu here as it requires a PlayerEditorComponent
     }
 }
 

@@ -55,14 +55,16 @@ private:
     void makeDefaultConnections(PluginGraph* graph);
     void createDefaultGraph(PluginGraph* graph);
 
-    Array<PluginDescriptionAndPreference> pluginDescriptionsAndPreference;
-    std::vector<PluginDescription> internalTypes;
+    // Plugin system pointers - references to shared resources
+    AudioPluginFormatManager* formatManager = nullptr;
+    KnownPluginList* knownPluginList = nullptr;
+    const std::vector<PluginDescription>* internalTypes = nullptr;
+    AudioDeviceManager* deviceManager = nullptr;
+
+    // Plugin menu and processing
     static constexpr int menuIDBase = 0x324503f4;
-    
+    Array<PluginDescriptionAndPreference> pluginDescriptionsAndPreference; 
     // Plugin system components
-    AudioPluginFormatManager formatManager;
-    AudioDeviceManager deviceManager;
-    KnownPluginList knownPluginList;
     Label nameLabel {"nameLabel", "Name:"};
     TextEditor nameEditor;
     
