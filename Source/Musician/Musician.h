@@ -21,7 +21,7 @@ using json = nlohmann::json;
 // Forward declare the friend class in the global scope
 class MultiMusicianTest;
 
-namespace coverband {
+namespace covertracks {
 
 class Musician;
 class Ensemble;
@@ -223,4 +223,4 @@ class MusicianFactory {
             const json& config);
     };
     
-}   // namespace coverband
+}   // namespace covertracks

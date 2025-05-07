@@ -1,0 +1,358 @@
+#include "Player.h"
+#include <iostream>
+
+namespace covertracks {
+
+// PlayerMetadata implementation
+var PlayerMetadata::toVar() const
+{
+    DynamicObject* obj = new DynamicObject();
+    
+    obj->setProperty("name", name);
+    obj->setProperty("category", category);
+    obj->setProperty("description", description);
+    obj->setProperty("created", created.toISO8601(true));
+    obj->setProperty("lastModified", lastModified.toISO8601(true));
+    
+    return var(obj);
+}
+
+void PlayerMetadata::fromVar(const var& v)
+{
+    if (auto* obj = v.getDynamicObject())
+    {
+        name = obj->getProperty("name").toString();
+        category = obj->getProperty("category").toString();
+        description = obj->getProperty("description").toString();
+        
+        created = Time::fromISO8601(obj->getProperty("created").toString());
+        lastModified = Time::fromISO8601(obj->getProperty("lastModified").toString());
+    }
+}
+
+// Player implementation
+Player::Player(const String& playerId, const String& name)
+    : id(playerId)
+{
+    // Initialize metadata
+    metadata.name = name;
+    metadata.category = "Undefined";
+    metadata.description = "A new player";
+    metadata.created = Time::getCurrentTime();
+    metadata.lastModified = metadata.created;
+    
+    std::cout << "Creating Player: " << name << " (ID: " << playerId << ")" << std::endl;
+}
+
+Player::~Player()
+{
+    // Stop playback before destruction
+    stopPlayback();
+    
+    std::cout << "Destroying Player: " << metadata.name << " (ID: " << id << ")" << std::endl;
+}
+
+bool Player::initialize()
+{
+    // Create instrument if needed
+    if (instrument == nullptr)
+    {
+        instrument = std::make_unique<Instrument>(metadata.name);
+        
+        // Set up pattern finished callback
+        instrument->setPatternFinishedCallback([this]() {
+            this->handlePatternFinished();
+        });
+    }
+    
+    // Initialize the instrument
+    bool instrumentInitialized = instrument->initialize();
+    
+    // Create musician if needed
+    if (musician == nullptr)
+    {
+        musician = std::make_unique<Musician>(id, metadata.category);
+    }
+    
+    // Set up the musician to use the instrument for playback
+    if (musician != nullptr && instrument != nullptr)
+    {
+        // Create a function that forwards play commands to the instrument
+        musician->setPlayerInterface([this](const std::string& jsonCommand) -> std::string {
+            try {
+                // Parse the JSON command
+                json command = json::parse(jsonCommand);
+                
+                // Check the command type
+                if (command.contains("command"))
+                {
+                    std::string commandType = command["command"];
+                    
+                    if (commandType == "play_pattern")
+                    {
+                        // Extract parameters
+                        json events = command["events"];
+                        double tempo = 120.0;
+                        
+                        if (command.contains("tempo") && command["tempo"].is_number())
+                        {
+                            tempo = command["tempo"];
+                        }
+                        
+                        // Play the pattern on the instrument
+                        bool success = instrument->playMIDIPattern(events, tempo);
+                        
+                        if (success)
+                        {
+                            return "{\"status\": \"success\", \"message\": \"Pattern playback started\"}";
+                        }
+                        else
+                        {
+                            return "{\"status\": \"error\", \"message\": \"Failed to start pattern playback\"}";
+                        }
+                    }
+                    else if (commandType == "stop_player")
+                    {
+                        // Stop playback
+                        instrument->stopPlayback();
+                        return "{\"status\": \"success\", \"message\": \"Playback stopped\"}";
+                    }
+                    else if (commandType == "create_player")
+                    {
+                        // Player is already created, just acknowledge
+                        return "{\"status\": \"success\", \"message\": \"Player already exists\"}";
+                    }
+                    else
+                    {
+                        return "{\"status\": \"error\", \"message\": \"Unknown command\"}";
+                    }
+                }
+                else
+                {
+                    return "{\"status\": \"error\", \"message\": \"Missing command field\"}";
+                }
+            }
+            catch (const json::exception& e)
+            {
+                return "{\"status\": \"error\", \"message\": \"Invalid JSON format: " + std::string(e.what()) + "\"}";
+            }
+            catch (const std::exception& e)
+            {
+                return "{\"status\": \"error\", \"message\": \"" + std::string(e.what()) + "\"}";
+            }
+        });
+    }
+    
+    std::cout << "Player initialized: " << metadata.name << " (ID: " << id << ")" << std::endl;
+    
+    return instrumentInitialized;
+}
+
+bool Player::loadPluginGraph(const XmlElement& graphState)
+{
+    if (instrument == nullptr)
+    {
+        std::cerr << "Cannot load plugin graph: instrument not initialized" << std::endl;
+        return false;
+    }
+    
+    return instrument->loadPluginGraph(graphState);
+}
+
+std::unique_ptr<XmlElement> Player::getPluginGraphState()
+{
+    if (instrument == nullptr)
+    {
+        return nullptr;
+    }
+    
+    return instrument->getPluginGraphState();
+}
+
+void Player::setLLMClient(std::shared_ptr<LLMClient> client)
+{
+    if (musician != nullptr)
+    {
+        musician->setLLMClient(client);
+    }
+}
+
+json Player::generatePattern(const json& parameters)
+{
+    if (musician == nullptr)
+    {
+        std::cerr << "Cannot generate pattern: musician not initialized" << std::endl;
+        return json::object({{"error", "Musician not initialized"}});
+    }
+    
+    // Generate pattern using the musician
+    json pattern = musician->generatePattern(parameters);
+    
+    // Store the last generated pattern
+    lastGeneratedPattern = pattern;
+    
+    return pattern;
+}
+
+bool Player::playPattern(const json& pattern, double tempo)
+{
+    if (instrument == nullptr)
+    {
+        std::cerr << "Cannot play pattern: instrument not initialized" << std::endl;
+        return false;
+    }
+    
+    // Extract the events array if the pattern is a full command
+    json eventsToPlay = pattern;
+    
+    if (pattern.contains("command") && pattern["command"] == "play_pattern" &&
+        pattern.contains("events"))
+    {
+        eventsToPlay = pattern["events"];
+    }
+    
+    // Use tempo from pattern if available
+    double tempoToUse = tempo;
+    if (pattern.contains("tempo") && pattern["tempo"].is_number())
+    {
+        tempoToUse = pattern["tempo"];
+    }
+    
+    // Play the pattern using the instrument
+    return instrument->playMIDIPattern(eventsToPlay, tempoToUse);
+}
+
+bool Player::generateAndPlay(const json& parameters)
+{
+    // Generate the pattern
+    json pattern = generatePattern(parameters);
+    
+    // Check for errors
+    if (pattern.contains("error"))
+    {
+        return false;
+    }
+    
+    // Extract tempo from parameters
+    double tempo = 120.0;
+    if (parameters.contains("tempo") && parameters["tempo"].is_number())
+    {
+        tempo = parameters["tempo"];
+    }
+    
+    // Play the pattern
+    return playPattern(pattern, tempo);
+}
+
+void Player::stopPlayback()
+{
+    if (instrument != nullptr)
+    {
+        instrument->stopPlayback();
+    }
+}
+
+void Player::setPatternFinishedCallback(std::function<void(const String&)> callback)
+{
+    onPatternFinished = std::move(callback);
+}
+
+void Player::handlePatternFinished()
+{
+    // Call the callback if set
+    if (onPatternFinished)
+    {
+        onPatternFinished(id);
+    }
+}
+
+var Player::toVar() const
+{
+    DynamicObject* obj = new DynamicObject();
+    
+    // Add metadata
+    obj->setProperty("metadata", metadata.toVar());
+    
+    // Add plugin graph state if available
+    if (instrument != nullptr)
+    {
+        auto graphState = instrument->getPluginGraphState();
+        if (graphState != nullptr)
+        {
+            // Convert the graph state (which includes plugin states) to base64
+            MemoryOutputStream mo;
+            graphState->writeTo(mo, {});
+            obj->setProperty("pluginGraph", mo.getMemoryBlock().toBase64Encoding());
+        }
+    }
+    
+    // Add musician state if available
+    // This is a placeholder for future implementation
+    // obj->setProperty("musicianState", ...);
+    
+    return var(obj);
+}
+
+std::unique_ptr<Player> Player::fromVar(const var& v)
+{
+    if (auto* obj = v.getDynamicObject())
+    {
+        // Extract ID and name
+        String playerId = obj->getProperty("id").toString();
+        
+        // If ID is missing, generate a new one
+        if (playerId.isEmpty())
+        {
+            // Generate a random ID
+            playerId = String::toHexString(Random::getSystemRandom().nextInt());
+        }
+        
+        // Get metadata
+        var metadataVar = obj->getProperty("metadata");
+        String name;
+        
+        if (auto* metadataObj = metadataVar.getDynamicObject())
+        {
+            name = metadataObj->getProperty("name").toString();
+        }
+        
+        if (name.isEmpty())
+        {
+            name = "Unnamed Player";
+        }
+        
+        // Create the player
+        auto player = std::make_unique<Player>(playerId, name);
+        
+        // Load metadata
+        player->metadata.fromVar(metadataVar);
+        
+        // Initialize the player
+        player->initialize();
+        
+        // Load plugin graph state if available
+        auto graphBase64 = obj->getProperty("pluginGraph").toString();
+        if (graphBase64.isNotEmpty())
+        {
+            // Decode the graph state
+            MemoryBlock mb;
+            mb.fromBase64Encoding(graphBase64);
+            std::unique_ptr<XmlElement> graphState = parseXML(mb.toString());
+            
+            if (graphState != nullptr)
+            {
+                player->loadPluginGraph(*graphState);
+            }
+        }
+        
+        // Load musician state if available
+        // This is a placeholder for future implementation
+        
+        return player;
+    }
+    
+    // If parsing failed, return a default player
+    return std::make_unique<Player>(String::toHexString(Random::getSystemRandom().nextInt()), "Default Player");
+}
+
+} // namespace covertracks
