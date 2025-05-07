@@ -816,7 +816,13 @@ void GraphEditorPanel::mouseDown(const MouseEvent& e)
         // Get the PlayerEditorComponent
         if (auto* editor = dynamic_cast<PlayerEditorComponent*>(getTopLevelComponent()))
         {
+            // Pass correct position to showPopupMenu
             showPopupMenu(e.position.toInt(), editor);
+        }
+        else
+        {
+            // Fall back to original behavior for other contexts
+            showPopupMenu(e.position.toInt(), nullptr);
         }
     }
 }

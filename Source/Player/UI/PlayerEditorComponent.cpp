@@ -416,6 +416,15 @@ void PlayerEditorComponent::paint(Graphics& g)
                                          graphBounds.getWidth(), 25);
     g.drawText("Right-click to add plugins, drag between pins to connect them",
                instructionRect, Justification::centred, true);
+               
+    // Add save status indicator
+    String saveStatus = player->graphFilePath.existsAsFile() ? 
+                       "Graph saved to: " + player->graphFilePath.getFileName() : 
+                       "Graph not saved yet";
+    
+    g.setColour(player->graphFilePath.existsAsFile() ? Colours::darkgreen : Colours::darkred);
+    g.setFont(Font(12.0f));
+    g.drawText(saveStatus, getWidth() - 250, getHeight() - 20, 240, 20, Justification::right, true);
 }
 
 void PlayerEditorComponent::mouseDown(const MouseEvent& e)
@@ -477,8 +486,13 @@ void PlayerEditorComponent::buttonClicked(Button* button)
                     // Update the player's graph state
                     if (safeThis->player != nullptr)
                     {
-                        safeThis->player->graphState = std::move(xml);
+                        safeThis->player->graphState = std::make_unique<XmlElement>(*xml);
                         safeThis->player->graphFilePath = graphFile;
+                        
+                        // Show confirmation message
+                        AlertWindow::showMessageBoxAsync(AlertWindow::InfoIcon,
+                                                       "Graph Loaded",
+                                                       "Successfully loaded graph from " + graphFile.getFileName());
                     }
                     
                     // Make sure the graph panel updates to show the loaded configuration
@@ -564,6 +578,30 @@ void PlayerEditorComponent::buttonClicked(Button* button)
         {
             // This will include both the graph structure and each plugin's state
             player->graphState = graph->createXml();
+            
+            // Check if we need to save the graph file first
+            if (!player->graphFilePath.existsAsFile())
+            {
+                // Prompt user to save graph file first
+                AlertWindow::showOkCancelBox(
+                    AlertWindow::QuestionIcon,
+                    "Save Graph File",
+                    "You haven't saved the graph file yet. Would you like to save it now?",
+                    "Yes", "No",
+                    this,
+                    ModalCallbackFunction::create([this](int result) {
+                        if (result == 1) // Yes
+                        {
+                            // Trigger save graph
+                            buttonClicked(&saveGraphButton);
+                        }
+                        
+                        // Continue with saving player
+                        listeners.call(&Listener::playerEditorSaveRequested, this);
+                    })
+                );
+                return; // Exit early, the callback will continue the process
+            }
         }
         
         // Notify listeners
