@@ -10,13 +10,11 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
     {
         player = std::make_unique<PlayerManager::Player>();
         player->metadata = playerToEdit->metadata;
+        player->graphFilePath = playerToEdit->graphFilePath;
         
-        // Copy the graph state
+        // Copy the graph state (as a backup in case file loading fails)
         if (playerToEdit->graphState != nullptr)
             player->graphState = std::make_unique<XmlElement>(*playerToEdit->graphState);
-            
-        // Copy the graph file path
-        player->graphFilePath = playerToEdit->graphFilePath;
     }
     else
     {
@@ -93,33 +91,57 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
     // Make the graph editor visually distinct
     graphEditor->setColour(ResizableWindow::backgroundColourId, Colours::lightgrey);
     
-    // Initialize the graph with a safe approach
+    // Initialize the graph
     if (auto* graph = graphEditor->graph.get())
     {
         // First clear the graph to start with a clean state - this removes any default plugins
         // that might have been added by the PluginGraph::newDocument() method
         graph->clear();
         
-        // If we have an existing graph state, try to load it
-        if (player->graphState != nullptr && player->graphState->hasTagName("FILTERGRAPH"))
+        // Now load the graph from file if available
+        if (player->graphFilePath.existsAsFile())
         {
-            // Check if the graph state has the necessary structure
-            bool hasValidStructure = player->graphState->getChildByName("CONNECTIONS") != nullptr;
+            // This will load the graph and properly set up the FileBasedDocument state
+            Result result = graph->loadDocument(player->graphFilePath);
             
-            if (hasValidStructure)
+            if (result.wasOk())
             {
-                // Only try to restore if the structure is valid
-                graph->restoreFromXml(*player->graphState);
-                
                 // Make sure the graph panel updates to show the loaded configuration
                 if (graphEditor->graphPanel != nullptr)
                     graphEditor->graphPanel->updateComponents();
+                    
+                // Update the player's graph state to match what was loaded from file
+                player->graphState = graph->createXml();
             }
             else
             {
-                // Create default graph since the existing one isn't valid
-                createDefaultGraph(graph);
+                // Handle error
+                AlertWindow::showMessageBoxAsync(AlertWindow::WarningIcon,
+                                              "Graph Load Error",
+                                              "Failed to load graph: " + result.getErrorMessage());
+                                              
+                // Fall back to using the graph state if we have it
+                if (player->graphState != nullptr && player->graphState->hasTagName("FILTERGRAPH"))
+                {
+                    graph->restoreFromXml(*player->graphState);
+                    
+                    if (graphEditor->graphPanel != nullptr)
+                        graphEditor->graphPanel->updateComponents();
+                }
+                else
+                {
+                    // Create default graph since we couldn't load from file or state
+                    createDefaultGraph(graph);
+                }
             }
+        }
+        else if (player->graphState != nullptr && player->graphState->hasTagName("FILTERGRAPH"))
+        {
+            // No file, but we have a graph state to restore from
+            graph->restoreFromXml(*player->graphState);
+            
+            if (graphEditor->graphPanel != nullptr)
+                graphEditor->graphPanel->updateComponents();
         }
         else
         {
@@ -456,113 +478,51 @@ void PlayerEditorComponent::buttonClicked(Button* button)
 {
     if (button == &loadGraphButton)
     {
-        // Prompt user to select a graph file
-        fileChooser = std::make_unique<FileChooser>("Load Graph File", 
-                                                  File::getSpecialLocation(File::userDocumentsDirectory),
-                                                  "*.filtergraph", true);
-        
-        auto loadGraphCallback = [safeThis = SafePointer<PlayerEditorComponent>(this)] (const FileChooser& chooser)
+        // Access the graph properly
+        if (graphEditor != nullptr && graphEditor->graph.get() != nullptr)
         {
-            if (safeThis == nullptr)
-                return;
-                
-            File graphFile = chooser.getResult();
-            if (graphFile == File())
-                return;
-                
-            // Load the graph file directly into the graph editor
-            if (auto* graph = safeThis->graphEditor->graph.get())
-            {
-                // Clear the graph first
-                graph->clear();
-                
-                // Load the XML file
-                std::unique_ptr<XmlElement> xml = parseXML(graphFile);
-                if (xml != nullptr && xml->hasTagName("FILTERGRAPH"))
+            auto* graph = graphEditor->graph.get();
+            
+            // Use the graph's FileBasedDocument methods for loading
+            graph->loadFromUserSpecifiedFileAsync(true, [this](Result result) {
+                if (result.wasOk())
                 {
-                    // Restore the graph from XML
-                    graph->restoreFromXml(*xml);
-                    
-                    // Update the player's graph state
-                    if (safeThis->player != nullptr)
+                    // The graph is now loaded, update the player's reference to it
+                    if (player != nullptr && graphEditor != nullptr && graphEditor->graph.get() != nullptr)
                     {
-                        safeThis->player->graphState = std::make_unique<XmlElement>(*xml);
-                        safeThis->player->graphFilePath = graphFile;
+                        // Store the graph state in the player
+                        player->graphState = graphEditor->graph->createXml();
+                        player->graphFilePath = graphEditor->graph->getFile();
                         
-                        // Show confirmation message
-                        AlertWindow::showMessageBoxAsync(AlertWindow::InfoIcon,
-                                                       "Graph Loaded",
-                                                       "Successfully loaded graph from " + graphFile.getFileName());
+                        // Update the UI
+                        repaint();
                     }
-                    
-                    // Make sure the graph panel updates to show the loaded configuration
-                    if (safeThis->graphEditor->graphPanel != nullptr)
-                        safeThis->graphEditor->graphPanel->updateComponents();
                 }
-                else
-                {
-                    // Show error if loading failed
-                    AlertWindow::showMessageBoxAsync(AlertWindow::WarningIcon,
-                                                   "Graph Load Error",
-                                                   "Failed to load the selected graph file.");
-                }
-            }
-        };
-        
-        fileChooser->launchAsync(FileBrowserComponent::openMode, loadGraphCallback);
+            });
+        }
     }
     else if (button == &saveGraphButton)
     {
-        // Save just the graph to a .filtergraph file
-        if (auto* graph = graphEditor->graph.get())
+        // Access the graph properly
+        if (graphEditor != nullptr && graphEditor->graph.get() != nullptr)
         {
-            // Create XML from the current graph state
-            std::unique_ptr<XmlElement> graphXml = graph->createXml();
+            auto* graph = graphEditor->graph.get();
             
-            // Prompt user to choose where to save the graph
-            fileChooser = std::make_unique<FileChooser>("Save Graph As", 
-                                                      player->graphFilePath.existsAsFile() ? player->graphFilePath : 
-                                                      File::getSpecialLocation(File::userDocumentsDirectory),
-                                                      "*.filtergraph");
-            
-            // We need to use a shared_ptr here because the lambda will be copied when passed to launchAsync
-            auto sharedXml = std::make_shared<XmlElement>(*graphXml);
-            
-            auto saveGraphCallback = [safeThis = SafePointer<PlayerEditorComponent>(this), sharedXml] 
-                                      (const FileChooser& chooser)
-            {
-                if (safeThis == nullptr)
-                    return;
-                    
-                File file = chooser.getResult();
-                if (file == File())
-                    return;
-                    
-                if (!file.getFileExtension().equalsIgnoreCase(".filtergraph"))
-                    file = file.withFileExtension("filtergraph");
-                
-                // Save the XML to file
-                MemoryBlock block;
-                MemoryOutputStream stream(block, false);
-                sharedXml->writeTo(stream);
-                
-                if (file.replaceWithData(block.getData(), block.getSize()))
+            // Use the graph's FileBasedDocument methods for saving
+            graph->saveAsAsync({}, true, true, true, [this](FileBasedDocument::SaveResult result) {
+                if (result == FileBasedDocument::savedOk)
                 {
-                    // Update the player's graph file path
-                    if (safeThis->player != nullptr)
-                        safeThis->player->graphFilePath = file;
+                    // Update the player's reference to the graph
+                    if (player != nullptr && graphEditor != nullptr && graphEditor->graph.get() != nullptr)
+                    {
+                        player->graphState = graphEditor->graph->createXml();
+                        player->graphFilePath = graphEditor->graph->getFile();
+                        
+                        // Update UI
+                        repaint();
+                    }
                 }
-                else
-                {
-                    // Show error if saving failed
-                    AlertWindow::showMessageBoxAsync(AlertWindow::WarningIcon,
-                                                   "Graph Save Error",
-                                                   "Failed to save the graph file.");
-                }
-            };
-            
-            fileChooser->launchAsync(FileBrowserComponent::saveMode | FileBrowserComponent::warnAboutOverwriting, 
-                                   saveGraphCallback);
+            });
         }
     }
     else if (button == &saveButton)
@@ -579,8 +539,31 @@ void PlayerEditorComponent::buttonClicked(Button* button)
             // This will include both the graph structure and each plugin's state
             player->graphState = graph->createXml();
             
-            // Check if we need to save the graph file first
-            if (!player->graphFilePath.existsAsFile())
+            // Check if the graph has unsaved changes
+            if (graph->hasChangedSinceSaved())
+            {
+                // Prompt user to save graph changes
+                AlertWindow::showOkCancelBox(
+                    AlertWindow::QuestionIcon,
+                    "Save Graph Changes",
+                    "The graph has unsaved changes. Would you like to save them before saving the player?",
+                    "Yes", "No",
+                    this,
+                    ModalCallbackFunction::create([this](int result) {
+                        if (result == 1) // Yes
+                        {
+                            // Trigger save graph
+                            buttonClicked(&saveGraphButton);
+                        }
+                        
+                        // Continue with saving player
+                        listeners.call(&Listener::playerEditorSaveRequested, this);
+                    })
+                );
+                return; // Exit early, the callback will continue the process
+            }
+            // Check if we need to save the graph file first (it doesn't exist yet)
+            else if (!player->graphFilePath.existsAsFile())
             {
                 // Prompt user to save graph file first
                 AlertWindow::showOkCancelBox(
