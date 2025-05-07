@@ -17,6 +17,9 @@ PlayerListComponent::PlayerListComponent(PlayerManager& pm)
     table.getHeader().setPopupMenuActive(false);
     table.setRowSelectedOnMouseDown(true);
     
+    // Set up a listener for selection changes
+    table.getHeader().addListener(this);
+    
     addAndMakeVisible(table);
     addAndMakeVisible(newButton);
     addAndMakeVisible(editButton);
@@ -69,7 +72,7 @@ int PlayerListComponent::getNumRows()
     return displayedPlayers.size();
 }
 
-void PlayerListComponent::paintRowBackground(Graphics& g, int rowNumber, int width, int height, bool rowIsSelected)
+void PlayerListComponent::paintRowBackground(Graphics& g, int rowNumber, int /*width*/, int /*height*/, bool rowIsSelected)
 {
     if (rowIsSelected)
         g.fillAll(getLookAndFeel().findColour(TextEditor::highlightColourId));
@@ -101,7 +104,8 @@ void PlayerListComponent::paintCell(Graphics& g, int rowNumber, int columnId, in
     }
     
     g.setColour(rowIsSelected ? Colours::white : Colours::black);
-    g.setFont(Font(height * 0.7f));
+    FontOptions fontOptions;
+    g.setFont(Font(fontOptions.withHeight(height * 0.7f)));
     g.drawText(text, 2, 0, width - 4, height, Justification::centredLeft, true);
 }
 
@@ -195,8 +199,18 @@ void PlayerListComponent::updateButtonStates()
     deleteButton.setEnabled(hasSelection);
 }
 
-void PlayerListComponent::cellClicked(int rowNumber, int columnId, const MouseEvent& event)
+void PlayerListComponent::cellClicked(int rowNumber, int /*columnId*/, const MouseEvent& event)
 {
+    // Update button states
+    updateButtonStates();
+    
+    // Notify listeners about the selection change
+    auto* selectedPlayer = getSelectedPlayer();
+    if (selectedPlayer != nullptr)
+    {
+        listeners.call(&Listener::playerSelected, selectedPlayer);
+    }
+    
     // Check if this was a double-click
     if (event.getNumberOfClicks() >= 2)
     {

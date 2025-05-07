@@ -6,7 +6,8 @@
 
 class PlayerListComponent : public Component,
                             public TableListBoxModel,
-                            public Button::Listener
+                            public Button::Listener,
+                            public TableHeaderComponent::Listener
 {
 public:
     PlayerListComponent(PlayerManager& pm);
@@ -23,6 +24,11 @@ public:
     
     // Button::Listener overrides
     void buttonClicked(Button* button) override;
+    
+    // TableHeaderComponent::Listener overrides
+    void tableColumnsChanged(TableHeaderComponent*) override {}
+    void tableColumnsResized(TableHeaderComponent*) override {}
+    void tableSortOrderChanged(TableHeaderComponent*) override { updateButtonStates(); }
     
     // TableListBoxModel override for cell clicks
     void cellClicked(int rowNumber, int columnId, const MouseEvent& event) override;

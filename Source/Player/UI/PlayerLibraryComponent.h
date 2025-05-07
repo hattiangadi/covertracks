@@ -36,6 +36,6 @@ private:
     // Helper methods
     void showPlayerEditor(PlayerManager::Player* playerToEdit = nullptr);
     void hidePlayerEditor();
-    
+ 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PlayerLibraryComponent)
 };

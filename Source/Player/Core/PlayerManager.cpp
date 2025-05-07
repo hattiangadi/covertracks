@@ -1,5 +1,6 @@
 // PlayerManager.cpp
 #include "PlayerManager.h"
+#include "../../UI/MainHostWindow.h"  // For getAppProperties
 
 PlayerManager::PlayerManager()
 {
@@ -48,12 +49,10 @@ var PlayerManager::Player::toVar() const
     
     obj->setProperty("metadata", metadata.toVar());
     
-    if (graphState != nullptr)
+    // Store the graph file path if it exists
+    if (graphFilePath.existsAsFile())
     {
-        // Convert the graph state (which includes plugin states) to base64
-        MemoryOutputStream mo;
-        graphState->writeTo(mo, {});
-        obj->setProperty("pluginGraph", mo.getMemoryBlock().toBase64Encoding());
+        obj->setProperty("graphFilePath", graphFilePath.getFullPathName());
     }
     
     return var(obj);
@@ -67,17 +66,68 @@ std::unique_ptr<PlayerManager::Player> PlayerManager::Player::fromVar(const var&
     {
         player->metadata.fromVar(obj->getProperty("metadata"));
         
-        auto graphBase64 = obj->getProperty("pluginGraph").toString();
-        if (graphBase64.isNotEmpty())
+        // Restore graph file path if it was saved
+        String graphFilePath = obj->getProperty("graphFilePath").toString();
+        if (graphFilePath.isNotEmpty())
         {
-            // Decode the graph state
-            MemoryBlock mb;
-            mb.fromBase64Encoding(graphBase64);
-            player->graphState = parseXML(mb.toString());
+            File file(graphFilePath);
+            if (file.existsAsFile())
+            {
+                player->graphFilePath = file;
+                // Load the graph file
+                player->loadGraphFromFile(file);
+            }
         }
     }
     
     return player;
+}
+
+bool PlayerManager::Player::loadGraphFromFile(const File& file)
+{
+    if (!file.existsAsFile())
+        return false;
+        
+    // Load the XML file
+    std::unique_ptr<XmlElement> xml = parseXML(file);
+    if (xml == nullptr)
+        return false;
+        
+    // Store the graph state
+    graphState = std::move(xml);
+    
+    // Update the file path
+    graphFilePath = file;
+    
+    return true;
+}
+
+bool PlayerManager::Player::saveGraphToFile()
+{
+    if (graphFilePath == File() || !graphState)
+        return false;
+        
+    return saveGraphToFile(graphFilePath);
+}
+
+bool PlayerManager::Player::saveGraphToFile(const File& file)
+{
+    if (!graphState)
+        return false;
+        
+    // Save the XML to the file using MemoryBlock for consistency with other parts of the app
+    MemoryBlock block;
+    MemoryOutputStream stream(block, false);
+    graphState->writeTo(stream);
+    
+    if (file.replaceWithData(block.getData(), block.getSize()))
+    {
+        // Update the file path
+        graphFilePath = file;
+        return true;
+    }
+    
+    return false;
 }
 
 
@@ -130,13 +180,14 @@ bool PlayerManager::savePlayer(Player* player)
     // Create JSON object
     var json = player->toVar();
     
-    // Generate filename from player name
+    // Generate a filename from the player name if we don't have one yet
+    File playerFile;
     String safeName = player->metadata.name.replaceCharacters(" ", "_");
-    File file = getPlayersDirectory().getChildFile(safeName + ".player");
+    playerFile = getPlayersDirectory().getChildFile(safeName + ".player");
     
     // Save the JSON to file
     auto jsonString = JSON::toString(json, true);
-    return file.replaceWithText(jsonString);
+    return playerFile.replaceWithText(jsonString);
 }
 
 std::unique_ptr<PlayerManager::Player> PlayerManager::createPlayer()
@@ -181,7 +232,13 @@ std::unique_ptr<PlayerManager::Player> PlayerManager::loadPlayer(const File& fil
     auto jsonString = file.loadFileAsString();
     auto json = JSON::parse(jsonString);
     
-    return Player::fromVar(json);
+    auto player = Player::fromVar(json);
+    
+    // Store the file path so we can save to the same location later
+    if (player != nullptr)
+        player->graphFilePath = file;
+    
+    return player;
 }
 
 bool PlayerManager::deletePlayer(Player* player)
@@ -189,12 +246,16 @@ bool PlayerManager::deletePlayer(Player* player)
     if (player == nullptr)
         return false;
     
-    // Find the player file
+    // Generate the player file name based on the player name
     String safeName = player->metadata.name.replaceCharacters(" ", "_");
-    File file = getPlayersDirectory().getChildFile(safeName + ".player");
+    File playerFile = getPlayersDirectory().getChildFile(safeName + ".player");
     
-    // Delete the file
-    bool fileDeleted = !file.existsAsFile() || file.deleteFile();
+    // Delete the player file if it exists
+    bool fileDeleted = true;
+    if (playerFile.existsAsFile())
+        fileDeleted = playerFile.deleteFile();
+    
+    // Note: We do NOT delete the graph file as it might be used by other players
     
     // Remove from the array (if it belongs to this manager)
     for (int i = 0; i < players.size(); ++i)
@@ -223,12 +284,28 @@ File PlayerManager::getPlayersDirectory()
     return appDir;
 }
 
+std::unique_ptr<PlayerManager::Player> PlayerManager::promptForPlayerFile()
+{
+    // Since we can't use modal dialogs in newer JUCE versions without enabling JUCE_MODAL_LOOPS_PERMITTED,
+    // we need to implement this differently
+    // In a real implementation, you would use launchAsync with a callback
+    
+    // For now, just look in the default players directory and load the first player found
+    Array<File> playerFiles;
+    getPlayersDirectory().findChildFiles(playerFiles, File::findFiles, false, "*.player");
+    
+    if (!playerFiles.isEmpty())
+        return loadPlayer(playerFiles.getFirst());
+    
+    return nullptr;
+}
+
 void PlayerManager::loadAllPlayers()
 {
     // Clear existing players
     players.clear();
     
-    // Get all player files
+    // We'll still check the legacy directory for backward compatibility
     Array<File> playerFiles;
     getPlayersDirectory().findChildFiles(playerFiles, File::findFiles, false, "*.player");
     
@@ -238,4 +315,53 @@ void PlayerManager::loadAllPlayers()
         if (auto player = loadPlayer(file))
             players.add(player.release());
     }
+    
+    // In the future, we could maintain a list of recently used player files
+    // in the application settings and load those instead
+}
+
+bool PlayerManager::setPlayersDirectory(const File& directory)
+{
+    if (directory.isDirectory() || directory.createDirectory())
+    {
+        customPlayersDirectory = directory;
+        
+        // Save the custom directory path in application settings
+        if (auto* props = getAppProperties().getUserSettings())
+            props->setValue("customPlayersDirectory", directory.getFullPathName());
+            
+        return true;
+    }
+    return false;
+}
+
+File PlayerManager::getUserSelectedPlayersDirectory()
+{
+    // Check if we have a custom directory
+    if (customPlayersDirectory.isDirectory())
+        return customPlayersDirectory;
+        
+    // Check if one is saved in settings
+    if (auto* props = getAppProperties().getUserSettings())
+    {
+        String path = props->getValue("customPlayersDirectory");
+        if (path.isNotEmpty())
+        {
+            File dir(path);
+            if (dir.isDirectory())
+                return dir;
+        }
+    }
+    
+    // Fall back to default
+    return getPlayersDirectory();
+}
+
+File PlayerManager::promptForPlayersDirectory()
+{
+    // Since we can't use modal dialogs in newer JUCE versions without enabling JUCE_MODAL_LOOPS_PERMITTED,
+    // we'll just return the default directory
+    // In a real implementation, you would use launchAsync with a callback
+    
+    return getPlayersDirectory();
 }

@@ -22,6 +22,8 @@ public:
     
     void createPlugin(const PluginDescriptionAndPreference& desc, Point<int> pos);
     
+    void showPopupMenu(Point<int> position);
+    
     void addPluginsToMenu(PopupMenu& menu);
     
     void addToMenu(const KnownPluginList::PluginTree& tree,
@@ -76,12 +78,17 @@ private:
     Label pluginLabel {"pluginLabel", "Plugin Configuration:"};
     std::unique_ptr<GraphDocumentComponent> graphEditor;
     
-    TextButton saveButton {"Save"};
+    TextButton loadGraphButton {"Load Graph"};
+    TextButton saveGraphButton {"Save Graph"};
+    TextButton saveButton {"Save Player"};
     TextButton cancelButton {"Cancel"};
     
     std::unique_ptr<PlayerManager::Player> player;
     
     ListenerList<Listener> listeners;
+    
+    // For asynchronous file operations
+    std::unique_ptr<FileChooser> fileChooser;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PlayerEditorComponent)
 };

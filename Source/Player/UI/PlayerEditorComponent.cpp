@@ -11,8 +11,12 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
         player = std::make_unique<PlayerManager::Player>();
         player->metadata = playerToEdit->metadata;
         
+        // Copy the graph state
         if (playerToEdit->graphState != nullptr)
             player->graphState = std::make_unique<XmlElement>(*playerToEdit->graphState);
+            
+        // Copy the graph file path
+        player->graphFilePath = playerToEdit->graphFilePath;
     }
     else
     {
@@ -24,6 +28,7 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
         player->metadata.created = Time::getCurrentTime();
         player->metadata.lastModified = player->metadata.created;
         
+        // Create an empty graph state
         player->graphState = std::make_unique<XmlElement>("FILTERGRAPH");
     }
     
@@ -60,13 +65,24 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
     // Set up plugin graph editor
     addAndMakeVisible(pluginLabel);
     
-    // Set up format manager and internal format types
-    InternalPluginFormat internalFormat;
-    internalTypes = internalFormat.getAllTypes();
-    
     // Create our own plugin system components
     formatManager.addDefaultFormats();
     formatManager.addFormat(new InternalPluginFormat());
+    
+    // Initialize internal plugin types
+    InternalPluginFormat internalFormat;
+    internalTypes = internalFormat.getAllTypes();
+    
+    // Load the plugin list from file
+    File pluginListFile = File::getSpecialLocation(File::userApplicationDataDirectory)
+                          .getChildFile(JUCEApplication::getInstance()->getApplicationName())
+                          .getChildFile("PluginList.xml");
+    
+    if (pluginListFile.existsAsFile())
+    {
+        if (auto savedPluginList = XmlDocument::parse(pluginListFile))
+            knownPluginList.recreateFromXml(*savedPluginList);
+    }
     
     // Initialize the device manager
     deviceManager.initialise(2, 2, nullptr, true);
@@ -80,7 +96,8 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
     // Initialize the graph with a safe approach
     if (auto* graph = graphEditor->graph.get())
     {
-        // First clear the graph to start with a clean state
+        // First clear the graph to start with a clean state - this removes any default plugins
+        // that might have been added by the PluginGraph::newDocument() method
         graph->clear();
         
         // If we have an existing graph state, try to load it
@@ -114,9 +131,13 @@ PlayerEditorComponent::PlayerEditorComponent(PlayerManager::Player* playerToEdit
     addAndMakeVisible(graphEditor.get());
     
     // Set up buttons
+    addAndMakeVisible(loadGraphButton);
+    addAndMakeVisible(saveGraphButton);
     addAndMakeVisible(saveButton);
     addAndMakeVisible(cancelButton);
     
+    loadGraphButton.addListener(this);
+    saveGraphButton.addListener(this);
     saveButton.addListener(this);
     cancelButton.addListener(this);
 }
@@ -129,43 +150,38 @@ PlayerEditorComponent::~PlayerEditorComponent()
 
 void PlayerEditorComponent::createDefaultGraph(PluginGraph* graph)
 {
-    // Set up a new default graph
+    // Clear existing graph
+    graph->clear();
+    
+    // Set up a new minimal default graph
     InternalPluginFormat internalFormat;
     auto pluginTypes = internalFormat.getAllTypes();
     
-    if (pluginTypes.size() > 4)
-    {
-        // Add standard nodes: Audio Input, Audio Output, and Sine Wave Synth
-        graph->addPlugin(PluginDescriptionAndPreference{pluginTypes[0]}, {0.25, 0.1});  // Audio Input
-        graph->addPlugin(PluginDescriptionAndPreference{pluginTypes[2]}, {0.25, 0.9});  // Audio Output
-        graph->addPlugin(PluginDescriptionAndPreference{pluginTypes[4]}, {0.5, 0.5});   // Sine Wave Synth
-        
-        // Wait for plugins to initialize
-        Thread::sleep(500);
-        
-        // Create the default connections between components
-        makeDefaultConnections(graph);
-        
-        // Make sure the graph panel updates to show the nodes
-        if (graphEditor->graphPanel != nullptr)
-            graphEditor->graphPanel->updateComponents();
-    }
+    // Add just the three essential components
+    graph->addPlugin(PluginDescriptionAndPreference{pluginTypes[1]}, {0.25, 0.2});  // MIDI Input
+    graph->addPlugin(PluginDescriptionAndPreference{pluginTypes[4]}, {0.5, 0.5});   // Sine Wave Synth
+    graph->addPlugin(PluginDescriptionAndPreference{pluginTypes[2]}, {0.75, 0.8});  // Audio Output
+    
+    // Wait for plugins to initialize
+    Thread::sleep(500);
+    
+    // Make proper connections between them
+    makeDefaultConnections(graph);
 }
 
 void PlayerEditorComponent::makeDefaultConnections(PluginGraph* graph)
 {
-    // Find the nodes by their processor types
-    AudioProcessorGraph::Node::Ptr audioInputNode;
-    AudioProcessorGraph::Node::Ptr audioOutputNode;
-    AudioProcessorGraph::Node::Ptr synthNode;
+    AudioProcessorGraph::Node::Ptr midiInputNode = nullptr;
+    AudioProcessorGraph::Node::Ptr audioOutputNode = nullptr;
+    AudioProcessorGraph::Node::Ptr synthNode = nullptr;
     
-    // Iterate through all nodes in the graph
+    // Find the nodes by their processor types
     for (auto* node : graph->graph.getNodes())
     {
         auto name = node->getProcessor()->getName();
         
-        if (name == "Audio Input")
-            audioInputNode = node;
+        if (name == "MIDI Input")
+            midiInputNode = node;
         else if (name == "Audio Output")
             audioOutputNode = node;
         else if (name == "Sine Wave Synth")
@@ -173,29 +189,25 @@ void PlayerEditorComponent::makeDefaultConnections(PluginGraph* graph)
     }
     
     // Connect the nodes if they exist
-    if (audioInputNode != nullptr && synthNode != nullptr && audioOutputNode != nullptr)
+    if (midiInputNode != nullptr && synthNode != nullptr && audioOutputNode != nullptr)
     {
-        // Connect audio input to synth
+        // Connect MIDI input to synth
         graph->graph.addConnection({
-            {audioInputNode->nodeID, 0}, // Audio input output channel 0
-            {synthNode->nodeID, 0}  // Synth input channel 0
+            {midiInputNode->nodeID, AudioProcessorGraph::midiChannelIndex}, // MIDI input output channel
+            {synthNode->nodeID, AudioProcessorGraph::midiChannelIndex}  // Synth MIDI input channel
         });
         
         // Connect synth to audio output
         graph->graph.addConnection({
-            {synthNode->nodeID, 0}, // Synth output channel 0
-            {audioOutputNode->nodeID, 0}  // Audio output input channel 0
+            {synthNode->nodeID, 0}, // Synth output channel 0 (left)
+            {audioOutputNode->nodeID, 0}  // Audio output input channel 0 (left)
         });
         
-        // Connect second channel if available
-        if (synthNode->getProcessor()->getTotalNumOutputChannels() > 1 &&
-            audioOutputNode->getProcessor()->getTotalNumInputChannels() > 1)
-        {
-            graph->graph.addConnection({
-                {synthNode->nodeID, 1}, // Synth output channel 1
-                {audioOutputNode->nodeID, 1}  // Audio output input channel 1
-            });
-        }
+        // Connect synth to second audio output channel
+        graph->graph.addConnection({
+            {synthNode->nodeID, 1}, // Synth output channel 1 (right)
+            {audioOutputNode->nodeID, 1}  // Audio output input channel 1 (right)
+        });
     }
 }
 
@@ -211,44 +223,42 @@ void PlayerEditorComponent::createPlugin(const PluginDescriptionAndPreference& d
 
 void PlayerEditorComponent::addPluginsToMenu(PopupMenu& m)
 {
-    if (graphEditor != nullptr)
+    // Clear any previous plugin descriptions
+    pluginDescriptionsAndPreference.clear();
+    
+    // Add internal plugins first
+    int menuID = menuIDBase;
+    
+    // Create a submenu for internal plugins
+    PopupMenu internalPluginsMenu;
+    
+    for (auto& type : internalTypes)
     {
-        int i = 0;
-        
-        // Use the class member internalTypes instead of creating a local variable
-        for (auto& t : internalTypes)
-            m.addItem(++i, t.name + " (" + t.pluginFormatName + ")");
+        pluginDescriptionsAndPreference.add(PluginDescriptionAndPreference{type});
+        internalPluginsMenu.addItem(menuID++, type.name);
     }
-        
+    
+    m.addSubMenu("Internal Plugins", internalPluginsMenu);
     m.addSeparator();
-        
-    // Get plugin list
-    KnownPluginList tempKnownPluginList;
-        
-    // Try to load plugin list from a file
-    File pluginListFile = File::getSpecialLocation(File::userApplicationDataDirectory)
-                         .getChildFile(JUCEApplication::getInstance()->getApplicationName())
-                         .getChildFile("PluginList.xml");
-        
-    if (pluginListFile.existsAsFile())
-    {
-        if (auto savedPluginList = XmlDocument::parse(pluginListFile))
-            tempKnownPluginList.recreateFromXml(*savedPluginList);
-    }
-        
-    auto pluginDescriptions = tempKnownPluginList.getTypes();
-        
-    // This avoids showing the internal types again later on in the list
+    
+    // Add external plugins from the known plugin list
+    auto pluginDescriptions = knownPluginList.getTypes();
+    
+    // Remove internal plugins from this list to avoid duplication
     pluginDescriptions.removeIf([](PluginDescription& desc)
     {
         return desc.pluginFormatName == InternalPluginFormat::getIdentifier();
     });
-        
+    
     // Create a tree structure for the plugins
     auto tree = KnownPluginList::createTree(pluginDescriptions, KnownPluginList::sortByManufacturer);
-    pluginDescriptionsAndPreference.clear();
-        
+    
+    // Add the tree to the menu
     addToMenu(*tree, m, pluginDescriptions, pluginDescriptionsAndPreference);
+    
+    // Add option to scan for plugins
+    m.addSeparator();
+    m.addItem(-1, "Edit the list of available plugins...");
 }
 
 void PlayerEditorComponent::addToMenu(const KnownPluginList::PluginTree& tree,
@@ -302,17 +312,24 @@ void PlayerEditorComponent::addToMenu(const KnownPluginList::PluginTree& tree,
     }
 }
 
-std::optional<PluginDescriptionAndPreference> PlayerEditorComponent::getChosenType(const int menuID) const
+std::optional<PluginDescriptionAndPreference> PlayerEditorComponent::getChosenType(int menuID) const
 {
-    const auto internalIndex = menuID - 1;
-    
-    if (isPositiveAndBelow(internalIndex, internalTypes.size()))
-        return PluginDescriptionAndPreference{internalTypes[(size_t)internalIndex]};
-    
-    const auto externalIndex = menuID - 1000; // 1000 is the base ID for external plugins
-    
-    if (isPositiveAndBelow(externalIndex, pluginDescriptionsAndPreference.size()))
-        return pluginDescriptionsAndPreference[externalIndex];
+    // If it's a regular plugin from the tree
+    if (menuID >= 1000)
+    {
+        const int i = menuID - 1000;
+        
+        if (isPositiveAndBelow(i, pluginDescriptionsAndPreference.size()))
+            return pluginDescriptionsAndPreference[i];
+    }
+    // If it's an internal plugin
+    else if (menuID >= menuIDBase && menuID < menuIDBase + internalTypes.size())
+    {
+        const int i = menuID - menuIDBase;
+        
+        if (isPositiveAndBelow(i, internalTypes.size()))
+            return PluginDescriptionAndPreference{internalTypes[i]};
+    }
     
     return {};
 }
@@ -364,7 +381,11 @@ void PlayerEditorComponent::resized()
     // Position buttons
     cancelButton.setBounds(buttonArea.removeFromLeft(100).withHeight(buttonHeight));
     buttonArea.removeFromLeft(10); // Spacing
-    saveButton.setBounds(buttonArea.removeFromLeft(100).withHeight(buttonHeight));
+    saveButton.setBounds(buttonArea.removeFromLeft(120).withHeight(buttonHeight));
+    buttonArea.removeFromLeft(10); // Spacing
+    saveGraphButton.setBounds(buttonArea.removeFromLeft(120).withHeight(buttonHeight));
+    buttonArea.removeFromLeft(10); // Spacing
+    loadGraphButton.setBounds(buttonArea.removeFromLeft(120).withHeight(buttonHeight));
 }
 
 void PlayerEditorComponent::paint(Graphics& g)
@@ -404,13 +425,133 @@ void PlayerEditorComponent::mouseDown(const MouseEvent& e)
     {
         // Convert the mouse position to the graph panel's coordinate space
         auto positionInGraph = e.getEventRelativeTo(graphEditor->graphPanel.get()).getPosition();
-        graphEditor->graphPanel->showPopupMenu(positionInGraph, this);
+        // Use our own showPopupMenu method instead of the graph panel's
+        showPopupMenu(positionInGraph);
     }
+}
+
+void PlayerEditorComponent::showPopupMenu(Point<int> position)
+{
+    PopupMenu menu;
+    addPluginsToMenu(menu);
+    
+    menu.showMenuAsync({},
+                    ModalCallbackFunction::create([this, position](int r)
+                    {
+                        if (auto chosen = getChosenType(r))
+                            createPlugin(*chosen, position);
+                    }));
 }
 
 void PlayerEditorComponent::buttonClicked(Button* button)
 {
-    if (button == &saveButton)
+    if (button == &loadGraphButton)
+    {
+        // Prompt user to select a graph file
+        fileChooser = std::make_unique<FileChooser>("Load Graph File", 
+                                                  File::getSpecialLocation(File::userDocumentsDirectory),
+                                                  "*.filtergraph", true);
+        
+        auto loadGraphCallback = [safeThis = SafePointer<PlayerEditorComponent>(this)] (const FileChooser& chooser)
+        {
+            if (safeThis == nullptr)
+                return;
+                
+            File graphFile = chooser.getResult();
+            if (graphFile == File())
+                return;
+                
+            // Load the graph file directly into the graph editor
+            if (auto* graph = safeThis->graphEditor->graph.get())
+            {
+                // Clear the graph first
+                graph->clear();
+                
+                // Load the XML file
+                std::unique_ptr<XmlElement> xml = parseXML(graphFile);
+                if (xml != nullptr && xml->hasTagName("FILTERGRAPH"))
+                {
+                    // Restore the graph from XML
+                    graph->restoreFromXml(*xml);
+                    
+                    // Update the player's graph state
+                    if (safeThis->player != nullptr)
+                    {
+                        safeThis->player->graphState = std::move(xml);
+                        safeThis->player->graphFilePath = graphFile;
+                    }
+                    
+                    // Make sure the graph panel updates to show the loaded configuration
+                    if (safeThis->graphEditor->graphPanel != nullptr)
+                        safeThis->graphEditor->graphPanel->updateComponents();
+                }
+                else
+                {
+                    // Show error if loading failed
+                    AlertWindow::showMessageBoxAsync(AlertWindow::WarningIcon,
+                                                   "Graph Load Error",
+                                                   "Failed to load the selected graph file.");
+                }
+            }
+        };
+        
+        fileChooser->launchAsync(FileBrowserComponent::openMode, loadGraphCallback);
+    }
+    else if (button == &saveGraphButton)
+    {
+        // Save just the graph to a .filtergraph file
+        if (auto* graph = graphEditor->graph.get())
+        {
+            // Create XML from the current graph state
+            std::unique_ptr<XmlElement> graphXml = graph->createXml();
+            
+            // Prompt user to choose where to save the graph
+            fileChooser = std::make_unique<FileChooser>("Save Graph As", 
+                                                      player->graphFilePath.existsAsFile() ? player->graphFilePath : 
+                                                      File::getSpecialLocation(File::userDocumentsDirectory),
+                                                      "*.filtergraph");
+            
+            // We need to use a shared_ptr here because the lambda will be copied when passed to launchAsync
+            auto sharedXml = std::make_shared<XmlElement>(*graphXml);
+            
+            auto saveGraphCallback = [safeThis = SafePointer<PlayerEditorComponent>(this), sharedXml] 
+                                      (const FileChooser& chooser)
+            {
+                if (safeThis == nullptr)
+                    return;
+                    
+                File file = chooser.getResult();
+                if (file == File())
+                    return;
+                    
+                if (!file.getFileExtension().equalsIgnoreCase(".filtergraph"))
+                    file = file.withFileExtension("filtergraph");
+                
+                // Save the XML to file
+                MemoryBlock block;
+                MemoryOutputStream stream(block, false);
+                sharedXml->writeTo(stream);
+                
+                if (file.replaceWithData(block.getData(), block.getSize()))
+                {
+                    // Update the player's graph file path
+                    if (safeThis->player != nullptr)
+                        safeThis->player->graphFilePath = file;
+                }
+                else
+                {
+                    // Show error if saving failed
+                    AlertWindow::showMessageBoxAsync(AlertWindow::WarningIcon,
+                                                   "Graph Save Error",
+                                                   "Failed to save the graph file.");
+                }
+            };
+            
+            fileChooser->launchAsync(FileBrowserComponent::saveMode | FileBrowserComponent::warnAboutOverwriting, 
+                                   saveGraphCallback);
+        }
+    }
+    else if (button == &saveButton)
     {
         // Update player data from UI
         player->metadata.name = nameEditor.getText();
