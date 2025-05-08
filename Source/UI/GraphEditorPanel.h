@@ -117,7 +117,8 @@ class GraphDocumentComponent final : public Component,
 public:
     GraphDocumentComponent (AudioPluginFormatManager& formatManager,
                             AudioDeviceManager& deviceManager,
-                            KnownPluginList& pluginList);
+                            KnownPluginList& pluginList,
+                            bool loadDefaultGraph = true);
 
     ~GraphDocumentComponent() override;
 

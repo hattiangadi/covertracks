@@ -208,10 +208,8 @@ public:
                 fileToOpen = recentFiles.getFile (0);
         }
 
-        if (fileToOpen.existsAsFile())
-            if (auto* graph = mainWindow->graphHolder.get())
-                if (auto* ioGraph = graph->graph.get())
-                    ioGraph->loadFrom (fileToOpen, true);
+        // In the instrument/player approach, graph files are loaded by the PlayerEditorComponent
+        // The main window no longer directly loads graph files
     }
 
     void shutdown() override
@@ -224,9 +222,8 @@ public:
     void suspended() override
     {
        #if JUCE_ANDROID || JUCE_IOS
-        if (auto graph = mainWindow->graphHolder.get())
-            if (auto ioGraph = graph->graph.get())
-                ioGraph->saveDocument (PluginGraph::getDefaultGraphDocumentOnMobile());
+        // In the instrument/player approach, graph files are saved by the PlayerEditorComponent
+        // The main window no longer directly manages graph files
        #endif
     }
 
@@ -240,9 +237,9 @@ public:
 
     bool backButtonPressed() override
     {
-        if (mainWindow->graphHolder != nullptr)
-            mainWindow->graphHolder->hideLastSidePanel();
-
+        // In the instrument/player approach, side panels are managed differently
+        // The main window no longer has a graphHolder
+        
         return true;
     }
 

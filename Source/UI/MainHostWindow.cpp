@@ -345,9 +345,6 @@ MainHostWindow::MainHostWindow()
     
     // Set it as the main content
     setContentNonOwned (playerLibraryWindow.get(), true);
-    
-    // Still create the GraphDocumentComponent for plugin functionality
-    graphHolder.reset (new GraphDocumentComponent (formatManager, deviceManager, knownPluginList));
 
     setUsingNativeTitleBar (true);
 
@@ -369,15 +366,12 @@ MainHostWindow::MainHostWindow()
 
     knownPluginList.addChangeListener (this);
 
-    if (auto* g = graphHolder->graph.get())
-        g->addChangeListener (this);
-
     addKeyListener (getCommandManager().getKeyMappings());
 
     Process::setPriority (Process::HighPriority);
 
   #if JUCE_IOS || JUCE_ANDROID
-    graphHolder->burgerMenu.setModel (this);
+    // Mobile menu setup - removed graph holder reference
   #else
    #if JUCE_MAC
     setMacMainMenu (this);
@@ -394,9 +388,6 @@ MainHostWindow::~MainHostWindow()
     pluginListWindow = nullptr;
     knownPluginList.removeChangeListener (this);
 
-    if (auto* g = graphHolder->graph.get())
-        g->removeChangeListener (this);
-
     getAppProperties().getUserSettings()->setValue ("mainWindowPos", getWindowStateAsString());
     clearContentComponent();
 
@@ -407,8 +398,6 @@ MainHostWindow::~MainHostWindow()
     setMenuBar (nullptr);
    #endif
   #endif
-
-    graphHolder = nullptr;
 }
 
 void MainHostWindow::closeButtonPressed()
@@ -432,52 +421,17 @@ struct AsyncQuitRetrier final : private Timer
 
 void MainHostWindow::tryToQuitApplication()
 {
-    if (graphHolder->closeAnyOpenPluginWindows())
-    {
-        // Really important thing to note here: if the last call just deleted any plugin windows,
-        // we won't exit immediately - instead we'll use our AsyncQuitRetrier to let the message
-        // loop run for another brief moment, then try again. This will give any plugins a chance
-        // to flush any GUI events that may have been in transit before the app forces them to
-        // be unloaded
-        new AsyncQuitRetrier();
-        return;
-    }
-
+    // In the instrument/player approach, we don't need to handle plugin windows or graph files
+    // at the MainHostWindow level, as they're now managed by the PlayerEditorComponent
+    
     if (ModalComponentManager::getInstance()->cancelAllModalComponents())
     {
+        // If there are modal components active, wait a moment and try again
         new AsyncQuitRetrier();
         return;
     }
-
-    if (graphHolder != nullptr)
-    {
-        auto releaseAndQuit = [this]
-        {
-            // Some plug-ins do not want [NSApp stop] to be called
-            // before the plug-ins are not deallocated.
-            graphHolder->releaseGraph();
-
-            JUCEApplication::quit();
-        };
-
-       #if JUCE_ANDROID || JUCE_IOS
-        if (graphHolder->graph->saveDocument (PluginGraph::getDefaultGraphDocumentOnMobile()))
-            releaseAndQuit();
-       #else
-        SafePointer<MainHostWindow> parent { this };
-        graphHolder->graph->saveIfNeededAndUserAgreesAsync ([parent, releaseAndQuit] (FileBasedDocument::SaveResult r)
-        {
-            if (parent == nullptr)
-                return;
-
-            if (r == FileBasedDocument::savedOk)
-                releaseAndQuit();
-        });
-       #endif
-
-        return;
-    }
-
+    
+    // Simply quit the application
     JUCEApplication::quit();
 }
 
@@ -495,16 +449,10 @@ void MainHostWindow::changeListenerCallback (ChangeBroadcaster* changed)
             getAppProperties().getUserSettings()->saveIfNeeded();
         }
     }
-    else if (graphHolder != nullptr && changed == graphHolder->graph.get())
-    {
-        auto title = JUCEApplication::getInstance()->getApplicationName();
-        auto f = graphHolder->graph->getFile();
-
-        if (f.existsAsFile())
-            title = f.getFileName() + " - " + title;
-
-        setName (title);
-    }
+    
+    // Set the window title to the application name
+    auto title = JUCEApplication::getInstance()->getApplicationName();
+    setName (title);
 }
 
 StringArray MainHostWindow::getMenuBarNames()
@@ -523,25 +471,8 @@ PopupMenu MainHostWindow::getMenuForIndex (int topLevelMenuIndex, const String& 
 
     if (topLevelMenuIndex == 0)
     {
-        // "File" menu
-       #if ! (JUCE_IOS || JUCE_ANDROID)
-        menu.addCommandItem (&getCommandManager(), CommandIDs::newFile);
-        menu.addCommandItem (&getCommandManager(), CommandIDs::open);
-       #endif
-
-        RecentlyOpenedFilesList recentFiles;
-        recentFiles.restoreFromString (getAppProperties().getUserSettings()
-                                            ->getValue ("recentFilterGraphFiles"));
-
-        PopupMenu recentFilesMenu;
-        recentFiles.createPopupMenuItems (recentFilesMenu, 100, true, true);
-        menu.addSubMenu ("Open recent file", recentFilesMenu);
-
-       #if ! (JUCE_IOS || JUCE_ANDROID)
-        menu.addCommandItem (&getCommandManager(), CommandIDs::save);
-        menu.addCommandItem (&getCommandManager(), CommandIDs::saveAs);
-       #endif
-
+        // "File" menu - graph file commands removed for instrument/player approach
+        
         menu.addSeparator();
         menu.addCommandItem (&getCommandManager(), StandardApplicationCommandIDs::quit);
     }
@@ -593,34 +524,11 @@ void MainHostWindow::menuItemSelected (int menuItemID, int /*topLevelMenuIndex*/
 {
     if (menuItemID == 250)
     {
-        if (graphHolder != nullptr)
-            if (auto* graph = graphHolder->graph.get())
-                graph->clear();
+        // Clearing plugins is now handled at the player level
+        AlertWindow::showMessageBoxAsync(AlertWindow::InfoIcon, "Plugin Management", 
+            "Plugin management is now handled at the player level.");
     }
-   #if ! (JUCE_ANDROID || JUCE_IOS)
-    else if (menuItemID >= 100 && menuItemID < 200)
-    {
-        RecentlyOpenedFilesList recentFiles;
-        recentFiles.restoreFromString (getAppProperties().getUserSettings()
-                                            ->getValue ("recentFilterGraphFiles"));
-
-        if (graphHolder != nullptr)
-        {
-            if (auto* graph = graphHolder->graph.get())
-            {
-                SafePointer<MainHostWindow> parent { this };
-                graph->saveIfNeededAndUserAgreesAsync ([parent, recentFiles, menuItemID] (FileBasedDocument::SaveResult r)
-                {
-                    if (parent == nullptr)
-                        return;
-
-                    if (r == FileBasedDocument::savedOk)
-                        parent->graphHolder->graph->loadFrom (recentFiles.getFile (menuItemID - 100), true);
-                });
-            }
-        }
-    }
-   #endif
+    // Recent files handling removed - no longer needed with instrument/player approach
     else if (menuItemID >= 200 && menuItemID < 210)
     {
              if (menuItemID == 200)     pluginSortMethod = KnownPluginList::defaultOrder;
@@ -635,23 +543,25 @@ void MainHostWindow::menuItemSelected (int menuItemID, int /*topLevelMenuIndex*/
     }
     else
     {
+        // In the instrument/player approach, plugin creation is handled at the player level
+        // This code is left as a placeholder for future implementation
         if (const auto chosen = getChosenType (menuItemID))
-            createPlugin (*chosen, { proportionOfWidth  (0.3f + Random::getSystemRandom().nextFloat() * 0.6f),
-                                     proportionOfHeight (0.3f + Random::getSystemRandom().nextFloat() * 0.6f) });
+        {
+            // Notify the user that plugins should be added through the player interface
+            String message = "Please use the Player Editor to add plugins.\n\n"
+                            "Plugin: " + chosen->pluginDescription.name + " (" + chosen->pluginDescription.pluginFormatName + ")"; 
+            AlertWindow::showMessageBoxAsync(AlertWindow::InfoIcon, "Plugin Selection", message);
+        }
     }
 }
 
-void MainHostWindow::menuBarActivated (bool isActivated)
+void covertracks::MainHostWindow::menuBarActivated (bool isActivated)
 {
-    if (isActivated && graphHolder != nullptr)
+    if (isActivated)
         Component::unfocusAllComponents();
 }
 
-void MainHostWindow::createPlugin (const PluginDescriptionAndPreference& desc, Point<int> pos)
-{
-    if (graphHolder != nullptr)
-        graphHolder->createNewPlugin (desc, pos);
-}
+// createPlugin method removed - plugin creation is now handled at the player level
 
 static bool containsDuplicateNames (const Array<PluginDescription>& plugins, const String& name)
 {
@@ -705,16 +615,15 @@ static void addToMenu (const KnownPluginList::PluginTree& tree,
     }
 }
 
-void MainHostWindow::addPluginsToMenu (PopupMenu& m)
+void covertracks::MainHostWindow::addPluginsToMenu (PopupMenu& m)
 {
-    if (graphHolder != nullptr)
-    {
-        int i = 0;
-
-        for (auto& t : internalTypes)
-            m.addItem (++i, t.name + " (" + t.pluginFormatName + ")");
-    }
-
+    // In the instrument/player approach, we still want to show available plugins in the menu
+    // even though they'll be added through the player interface
+    int i = 0;
+    
+    for (auto& t : internalTypes)
+        m.addItem (++i, t.name + " (" + t.pluginFormatName + ")");
+        
     m.addSeparator();
 
     auto pluginDescriptions = knownPluginList.getTypes();
@@ -729,8 +638,9 @@ void MainHostWindow::addPluginsToMenu (PopupMenu& m)
     pluginDescriptionsAndPreference = {};
     addToMenu (*tree, m, pluginDescriptions, pluginDescriptionsAndPreference);
 }
+}
 
-std::optional<PluginDescriptionAndPreference> MainHostWindow::getChosenType (const int menuID) const
+std::optional<covertracks::PluginDescriptionAndPreference> covertracks::MainHostWindow::getChosenType (const int menuID) const
 {
     const auto internalIndex = menuID - 1;
 
@@ -746,12 +656,12 @@ std::optional<PluginDescriptionAndPreference> MainHostWindow::getChosenType (con
 }
 
 //==============================================================================
-ApplicationCommandTarget* MainHostWindow::getNextCommandTarget()
+ApplicationCommandTarget* covertracks::MainHostWindow::getNextCommandTarget()
 {
     return findFirstTargetParentComponent();
 }
 
-void MainHostWindow::getAllCommands (Array<CommandID>& commands)
+void covertracks::MainHostWindow::getAllCommands (Array<CommandID>& commands)
 {
     // this returns the set of all commands that this target can perform..
     const CommandID ids[] = {
@@ -773,7 +683,7 @@ void MainHostWindow::getAllCommands (Array<CommandID>& commands)
     commands.addArray (ids, numElementsInArray (ids));
 }
 
-void MainHostWindow::getCommandInfo (const CommandID commandID, ApplicationCommandInfo& result)
+void covertracks::MainHostWindow::getCommandInfo (const CommandID commandID, ApplicationCommandInfo& result)
 {
     const String category ("General");
 
@@ -840,50 +750,12 @@ void MainHostWindow::getCommandInfo (const CommandID commandID, ApplicationComma
     }
 }
 
-bool MainHostWindow::perform (const InvocationInfo& info)
+bool covertracks::MainHostWindow::perform (const InvocationInfo& info)
 {
     switch (info.commandID)
     {
    #if ! (JUCE_IOS || JUCE_ANDROID)
-    case CommandIDs::newFile:
-        if (graphHolder != nullptr && graphHolder->graph != nullptr)
-        {
-            SafePointer<MainHostWindow> parent { this };
-            graphHolder->graph->saveIfNeededAndUserAgreesAsync ([parent] (FileBasedDocument::SaveResult r)
-            {
-                if (parent == nullptr)
-                    return;
-
-                if (r == FileBasedDocument::savedOk)
-                    parent->graphHolder->graph->newDocument();
-            });
-        }
-        break;
-
-    case CommandIDs::open:
-         if (graphHolder != nullptr && graphHolder->graph != nullptr)
-         {
-             SafePointer<MainHostWindow> parent { this };
-             graphHolder->graph->saveIfNeededAndUserAgreesAsync ([parent] (FileBasedDocument::SaveResult r)
-             {
-                 if (parent == nullptr)
-                     return;
-
-                 if (r == FileBasedDocument::savedOk)
-                     parent->graphHolder->graph->loadFromUserSpecifiedFileAsync (true, [] (Result) {});
-             });
-         }
-        break;
-
-    case CommandIDs::save:
-        if (graphHolder != nullptr && graphHolder->graph != nullptr)
-            graphHolder->graph->saveAsync (true, true, nullptr);
-        break;
-
-    case CommandIDs::saveAs:
-        if (graphHolder != nullptr && graphHolder->graph != nullptr)
-            graphHolder->graph->saveAsAsync ({}, true, true, true, nullptr);
-        break;
+    // Graph file commands removed - no longer needed with instrument/player approach
    #endif
 
     case CommandIDs::showPluginListEditor:
@@ -906,9 +778,8 @@ bool MainHostWindow::perform (const InvocationInfo& info)
             ApplicationCommandInfo cmdInfo (info.commandID);
             updatePrecisionMenuItem (cmdInfo);
             menuItemsChanged();
-
-            if (graphHolder != nullptr)
-                graphHolder->setDoublePrecision (newIsDoublePrecision);
+            
+            // Double precision setting is now handled at the player level
         }
         break;
 
@@ -967,7 +838,7 @@ bool MainHostWindow::perform (const InvocationInfo& info)
     return true;
 }
 
-void MainHostWindow::showAudioSettings()
+void covertracks::MainHostWindow::showAudioSettings()
 {
     auto* audioSettingsComp = new AudioDeviceSelectorComponent (deviceManager,
                                                                 0, 256,
@@ -997,68 +868,44 @@ void MainHostWindow::showAudioSettings()
 
                              getAppProperties().getUserSettings()->setValue ("audioDeviceState", audioState.get());
                              getAppProperties().getUserSettings()->saveIfNeeded();
-
-                             if (safeThis->graphHolder != nullptr)
-                                 if (safeThis->graphHolder->graph != nullptr)
-                                     safeThis->graphHolder->graph->graph.removeIllegalConnections();
+                             
+                             // Graph connections are now handled at the player level
                          }), true);
 }
 
-bool MainHostWindow::isInterestedInFileDrag (const StringArray&)
+bool covertracks::MainHostWindow::isInterestedInFileDrag (const StringArray&)
 {
     return true;
 }
 
-void MainHostWindow::fileDragEnter (const StringArray&, int, int)
+void covertracks::MainHostWindow::fileDragEnter (const StringArray&, int, int)
 {
 }
 
-void MainHostWindow::fileDragMove (const StringArray&, int, int)
+void covertracks::MainHostWindow::fileDragMove (const StringArray&, int, int)
 {
 }
 
-void MainHostWindow::fileDragExit (const StringArray&)
+void covertracks::MainHostWindow::fileDragExit (const StringArray&)
 {
 }
 
-void MainHostWindow::filesDropped (const StringArray& files, int x, int y)
+void covertracks::MainHostWindow::filesDropped (const StringArray& files, int /*x*/, int /*y*/)
 {
-    if (graphHolder != nullptr)
+    // In the instrument/player approach, plugin files should be handled by the PlayerEditorComponent
+    // This is just a stub that adds the plugins to the known plugin list
+    OwnedArray<PluginDescription> typesFound;
+    knownPluginList.scanAndAddDragAndDroppedFiles (formatManager, files, typesFound);
+    
+    // Notify the user that plugins were added to the list
+    if (typesFound.size() > 0)
     {
-       #if ! (JUCE_ANDROID || JUCE_IOS)
-        File firstFile { files[0] };
-
-        if (files.size() == 1 && firstFile.hasFileExtension (PluginGraph::getFilenameSuffix()))
-        {
-            if (auto* g = graphHolder->graph.get())
-            {
-                SafePointer<MainHostWindow> parent;
-                g->saveIfNeededAndUserAgreesAsync ([parent, g, firstFile] (FileBasedDocument::SaveResult r)
-                {
-                    if (parent == nullptr)
-                        return;
-
-                    if (r == FileBasedDocument::savedOk)
-                        g->loadFrom (firstFile, true);
-                });
-            }
-        }
-        else
-       #endif
-        {
-            OwnedArray<PluginDescription> typesFound;
-            knownPluginList.scanAndAddDragAndDroppedFiles (formatManager, files, typesFound);
-
-            auto pos = graphHolder->getLocalPoint (this, Point<int> (x, y));
-
-            for (int i = 0; i < jmin (5, typesFound.size()); ++i)
-                if (auto* desc = typesFound.getUnchecked (i))
-                    createPlugin (PluginDescriptionAndPreference { *desc }, pos);
-        }
+        String message = String(typesFound.size()) + " plugin(s) added to the list.";
+        AlertWindow::showMessageBoxAsync(AlertWindow::InfoIcon, "Plugins Added", message);
     }
 }
 
-bool MainHostWindow::isDoublePrecisionProcessingEnabled()
+bool covertracks::MainHostWindow::isDoublePrecisionProcessingEnabled()
 {
     if (auto* props = getAppProperties().getUserSettings())
         return props->getBoolValue ("doublePrecisionProcessing", false);
@@ -1066,7 +913,7 @@ bool MainHostWindow::isDoublePrecisionProcessingEnabled()
     return false;
 }
 
-bool MainHostWindow::isAutoScalePluginWindowsEnabled()
+bool covertracks::MainHostWindow::isAutoScalePluginWindowsEnabled()
 {
     if (auto* props = getAppProperties().getUserSettings())
         return props->getBoolValue ("autoScalePluginWindows", false);
@@ -1074,16 +921,15 @@ bool MainHostWindow::isAutoScalePluginWindowsEnabled()
     return false;
 }
 
-void MainHostWindow::updatePrecisionMenuItem (ApplicationCommandInfo& info)
+void covertracks::MainHostWindow::updatePrecisionMenuItem (ApplicationCommandInfo& info)
 {
     info.setInfo ("Double Floating-Point Precision Rendering", {}, "General", 0);
     info.setTicked (isDoublePrecisionProcessingEnabled());
 }
 
-void MainHostWindow::updateAutoScaleMenuItem (ApplicationCommandInfo& info)
+void covertracks::MainHostWindow::updateAutoScaleMenuItem (ApplicationCommandInfo& info)
 {
-    info.setInfo ("Auto-Scale Plug-in Windows", {}, "General", 0);
+    info.setInfo ("Auto-Scale Plugin Windows", {}, "General", 0);
     info.setTicked (isAutoScalePluginWindowsEnabled());
 }
 
-} // namespace covertracks

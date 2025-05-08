@@ -54,7 +54,10 @@ PluginGraph::PluginGraph (AudioPluginFormatManager& fm, KnownPluginList& kpl)
       formatManager (fm),
       knownPlugins (kpl)
 {
-    newDocument();
+    // Don't automatically create a new document with default plugins
+    // This will be handled by the GraphDocumentComponent based on loadDefaultGraph parameter
+    clear();
+    setFile({});
     graph.addListener (this);
 }
 
@@ -211,21 +214,24 @@ String PluginGraph::getDocumentTitle()
     return getFile().getFileNameWithoutExtension();
 }
 
-void PluginGraph::newDocument()
+void PluginGraph::newDocument(bool createDefaultPlugins)
 {
     clear();
     setFile ({});
 
     graph.removeChangeListener (this);
 
-    InternalPluginFormat internalFormat;
-
-    jassert (internalFormat.getAllTypes().size() > 3);
-
-    addPlugin (PluginDescriptionAndPreference { internalFormat.getAllTypes()[0] }, { 0.5,  0.1 });
-    addPlugin (PluginDescriptionAndPreference { internalFormat.getAllTypes()[1] }, { 0.25, 0.1 });
-    addPlugin (PluginDescriptionAndPreference { internalFormat.getAllTypes()[2] }, { 0.5,  0.9 });
-    addPlugin (PluginDescriptionAndPreference { internalFormat.getAllTypes()[3] }, { 0.25, 0.9 });
+    if (createDefaultPlugins)
+    {
+        InternalPluginFormat internalFormat;
+        
+        jassert (internalFormat.getAllTypes().size() > 3);
+        
+        addPlugin (PluginDescriptionAndPreference { internalFormat.getAllTypes()[0] }, { 0.5,  0.1 });
+        addPlugin (PluginDescriptionAndPreference { internalFormat.getAllTypes()[1] }, { 0.25, 0.1 });
+        addPlugin (PluginDescriptionAndPreference { internalFormat.getAllTypes()[2] }, { 0.5,  0.9 });
+        addPlugin (PluginDescriptionAndPreference { internalFormat.getAllTypes()[3] }, { 0.25, 0.9 });
+    }
 
     MessageManager::callAsync ([this]
     {

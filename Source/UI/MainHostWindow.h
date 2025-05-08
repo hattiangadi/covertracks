@@ -120,12 +120,11 @@ public:
 
     void tryToQuitApplication();
 
-    void createPlugin (const PluginDescriptionAndPreference&, Point<int> pos);
-
+    // Plugin-related functionality is now handled at the player level
     void addPluginsToMenu (PopupMenu&);
     std::optional<PluginDescriptionAndPreference> getChosenType (int menuID) const;
 
-    std::unique_ptr<GraphDocumentComponent> graphHolder;
+    // Main components
     std::unique_ptr<PlayerLibraryComponent> playerLibraryWindow;
     std::shared_ptr<PlayerManager> playerManager;
 

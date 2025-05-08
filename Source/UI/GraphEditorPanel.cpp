@@ -483,11 +483,16 @@ struct GraphEditorPanel::PluginComponent final : public Component,
                 mainWindow->addPluginsToMenu(*menu);
 
                 menu->showMenuAsync({},
-                                ModalCallbackFunction::create([this, mainWindow, position](int r)
+                                ModalCallbackFunction::create([mainWindow, position](int r)
                                 {
                                     if (mainWindow != nullptr)
                                         if (const auto chosen = mainWindow->getChosenType(r))
-                                            mainWindow->createPlugin(*chosen, position);
+                                        {
+                                            // In the instrument/player approach, plugins should be added through the player interface
+                                            String message = "Please use the Player Editor to add plugins.\n\n"
+                                                           "Plugin: " + chosen->pluginDescription.name + " (" + chosen->pluginDescription.pluginFormatName + ")";
+                                            AlertWindow::showMessageBoxAsync(AlertWindow::InfoIcon, "Plugin Selection", message);
+                                        }
                                 }));
             }
         }
@@ -855,14 +860,14 @@ void GraphEditorPanel::mouseDrag (const MouseEvent& e)
 
 void GraphEditorPanel::showPopupMenu(Point<int> position, PlayerEditorComponent* playerEditorComponent)
 {
-    PopupMenu menu;
+    auto popupMenu = PopupMenu();
     
     if (playerEditorComponent != nullptr)
     {
-        playerEditorComponent->addPluginsToMenu(menu);
+        playerEditorComponent->addPluginsToMenu(popupMenu);
         
-        menu.showMenuAsync({},
-                        ModalCallbackFunction::create([this, playerEditorComponent, position](int r)
+        popupMenu.showMenuAsync({},
+                        ModalCallbackFunction::create([playerEditorComponent, position](int r)
                         {
                             if (playerEditorComponent != nullptr)
                                 if (const auto chosen = playerEditorComponent->getChosenType(r))
@@ -873,14 +878,19 @@ void GraphEditorPanel::showPopupMenu(Point<int> position, PlayerEditorComponent*
     {
         if (auto* mainWindow = findParentComponentOfClass<MainHostWindow>())
         {
-            mainWindow->addPluginsToMenu(menu);
+            mainWindow->addPluginsToMenu(popupMenu);
             
-            menu.showMenuAsync({},
-                            ModalCallbackFunction::create([this, mainWindow, position](int r)
+            popupMenu.showMenuAsync({},
+                            ModalCallbackFunction::create([mainWindow, position](int r)
                             {
                                 if (mainWindow != nullptr)
                                     if (const auto chosen = mainWindow->getChosenType(r))
-                                        mainWindow->createPlugin(*chosen, position);
+                                    {
+                                        // In the instrument/player approach, plugins should be added through the player interface
+                                        String message = "Please use the Player Editor to add plugins.\n\n"
+                                                       "Plugin: " + chosen->pluginDescription.name + " (" + chosen->pluginDescription.pluginFormatName + ")";
+                                        AlertWindow::showMessageBoxAsync(AlertWindow::InfoIcon, "Plugin Selection", message);
+                                    }
                             }));
         }
     }
@@ -1277,12 +1287,20 @@ struct GraphDocumentComponent::PluginListBoxModel final : public ListBoxModel,
 //==============================================================================
 GraphDocumentComponent::GraphDocumentComponent (AudioPluginFormatManager& fm,
                                                 AudioDeviceManager& dm,
-                                                KnownPluginList& kpl)
+                                                KnownPluginList& kpl,
+                                                bool loadDefaultGraph)
     : graph (new PluginGraph (fm, kpl)),
       deviceManager (dm),
       pluginList (kpl),
       graphPlayer (getAppProperties().getUserSettings()->getBoolValue ("doublePrecisionProcessing", false))
 {
+    // If we don't want to load a default graph, create an empty one without default plugins
+    if (!loadDefaultGraph)
+    {
+        // Clear any existing graph and create a new empty one without default plugins
+        graph->newDocument(false);
+    }
+    
     init();
 
     deviceManager.addChangeListener (graphPanel.get());

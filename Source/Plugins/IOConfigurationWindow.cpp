@@ -552,11 +552,7 @@ covertracks::PlayerEditorComponent* covertracks::IOConfigurationWindow::getPlaye
 
 covertracks::GraphDocumentComponent* covertracks::IOConfigurationWindow::getGraphEditor() const
 {
-    // First try to get it from MainHostWindow
-    if (auto* mainWindow = getMainWindow())
-        return mainWindow->graphHolder.get();
-    
-    // If that fails, try to get it from PlayerEditorComponent
+    // In the instrument/player approach, graph editors are managed by the PlayerEditorComponent
     if (auto* playerEditor = getPlayerEditor())
         return playerEditor->getGraphEditor();
 

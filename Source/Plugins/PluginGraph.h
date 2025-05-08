@@ -103,7 +103,7 @@ public:
     static const char* getFilenameWildcard()    { return "*.filtergraph"; }
 
     //==============================================================================
-    void newDocument();
+    void newDocument(bool createDefaultPlugins = true);
     String getDocumentTitle() override;
     Result loadDocument (const File& file) override;
     Result saveDocument (const File& file) override;
