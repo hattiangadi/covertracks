@@ -8,7 +8,7 @@
 
 using json = nlohmann::json;
 
-namespace coverband {
+namespace covertracks {
 
 /**
  * @brief Simple logger for Claude interactions
@@ -126,4 +126,4 @@ private:
 };
 
 
-} // namespace coverband
+} // namespace covertracks

@@ -1,15 +1,12 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include <nlohmann/json.hpp>
 #include <string>
 #include <map>
 #include <vector>
 #include <regex>
 
-using json = nlohmann::json;
-
-namespace coverband {
+namespace covertracks {
 
 /**
  * @brief Utility class for musical note and rhythm parsing
@@ -408,10 +405,10 @@ static std::vector<int> parseExtendedChord(const std::string& chordStr, int octa
      * 
      * @param noteSequence String of note+duration pairs (e.g., "C4q D4q E4e F4e")
      * @param ppq Pulses per quarter note (default: 480)
-     * @return json MIDI events for the note sequence
+     * @return var MIDI events for the note sequence as JUCE var/JSON
      */
-    static json parseNoteSequence(const std::string& noteSequence, int ppq = 480) {
-        json events = json::array();
+    static var parseNoteSequence(const std::string& noteSequence, int ppq = 480) {
+        var events = var(Array<var>());
         
         // Regex to match notes with duration
         std::regex noteRegex(R"(([A-Ga-g][b#]?\d+|r)([a-z\.]*))");
@@ -436,21 +433,21 @@ static std::vector<int> parseExtendedChord(const std::string& chordStr, int octa
                 int note = parseNote(noteStr);
                 if (note != -1) {
                     // Add note-on event
-                    events.push_back({
-                        {"type", "note_on"},
-                        {"channel", 0},
-                        {"note", note},
-                        {"velocity", 100},
-                        {"time", currentTime}
-                    });
+                    DynamicObject* noteOnObj = new DynamicObject();
+                    noteOnObj->setProperty("type", "note_on");
+                    noteOnObj->setProperty("channel", 0);
+                    noteOnObj->setProperty("note", note);
+                    noteOnObj->setProperty("velocity", 100);
+                    noteOnObj->setProperty("time", currentTime);
+                    events.append(var(noteOnObj));
                     
                     // Add note-off event
-                    events.push_back({
-                        {"type", "note_off"},
-                        {"channel", 0},
-                        {"note", note},
-                        {"time", currentTime + duration}
-                    });
+                    DynamicObject* noteOffObj = new DynamicObject();
+                    noteOffObj->setProperty("type", "note_off");
+                    noteOffObj->setProperty("channel", 0);
+                    noteOffObj->setProperty("note", note);
+                    noteOffObj->setProperty("time", currentTime + duration);
+                    events.append(var(noteOffObj));
                 }
                 
                 // Advance time
@@ -575,4 +572,4 @@ static std::vector<int> parseExtendedChord(const std::string& chordStr, int octa
     }
 };
 
-} // namespace coverband
+} // namespace covertracks

@@ -6,7 +6,7 @@
 
 using json = nlohmann::json;
 
-namespace coverband {
+namespace covertracks {
 
 /**
  * @brief Claude-optimized pattern templates for different instruments and styles
@@ -354,4 +354,4 @@ Respond ONLY with a valid JSON object containing the "events" array. No explanat
 }
 
 } // namespace ClaudePatternTemplates
-} // namespace coverband
+} // namespace covertracks

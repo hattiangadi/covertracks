@@ -12,12 +12,12 @@
 
 using json = nlohmann::json;
 
-namespace coverband {
+namespace covertracks {
 
 // Constants
 const std::string API_BASE_URL = "https://api.anthropic.com/v1/messages";
 const std::string DEFAULT_MODEL = "claude-3-sonnet-20240229";
-const std::string SYSTEM_PROMPT_BASE = "You are an expert musician and composer helping to generate musical patterns for the CoverBand application. You generate music notation using a specific shorthand format described in the user prompt. Follow the instructions and format EXACTLY.";
+const std::string SYSTEM_PROMPT_BASE = "You are an expert musician and composer helping to generate musical patterns for the covertracks application. You generate music notation using a specific shorthand format described in the user prompt. Follow the instructions and format EXACTLY.";
 
 ClaudeClient::ClaudeClient(const std::string& apiKeyParam, const json& configParam)
     : apiKey(apiKeyParam),
@@ -260,4 +260,4 @@ int ClaudeClient::estimateTokenCount(const std::string& text) const {
     return static_cast<int>(text.length() / 4) + 1;
 }
 
-} // namespace coverband
+} // namespace covertracks

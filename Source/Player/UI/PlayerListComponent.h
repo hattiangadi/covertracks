@@ -4,12 +4,14 @@
 #include <JuceHeader.h>
 #include "../Core/PlayerManager.h"
 
+namespace covertracks {
+
 class PlayerListComponent : public Component,
                             public TableListBoxModel,
                             public Button::Listener
 {
 public:
-    PlayerListComponent(PlayerManager& pm);
+    PlayerListComponent(PlayerManager* pm);
     ~PlayerListComponent() override;
     
     void resized() override;
@@ -28,48 +30,38 @@ public:
     void cellClicked(int rowNumber, int columnId, const MouseEvent& event) override;
     
     // Get the currently selected player
-    PlayerManager::Player* getSelectedPlayer() const;
+    Player* getSelectedPlayer() const;
     
-    // Refresh the list content
-    void refreshList();
+    // Refresh the list
+    void refresh();
     
+    // Listener interface for receiving events from the PlayerListComponent
     class Listener
     {
     public:
         virtual ~Listener() = default;
         
-        virtual void playerSelected(PlayerManager::Player* player) = 0;
+        virtual void playerSelected(Player* player) = 0;
         virtual void newPlayerRequested() = 0;
-        virtual void editPlayerRequested(PlayerManager::Player* player) = 0;
-        virtual void deletePlayerRequested(PlayerManager::Player* player) = 0;
+        virtual void editPlayerRequested(Player* player) = 0;
+        virtual void deletePlayerRequested(Player* player) = 0;
     };
     
-    void addListener(Listener* listener) { listeners.add(listener); }
-    void removeListener(Listener* listener) { listeners.remove(listener); }
+    void addListener(Listener* listener);
+    void removeListener(Listener* listener);
     
 private:
-    enum ColumnIds
-    {
-        NameColumn = 1,
-        CategoryColumn,
-        DescriptionColumn
-    };
+    PlayerManager* playerManager;
+    TableListBox playerTable;
+    TextButton newButton;
+    TextButton editButton;
+    TextButton deleteButton;
     
-    PlayerManager& playerManager;
-    TableListBox table;
-    
-    TextButton newButton {"New Player"};
-    TextButton editButton {"Edit"};
-    TextButton deleteButton {"Delete"};
-    
-    Array<PlayerManager::Player*> displayedPlayers;
-    int sortColumnId = NameColumn;
-    bool sortForwards = true;
+    Array<Player*> displayedPlayers;
     
     ListenerList<Listener> listeners;
     
-    void updateButtonStates();
-    void sortPlayers();
-    
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PlayerListComponent)
 };
+
+} // namespace covertracks

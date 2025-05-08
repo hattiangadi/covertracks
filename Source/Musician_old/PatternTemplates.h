@@ -6,7 +6,7 @@
 
 using json = nlohmann::json;
 
-namespace coverband {
+namespace covertracks {
 
 /**
  * @brief Pattern-based templates for different instruments and styles
@@ -275,4 +275,4 @@ inline std::string getPatternImplementation(
 }
 
 } // namespace PatternTemplates
-} // namespace coverband
+} // namespace covertracks

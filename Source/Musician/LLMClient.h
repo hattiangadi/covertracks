@@ -1,14 +1,11 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include <nlohmann/json.hpp>
 #include <string>
 #include <memory>
 #include <functional>
 
-using json = nlohmann::json;
-
-namespace coverband {
+namespace covertracks {
 
 /**
  * @brief Abstract interface for LLM clients
@@ -24,9 +21,9 @@ public:
      * @brief Generate a response from the LLM based on a prompt
      * 
      * @param prompt The text prompt to send to the LLM
-     * @return json The generated response as a JSON object
+     * @return var The generated response as a JUCE var/JSON object
      */
-    virtual json generateResponse(const std::string& prompt) = 0;
+    virtual var generateResponse(const std::string& prompt) = 0;
     
     /**
      * @brief Generate a response asynchronously
@@ -35,16 +32,16 @@ public:
      * @param callback Function to call with the response
      */
     virtual void generateResponseAsync(const std::string& prompt, 
-                                      std::function<void(const json&)> callback) = 0;
+                                      std::function<void(const var&)> callback) = 0;
 
     /**
      * @brief Update the LLM client's configuration
      * 
-     * @param updatedConfig JSON object with configuration updates
+     * @param updatedConfig JUCE var/JSON object with configuration updates
      * @return true If the configuration was updated successfully
      * @return false If the configuration update failed or is unsupported
      */
-    virtual bool updateConfiguration(const json& /*updatedConfig*/) { return false; }
+    virtual bool updateConfiguration(const var& /*updatedConfig*/) { return false; }
 
     /**
      * @brief Set the GBNF grammar to use for generations (if supported)
@@ -83,7 +80,7 @@ public:
      * @param config Configuration parameters as JSON
      * @return std::unique_ptr<LLMClient> The created LLM client
      */
-    static std::unique_ptr<LLMClient> createClient(const std::string& type, const json& config);
+    static std::unique_ptr<LLMClient> createClient(const std::string& type, const var& config);
 };
 
-} // namespace coverband
+} // namespace covertracks

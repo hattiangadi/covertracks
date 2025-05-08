@@ -2,9 +2,6 @@
 
 #include <JuceHeader.h>
 #include "../../Plugins/PluginGraph.h"
-#include <nlohmann/json.hpp>
-
-using json = nlohmann::json;
 
 namespace covertracks {
 
@@ -30,7 +27,7 @@ public:
     /**
      * @brief Destroy the Instrument
      */
-    ~Instrument();
+    ~Instrument() override;
     
     /**
      * @brief Initialize the instrument
@@ -38,7 +35,7 @@ public:
      * @return true If initialization was successful
      * @return false If initialization failed
      */
-    bool initialize();
+    void initialize();
     
     /**
      * @brief Load a plugin graph configuration
@@ -59,12 +56,12 @@ public:
     /**
      * @brief Play a MIDI pattern
      * 
-     * @param pattern MIDI events in JSON format
+     * @param pattern MIDI events in JUCE var/JSON format
      * @param tempo Tempo in BPM
      * @return true If playback started successfully
      * @return false If playback failed to start
      */
-    bool playMIDIPattern(const json& pattern, double tempo = 120.0);
+    bool playMIDIPattern(const var& pattern, double tempo = 120.0);
     
     /**
      * @brief Stop current playback
@@ -86,14 +83,14 @@ public:
      * 
      * @param listener The listener to add
      */
-    void addMidiInputCallback(MidiInputCallback* listener);
+    void addMidiInputListener(MidiInputCallback* listener);
     
     /**
      * @brief Remove MIDI listener
      * 
      * @param listener The listener to remove
      */
-    void removeMidiInputCallback(MidiInputCallback* listener);
+    void removeMidiInputListener(MidiInputCallback* listener);
     
     /**
      * @brief Get direct access to the plugin graph
@@ -108,7 +105,22 @@ public:
      * @return true If playing
      * @return false If not playing
      */
-    bool isPlaying() const { return playing; }
+    bool isPlaying() const;
+    
+    /**
+     * @brief Check if the instrument is currently paused
+     * 
+     * @return true If paused
+     * @return false If not paused
+     */
+    bool isPaused() const;
+    
+    /**
+     * @brief Set callback for pattern completion
+     * 
+     * @param callback Function to call when pattern playback completes
+     */
+    void setOnPatternFinishedCallback(std::function<void()> callback);
     
     /**
      * @brief Get the current playback position in seconds
@@ -139,7 +151,7 @@ private:
                               int numInputChannels,
                               float** outputChannelData,
                               int numOutputChannels,
-                              int numSamples) override;
+                              int numSamples);
     
     void audioDeviceAboutToStart(AudioIODevice* device) override;
     void audioDeviceStopped() override;
@@ -157,12 +169,15 @@ private:
     void updateCurrentTime(int numSamples);
     
     // Convert JSON pattern to MIDI sequence
-    std::unique_ptr<MidiMessageSequence> convertJSONToMIDISequence(const json& events);
+    std::unique_ptr<MidiMessageSequence> convertJSONToMIDISequence(const var& events);
     
     // Core components
     String instrumentName;
     std::unique_ptr<AudioDeviceManager> deviceManager;
+    std::unique_ptr<AudioPluginFormatManager> pluginFormatManager;
+    std::unique_ptr<KnownPluginList> pluginList;
     std::unique_ptr<PluginGraph> pluginGraph;
+    std::unique_ptr<AudioProcessorGraph> processorGraph; // For actual audio processing
     
     // MIDI playback state
     bool playing = false;

@@ -13,7 +13,7 @@
 
 using json = nlohmann::json;
 
-namespace coverband {
+namespace covertracks {
 
 // Helper function to generate UUIDs for pattern IDs
 static std::string generateUUID() {
@@ -504,4 +504,4 @@ std::unique_ptr<Musician> MusicianFactory::createMusician(
     return musician;
 }
 
-} // namespace coverband
+} // namespace covertracks

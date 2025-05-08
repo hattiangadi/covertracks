@@ -6,12 +6,14 @@
 #include "PlayerListComponent.h"
 #include "PlayerEditorComponent.h"
 
+namespace covertracks {
+
 class PlayerLibraryComponent : public Component,
                                private PlayerListComponent::Listener,
                                private PlayerEditorComponent::Listener
 {
 public:
-    PlayerLibraryComponent();
+    explicit PlayerLibraryComponent(std::shared_ptr<PlayerManager> manager);
     ~PlayerLibraryComponent() override;
     
     void resized() override;
@@ -19,23 +21,25 @@ public:
     
 private:
     // PlayerListComponent::Listener implementation
-    void playerSelected(PlayerManager::Player* player) override;
+    void playerSelected(Player* player) override;
     void newPlayerRequested() override;
-    void editPlayerRequested(PlayerManager::Player* player) override;
-    void deletePlayerRequested(PlayerManager::Player* player) override;
+    void editPlayerRequested(Player* player) override;
+    void deletePlayerRequested(Player* player) override;
     
     // PlayerEditorComponent::Listener implementation
     void playerEditorSaveRequested(PlayerEditorComponent* editor) override;
     void playerEditorCancelRequested(PlayerEditorComponent* editor) override;
     
     // UI components
-    PlayerManager playerManager;
-    std::unique_ptr<PlayerListComponent> playerListComponent;
-    std::unique_ptr<PlayerEditorComponent> playerEditorComponent;
+    std::shared_ptr<PlayerManager> playerManager;
+    std::unique_ptr<PlayerListComponent> playerList;
+    std::unique_ptr<PlayerEditorComponent> playerEditor;
     
     // Helper methods
-    void showPlayerEditor(PlayerManager::Player* playerToEdit = nullptr);
+    void showPlayerEditor(Player* playerToEdit = nullptr);
     void hidePlayerEditor();
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PlayerLibraryComponent)
 };
+
+} // namespace covertracks

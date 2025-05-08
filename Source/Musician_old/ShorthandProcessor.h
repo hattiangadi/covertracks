@@ -9,7 +9,7 @@
 
 using json = nlohmann::json;
 
-namespace coverband {
+namespace covertracks {
 
 /**
  * @brief Processor for handling pattern-based musical notation conversion
@@ -205,4 +205,4 @@ private:
     }
 };
 
-} // namespace coverband
+} // namespace covertracks

@@ -1,11 +1,9 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include <nlohmann/json.hpp>
 #include "Instrument.h"
-#include "../Musician/Musician.h"
-
-using json = nlohmann::json;
+// Temporarily commenting out Musician for compilation
+// #include "../../Musician/Musician.h"
 
 namespace covertracks {
 
@@ -70,38 +68,38 @@ public:
     std::unique_ptr<XmlElement> getPluginGraphState();
     
     /**
-     * @brief Set the LLM client for the musician
+     * @brief Set the LLM client for the musician (stubbed)
      * 
      * @param client Shared pointer to an LLM client
      */
-    void setLLMClient(std::shared_ptr<LLMClient> client);
+    // void setLLMClient(std::shared_ptr<LLMClient> client);
     
     /**
-     * @brief Generate a musical pattern
+     * @brief Generate a musical pattern (stubbed)
      * 
      * @param parameters Parameters for pattern generation (key, tempo, etc.)
-     * @return json The generated pattern
+     * @return var The generated pattern as JUCE var/JSON
      */
-    json generatePattern(const json& parameters);
+    var generatePattern(const var& parameters);
     
     /**
      * @brief Play a MIDI pattern
      * 
-     * @param pattern MIDI events in JSON format
+     * @param pattern MIDI events in JUCE var/JSON format
      * @param tempo Tempo in BPM
      * @return true If playback started successfully
      * @return false If playback failed to start
      */
-    bool playPattern(const json& pattern, double tempo = 120.0);
+    bool playPattern(const var& pattern, double tempo = 120.0);
     
     /**
-     * @brief Generate and immediately play a pattern
+     * @brief Generate and immediately play a pattern (stubbed)
      * 
      * @param parameters Parameters for pattern generation
      * @return true If generation and playback were successful
      * @return false If an error occurred
      */
-    bool generateAndPlay(const json& parameters);
+    bool generateAndPlay(const var& parameters);
     
     /**
      * @brief Stop current playback
@@ -152,11 +150,12 @@ public:
     Instrument* getInstrument() { return instrument.get(); }
     
     /**
-     * @brief Get the musician component
+     * @brief Get the musician component (stubbed)
      * 
      * @return Musician* Pointer to the musician (not owned)
      */
-    Musician* getMusician() { return musician.get(); }
+    // Musician* getMusician() { return musician.get(); }
+    void* getMusician() { return nullptr; } // Stubbed implementation
     
 private:
     // Core properties
@@ -165,10 +164,10 @@ private:
     
     // Core components
     std::unique_ptr<Instrument> instrument;
-    std::unique_ptr<Musician> musician;
+    // std::unique_ptr<Musician> musician; // Temporarily commented out
     
     // Most recently generated pattern
-    json lastGeneratedPattern;
+    var lastGeneratedPattern;
     
     // Pattern finished callback
     std::function<void(const String&)> onPatternFinished;
@@ -177,3 +176,7 @@ private:
     void handlePatternFinished();
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Player)
+
+};
+
+}

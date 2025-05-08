@@ -5,9 +5,22 @@ namespace covertracks {
 
 Instrument::Instrument(const String& name)
     : instrumentName(name), 
-      deviceManager(std::make_unique<AudioDeviceManager>()),
-      pluginGraph(std::make_unique<PluginGraph>())
+      deviceManager(std::make_unique<AudioDeviceManager>())
 {
+    // Create format manager and plugin list for the graph
+    auto formatManager = std::make_unique<AudioPluginFormatManager>();
+    formatManager->addDefaultFormats();
+    
+    auto knownPluginList = std::make_unique<KnownPluginList>();
+    
+    // Initialize the plugin graph
+    pluginGraph = std::make_unique<PluginGraph>(*formatManager, *knownPluginList);
+    
+    // Store the format manager and plugin list as they're needed by the graph
+    // We need to keep these alive as long as the graph exists
+    pluginFormatManager = std::move(formatManager);
+    pluginList = std::move(knownPluginList);
+    
     // Output initialization message
     std::cout << "Creating Instrument: " << name << std::endl;
 }
@@ -20,104 +33,92 @@ Instrument::~Instrument()
     // Stop timer if running
     stopTimer();
     
-    // Remove as callback from device manager
+    // Clean up MIDI input callbacks
     if (deviceManager != nullptr)
     {
-        deviceManager->removeAudioCallback(this);
-        deviceManager->removeMidiInputCallback(String(), this);
+        deviceManager->removeMidiInputDeviceCallback(String(), this);
+        deviceManager->closeAudioDevice();
     }
     
     // Output cleanup message
     std::cout << "Destroying Instrument: " << instrumentName << std::endl;
 }
 
-bool Instrument::initialize()
+void Instrument::initialize()
 {
-    // Initialize the device manager first
-    auto error = deviceManager->initialiseWithDefaultDevices(2, 2);
+    // Initialize the audio device manager
+    deviceManager->initialiseWithDefaultDevices(2, 2);
     
-    if (error.isNotEmpty())
-    {
-        std::cerr << "Error initializing audio device: " << error << std::endl;
-        return false;
-    }
-    
-    // Register as audio callback
+    // Register as an audio callback
     deviceManager->addAudioCallback(this);
     
     // Enable MIDI input
-    deviceManager->setMidiInputEnabled(String(), true);
-    deviceManager->addMidiInputCallback(String(), this);
+    deviceManager->setMidiInputDeviceEnabled(String(), true);
+    deviceManager->addMidiInputDeviceCallback(String(), this);
     
-    // Initialize the plugin graph
-    if (pluginGraph == nullptr)
+    // Initialize the processor graph if it doesn't exist
+    if (!processorGraph)
     {
-        pluginGraph = std::make_unique<PluginGraph>();
+        processorGraph = std::make_unique<AudioProcessorGraph>();
     }
     
-    // Initialize the plugin graph with device manager's settings
-    auto& deviceManager = this->deviceManager;
+    auto& deviceManagerRef = *deviceManager;
     auto currentAudioDevice = deviceManager->getCurrentAudioDevice();
     
     if (currentAudioDevice != nullptr)
     {
-        // Set sample rate and buffer size from the audio device
-        double sampleRate = currentAudioDevice->getCurrentSampleRate();
+        // Get device settings
+        double sampleRateValue = currentAudioDevice->getCurrentSampleRate();
         int bufferSize = currentAudioDevice->getCurrentBufferSizeSamples();
         
-        // Initialize the plugin graph's processor
-        pluginGraph->setPlayConfigDetails(currentAudioDevice->getActiveInputChannels().countNumberOfSetBits(),
-                                        currentAudioDevice->getActiveOutputChannels().countNumberOfSetBits(),
-                                        sampleRate, bufferSize);
-        
-        // Store the sample rate for MIDI timing calculations
-        this->sampleRate = sampleRate;
+        // Configure the processor graph
+        processorGraph->setPlayConfigDetails(
+            currentAudioDevice->getActiveInputChannels().countNumberOfSetBits(),
+            currentAudioDevice->getActiveOutputChannels().countNumberOfSetBits(),
+            sampleRateValue,
+            bufferSize);
+            
+        // Update the sample rate
+        sampleRate = sampleRateValue;
     }
     else
     {
-        // Use default values if no audio device is available
-        pluginGraph->setPlayConfigDetails(2, 2, 44100.0, 512);
+        // Default configuration if no audio device is available
+        processorGraph->setPlayConfigDetails(2, 2, 44100.0, 512);
     }
     
-    // Prepare the plugin graph for playback
-    pluginGraph->prepareToPlay(sampleRate, 512);
+    // Prepare the processor graph for playback
+    processorGraph->prepareToPlay(sampleRate, 512);
     
     // Start the timer at 20ms interval (50Hz) for MIDI playback tracking
     startTimer(20);
     
-    std::cout << "Instrument initialized: " << instrumentName 
-             << " (Sample rate: " << sampleRate << "Hz)" << std::endl;
-    
-    return true;
+    std::cout << "Initialized Instrument: " << instrumentName << std::endl;
 }
 
 bool Instrument::loadPluginGraph(const XmlElement& graphState)
 {
+    // Check if the XML is valid
     if (!graphState.hasTagName("FILTERGRAPH"))
     {
-        std::cerr << "Invalid plugin graph XML (missing FILTERGRAPH tag)" << std::endl;
+        std::cerr << "Invalid plugin graph XML for " << instrumentName << std::endl;
         return false;
     }
     
-    // Ensure we have a plugin graph
-    if (pluginGraph == nullptr)
+    // Ensure we have a processor graph
+    if (processorGraph == nullptr)
     {
-        pluginGraph = std::make_unique<PluginGraph>();
+        processorGraph = std::make_unique<AudioProcessorGraph>();
     }
     
-    // Attempt to restore from XML
-    bool result = pluginGraph->restoreFromXml(graphState);
+    // Restore the plugin graph from XML
+    pluginGraph->restoreFromXml(graphState);
     
-    if (result)
-    {
-        std::cout << "Plugin graph loaded successfully for " << instrumentName << std::endl;
-    }
-    else
-    {
-        std::cerr << "Failed to load plugin graph for " << instrumentName << std::endl;
-    }
+    // In a real implementation, we would need to update the processor graph
+    // based on the plugin graph configuration
     
-    return result;
+    std::cout << "Plugin graph loaded successfully for " << instrumentName << std::endl;
+    return true;
 }
 
 std::unique_ptr<XmlElement> Instrument::getPluginGraphState()
@@ -130,76 +131,76 @@ std::unique_ptr<XmlElement> Instrument::getPluginGraphState()
     return pluginGraph->createXml();
 }
 
-bool Instrument::playMIDIPattern(const json& pattern, double newTempo)
+bool Instrument::playMIDIPattern(const var& pattern, double newTempo)
 {
-    // Stop any existing playback first
+    // Stop any current playback
     stopPlayback();
     
-    // Convert the JSON pattern to a MIDI sequence
+    // Set the new tempo if provided
+    if (newTempo > 0)
+    {
+        tempo = newTempo;
+    }
+    
+    // Convert the pattern to a MIDI sequence
     currentSequence = convertJSONToMIDISequence(pattern);
     
     if (currentSequence == nullptr || currentSequence->getNumEvents() == 0)
     {
-        std::cerr << "Failed to create MIDI sequence or sequence is empty" << std::endl;
+        std::cerr << "Failed to create MIDI sequence from pattern" << std::endl;
         return false;
     }
     
-    // Update tempo
-    tempo = newTempo;
+    // Calculate the total duration of the pattern
+    totalDuration = 0.0;
     
-    // Calculate total duration in seconds based on the sequence
-    // Find the end time of the last event
-    auto& lastEvent = currentSequence->getEventPointer(currentSequence->getNumEvents() - 1)->message;
-    double lastTimestamp = lastEvent.getTimeStamp();
-    
-    // Convert from ticks to seconds
-    // Assuming 480 ticks per quarter note (standard MIDI resolution)
-    // tempo is in beats per minute, so beats per second is tempo/60
-    double ticksPerSecond = 480.0 * (tempo / 60.0);
-    totalDuration = lastTimestamp / ticksPerSecond;
-    
-    // Make sure we add a bit of extra time for note release
-    totalDuration += 0.5; // Add half a second
+    for (int i = 0; i < currentSequence->getNumEvents(); ++i)
+    {
+        auto event = currentSequence->getEventPointer(i);
+        if (event->message.isNoteOff())
+        {
+            totalDuration = std::max(totalDuration, event->message.getTimeStamp());
+        }
+    }
     
     // Reset playback state
     nextEventIndex = 0;
     currentTime = 0.0;
-    
-    // Start playback
     playing = true;
     paused = false;
     
-    std::cout << "Started MIDI pattern playback on " << instrumentName
-             << " (Duration: " << totalDuration << "s, Tempo: " << tempo << " BPM)" << std::endl;
+    std::cout << "Started MIDI pattern playback on " << instrumentName 
+              << " (tempo: " << tempo << " BPM, duration: " << totalDuration << " ticks)" << std::endl;
     
     return true;
 }
 
 void Instrument::stopPlayback()
 {
-    // Only send MIDI Off messages if we were playing
     if (playing)
     {
-        // Send all notes off message on all channels
+        // Send all notes off
         MidiBuffer allNotesOff;
+        
         for (int channel = 1; channel <= 16; ++channel)
         {
             allNotesOff.addEvent(MidiMessage::allNotesOff(channel), 0);
-            allNotesOff.addEvent(MidiMessage::allSoundOff(channel), 0);
+            allNotesOff.addEvent(MidiMessage::allControllersOff(channel), 0);
         }
         
         // Process the all notes off messages
         AudioBuffer<float> tempBuffer(2, 512);
         MidiBuffer midiBuffer(allNotesOff);
-        pluginGraph->processBlock(tempBuffer, midiBuffer);
+        if (processorGraph)
+            processorGraph->processBlock(tempBuffer, midiBuffer);
     }
     
     // Reset state
     playing = false;
     paused = false;
+    currentSequence = nullptr;
     nextEventIndex = 0;
     currentTime = 0.0;
-    currentSequence.reset(nullptr);
     
     std::cout << "Stopped MIDI pattern playback on " << instrumentName << std::endl;
 }
@@ -208,22 +209,25 @@ void Instrument::pausePlayback()
 {
     if (playing && !paused)
     {
-        paused = true;
-        
-        // Send all notes off message on all channels
+        // Send all notes off
         MidiBuffer allNotesOff;
+        
         for (int channel = 1; channel <= 16; ++channel)
         {
             allNotesOff.addEvent(MidiMessage::allNotesOff(channel), 0);
+            allNotesOff.addEvent(MidiMessage::allControllersOff(channel), 0);
         }
         
         // Process the all notes off messages
         AudioBuffer<float> tempBuffer(2, 512);
         MidiBuffer midiBuffer(allNotesOff);
-        pluginGraph->processBlock(tempBuffer, midiBuffer);
+        if (processorGraph)
+            processorGraph->processBlock(tempBuffer, midiBuffer);
         
         std::cout << "Paused MIDI pattern playback on " << instrumentName << std::endl;
     }
+    
+    paused = true;
 }
 
 void Instrument::resumePlayback()
@@ -235,26 +239,21 @@ void Instrument::resumePlayback()
     }
 }
 
-void Instrument::addMidiInputCallback(MidiInputCallback* listener)
+bool Instrument::isPlaying() const
 {
-    if (listener != nullptr && !midiInputListeners.contains(listener))
-    {
-        midiInputListeners.add(listener);
-    }
+    return playing && !paused;
 }
 
-void Instrument::removeMidiInputCallback(MidiInputCallback* listener)
+bool Instrument::isPaused() const
 {
-    midiInputListeners.removeFirstMatchingValue(listener);
+    return playing && paused;
 }
 
-void Instrument::audioDeviceIOCallback(const float** inputChannelData,
-                                      int numInputChannels,
-                                      float** outputChannelData,
-                                      int numOutputChannels,
-                                      int numSamples)
+void Instrument::audioDeviceIOCallback(const float** inputChannelData, int numInputChannels,
+                                     float** outputChannelData, int numOutputChannels,
+                                     int numSamples)
 {
-    // Create a buffer with the correct number of channels
+    // Create audio buffer wrapper around the output channels
     AudioBuffer<float> buffer(outputChannelData, numOutputChannels, numSamples);
     
     // Clear the output buffer
@@ -263,26 +262,27 @@ void Instrument::audioDeviceIOCallback(const float** inputChannelData,
     // Create a MIDI buffer for this block
     MidiBuffer midiBuffer;
     
-    // Process any MIDI events for the current time position
-    if (playing && !paused && currentSequence != nullptr)
+    // If playing, add MIDI events for this block
+    if (playing && !paused)
     {
         processMIDIEvents(midiBuffer, numSamples);
     }
     
-    // Process audio with the plugin graph
-    if (pluginGraph != nullptr)
+    // Process audio with the processor graph
+    if (processorGraph != nullptr)
     {
         // Add any input audio to the buffer if needed
         if (numInputChannels > 0)
         {
-            for (int channel = 0; channel < jmin(numInputChannels, numOutputChannels); ++channel)
+            for (int channel = 0; channel < std::min(numInputChannels, numOutputChannels); ++channel)
             {
                 buffer.copyFrom(channel, 0, inputChannelData[channel], numSamples);
             }
         }
         
-        // Process the block through the plugin graph
-        pluginGraph->processBlock(buffer, midiBuffer);
+        // Process the block through the processor graph
+        if (processorGraph)
+            processorGraph->processBlock(buffer, midiBuffer);
     }
     
     // Update current time
@@ -295,271 +295,176 @@ void Instrument::audioDeviceAboutToStart(AudioIODevice* device)
     {
         sampleRate = device->getCurrentSampleRate();
         
-        if (pluginGraph != nullptr)
+        if (processorGraph != nullptr)
         {
-            pluginGraph->setPlayConfigDetails(device->getActiveInputChannels().countNumberOfSetBits(),
-                                            device->getActiveOutputChannels().countNumberOfSetBits(),
-                                            sampleRate, device->getCurrentBufferSizeSamples());
+            processorGraph->setPlayConfigDetails(
+                device->getActiveInputChannels().countNumberOfSetBits(),
+                device->getActiveOutputChannels().countNumberOfSetBits(),
+                sampleRate,
+                device->getCurrentBufferSizeSamples());
             
-            pluginGraph->prepareToPlay(sampleRate, device->getCurrentBufferSizeSamples());
+            processorGraph->prepareToPlay(sampleRate, device->getCurrentBufferSizeSamples());
         }
     }
 }
 
 void Instrument::audioDeviceStopped()
 {
-    if (pluginGraph != nullptr)
+    if (processorGraph != nullptr)
     {
-        pluginGraph->releaseResources();
+        processorGraph->releaseResources();
     }
 }
 
 void Instrument::handleIncomingMidiMessage(MidiInput* source, const MidiMessage& message)
 {
-    // Forward MIDI message to registered listeners
+    // Forward the message to any registered listeners
     for (auto* listener : midiInputListeners)
     {
         listener->handleIncomingMidiMessage(source, message);
     }
     
-    // Also process the MIDI message through our plugin graph on the message thread
-    // This ensures we respond to MIDI input immediately rather than waiting for the next audio block
-    if (pluginGraph != nullptr && message.getRawDataSize() > 0)
+    // If we're not playing a pattern, we can process live MIDI input
+    if (!playing)
     {
-        MessageManager::callAsync([this, messageData = message.getRawData(), 
-                                 messageSize = message.getRawDataSize()]() {
-            MidiMessage copiedMessage(messageData, messageSize);
+        // Process the MIDI message through the plugin graph
+        MessageManager::callAsync([this, message]()
+        {
             MidiBuffer tempBuffer;
-            tempBuffer.addEvent(copiedMessage, 0);
+            tempBuffer.addEvent(message, 0);
             
             AudioBuffer<float> tempAudioBuffer(2, 512);
             tempAudioBuffer.clear();
             
-            pluginGraph->processBlock(tempAudioBuffer, tempBuffer);
+            if (processorGraph)
+                processorGraph->processBlock(tempAudioBuffer, tempBuffer);
         });
+    }
+}
+
+void Instrument::addMidiInputListener(MidiInputCallback* listener)
+{
+    if (listener != nullptr && !midiInputListeners.contains(listener))
+    {
+        midiInputListeners.add(listener);
+    }
+}
+
+void Instrument::removeMidiInputListener(MidiInputCallback* listener)
+{
+    if (listener != nullptr)
+    {
+        midiInputListeners.removeFirstMatchingValue(listener);
     }
 }
 
 void Instrument::timerCallback()
 {
-    // Check if the playback has completed
-    if (playing && !paused && currentTime >= totalDuration)
+    // This is called at regular intervals to update the playback state
+    if (playing && !paused)
     {
-        // Playback is complete, stop and notify
-        stopPlayback();
-        
-        // Call the callback if set
-        if (onPatternFinished)
+        // Check if we've reached the end of the pattern
+        if (currentTime >= totalDuration && totalDuration > 0)
         {
-            onPatternFinished();
+            // Stop playback
+            stopPlayback();
+            
+            // Notify any registered callback
+            if (onPatternFinished)
+            {
+                onPatternFinished();
+            }
         }
     }
+}
+
+void Instrument::setOnPatternFinishedCallback(std::function<void()> callback)
+{
+    onPatternFinished = std::move(callback);
 }
 
 void Instrument::processMIDIEvents(MidiBuffer& midiBuffer, int numSamples)
 {
     if (currentSequence == nullptr || nextEventIndex >= currentSequence->getNumEvents())
+    {
         return;
+    }
     
-    // Calculate time range for this buffer
-    double bufferStartTime = currentTime;
-    double bufferEndTime = currentTime + (numSamples / sampleRate);
+    // Calculate the time range for this block
+    double blockStartTime = currentTime;
+    double blockEndTime = blockStartTime + (numSamples / sampleRate) * (60.0 / tempo) * 480.0; // Assuming 480 ticks per quarter note
     
-    // Calculate MIDI tick timing
-    // Standard MIDI is 480 ticks per quarter note (TPQN)
-    // Tempo is in beats per minute, so beats per second is tempo/60
-    double ticksPerSecond = 480.0 * (tempo / 60.0);
-    
-    // Convert buffer times to ticks
-    double bufferStartTicks = bufferStartTime * ticksPerSecond;
-    double bufferEndTicks = bufferEndTime * ticksPerSecond;
-    
-    // Process all events in this time range
+    // Add all events that fall within this time range
     while (nextEventIndex < currentSequence->getNumEvents())
     {
-        auto* eventPtr = currentSequence->getEventPointer(nextEventIndex);
-        double eventTicks = eventPtr->message.getTimeStamp();
+        auto event = currentSequence->getEventPointer(nextEventIndex);
+        double eventTime = event->message.getTimeStamp();
         
-        // If event is beyond this buffer, we're done for now
-        if (eventTicks >= bufferEndTicks)
-            break;
-        
-        // If event is in this buffer's range
-        if (eventTicks >= bufferStartTicks)
+        if (eventTime >= blockEndTime)
         {
-            // Calculate the offset within the buffer
-            double eventTime = eventTicks / ticksPerSecond;
-            int sampleOffset = jlimit(0, numSamples - 1, 
-                           (int)((eventTime - bufferStartTime) * sampleRate));
-            
-            // Add the event to the buffer
-            midiBuffer.addEvent(eventPtr->message, sampleOffset);
+            break;
         }
         
-        // Move to next event
+        if (eventTime >= blockStartTime)
+        {
+            // Calculate the sample position within this block
+            int samplePosition = static_cast<int>((eventTime - blockStartTime) / (blockEndTime - blockStartTime) * numSamples);
+            samplePosition = jlimit(0, numSamples - 1, samplePosition);
+            
+            // Add the event to the buffer
+            midiBuffer.addEvent(event->message, samplePosition);
+        }
+        
         nextEventIndex++;
     }
 }
 
 void Instrument::updateCurrentTime(int numSamples)
 {
-    // Only update time if playing and not paused
     if (playing && !paused)
     {
-        currentTime += numSamples / sampleRate;
+        // Update the current time based on the number of samples processed
+        double blockDuration = (numSamples / sampleRate) * (60.0 / tempo) * 480.0; // Assuming 480 ticks per quarter note
+        currentTime += blockDuration;
     }
 }
 
-std::unique_ptr<MidiMessageSequence> Instrument::convertJSONToMIDISequence(const json& events)
+std::unique_ptr<MidiMessageSequence> Instrument::convertJSONToMIDISequence(const var& events)
 {
     auto sequence = std::make_unique<MidiMessageSequence>();
     
     try
     {
-        // Check if events array exists
-        if (!events.contains("events") || !events["events"].is_array())
+        if (!events.isArray())
         {
-            std::cerr << "Invalid JSON: missing 'events' array" << std::endl;
-            return sequence;
+            throw std::runtime_error("Events must be an array");
         }
         
-        // Process each event in the array
-        for (const auto& event : events["events"])
+        for (int i = 0; i < events.size(); ++i)
         {
-            // Validate required fields
-            if (!event.contains("type") || !event["type"].is_string() || 
-                !event.contains("time") || !event["time"].is_number())
-            {
-                continue; // Skip invalid events
-            }
+            auto event = events[i];
             
-            std::string type = event["type"];
-            int time = event["time"];
-            
-            MidiMessage message;
-            
-            if (type == "note_on")
+            if (!event.isObject())
             {
-                // Check for required fields
-                if (!event.contains("channel") || !event["channel"].is_number() ||
-                    !event.contains("note") || !event["note"].is_number() ||
-                    !event.contains("velocity") || !event["velocity"].is_number())
-                {
-                    continue; // Skip invalid note_on
-                }
-                
-                int channel = event["channel"];
-                int note = event["note"];
-                int velocity = event["velocity"];
-                
-                // Create note on message
-                message = MidiMessage::noteOn(channel + 1, note, (uint8)velocity);
-            }
-            else if (type == "note_off")
-            {
-                // Check for required fields
-                if (!event.contains("channel") || !event["channel"].is_number() ||
-                    !event.contains("note") || !event["note"].is_number())
-                {
-                    continue; // Skip invalid note_off
-                }
-                
-                int channel = event["channel"];
-                int note = event["note"];
-                
-                // Create note off message
-                message = MidiMessage::noteOff(channel + 1, note);
-            }
-            else if (type == "controller")
-            {
-                // Check for required fields
-                if (!event.contains("channel") || !event["channel"].is_number() ||
-                    !event.contains("number") || !event["number"].is_number() ||
-                    !event.contains("value") || !event["value"].is_number())
-                {
-                    continue; // Skip invalid controller
-                }
-                
-                int channel = event["channel"];
-                int number = event["number"];
-                int value = event["value"];
-                
-                // Create controller message
-                message = MidiMessage::controllerEvent(channel + 1, number, value);
-            }
-            else if (type == "program_change")
-            {
-                // Check for required fields
-                if (!event.contains("channel") || !event["channel"].is_number() ||
-                    !event.contains("program") || !event["program"].is_number())
-                {
-                    continue; // Skip invalid program_change
-                }
-                
-                int channel = event["channel"];
-                int program = event["program"];
-                
-                // Create program change message
-                message = MidiMessage::programChange(channel + 1, program);
-            }
-            else if (type == "pitch_bend")
-            {
-                // Check for required fields
-                if (!event.contains("channel") || !event["channel"].is_number() ||
-                    !event.contains("value") || !event["value"].is_number())
-                {
-                    continue; // Skip invalid pitch_bend
-                }
-                
-                int channel = event["channel"];
-                int value = event["value"];
-                
-                // Create pitch bend message
-                message = MidiMessage::pitchWheel(channel + 1, value);
-            }
-            else if (type == "aftertouch")
-            {
-                // Check for required fields
-                if (!event.contains("channel") || !event["channel"].is_number() ||
-                    !event.contains("note") || !event["note"].is_number() ||
-                    !event.contains("pressure") || !event["pressure"].is_number())
-                {
-                    continue; // Skip invalid aftertouch
-                }
-                
-                int channel = event["channel"];
-                int note = event["note"];
-                int pressure = event["pressure"];
-                
-                // Create aftertouch message
-                message = MidiMessage::aftertouchChange(channel + 1, note, pressure);
-            }
-            else if (type == "channel_pressure")
-            {
-                // Check for required fields
-                if (!event.contains("channel") || !event["channel"].is_number() ||
-                    !event.contains("pressure") || !event["pressure"].is_number())
-                {
-                    continue; // Skip invalid channel_pressure
-                }
-                
-                int channel = event["channel"];
-                int pressure = event["pressure"];
-                
-                // Create channel pressure message
-                message = MidiMessage::channelPressureChange(channel + 1, pressure);
-            }
-            else
-            {
-                // Unknown event type, skip
                 continue;
             }
             
-            // Set the timestamp
-            message.setTimeStamp(time);
+            // Extract event properties
+            int channel = event.getProperty("channel", 1);
+            int note = event.getProperty("note", 60);
+            int velocity = event.getProperty("velocity", 100);
+            double time = event.getProperty("time", 0.0);
+            double duration = event.getProperty("duration", 0.25);
             
-            // Add to sequence
-            sequence->addEvent(message);
+            // Create note on message
+            MidiMessage noteOn = MidiMessage::noteOn(channel, note, static_cast<float>(velocity) / 127.0f);
+            noteOn.setTimeStamp(time);
+            sequence->addEvent(noteOn);
+            
+            // Create note off message
+            MidiMessage noteOff = MidiMessage::noteOff(channel, note);
+            noteOff.setTimeStamp(time + duration);
+            sequence->addEvent(noteOff);
         }
         
         // Sort the sequence by timestamp
@@ -568,7 +473,7 @@ std::unique_ptr<MidiMessageSequence> Instrument::convertJSONToMIDISequence(const
         std::cout << "Converted JSON to MIDI sequence with " 
                  << sequence->getNumEvents() << " events" << std::endl;
     }
-    catch (const json::exception& e)
+    catch (const std::exception& e)
     {
         std::cerr << "Error parsing JSON MIDI events: " << e.what() << std::endl;
     }

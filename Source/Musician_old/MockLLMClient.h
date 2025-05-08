@@ -5,7 +5,7 @@
 #include <thread>
 #include <chrono>
 
-namespace coverband {
+namespace covertracks {
 
 /**
  * @brief A mock LLM client for testing
@@ -136,4 +136,4 @@ private:
     }
 };
 
-} // namespace coverband
+} // namespace covertracks

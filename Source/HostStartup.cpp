@@ -40,6 +40,8 @@
  #error "If you're building the audio plugin host, you probably want to enable VST and/or AU support"
 #endif
 
+namespace covertracks {
+    
 class PluginScannerSubprocess final : private ChildProcessWorker,
                                       private AsyncUpdater
 {
@@ -387,5 +389,7 @@ void addPluginAutoScaleOptionsSubMenu (AudioPluginInstance* pluginInstance,
     menu.addSubMenu ("Auto-scale window", autoScaleMenu);
 }
 
+}   // namespace covertracks
+
 // This kicks the whole thing off..
-START_JUCE_APPLICATION (PluginHostApp)
+START_JUCE_APPLICATION (covertracks::PluginHostApp)

@@ -4,11 +4,11 @@
               companyName="Covertracks" cppLanguageStandard="20" useAppConfig="0"
               addUsingNamespaceToJuceHeader="1" jucerFormatVersion="1">
   <EXPORTFORMATS>
-     <XCODE_MAC targetFolder="Builds/MacOSX" smallIcon="c97aUr" bigIcon="c97aUr"
+    <XCODE_MAC targetFolder="Builds/MacOSX" smallIcon="c97aUr" bigIcon="c97aUr"
                microphonePermissionNeeded="1" sendAppleEventsPermissionNeeded="1"
                sendAppleEventsPermissionText="This is required for some third-party plug-ins to function correctly."
                customXcodeResourceFolders="BinaryData" applicationCategory="public.app-category.developer-tools"
-               extraDefs="JUCE_SILENCE_XCODE_15_LINKER_WARNING=1" extraLinkerFlags="-Wl,-weak_reference_mismatches,weak">     
+               extraDefs="JUCE_SILENCE_XCODE_15_LINKER_WARNING=1" extraLinkerFlags="-Wl,-weak_reference_mismatches,weak">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" isDebug="1" targetName="Covertracks" recommendedWarnings="LLVM"/>
         <CONFIGURATION name="Release" isDebug="0" optimisation="2" targetName="Covertracks"
@@ -34,6 +34,18 @@
   </EXPORTFORMATS>
   <MAINGROUP id="YdWL7hi7p" name="Covertracks">
     <GROUP id="{CFED5B3D-D1D8-0F3F-4D67-B2A810D057EF}" name="Source">
+      <GROUP id="{63C773C8-4305-87DD-DB3F-6D1143EFEC61}" name="Musician">
+        <FILE id="hKhTKd" name="LLMClient.h" compile="0" resource="0" file="Source/Musician/LLMClient.h"/>
+        <FILE id="tdBLJO" name="MusicalShorthand.h" compile="0" resource="0"
+              file="Source/Musician/MusicalShorthand.h"/>
+        <FILE id="DTMiwt" name="Musician.h" compile="0" resource="0" file="Source/Musician/Musician.h"/>
+        <FILE id="gWBgo1" name="PatternProcessor.h" compile="0" resource="0"
+              file="Source/Musician/PatternProcessor.h"/>
+        <FILE id="pmlmEg" name="PatternTemplates.h" compile="0" resource="0"
+              file="Source/Musician/PatternTemplates.h"/>
+        <FILE id="yuICey" name="PromptTemplates.h" compile="0" resource="0"
+              file="Source/Musician/PromptTemplates.h"/>
+      </GROUP>
       <GROUP id="{6F257CD6-CE86-9BBC-54C1-45E43249E414}" name="Plugins">
         <FILE id="rcuPqK" name="ARAPlugin.cpp" compile="1" resource="0" file="Source/Plugins/ARAPlugin.cpp"/>
         <FILE id="gR1tiA" name="ARAPlugin.h" compile="0" resource="0" file="Source/Plugins/ARAPlugin.h"/>
@@ -61,16 +73,28 @@
       </GROUP>
       <GROUP id="{A3F7F3C9-8C9E-4F3F-8D67-B2A810D057EF}" name="Player">
         <GROUP id="{B3F7F3C9-8C9E-4F3F-8D67-B2A810D057EF}" name="Core">
-          <FILE id="NEW_FILE_ID_1" name="PlayerManager.cpp" compile="1" resource="0" file="Source/Player/Core/PlayerManager.cpp"/>
-          <FILE id="NEW_FILE_ID_2" name="PlayerManager.h" compile="0" resource="0" file="Source/Player/Core/PlayerManager.h"/>
+          <FILE id="yTxmvb" name="Instrument.cpp" compile="1" resource="0" file="Source/Player/Core/Instrument.cpp"/>
+          <FILE id="NEW_FILE_ID_1" name="PlayerManager.cpp" compile="1" resource="0"
+                file="Source/Player/Core/PlayerManager.cpp"/>
+          <FILE id="oIwNcN" name="Player.cpp" compile="1" resource="0" file="Source/Player/Core/Player.cpp"/>
+          <FILE id="raqQwD" name="Player.h" compile="0" resource="0" file="Source/Player/Core/Player.h"/>
+          <FILE id="O9Wi3Q" name="Instrument.h" compile="0" resource="0" file="Source/Player/Core/Instrument.h"/>
+          <FILE id="NEW_FILE_ID_2" name="PlayerManager.h" compile="0" resource="0"
+                file="Source/Player/Core/PlayerManager.h"/>
         </GROUP>
         <GROUP id="{C3F7F3C9-8C9E-4F3F-8D67-B2A810D057EF}" name="UI">
-          <FILE id="NEW_FILE_ID_3" name="PlayerEditorComponent.cpp" compile="1" resource="0" file="Source/Player/UI/PlayerEditorComponent.cpp"/>
-          <FILE id="NEW_FILE_ID_4" name="PlayerEditorComponent.h" compile="0" resource="0" file="Source/Player/UI/PlayerEditorComponent.h"/>
-          <FILE id="NEW_FILE_ID_5" name="PlayerLibraryComponent.cpp" compile="1" resource="0" file="Source/Player/UI/PlayerLibraryComponent.cpp"/>
-          <FILE id="NEW_FILE_ID_6" name="PlayerLibraryComponent.h" compile="0" resource="0" file="Source/Player/UI/PlayerLibraryComponent.h"/>
-          <FILE id="NEW_FILE_ID_7" name="PlayerListComponent.cpp" compile="1" resource="0" file="Source/Player/UI/PlayerListComponent.cpp"/>
-          <FILE id="NEW_FILE_ID_8" name="PlayerListComponent.h" compile="0" resource="0" file="Source/Player/UI/PlayerListComponent.h"/>
+          <FILE id="NEW_FILE_ID_3" name="PlayerEditorComponent.cpp" compile="1"
+                resource="0" file="Source/Player/UI/PlayerEditorComponent.cpp"/>
+          <FILE id="NEW_FILE_ID_4" name="PlayerEditorComponent.h" compile="0"
+                resource="0" file="Source/Player/UI/PlayerEditorComponent.h"/>
+          <FILE id="NEW_FILE_ID_5" name="PlayerLibraryComponent.cpp" compile="1"
+                resource="0" file="Source/Player/UI/PlayerLibraryComponent.cpp"/>
+          <FILE id="NEW_FILE_ID_6" name="PlayerLibraryComponent.h" compile="0"
+                resource="0" file="Source/Player/UI/PlayerLibraryComponent.h"/>
+          <FILE id="NEW_FILE_ID_7" name="PlayerListComponent.cpp" compile="1"
+                resource="0" file="Source/Player/UI/PlayerListComponent.cpp"/>
+          <FILE id="NEW_FILE_ID_8" name="PlayerListComponent.h" compile="0" resource="0"
+                file="Source/Player/UI/PlayerListComponent.h"/>
         </GROUP>
       </GROUP>
       <FILE id="OmIhwQ" name="HostStartup.cpp" compile="1" resource="0" file="Source/HostStartup.cpp"/>

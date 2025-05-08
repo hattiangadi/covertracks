@@ -34,11 +34,11 @@
 
 #pragma once
 
+namespace covertracks {
+
 class MainHostWindow;
 class PlayerEditorComponent;
 class GraphDocumentComponent;
-
-
 //==============================================================================
 class IOConfigurationWindow final : public  AudioProcessorEditor
 {
@@ -68,3 +68,4 @@ private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (IOConfigurationWindow)
 };
+}   // namespace covertracks

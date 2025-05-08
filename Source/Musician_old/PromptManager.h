@@ -8,13 +8,13 @@
 
 using json = nlohmann::json;
 
-namespace coverband {
+namespace covertracks {
 
 /**
  * @brief Central manager for all prompt templates
  * 
  * This class provides a single source of truth for all prompt templates
- * used in the CoverBand application.
+ * used in the covertracks application.
  */
 class PromptManager {
 public:
@@ -595,4 +595,4 @@ Create a pattern lasting exactly {{bars}} bars that complements the melody and s
     }
 };
 
-} // namespace coverband
+} // namespace covertracks

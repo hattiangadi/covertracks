@@ -3,7 +3,7 @@
 #include "MockLLMClient.h"
 #include <iostream>
 
-namespace coverband {
+namespace covertracks {
 
 std::unique_ptr<LLMClient> LLMClientFactory::createClient(const std::string& type, const json& config)
 {
@@ -24,16 +24,16 @@ std::unique_ptr<LLMClient> LLMClientFactory::createClient(const std::string& typ
             // Create a copy of the config and add the API key
             json configWithKey = config;
             configWithKey["api_key"] = apiKey;
-            return std::make_unique<coverband::ClaudeClient>(apiKey, configWithKey);
+            return std::make_unique<covertracks::ClaudeClient>(apiKey, configWithKey);
         } else {
             // Use API key from config
             std::string apiKey = config["api_key"];
-            return std::make_unique<coverband::ClaudeClient>(apiKey, config);
+            return std::make_unique<covertracks::ClaudeClient>(apiKey, config);
         }
     }
     else if (type == "mock") {
         // Mock client for testing
-        return std::make_unique<coverband::MockLLMClient>();
+        return std::make_unique<covertracks::MockLLMClient>();
     }
     else {
         std::cerr << "Unknown LLM client type: " << type << std::endl;
@@ -41,4 +41,4 @@ std::unique_ptr<LLMClient> LLMClientFactory::createClient(const std::string& typ
     }
 }
 
-} // namespace coverband
+} // namespace covertracks

@@ -1,23 +1,37 @@
 // PlayerListComponent.cpp
 #include "PlayerListComponent.h"
 
-PlayerListComponent::PlayerListComponent(PlayerManager& pm)
+namespace covertracks {
+
+enum TableColumns {
+    NameColumn = 1,
+    CategoryColumn,
+    DescriptionColumn
+};
+
+PlayerListComponent::PlayerListComponent(PlayerManager* pm)
     : playerManager(pm),
-      table("PlayerTable", this)
+      playerTable("PlayerTable", this)
 {
     // Set up table columns
-    table.getHeader().addColumn("Name", NameColumn, 150);
-    table.getHeader().addColumn("Category", CategoryColumn, 100);
-    table.getHeader().addColumn("Description", DescriptionColumn, 300);
+    playerTable.getHeader().addColumn("Name", NameColumn, 150);
+    playerTable.getHeader().addColumn("Category", CategoryColumn, 100);
+    playerTable.getHeader().addColumn("Description", DescriptionColumn, 300);
     
-    table.setMultipleSelectionEnabled(false);
-    table.setClickingTogglesRowSelection(true);
+    playerTable.setMultipleSelectionEnabled(false);
+    playerTable.setClickingTogglesRowSelection(true);
     
     // Set up the table to respond to double-clicks
-    table.getHeader().setPopupMenuActive(false);
-    table.setRowSelectedOnMouseDown(true);
+    playerTable.getHeader().setPopupMenuActive(false);
+    playerTable.setRowSelectedOnMouseDown(true);
     
-    addAndMakeVisible(table);
+    addAndMakeVisible(playerTable);
+    
+    // Set up buttons
+    newButton.setButtonText("New");
+    editButton.setButtonText("Edit");
+    deleteButton.setButtonText("Delete");
+    
     addAndMakeVisible(newButton);
     addAndMakeVisible(editButton);
     addAndMakeVisible(deleteButton);
@@ -27,10 +41,7 @@ PlayerListComponent::PlayerListComponent(PlayerManager& pm)
     deleteButton.addListener(this);
     
     // Initialize the displayed players
-    refreshList();
-    
-    // Set initial button states
-    updateButtonStates();
+    refresh();
 }
 
 PlayerListComponent::~PlayerListComponent()
@@ -44,19 +55,18 @@ void PlayerListComponent::resized()
 {
     auto area = getLocalBounds();
     
-    // Reserve space at the bottom for buttons
-    auto buttonArea = area.removeFromBottom(40).reduced(5);
+    // Reserve space for buttons at the bottom
+    auto buttonArea = area.removeFromBottom(40);
     
-    // Position buttons
-    auto buttonWidth = jmin(120, buttonArea.getWidth() / 3 - 10);
-    newButton.setBounds(buttonArea.removeFromLeft(buttonWidth));
-    buttonArea.removeFromLeft(10); // Spacing
-    editButton.setBounds(buttonArea.removeFromLeft(buttonWidth));
-    buttonArea.removeFromLeft(10); // Spacing
-    deleteButton.setBounds(buttonArea.removeFromLeft(buttonWidth));
+    // Divide the button area into three equal parts
+    auto buttonWidth = buttonArea.getWidth() / 3;
     
-    // The rest is for the table
-    table.setBounds(area);
+    newButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(5));
+    editButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(5));
+    deleteButton.setBounds(buttonArea.reduced(5));
+    
+    // Use the remaining area for the table
+    playerTable.setBounds(area);
 }
 
 void PlayerListComponent::paint(Graphics& g)
@@ -72,139 +82,175 @@ int PlayerListComponent::getNumRows()
 void PlayerListComponent::paintRowBackground(Graphics& g, int rowNumber, int width, int height, bool rowIsSelected)
 {
     if (rowIsSelected)
-        g.fillAll(getLookAndFeel().findColour(TextEditor::highlightColourId));
-    else
-        g.fillAll(rowNumber % 2 == 0 ? Colours::white : Colour(0xffF9F9F9));
+    {
+        g.fillAll(getLookAndFeel().findColour(ListBox::backgroundColourId).contrasting(0.2f));
+    }
+    else if (rowNumber % 2)
+    {
+        g.fillAll(getLookAndFeel().findColour(ListBox::backgroundColourId).contrasting(0.05f));
+    }
 }
 
 void PlayerListComponent::paintCell(Graphics& g, int rowNumber, int columnId, int width, int height, bool rowIsSelected)
 {
-    if (rowNumber >= displayedPlayers.size())
-        return;
-    
-    auto* player = displayedPlayers[rowNumber];
-    String text;
-    
-    switch (columnId)
+    if (rowNumber < displayedPlayers.size())
     {
-        case NameColumn:
-            text = player->metadata.name;
-            break;
-        case CategoryColumn:
-            text = player->metadata.category;
-            break;
-        case DescriptionColumn:
-            text = player->metadata.description;
-            break;
-        default:
-            break;
+        auto* player = displayedPlayers[rowNumber];
+        
+        if (player != nullptr)
+        {
+            g.setColour(rowIsSelected ? Colours::white : getLookAndFeel().findColour(ListBox::textColourId));
+            
+            String text;
+            auto& metadata = player->getMetadata();
+            
+            switch (columnId)
+            {
+                case NameColumn:
+                    text = metadata.name;
+                    break;
+                    
+                case CategoryColumn:
+                    text = metadata.category;
+                    break;
+                    
+                case DescriptionColumn:
+                    text = metadata.description;
+                    break;
+                    
+                default:
+                    break;
+            }
+            
+            g.drawText(text, 2, 0, width - 4, height, Justification::centredLeft, true);
+        }
     }
-    
-    g.setColour(rowIsSelected ? Colours::white : Colours::black);
-    g.setFont(Font(height * 0.7f));
-    g.drawText(text, 2, 0, width - 4, height, Justification::centredLeft, true);
 }
 
 void PlayerListComponent::sortOrderChanged(int newSortColumnId, bool isForwards)
 {
+    // Sort the players based on the column
     if (newSortColumnId != 0)
     {
-        sortColumnId = newSortColumnId;
-        sortForwards = isForwards;
-        sortPlayers();
+        std::sort(displayedPlayers.begin(), displayedPlayers.end(), [newSortColumnId, isForwards](Player* a, Player* b) {
+            String aValue, bValue;
+            auto& aMetadata = a->getMetadata();
+            auto& bMetadata = b->getMetadata();
+            
+            switch (newSortColumnId)
+            {
+                case NameColumn:
+                    aValue = aMetadata.name;
+                    bValue = bMetadata.name;
+                    break;
+                    
+                case CategoryColumn:
+                    aValue = aMetadata.category;
+                    bValue = bMetadata.category;
+                    break;
+                    
+                case DescriptionColumn:
+                    aValue = aMetadata.description;
+                    bValue = bMetadata.description;
+                    break;
+                    
+                default:
+                    return false;
+            }
+            
+            return isForwards ? (aValue.compareIgnoreCase(bValue) < 0) : (aValue.compareIgnoreCase(bValue) > 0);
+        });
+        
+        playerTable.updateContent();
     }
-}
-
-void PlayerListComponent::sortPlayers()
-{
-    switch (sortColumnId)
-    {
-        case NameColumn:
-            std::sort(displayedPlayers.begin(), displayedPlayers.end(),
-                     [this](PlayerManager::Player* a, PlayerManager::Player* b) {
-                         int result = a->metadata.name.compareIgnoreCase(b->metadata.name);
-                         return sortForwards ? result < 0 : result > 0;
-                     });
-            break;
-        case CategoryColumn:
-            std::sort(displayedPlayers.begin(), displayedPlayers.end(),
-                     [this](PlayerManager::Player* a, PlayerManager::Player* b) {
-                         int result = a->metadata.category.compareIgnoreCase(b->metadata.category);
-                         return sortForwards ? result < 0 : result > 0;
-                     });
-            break;
-        case DescriptionColumn:
-            std::sort(displayedPlayers.begin(), displayedPlayers.end(),
-                     [this](PlayerManager::Player* a, PlayerManager::Player* b) {
-                         int result = a->metadata.description.compareIgnoreCase(b->metadata.description);
-                         return sortForwards ? result < 0 : result > 0;
-                     });
-            break;
-        default:
-            break;
-    }
-    
-    table.updateContent();
 }
 
 void PlayerListComponent::buttonClicked(Button* button)
 {
     if (button == &newButton)
     {
+        // Notify listeners that a new player has been requested
         listeners.call(&Listener::newPlayerRequested);
     }
     else if (button == &editButton)
     {
-        auto selectedPlayer = getSelectedPlayer();
+        auto* selectedPlayer = getSelectedPlayer();
+        
         if (selectedPlayer != nullptr)
         {
+            // Notify listeners that a player edit has been requested
             listeners.call(&Listener::editPlayerRequested, selectedPlayer);
         }
     }
     else if (button == &deleteButton)
     {
-        auto selectedPlayer = getSelectedPlayer();
+        auto* selectedPlayer = getSelectedPlayer();
+        
         if (selectedPlayer != nullptr)
         {
+            // Notify listeners that a player deletion has been requested
             listeners.call(&Listener::deletePlayerRequested, selectedPlayer);
         }
     }
 }
 
-PlayerManager::Player* PlayerListComponent::getSelectedPlayer() const
+void PlayerListComponent::cellClicked(int rowNumber, int columnId, const MouseEvent& event)
 {
-    auto selectedRow = table.getSelectedRow();
+    // Handle cell clicks
+    if (rowNumber < displayedPlayers.size())
+    {
+        auto* player = displayedPlayers[rowNumber];
+        
+        if (player != nullptr)
+        {
+            // Notify listeners that a player has been selected
+            listeners.call(&Listener::playerSelected, player);
+            
+            // If double-clicked, also trigger edit
+            if (event.getNumberOfClicks() > 1)
+            {
+                listeners.call(&Listener::editPlayerRequested, player);
+            }
+        }
+    }
+}
+
+Player* PlayerListComponent::getSelectedPlayer() const
+{
+    auto selectedRow = playerTable.getSelectedRow();
+    
     if (selectedRow >= 0 && selectedRow < displayedPlayers.size())
+    {
         return displayedPlayers[selectedRow];
+    }
     
     return nullptr;
 }
 
-void PlayerListComponent::refreshList()
+void PlayerListComponent::refresh()
 {
-    displayedPlayers = playerManager.getPlayers();
-    sortPlayers();
-    table.updateContent();
-    updateButtonStates();
-}
-
-void PlayerListComponent::updateButtonStates()
-{
-    bool hasSelection = table.getSelectedRow() >= 0;
-    editButton.setEnabled(hasSelection);
-    deleteButton.setEnabled(hasSelection);
-}
-
-void PlayerListComponent::cellClicked(int rowNumber, int columnId, const MouseEvent& event)
-{
-    // Check if this was a double-click
-    if (event.getNumberOfClicks() >= 2)
+    // Clear the current list
+    displayedPlayers.clear();
+    
+    // Get all players from the manager
+    if (playerManager != nullptr)
     {
-        // If a valid row was double-clicked, request to edit that player
-        if (rowNumber >= 0 && rowNumber < displayedPlayers.size())
-        {
-            auto* player = displayedPlayers[rowNumber];
-            listeners.call(&Listener::editPlayerRequested, player);
-        }
+        displayedPlayers = playerManager->getPlayers();
     }
+    
+    // Update the table
+    playerTable.updateContent();
+    playerTable.repaint();
 }
+
+void PlayerListComponent::addListener(Listener* listener)
+{
+    listeners.add(listener);
+}
+
+void PlayerListComponent::removeListener(Listener* listener)
+{
+    listeners.remove(listener);
+}
+
+} // namespace covertracks

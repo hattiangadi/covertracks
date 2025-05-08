@@ -38,6 +38,7 @@
 #include "InternalPlugins.h"
 #include "../UI/GraphEditorPanel.h"
 
+namespace covertracks {
 static std::unique_ptr<ScopedDPIAwarenessDisabler> makeDPIAwarenessDisablerForPlugin (const PluginDescription& desc)
 {
     return shouldAutoScalePlugin (desc) ? std::make_unique<ScopedDPIAwarenessDisabler>()
@@ -545,3 +546,5 @@ File PluginGraph::getDefaultGraphDocumentOnMobile()
     auto persistantStorageLocation = File::getSpecialLocation (File::userApplicationDataDirectory);
     return persistantStorageLocation.getChildFile ("state.filtergraph");
 }
+
+}   // namespace covertracks

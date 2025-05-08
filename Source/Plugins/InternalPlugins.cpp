@@ -69,6 +69,7 @@ static std::unique_ptr<InputStream> createAssetInputStream (const char* resource
 #include "../../../../examples/Plugins/SamplerPluginDemo.h"
 #include "../../../../examples/Plugins/SurroundPluginDemo.h"
 
+namespace covertracks {
 //==============================================================================
 class InternalPlugin final : public AudioPluginInstance
 {
@@ -489,3 +490,6 @@ const std::vector<PluginDescription>& InternalPluginFormat::getAllTypes() const
 {
     return factory.getDescriptions();
 }
+
+}   // namespace covertracks
+

@@ -43,6 +43,7 @@
 #include <ARA_API/ARAInterface.h>
 #include <ARA_Library/Dispatch/ARAHostDispatch.h>
 
+namespace covertracks {
 class FileAudioSource
 {
     auto getAudioSourceProperties() const
@@ -1411,4 +1412,5 @@ private:
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ARAPluginInstanceWrapper)
 };
+}   // namespace covertracks
 #endif

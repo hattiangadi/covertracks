@@ -38,6 +38,9 @@
 #include "../Player/UI/PlayerEditorComponent.h"
 #include "MainHostWindow.h"
 
+
+namespace covertracks {
+
 //==============================================================================
 #if JUCE_IOS
  class AUScanner
@@ -1469,3 +1472,5 @@ void GraphDocumentComponent::updateMidiOutput()
         graphPlayer.setMidiOutput (midiOutput);
     }
 }
+
+}// namespace covertracks

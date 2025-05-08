@@ -38,7 +38,7 @@
 #include "../UI/MainHostWindow.h"
 #include "../Player/UI/PlayerEditorComponent.h"
 
-
+namespace covertracks {
 //==============================================================================
 struct NumberedBoxes final : public TableListBox,
                         private TableListBoxModel,
@@ -528,7 +528,7 @@ AudioProcessorGraph::NodeID IOConfigurationWindow::getNodeID() const
     return {};
 }
 
-MainHostWindow* IOConfigurationWindow::getMainWindow() const
+covertracks::MainHostWindow* covertracks::IOConfigurationWindow::getMainWindow() const
 {
     auto& desktop = Desktop::getInstance();
 
@@ -539,7 +539,7 @@ MainHostWindow* IOConfigurationWindow::getMainWindow() const
     return nullptr;
 }
 
-PlayerEditorComponent* IOConfigurationWindow::getPlayerEditor() const
+covertracks::PlayerEditorComponent* covertracks::IOConfigurationWindow::getPlayerEditor() const
 {
     auto& desktop = Desktop::getInstance();
 
@@ -550,7 +550,7 @@ PlayerEditorComponent* IOConfigurationWindow::getPlayerEditor() const
     return nullptr;
 }
 
-GraphDocumentComponent* IOConfigurationWindow::getGraphEditor() const
+covertracks::GraphDocumentComponent* covertracks::IOConfigurationWindow::getGraphEditor() const
 {
     // First try to get it from MainHostWindow
     if (auto* mainWindow = getMainWindow())
@@ -563,7 +563,7 @@ GraphDocumentComponent* IOConfigurationWindow::getGraphEditor() const
     return nullptr;
 }
 
-AudioProcessorGraph* IOConfigurationWindow::getGraph() const
+juce::AudioProcessorGraph* covertracks::IOConfigurationWindow::getGraph() const
 {
     if (auto* graphEditor = getGraphEditor())
         if (auto* panel = graphEditor->graph.get())
@@ -571,3 +571,6 @@ AudioProcessorGraph* IOConfigurationWindow::getGraph() const
 
     return nullptr;
 }
+
+}   // namespace covertracks
+

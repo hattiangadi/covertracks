@@ -37,6 +37,7 @@
 #include "../Plugins/InternalPlugins.h"
 #include "../Player/UI/PlayerLibraryComponent.h"
 
+namespace covertracks {
 constexpr const char* scanModeKey = "pluginScanMode";
 
 //==============================================================================
@@ -336,9 +337,17 @@ MainHostWindow::MainHostWindow()
 
     knownPluginList.setCustomScanner (std::make_unique<CustomPluginScanner>());
 
+    // Create a PlayerManager instance
+    playerManager = std::make_shared<PlayerManager>();
+    
+    // Create PlayerLibraryComponent as the main content
+    playerLibraryWindow = std::make_unique<PlayerLibraryComponent>(playerManager);
+    
+    // Set it as the main content
+    setContentNonOwned (playerLibraryWindow.get(), true);
+    
+    // Still create the GraphDocumentComponent for plugin functionality
     graphHolder.reset (new GraphDocumentComponent (formatManager, deviceManager, knownPluginList));
-
-    setContentNonOwned (graphHolder.get(), false);
 
     setUsingNativeTitleBar (true);
 
@@ -932,7 +941,7 @@ bool MainHostWindow::perform (const InvocationInfo& info)
     case CommandIDs::showPlayerLibrary:
     {
         // Create the component
-        auto* component = new PlayerLibraryComponent();
+        auto* component = new PlayerLibraryComponent(playerManager);
         component->setSize(800, 600);
         
         DialogWindow::LaunchOptions o;
@@ -1076,3 +1085,5 @@ void MainHostWindow::updateAutoScaleMenuItem (ApplicationCommandInfo& info)
     info.setInfo ("Auto-Scale Plug-in Windows", {}, "General", 0);
     info.setTicked (isAutoScalePluginWindowsEnabled());
 }
+
+} // namespace covertracks

@@ -36,6 +36,7 @@
 
 #include "PluginGraph.h"
 
+namespace covertracks {
 
 //==============================================================================
 /**
@@ -91,3 +92,4 @@ private:
 
     InternalPluginFactory factory;
 };
+}   // namespace covertracks

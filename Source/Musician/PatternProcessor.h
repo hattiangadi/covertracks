@@ -1,23 +1,18 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include <nlohmann/json.hpp>
 #include <string>
 #include <regex>
 #include <sstream>
 #include <map>
 #include <vector>
-#include "MusicalShorthand.h"
-#include "PatternTemplates.h"
-#include "PromptManager.h" // Added include
-#include <vector>
 #include <utility>
 #include <algorithm>
 #include <numeric>
+#include "MusicalShorthand.h"
+#include "PatternTemplates.h"
 
-using json = nlohmann::json;
-
-namespace coverband {
+namespace covertracks {
 
 /**
  * @brief Processor for handling pattern-based musical notation
@@ -31,18 +26,32 @@ public:
      * @brief Create a pattern-based prompt for the LLM
      * 
      * @param instrumentType The instrument type
-     * @param parameters Parameters for template variables
+     * @param parameters Parameters for template variables as JUCE var/JSON
      * @param style The musical style (default: "jazz")
      * @return std::string The prompt for the LLM
      */
     static std::string createPatternPrompt(
         const std::string& instrumentType,
-        const json& parameters,
+        const var& parameters,
         const std::string& style = "jazz")
     {
-    // Use PromptManager to create the prompt
-    return PromptManager::createPrompt(instrumentType, parameters, style);
-}
+        // Simple implementation that returns a template string
+        String prompt = "Generate a " + String(instrumentType) + " pattern in " + String(style) + " style.";
+        
+        if (parameters.isObject()) {
+            if (parameters.hasProperty("key"))
+                prompt += "\nKey: " + parameters["key"].toString();
+                
+            if (parameters.hasProperty("tempo"))
+                prompt += "\nTempo: " + parameters["tempo"].toString() + " BPM";
+                
+            if (parameters.hasProperty("chords"))
+                prompt += "\nChords: " + parameters["chords"].toString();
+        }
+        
+        prompt += "\n\nReturn a valid JSON object with MIDI events.";
+        return prompt.toStdString();
+    }
     
     /**
      * @brief Parse pattern-based notation to MIDI events
@@ -52,52 +61,83 @@ public:
      * @param playerId The player ID
      * @param patternId The pattern ID
      * @param tempo The tempo in BPM
-     * @return json JSON object for the player layer
+     * @return var JSON object for the player layer as JUCE var/JSON
      */
-    static json patternToJson(
+    /**
+     * @brief Clean up pattern text for consistent parsing
+     * 
+     * @param patternText Original pattern text
+     * @return std::string Cleaned pattern text
+     */
+    static std::string cleanupPatternText(const std::string& patternText) {
+        std::string result = patternText;
+        
+        try {
+            // Remove markdown code blocks if present
+            std::regex codeBlockRegex(R"(```[a-zA-Z]*\s+([\s\S]*)\s*```)");
+            std::smatch codeBlockMatch;
+            if (std::regex_search(result, codeBlockMatch, codeBlockRegex) && codeBlockMatch.size() > 1) {
+                result = codeBlockMatch[1].str();
+            }
+        } catch (const std::regex_error& e) {
+            std::cerr << "REGEX_ERROR in codeBlockRegex: " << e.what() << std::endl;
+        }
+        
+        // Replace newlines with spaces
+        try {
+            std::regex newlineRegex("\n");
+            result = std::regex_replace(result, newlineRegex, " ");
+        } catch (const std::regex_error& e) {
+            std::cerr << "REGEX_ERROR in newlineRegex: " << e.what() << std::endl;
+        }
+        
+        // Normalize spaces
+        result = std::regex_replace(result, std::regex("\\s+"), " ");
+        
+        // Trim leading and trailing whitespace
+        result = std::regex_replace(result, std::regex("^\\s+|\\s+$"), "");
+        
+        return result;
+    }
+    
+    static var patternToJson(
         const std::string& patternText,
         const std::string& instrumentType,
         const std::string& playerId,
         const std::string& patternId,
         double tempo = 120.0)
     {
-        json outputJson;
+        DynamicObject* outputObj = new DynamicObject();
         try {
             // Clean up the input text
             std::string cleanPattern = cleanupPatternText(patternText);
 
             // Parse the pattern to MIDI events
-            json events = parsePatternToEvents(cleanPattern, instrumentType);
+            var events = parsePatternToEvents(cleanPattern, instrumentType);
 
             // Create JSON output for the player layer
-            outputJson = {
-                {"command", "play_pattern"},
-                {"player_id", playerId},
-                {"pattern_id", patternId},
-                {"tempo", tempo},
-                {"events", events}
-            };
+            outputObj->setProperty("command", "play_pattern");
+            outputObj->setProperty("player_id", String(playerId));
+            outputObj->setProperty("pattern_id", String(patternId));
+            outputObj->setProperty("tempo", tempo);
+            outputObj->setProperty("events", events);
         } catch (const std::regex_error& e) {
             std::cerr << "REGEX_ERROR in PatternProcessor::patternToJson: " << e.what() << std::endl;
             // Fallback: empty events
-            outputJson = {
-                {"command", "play_pattern"},
-                {"player_id", playerId},
-                {"pattern_id", patternId},
-                {"tempo", tempo},
-                {"events", json::array()}
-            };
+            outputObj->setProperty("command", "play_pattern");
+            outputObj->setProperty("player_id", String(playerId));
+            outputObj->setProperty("pattern_id", String(patternId));
+            outputObj->setProperty("tempo", tempo);
+            outputObj->setProperty("events", var(Array<var>()));
         } catch (const std::exception& e) { // Catch other potential exceptions
             juce::Logger::writeToLog("EXCEPTION in PatternProcessor::patternToJson: " + juce::String(e.what()));
-            outputJson = {
-                {"command", "play_pattern"},
-                {"player_id", playerId},
-                {"pattern_id", patternId},
-                {"tempo", tempo},
-                {"events", json::array()}
-            };
+            outputObj->setProperty("command", "play_pattern");
+            outputObj->setProperty("player_id", String(playerId));
+            outputObj->setProperty("pattern_id", String(patternId));
+            outputObj->setProperty("tempo", tempo);
+            outputObj->setProperty("events", var(Array<var>()));
         }
-        return outputJson;
+        return var(outputObj);
     }
     
     /**
@@ -106,41 +146,200 @@ public:
      * @param patternText The pattern-based notation
      * @param instrumentType The instrument type
      * @param ppq Pulses per quarter note (default: 480)
-     * @return json MIDI events
+     * @return var MIDI events as JUCE var/JSON
      */
-    static json parsePatternToEvents(
+    static var parsePatternToEvents(
         const std::string& patternText,
         const std::string& instrumentType,
         int ppq = 480)
     {
-        json events = json::array();
+        var events = var(Array<var>());
         
         // Extract measures from the pattern text
         std::vector<std::string> measures = extractMeasures(patternText);
         
-        // Process each measure
-        int currentTime = 0;
-        const int ticksPerMeasure = ppq * 4; // Assuming 4/4 time
+        // Process based on instrument type
+        if (instrumentType == "piano" || instrumentType == "guitar" || instrumentType == "bass") {
+            // For melodic instruments, use MusicalShorthand to parse
+            events = MusicalShorthand::parseNoteSequence(patternText, ppq);
+        } else if (instrumentType == "drums") {
+            // For drums, use drum-specific parsing
+            events = parseDrumPattern(patternText, ppq);
+        }
         
-        for (const auto& measure : measures) {
-            // Parse the measure to get pattern and chord information
-            PatternInfo patternInfo = parseMeasurePattern(measure);
+        // If no events were generated by the instrument-specific parsers,
+        // we'll try a generic approach
+        if (events.getArray()->isEmpty()) {
+            // Process each measure
+            int currentTime = 0;
+            const int ticksPerMeasure = ppq * 4; // Assuming 4/4 time
             
-            // Generate events for this measure based on the pattern
-            json measureEvents = generateEventsForPattern(
-                patternInfo,
-                instrumentType,
-                currentTime,
-                ppq
-            );
+            for (const auto& measure : measures) {
+                // For now, just use MusicalShorthand to parse any notes in the measure
+                var measureEvents = MusicalShorthand::parseNoteSequence(measure, ppq);
+                
+                // Adjust the timing of events to account for measure position
+                if (!measureEvents.getArray()->isEmpty()) {
+                    for (int i = 0; i < measureEvents.getArray()->size(); ++i) {
+                        var& event = measureEvents.getArray()->getReference(i);
+                        if (event.hasProperty("time")) {
+                            int time = event["time"];
+                            event.getDynamicObject()->setProperty("time", time + currentTime);
+                        }
+                    }
+                    
+                    // Add the measure events to the overall events
+                    for (int i = 0; i < measureEvents.getArray()->size(); ++i) {
+                        events.append(measureEvents.getArray()->getReference(i));
+                    }
+                }
+                
+                // Move to the next measure
+                currentTime += ticksPerMeasure;
+            }
+        }
+        
+        return events;
+    }
+    
+    /**
+     * @brief Extract measures from pattern text
+     * 
+     * @param patternText The pattern-based notation
+     * @return std::vector<std::string> Vector of measures
+     */
+    static std::vector<std::string> extractMeasures(const std::string& patternText) {
+        std::vector<std::string> measures;
+        
+        try {
+            // Split by bar lines or newlines
+            std::regex measureRegex(R"([|\n]+)");
+            std::sregex_token_iterator iter(patternText.begin(), patternText.end(), measureRegex, -1);
+            std::sregex_token_iterator end;
             
-            // Add measure events to the main event list
-            for (const auto& event : measureEvents) {
-                events.push_back(event);
+            while (iter != end) {
+                std::string measure = *iter++;
+                if (!measure.empty()) {
+                    // Trim whitespace
+                    measure = std::regex_replace(measure, std::regex("^\\s+|\\s+$"), "");
+                    if (!measure.empty()) {
+                        measures.push_back(measure);
+                    }
+                }
+            }
+        } catch (const std::regex_error& e) {
+            std::cerr << "REGEX_ERROR in extractMeasures: " << e.what() << std::endl;
+            // Fallback: treat the whole pattern as one measure
+            measures.push_back(patternText);
+        }
+        
+        return measures;
+    }
+    
+    /**
+     * @brief Parse drum pattern to MIDI events
+     * 
+     * @param patternText The drum pattern notation
+     * @param ppq Pulses per quarter note
+     * @return var MIDI events as JUCE var/JSON
+     */
+    static var parseDrumPattern(const std::string& patternText, int ppq = 480) {
+        var events = var(Array<var>());
+        
+        // Define drum mappings (GM standard)
+        std::map<std::string, int> drumMap = {
+            {"bd", 36},  // Bass drum
+            {"sn", 38},  // Snare
+            {"hh", 42},  // Closed hi-hat
+            {"ho", 46},  // Open hi-hat
+            {"cy", 49},  // Crash cymbal
+            {"rd", 51},  // Ride cymbal
+            {"tm", 45},  // Tom
+            {"lt", 41},  // Low tom
+            {"mt", 47},  // Mid tom
+            {"ht", 50}   // High tom
+        };
+        
+        try {
+            // Split into lines for different drum parts
+            std::vector<std::string> lines;
+            std::stringstream ss(patternText);
+            std::string line;
+            
+            while (std::getline(ss, line)) {
+                if (!line.empty()) {
+                    lines.push_back(line);
+                }
             }
             
-            // Advance time to the next measure
-            currentTime += ticksPerMeasure;
+            // Process each line
+            for (const auto& line : lines) {
+                // Extract drum type and pattern
+                std::regex drumLineRegex(R"(([a-zA-Z]+)\s*[:\-]\s*([xXoO\-\s]+))");
+                std::smatch drumLineMatch;
+                
+                if (std::regex_search(line, drumLineMatch, drumLineRegex) && drumLineMatch.size() > 2) {
+                    std::string drumType = drumLineMatch[1].str();
+                    std::string pattern = drumLineMatch[2].str();
+                    
+                    // Convert to lowercase
+                    std::transform(drumType.begin(), drumType.end(), drumType.begin(), ::tolower);
+                    
+                    // Find drum note in map
+                    int note = -1;
+                    if (drumMap.find(drumType) != drumMap.end()) {
+                        note = drumMap[drumType];
+                    } else {
+                        // Try to find a partial match
+                        for (const auto& pair : drumMap) {
+                            if (drumType.find(pair.first) != std::string::npos) {
+                                note = pair.second;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (note != -1) {
+                        // Process the pattern
+                        // Remove all whitespace
+                        pattern = std::regex_replace(pattern, std::regex("\\s+"), "");
+                        
+                        // Calculate ticks per step
+                        int steps = pattern.length();
+                        int ticksPerStep = (ppq * 4) / steps; // Assuming 4/4 time
+                        
+                        // Create events for each hit
+                        for (int i = 0; i < steps; i++) {
+                            char c = pattern[i];
+                            if (c == 'x' || c == 'X' || c == 'o' || c == 'O') {
+                                // Determine velocity based on character
+                                int velocity = (c == 'x' || c == 'X') ? 100 : 70;
+                                
+                                // Add note-on event
+                                DynamicObject* noteOnObj = new DynamicObject();
+                                noteOnObj->setProperty("type", "note_on");
+                                noteOnObj->setProperty("channel", 9); // Drum channel (10-1)
+                                noteOnObj->setProperty("note", note);
+                                noteOnObj->setProperty("velocity", velocity);
+                                noteOnObj->setProperty("time", i * ticksPerStep);
+                                events.append(var(noteOnObj));
+                                
+                                // Add note-off event (short duration)
+                                DynamicObject* noteOffObj = new DynamicObject();
+                                noteOffObj->setProperty("type", "note_off");
+                                noteOffObj->setProperty("channel", 9); // Drum channel (10-1)
+                                noteOffObj->setProperty("note", note);
+                                noteOffObj->setProperty("time", i * ticksPerStep + ticksPerStep/2);
+                                events.append(var(noteOffObj));
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (const std::regex_error& e) {
+            std::cerr << "REGEX_ERROR in parseDrumPattern: " << e.what() << std::endl;
+        } catch (const std::exception& e) {
+            juce::Logger::writeToLog("EXCEPTION in parseDrumPattern: " + juce::String(e.what()));
         }
         
         return events;
@@ -152,50 +351,44 @@ public:
      * @param patternText The pattern text
      * @return std::vector<std::string> Vector of measure strings
      */
-    /**
- * @brief Extract measures from pattern text
- *
- * @param patternText The pattern text
- * @return std::vector<std::string> Vector of measure strings
- */
-static std::vector<std::string> extractMeasures(const std::string& patternText) {
-    std::vector<std::string> measures;
-    
-    // Find all text between pipe characters
-    std::string::size_type start = 0;
-    std::string::size_type end = 0;
-    
-    while ((start = patternText.find("|", start)) != std::string::npos) {
-        // Move past the opening pipe
-        start++;
+    static std::vector<std::string> extractMeasures(const std::string& patternText) {
+        std::vector<std::string> measures;
         
-        // Find the closing pipe
-        end = patternText.find("|", start);
+        // Find all text between pipe characters
+        std::string::size_type start = 0;
+        std::string::size_type end = 0;
         
-        // If no closing pipe, break
-        if (end == std::string::npos) {
-            break;
+        while ((start = patternText.find("|", start)) != std::string::npos) {
+            // Move past the opening pipe
+            start++;
+            
+            // Find the closing pipe
+            end = patternText.find("|", start);
+            
+            // If no closing pipe, break
+            if (end == std::string::npos) {
+                break;
+            }
+            
+            // Extract the measure content
+            std::string measure = patternText.substr(start, end - start);
+            
+            // Trim whitespace
+            measure = std::regex_replace(measure, std::regex("^\\s+|\\s+$"), "");
+            
+            if (!measure.empty()) {
+                measures.push_back(measure);
+            }
+            
+            // Move past the closing pipe for the next iteration
+            start = end + 1;
         }
         
-        // Extract the measure content
-        std::string measure = patternText.substr(start, end - start);
+        // Debug output
+        std::cout << "Extracted " << measures.size() << " measures from pattern text" << std::endl;
         
-        // Trim whitespace
-        measure = std::regex_replace(measure, std::regex("^\\s+|\\s+$"), "");
-        
-        if (!measure.empty()) {
-            measures.push_back(measure);
-        }
-        
-        // Move past the closing pipe for the next iteration
-        start = end + 1;
+        return measures;
     }
-    
-    // Debug output
-    std::cout << "Extracted " << measures.size() << " measures from pattern text" << std::endl;
-    
-    return measures;
-}
     
 private:
     /**
@@ -214,7 +407,7 @@ private:
      * @param parameters JSON object with variable values
      * @return std::string The filled template
      */
-    static std::string fillTemplateVariables(const std::string& templateText, const json& parameters) {
+    static std::string fillTemplateVariables(const std::string& templateText, const var& parameters) {
         std::string result = templateText;
         
         // Replace {{variable}} with value from parameters
@@ -227,12 +420,8 @@ private:
             std::string replacement;
             
             // Extract value from parameters
-            if (parameters.contains(varName)) {
-                if (parameters[varName].is_string()) {
-                    replacement = parameters[varName].get<std::string>();
-                } else {
-                    replacement = parameters[varName].dump();
-                }
+            if (parameters.isObject() && parameters.hasProperty(varName)) {
+                replacement = parameters[varName].toString().toStdString();
             } else {
                 // Default values for common parameters
                 if (varName == "tempo") replacement = "120";
@@ -356,7 +545,7 @@ private:
                 // Trim whitespace
                 chord = std::regex_replace(chord, std::regex("^\\s+|\\s+$"), "");
                 if (!chord.empty()) {
-                    info.chords.push_back(chord);
+                    info.chords.append(chord);
                 }
             }
         } else {
@@ -368,7 +557,7 @@ private:
                 // Trim whitespace
                 chord = std::regex_replace(chord, std::regex("^\\s+|\\s+$"), "");
                 if (!chord.empty()) {
-                    info.chords.push_back(chord);
+                    info.chords.append(chord);
                 }
             }
         }
@@ -400,7 +589,7 @@ private:
 
     // If we didn't find any chords, add a default C chord
     if (info.chords.empty()) {
-        info.chords.push_back("C");
+        info.chords.append("C");
     }
 
     return info;
@@ -413,15 +602,15 @@ private:
      * @param instrumentType Instrument type
      * @param startTime Start time in MIDI ticks
      * @param ppq Pulses per quarter note
-     * @return json MIDI events for the pattern
+     * @return var MIDI events for the pattern
      */
-    static json generateEventsForPattern(
+    static var generateEventsForPattern(
         const PatternInfo& patternInfo,
         const std::string& instrumentType,
         int startTime,
         int ppq)
     {
-        json events = json::array();
+        var events = var(Array<var>());
         
         // Special handling for drums
         if (instrumentType == "drums") {
@@ -431,7 +620,7 @@ private:
         // If no chord information available, add defaults
         std::vector<std::string> chords = patternInfo.chords;
         if (chords.empty()) {
-            chords.push_back("C");
+            chords.append("C");
         }
         
         // Get the implementation for this pattern
@@ -449,7 +638,7 @@ private:
         if (usedChords.size() < numSlots) {
             // Repeat the last chord if needed
             while (usedChords.size() < numSlots && !usedChords.empty()) {
-                usedChords.push_back(usedChords.back());
+                usedChords.append(usedChords.back());
             }
         }
         
@@ -504,28 +693,28 @@ private:
                         // Just the root note
                         auto chordNotes = MusicalShorthand::parseChord(chordName, instrumentType == "bass" ? 2 : 4);
                         if (!chordNotes.empty()) {
-                            notes.push_back(chordNotes[0]); // Root note
+                            notes.append(chordNotes[0]); // Root note
                         }
                     }
                     else if (chordComponent == "3RD") {
                         // Just the third
                         auto chordNotes = MusicalShorthand::parseChord(chordName, instrumentType == "bass" ? 2 : 4);
                         if (chordNotes.size() > 1) {
-                            notes.push_back(chordNotes[1]); // Third
+                            notes.append(chordNotes[1]); // Third
                         }
                     }
                     else if (chordComponent == "5TH") {
                         // Just the fifth
                         auto chordNotes = MusicalShorthand::parseChord(chordName, instrumentType == "bass" ? 2 : 4);
                         if (chordNotes.size() > 2) {
-                            notes.push_back(chordNotes[2]); // Fifth
+                            notes.append(chordNotes[2]); // Fifth
                         }
                     }
                     else if (chordComponent == "7TH") {
                         // Just the seventh if available
                         auto chordNotes = MusicalShorthand::parseChord(chordName, instrumentType == "bass" ? 2 : 4);
                         if (chordNotes.size() > 3) {
-                            notes.push_back(chordNotes[3]); // Seventh
+                            notes.append(chordNotes[3]); // Seventh
                         }
                     }
                     else {
@@ -551,7 +740,7 @@ private:
                                     // Parse note
                                     int note = MusicalShorthand::parseNote(noteStr);
                                     if (note != -1) {
-                                        notes.push_back(note);
+                                        notes.append(note);
                                     }
                                 }
                             }
@@ -568,7 +757,7 @@ private:
                     // Create note events
                     for (int note : notes) {
                         // Add note-on event
-                        events.push_back({
+                        events.append({
                             {"type", "note_on"},
                             {"channel", 0},
                             {"note", note},
@@ -577,7 +766,7 @@ private:
                         });
                         
                         // Add note-off event
-                        events.push_back({
+                        events.append({
                             {"type", "note_off"},
                             {"channel", 0},
                             {"note", note},
@@ -613,7 +802,7 @@ private:
                 std::string elementType = matches[1].str();
                 std::string rhythmValue = matches[2].str();
                 
-                elements.push_back(std::make_pair(elementType, rhythmValue));
+                elements.append(std::make_pair(elementType, rhythmValue));
             }
             
             searchStart = matches.suffix().first;
@@ -628,14 +817,14 @@ private:
      * @param patternName The drum pattern name
      * @param startTime Start time in MIDI ticks
      * @param ppq Pulses per quarter note
-     * @return json MIDI events for the drum pattern
+     * @return var MIDI events for the drum pattern
      */
-    static json generateDrumEvents(
+    static var generateDrumEvents(
         const std::string& patternName,
         int startTime,
         int ppq)
     {
-        json events = json::array();
+        var events = var(Array<var>());
         
         // Get the implementation for this drum pattern
         std::string patternImpl = PatternTemplates::getPatternImplementation("drums", patternName);
@@ -680,7 +869,7 @@ private:
                 
                 // Split by commas
                 while (std::getline(beatStream, pos, ',')) {
-                    beatPositions.push_back(pos);
+                    beatPositions.append(pos);
                 }
                 
                 // Process each beat position
@@ -704,7 +893,7 @@ private:
                     }
                     
                     // Add note-on event
-                    events.push_back({
+                    events.append({
                         {"type", "note_on"},
                         {"channel", 9},  // Drum channel
                         {"note", midiNote},
@@ -713,7 +902,7 @@ private:
                     });
                     
                     // Add note-off event (short duration for drums)
-                    events.push_back({
+                    events.append({
                         {"type", "note_off"},
                         {"channel", 9},
                         {"note", midiNote},

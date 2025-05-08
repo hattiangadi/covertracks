@@ -36,6 +36,7 @@
 
 #include "../UI/PluginWindow.h"
 
+namespace covertracks {
 //==============================================================================
 /** A type that encapsulates a PluginDescription and some preferences regarding
     how plugins of that description should be instantiated.
@@ -133,3 +134,5 @@ private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginGraph)
 };
+
+}   // namespace covertracks

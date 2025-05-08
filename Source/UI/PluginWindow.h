@@ -37,6 +37,7 @@
 #include "../Plugins/IOConfigurationWindow.h"
 #include "../Plugins/ARAPlugin.h"
 
+namespace covertracks {
 inline String getFormatSuffix (const AudioProcessor* plugin)
 {
     const auto format = [plugin]()
@@ -416,3 +417,4 @@ private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginWindow)
 };
+}   // namespace covertracks

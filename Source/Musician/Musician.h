@@ -1,7 +1,6 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include <nlohmann/json.hpp>
 #include <string>
 #include <memory>
 #include <functional>
@@ -13,10 +12,8 @@
 #include "PatternProcessor.h"
 // Removed ShorthandProcessor.h and ShorthandTemplates.h
 
-using json = nlohmann::json;
-
 // Forward include the JSONInterface class
-#include "../MIDIPlayer/JSONInterface.h"
+#include "../Player/Core/JSONInterface.h"
 
 // Forward declare the friend class in the global scope
 class MultiMusicianTest;
@@ -62,7 +59,7 @@ public:
      * @return true If initialization was successful
      * @return false If initialization failed
      */
-    bool initialize(const json& config = json::object());
+    bool initialize(const var& config = var());
     
     /**
      * @brief Set the LLM client to use for pattern generation
@@ -88,24 +85,24 @@ public:
      *        - key: Musical key
      *        - chords: Chord progression
      *        - intensity: Dynamic level (0.0-1.0)
-     * @return json The generated pattern (for reference)
+     * @return var The generated pattern (for reference) as JUCE var/JSON
      */
-    virtual json generateAndPlayPattern(const json& parameters);
+    virtual var generateAndPlayPattern(const var& parameters);
     
     /**
      * @brief Generate a pattern but don't play it
      * 
      * @param parameters Parameters for pattern generation
-     * @return json The generated pattern
+     * @return var The generated pattern as JUCE var/JSON
      */
-    json generatePattern(const json& parameters);
+    var generatePattern(const var& parameters);
     
     /**
      * @brief Process feedback from the Player layer
      * 
-     * @param feedback Feedback data in JSON format
+     * @param feedback Feedback data in JUCE var/JSON format
      */
-    void processFeedback(const json& feedback);
+    void processFeedback(const var& feedback);
     
     /**
      * @brief Get the musician ID
@@ -136,9 +133,9 @@ protected:
     /**
      * @brief Create player configuration based on instrument type
      * 
-     * @return json Configuration for the player
+     * @return var Configuration for the player as JUCE var/JSON
      */
-    json createPlayerConfig();
+    var createPlayerConfig();
     
     /**
      * @brief Process pattern completion feedback
@@ -150,33 +147,33 @@ protected:
     /**
      * @brief Send a command to the Player layer
      * 
-     * @param command JSON command to send
-     * @return json Response from the Player layer
+     * @param command JUCE var/JSON command to send
+     * @return var Response from the Player layer as JUCE var/JSON
      */
-    json sendCommand(const json& command);
+    var sendCommand(const var& command);
     
     /**
      * @brief Send a command to the Player layer as a string
      * 
      * @param commandString JSON command string to send
-     * @return json Response from the Player layer
+     * @return var Response from the Player layer as JUCE var/JSON
      */
-    json sendCommandString(const std::string& commandString);
+    var sendCommandString(const std::string& commandString);
     
     /**
      * @brief Load prompt templates for this instrument
      * 
-     * @param config Configuration containing templates
+     * @param config Configuration containing templates as JUCE var/JSON
      */
-    void loadPromptTemplates(const json& config);
+    void loadPromptTemplates(const var& config);
     
     /**
      * @brief Adapt pattern parameters based on feedback history
      * 
-     * @param parameters Original parameters
-     * @return json Adapted parameters
+     * @param parameters Original parameters as JUCE var/JSON
+     * @return var Adapted parameters as JUCE var/JSON
      */
-    json adaptParameters(const json& parameters);
+    var adaptParameters(const var& parameters);
     
     // Unique identifier for this musician
     std::string id;
@@ -194,10 +191,10 @@ protected:
     std::shared_ptr<LLMClient> llmClient;
     
     // Musical state
-    json musicalState;
+    var musicalState;
     
     // Instrument-specific configuration
-    json instrumentConfig;
+    var instrumentConfig;
     
     // Prompt templates by style and section
     std::map<std::string, std::string> promptTemplates;
@@ -205,10 +202,10 @@ protected:
     // Player state
     bool playerCreated = false;
     std::string currentPatternId;
-    json lastGeneratedPatternCommand; // Store the last generated pattern command
+    var lastGeneratedPatternCommand; // Store the last generated pattern command
     
     // Feedback history
-    json feedbackHistory;
+    var feedbackHistory;
     
     // Whether the musician is initialized
     bool initialized = false;
@@ -220,7 +217,7 @@ class MusicianFactory {
             const std::string& type,
             const std::string& id,
             JSONInterface* jsonInterface,
-            const json& config);
+            const var& config);
     };
     
 }   // namespace covertracks

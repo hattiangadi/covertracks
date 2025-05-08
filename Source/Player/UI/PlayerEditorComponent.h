@@ -1,16 +1,18 @@
-// PlayerEditorComponent.h
 #pragma once
 
 #include <JuceHeader.h>
 #include "../Core/PlayerManager.h"
 #include "../../UI/GraphEditorPanel.h"
-#include "../../Plugins/InternalPlugins.h" 
+#include "../../Plugins/InternalPlugins.h"
+#include "../Core/Player.h"
+
+namespace covertracks {
 
 class PlayerEditorComponent : public Component,
                               public Button::Listener
 {
 public:
-    PlayerEditorComponent(PlayerManager::Player* playerToEdit = nullptr);
+    PlayerEditorComponent(Player* playerToEdit = nullptr);
     ~PlayerEditorComponent() override;
     
     void resized() override;
@@ -28,12 +30,18 @@ public:
                   PopupMenu& m,
                   const Array<PluginDescription>& allPlugins,
                   Array<PluginDescriptionAndPreference>& addedPlugins);
-
-    std::optional<PluginDescriptionAndPreference> getChosenType(int menuID) const;
-
-    // Get the edited player data
-    std::unique_ptr<PlayerManager::Player> getPlayer();
     
+    Player* getPlayer() const { return player; }
+    
+    GraphDocumentComponent* getGraphEditor() const { return graphEditor.get(); }
+    
+    // Get the chosen plugin type from a menu ID
+    std::optional<PluginDescriptionAndPreference> getChosenType(int menuID) const;
+    
+    // Take ownership of a player (for new players)
+    void takeOwnershipOfPlayer(std::unique_ptr<Player> newPlayer);
+    
+    // Listener interface for receiving events from the PlayerEditorComponent
     class Listener
     {
     public:
@@ -43,45 +51,29 @@ public:
         virtual void playerEditorCancelRequested(PlayerEditorComponent* editor) = 0;
     };
     
-    void addListener(Listener* listener) { listeners.add(listener); }
-    void removeListener(Listener* listener) { listeners.remove(listener); }
-    
-    // Getter for the graph editor component
-    GraphDocumentComponent* getGraphEditor() const { return graphEditor.get(); }
+    void addListener(Listener* listener);
+    void removeListener(Listener* listener);
     
 private:
-    void makeDefaultConnections(PluginGraph* graph);
-    void createDefaultGraph(PluginGraph* graph);
-
-    Array<PluginDescriptionAndPreference> pluginDescriptionsAndPreference;
-    std::vector<PluginDescription> internalTypes;
-    static constexpr int menuIDBase = 0x324503f4;
+    Player* player = nullptr;
+    std::unique_ptr<Player> ownedPlayer;
     
-    // Plugin system components
-    AudioPluginFormatManager formatManager;
-    AudioDeviceManager deviceManager;
-    KnownPluginList knownPluginList;
-    Label nameLabel {"nameLabel", "Name:"};
     TextEditor nameEditor;
-    
-    Label categoryLabel {"categoryLabel", "Category:"};
-    ComboBox categoryCombo;
-    
-    Label descriptionLabel {"descriptionLabel", "Description:"};
+    TextEditor categoryEditor;
     TextEditor descriptionEditor;
     
-    static bool containsDuplicateNames(const Array<PluginDescription>& plugins, const String& name);
-
-    // Plugin graph editor
-    Label pluginLabel {"pluginLabel", "Plugin Configuration:"};
+    TextButton saveButton;
+    TextButton cancelButton;
+    TextButton loadGraphButton;
+    
     std::unique_ptr<GraphDocumentComponent> graphEditor;
-    
-    TextButton saveButton {"Save"};
-    TextButton cancelButton {"Cancel"};
-    
-    std::unique_ptr<PlayerManager::Player> player;
     
     ListenerList<Listener> listeners;
     
+    void updatePlayerFromUI();
+    void updateUIFromPlayer();
+    
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PlayerEditorComponent)
 };
+
+} // namespace covertracks

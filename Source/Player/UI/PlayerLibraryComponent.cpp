@@ -1,33 +1,36 @@
 // PlayerLibraryComponent.cpp
 #include "PlayerLibraryComponent.h"
 
-PlayerLibraryComponent::PlayerLibraryComponent()
+namespace covertracks {
+
+PlayerLibraryComponent::PlayerLibraryComponent(std::shared_ptr<PlayerManager> manager)
+    : playerManager(std::move(manager))
 {
-    playerListComponent = std::make_unique<PlayerListComponent>(playerManager);
-    playerListComponent->addListener(this);
-    addAndMakeVisible(playerListComponent.get());
+    playerList = std::make_unique<PlayerListComponent>(playerManager.get());
+    playerList->addListener(this);
+    addAndMakeVisible(playerList.get());
 }
 
 PlayerLibraryComponent::~PlayerLibraryComponent()
 {
-    if (playerListComponent != nullptr)
-        playerListComponent->removeListener(this);
+    if (playerList != nullptr)
+        playerList->removeListener(this);
     
-    if (playerEditorComponent != nullptr)
-        playerEditorComponent->removeListener(this);
+    if (playerEditor != nullptr)
+        playerEditor->removeListener(this);
 }
 
 void PlayerLibraryComponent::resized()
 {
     auto area = getLocalBounds();
     
-    if (playerEditorComponent != nullptr)
+    if (playerEditor != nullptr)
     {
-        playerEditorComponent->setBounds(area);
+        playerEditor->setBounds(area);
     }
-    else if (playerListComponent != nullptr)
+    else if (playerList != nullptr)
     {
-        playerListComponent->setBounds(area);
+        playerList->setBounds(area);
     }
 }
 
@@ -36,10 +39,9 @@ void PlayerLibraryComponent::paint(Graphics& g)
     g.fillAll(getLookAndFeel().findColour(ResizableWindow::backgroundColourId));
 }
 
-void PlayerLibraryComponent::playerSelected(PlayerManager::Player* player)
+void PlayerLibraryComponent::playerSelected(Player* player)
 {
     // Handle player selection
-    // For now, we don't need to do anything special here
 }
 
 void PlayerLibraryComponent::newPlayerRequested()
@@ -47,120 +49,108 @@ void PlayerLibraryComponent::newPlayerRequested()
     showPlayerEditor(nullptr);
 }
 
-void PlayerLibraryComponent::editPlayerRequested(PlayerManager::Player* player)
+void PlayerLibraryComponent::editPlayerRequested(Player* player)
 {
     showPlayerEditor(player);
 }
 
-void PlayerLibraryComponent::deletePlayerRequested(PlayerManager::Player* player)
+void PlayerLibraryComponent::deletePlayerRequested(Player* player)
 {
-    // Show confirmation dialog
+    // Confirm deletion
     AlertWindow::showOkCancelBox(
         AlertWindow::QuestionIcon,
         "Delete Player",
-        "Are you sure you want to delete the player '" + player->metadata.name + "'?",
+        "Are you sure you want to delete this player?",
         "Delete",
         "Cancel",
         this,
         ModalCallbackFunction::create([this, player](int result) {
-            if (result == 1) // OK was clicked
+            if (result == 1) // OK button was pressed
             {
-                playerManager.deletePlayer(player);
-                playerListComponent->refreshList();
+                playerManager->deletePlayer(player);
+                playerList->refresh();
             }
         })
     );
 }
 
-// PlayerLibraryComponent.cpp - Update to ensure both graph structure and plugin states are preserved
-
 void PlayerLibraryComponent::playerEditorSaveRequested(PlayerEditorComponent* editor)
 {
-    // Get the player from the editor (includes graph and plugin states)
-    auto playerPtr = editor->getPlayer();
-    
-    if (playerPtr == nullptr)
-        return;
-    
-    // Save the player
-    bool saved = playerManager.savePlayer(playerPtr.get());
-    
-    if (saved)
+    if (editor != nullptr)
     {
-        // Add to manager's collection if it's not already there
-        playerManager.addPlayer(std::move(playerPtr));
+        auto player = editor->getPlayer();
         
-        // Refresh the player list
-        if (playerListComponent != nullptr)
-            playerListComponent->refreshList();
+        if (player != nullptr)
+        {
+            // Save the player
+            playerManager->savePlayer(player);
+            
+            // Refresh the list
+            playerList->refresh();
+        }
     }
     
-    // Hide the editor
     hidePlayerEditor();
 }
 
 void PlayerLibraryComponent::playerEditorCancelRequested(PlayerEditorComponent* editor)
 {
-    // Just hide the editor without saving
     hidePlayerEditor();
 }
 
-// In PlayerLibraryComponent.cpp, update the showPlayerEditor method:
-
-void PlayerLibraryComponent::showPlayerEditor(PlayerManager::Player* playerToEdit)
+void PlayerLibraryComponent::showPlayerEditor(Player* playerToEdit)
 {
-    // Remove existing editor if any
-    if (playerEditorComponent != nullptr)
+    // Create a new player if none was provided
+    std::unique_ptr<Player> newPlayer;
+    
+    if (playerToEdit == nullptr)
     {
-        playerEditorComponent->removeListener(this);
-        removeChildComponent(playerEditorComponent.get());
-        playerEditorComponent = nullptr;
+        newPlayer = playerManager->createPlayer();
+        playerToEdit = newPlayer.get();
     }
     
-    // Create and show new editor
-    playerEditorComponent = std::make_unique<PlayerEditorComponent>(playerToEdit);
-    playerEditorComponent->addListener(this);
-    addAndMakeVisible(playerEditorComponent.get());
+    // Create the editor component
+    playerEditor = std::make_unique<PlayerEditorComponent>(playerToEdit);
+    playerEditor->addListener(this);
     
-    // Hide the list component
-    if (playerListComponent != nullptr)
-        playerListComponent->setVisible(false);
+    // If we created a new player, transfer ownership to the editor
+    if (newPlayer != nullptr)
+    {
+        playerEditor->takeOwnershipOfPlayer(std::move(newPlayer));
+    }
     
-    // Resize to fit - ensure the editor has enough space
+    // Show the editor
+    addAndMakeVisible(playerEditor.get());
+    
+    // Hide the list
+    if (playerList != nullptr)
+    {
+        playerList->setVisible(false);
+    }
+    
+    // Resize to fit
     resized();
-    
-    // Resize parent window if needed to give enough space for the graph editor
-    if (auto* parentComponent = getParentComponent())
-    {
-        if (auto* dialogWindow = dynamic_cast<DialogWindow*>(parentComponent))
-        {
-            // Make sure the dialog is large enough
-            const int minWidth = 800;
-            const int minHeight = 700;
-            
-            auto currentBounds = dialogWindow->getBounds();
-            if (currentBounds.getWidth() < minWidth || currentBounds.getHeight() < minHeight)
-            {
-                dialogWindow->centreWithSize(minWidth, minHeight);
-            }
-        }
-    }
 }
 
 void PlayerLibraryComponent::hidePlayerEditor()
 {
     // Remove the editor
-    if (playerEditorComponent != nullptr)
+    if (playerEditor != nullptr)
     {
-        playerEditorComponent->removeListener(this);
-        removeChildComponent(playerEditorComponent.get());
-        playerEditorComponent = nullptr;
+        playerEditor->removeListener(this);
+        removeChildComponent(playerEditor.get());
+        playerEditor = nullptr;
     }
     
-    // Show the list component
-    if (playerListComponent != nullptr)
-        playerListComponent->setVisible(true);
+    // Show the list
+    if (playerList != nullptr)
+    {
+        playerList->setVisible(true);
+        playerList->refresh();
+    }
     
     // Resize to fit
     resized();
 }
+
+} // namespace covertracks

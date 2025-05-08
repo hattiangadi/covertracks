@@ -11,7 +11,7 @@
 #include <atomic>
 #include <juce_core/juce_core.h>
 
-namespace coverband {
+namespace covertracks {
 
 /**
  * @brief Claude API client implementation of the LLMClient interface
@@ -125,4 +125,4 @@ private:
     std::map<std::string, json> responseCache;
 };
 
-} // namespace coverband
+} // namespace covertracks

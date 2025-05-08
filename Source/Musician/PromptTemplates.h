@@ -1,12 +1,10 @@
 #pragma once
 
-#include <nlohmann/json.hpp>
 #include <map>
 #include <string>
 
-using json = nlohmann::json;
 
-namespace coverband {
+namespace covertracks {
 
 /**
  * @brief Default prompt templates for different instrument types and styles
@@ -734,38 +732,38 @@ Every note_on MUST have a matching note_off event.
 };
 
 // Load templates for a specific instrument type
-inline json getTemplates(const std::string& instrumentType) {
-    json templates = json::object();
+inline var getTemplates(const std::string& instrumentType) {
+    DynamicObject* templatesObj = new DynamicObject();
     
     // Add test templates for all instruments
     for (const auto& pair : test) {
-        templates[pair.first] = pair.second;
+        templatesObj->setProperty(Identifier(pair.first), String(pair.second));
     }
     
     // Add instrument-specific templates
     if (instrumentType == "piano") {
         for (const auto& pair : piano) {
-            templates[pair.first] = pair.second;
+            templatesObj->setProperty(Identifier(pair.first), String(pair.second));
         }
     }
     else if (instrumentType == "bass") {
         for (const auto& pair : bass) {
-            templates[pair.first] = pair.second;
+            templatesObj->setProperty(Identifier(pair.first), String(pair.second));
         }
     }
     else if (instrumentType == "drums") {
         for (const auto& pair : drums) {
-            templates[pair.first] = pair.second;
+            templatesObj->setProperty(Identifier(pair.first), String(pair.second));
         }
     }
     else if (instrumentType == "guitar") {
         for (const auto& pair : guitar) {
-            templates[pair.first] = pair.second;
+            templatesObj->setProperty(Identifier(pair.first), String(pair.second));
         }
     }
     
-    return templates;
+    return var(templatesObj);
 }
 
 } // namespace PromptTemplates
-} // namespace coverband
+} // namespace covertracks

@@ -36,6 +36,7 @@
 
 #include "../Plugins/PluginGraph.h"
 
+namespace covertracks {
 class MainHostWindow;
 class PlayerEditorComponent; // Forward declaration
 
@@ -180,3 +181,5 @@ private:
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GraphDocumentComponent)
 };
+
+} // namespace covertracks
