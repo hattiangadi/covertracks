@@ -545,7 +545,17 @@ void MainHostWindow::menuItemSelected (int menuItemID, int /*topLevelMenuIndex*/
         // This code is left as a placeholder for future implementation
         if (const auto chosen = getChosenType (menuItemID))
         {
-            // Notify the user that plugins should be added through the player interface
+            // Try to forward the plugin creation to the PlayerEditorComponent if open
+            if (playerLibraryWindow != nullptr)
+            {
+                if (auto* playerEditor = playerLibraryWindow->getPlayerEditor())
+                {
+                    // Use a default position (e.g., center of editor or {100,100})
+                    playerEditor->createPlugin(*chosen, {100, 100});
+                    return;
+                }
+            }
+            // If no editor is open, show the info message
             String message = "Please use the Player Editor to add plugins.\n\n"
                             "Plugin: " + chosen->pluginDescription.name + " (" + chosen->pluginDescription.pluginFormatName + ")"; 
             AlertWindow::showMessageBoxAsync(AlertWindow::InfoIcon, "Plugin Selection", message);

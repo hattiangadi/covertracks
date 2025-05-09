@@ -64,6 +64,8 @@ public:
 
     void changeListenerCallback (ChangeBroadcaster*) override;
 
+    void setOwnerPlayerEditorComponent(PlayerEditorComponent* owner);
+
     //==============================================================================
     void updateComponents();
 
@@ -98,6 +100,8 @@ private:
     Point<int> originalTouchPos;
 
     void timerCallback() override;
+
+    PlayerEditorComponent* ownerPlayerEditorComponent = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GraphEditorPanel)
 };

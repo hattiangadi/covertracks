@@ -5,7 +5,8 @@
 
 namespace covertracks {
 
-PlayerEditorComponent::PlayerEditorComponent(Player* playerToEdit)
+// Constructor
+PlayerEditorComponent::PlayerEditorComponent(Player* playerToEdit, MainHostWindow* mainWindow)
     : player(playerToEdit)
 {
     // Initialize and add metadata labels
@@ -21,51 +22,84 @@ PlayerEditorComponent::PlayerEditorComponent(Player* playerToEdit)
     descriptionLabel.setJustificationType(Justification::centredRight);
     addAndMakeVisible(descriptionLabel);
 
-    // Set up UI components
+    // Initialize and add metadata editors
     nameEditor.setMultiLine(false);
     nameEditor.setReturnKeyStartsNewLine(false);
     nameEditor.setReadOnly(false);
     nameEditor.setScrollbarsShown(true);
     nameEditor.setCaretVisible(true);
     nameEditor.setPopupMenuEnabled(true);
-    
+    addAndMakeVisible(nameEditor);
+
     categoryEditor.setMultiLine(false);
     categoryEditor.setReturnKeyStartsNewLine(false);
     categoryEditor.setReadOnly(false);
     categoryEditor.setScrollbarsShown(true);
     categoryEditor.setCaretVisible(true);
     categoryEditor.setPopupMenuEnabled(true);
-    
+    addAndMakeVisible(categoryEditor);
+
     descriptionEditor.setMultiLine(true);
     descriptionEditor.setReturnKeyStartsNewLine(true);
     descriptionEditor.setReadOnly(false);
     descriptionEditor.setScrollbarsShown(true);
     descriptionEditor.setCaretVisible(true);
     descriptionEditor.setPopupMenuEnabled(true);
-    
-    saveButton.setButtonText("Save");
-    cancelButton.setButtonText("Cancel");
-    loadGraphButton.setButtonText("Load Graph");
-    
-    addAndMakeVisible(nameEditor);
-    addAndMakeVisible(categoryEditor);
     addAndMakeVisible(descriptionEditor);
-    addAndMakeVisible(saveButton);
-    addAndMakeVisible(cancelButton);
-    addAndMakeVisible(loadGraphButton);
-    
+
+    // Initialize and add buttons
+    saveButton.setButtonText("Save");
     saveButton.addListener(this);
+    addAndMakeVisible(saveButton);
+
+    cancelButton.setButtonText("Cancel");
     cancelButton.addListener(this);
+    addAndMakeVisible(cancelButton);
+
+    loadGraphButton.setButtonText("Load Graph");
     loadGraphButton.addListener(this);
-    
-    // Initialize the graph editor if we have a player
+    addAndMakeVisible(loadGraphButton);
+
+    // Create a graph editor if we have a player
     if (player != nullptr)
     {
-        // Create a graph document component
-        AudioPluginFormatManager formatManager;
-        AudioDeviceManager deviceManager;
-        KnownPluginList knownPluginList;
-        graphEditor = std::make_unique<GraphDocumentComponent>(formatManager, deviceManager, knownPluginList);
+        // If mainWindow was provided, use its plugin environment
+        if (mainWindow != nullptr)
+        {
+            DBG("Using MainHostWindow's plugin environment");
+            graphEditor = std::make_unique<GraphDocumentComponent>(mainWindow->getFormatManager(),
+                                                                mainWindow->getDeviceManager(),
+                                                                mainWindow->getKnownPluginList());
+        }
+        else
+        {
+            // If no mainWindow was provided, try to find it
+            auto* foundMainWindow = dynamic_cast<MainHostWindow*>(getTopLevelComponent());
+            
+            if (foundMainWindow != nullptr)
+            {
+                DBG("Found MainHostWindow, using its plugin environment");
+                graphEditor = std::make_unique<GraphDocumentComponent>(foundMainWindow->getFormatManager(),
+                                                                    foundMainWindow->getDeviceManager(),
+                                                                    foundMainWindow->getKnownPluginList());
+            }
+            else
+            {
+                // Last resort: create a temporary environment
+                DBG("WARNING: MainHostWindow not found, creating temporary plugin environment");
+                AudioPluginFormatManager formatManager;
+                formatManager.addDefaultFormats();
+                formatManager.addFormat(new InternalPluginFormat());
+                
+                AudioDeviceManager deviceManager;
+                KnownPluginList knownPluginList;
+                
+                graphEditor = std::make_unique<GraphDocumentComponent>(formatManager, deviceManager, knownPluginList);
+            }
+        }
+        
+        if (graphEditor->graphPanel)
+            graphEditor->graphPanel->setOwnerPlayerEditorComponent(this);
         addAndMakeVisible(graphEditor.get());
         
         // Load the graph state if available
@@ -87,6 +121,8 @@ PlayerEditorComponent::~PlayerEditorComponent()
     loadGraphButton.removeListener(this);
 }
 
+
+
 void PlayerEditorComponent::resized()
 {
     auto area = getLocalBounds();
@@ -106,24 +142,24 @@ void PlayerEditorComponent::resized()
 
     // Name label and field
     nameLabel.setBounds(sidePanel.getX() + panelMargin, y, labelWidth, fieldHeight);
-    nameEditor.setBounds(sidePanel.getX() + panelMargin + labelWidth + labelFieldGap, y, fieldWidth, fieldHeight);
+    nameEditor.setBounds(nameLabel.getRight() + labelFieldGap, y, fieldWidth, fieldHeight);
     y += fieldHeight + fieldSpacing;
 
     // Category label and field
     categoryLabel.setBounds(sidePanel.getX() + panelMargin, y, labelWidth, fieldHeight);
-    categoryEditor.setBounds(sidePanel.getX() + panelMargin + labelWidth + labelFieldGap, y, fieldWidth, fieldHeight);
+    categoryEditor.setBounds(categoryLabel.getRight() + labelFieldGap, y, fieldWidth, fieldHeight);
     y += fieldHeight + fieldSpacing;
 
-    // Description label and field (taller)
-    int descHeight = fieldHeight * 2;
+    // Description label and field
     descriptionLabel.setBounds(sidePanel.getX() + panelMargin, y, labelWidth, fieldHeight);
-    descriptionEditor.setBounds(sidePanel.getX() + panelMargin + labelWidth + labelFieldGap, y, fieldWidth, descHeight);
-    y += descHeight + fieldSpacing;
+    descriptionEditor.setBounds(descriptionLabel.getRight() + labelFieldGap, y, fieldWidth, fieldHeight * 3);
+    y += fieldHeight * 3 + fieldSpacing * 2;
 
-    // Buttons at the bottom of side panel (unchanged)
-    int buttonHeight = 32;
-    int buttonWidth = (sidePanel.getWidth() - 4 * panelMargin) / 3;
-    int buttonY = sidePanel.getBottom() - buttonHeight - panelMargin;
+    // Buttons
+    const int buttonWidth = (fieldWidth + labelWidth + labelFieldGap - 2 * panelMargin) / 3;
+    const int buttonHeight = 30;
+    const int buttonY = sidePanel.getBottom() - panelMargin - buttonHeight;
+
     saveButton.setBounds(sidePanel.getX() + panelMargin, buttonY, buttonWidth, buttonHeight);
     cancelButton.setBounds(sidePanel.getX() + panelMargin + buttonWidth + panelMargin, buttonY, buttonWidth, buttonHeight);
     loadGraphButton.setBounds(sidePanel.getX() + panelMargin + 2 * (buttonWidth + panelMargin), buttonY, buttonWidth, buttonHeight);
@@ -203,10 +239,53 @@ void PlayerEditorComponent::buttonClicked(Button* button)
 void PlayerEditorComponent::createPlugin(const PluginDescriptionAndPreference& desc, Point<int> pos)
 {
     // Create a plugin in the graph editor
-    if (graphEditor != nullptr)
+    if (graphEditor != nullptr && graphEditor->graph != nullptr)
     {
-        // Use the provided PluginDescriptionAndPreference directly
-        graphEditor->createNewPlugin(desc, pos);
+        // Log plugin description details for debugging
+        DBG("Attempting to create plugin: " + desc.pluginDescription.name);
+        DBG("  Format: " + desc.pluginDescription.pluginFormatName);
+        DBG("  File: " + desc.pluginDescription.fileOrIdentifier);
+        
+        // Debug available formats
+        if (auto* mainWindow = dynamic_cast<MainHostWindow*>(getTopLevelComponent()))
+        {
+            DBG("Available formats in MainHostWindow:");
+            for (int i = 0; i < mainWindow->getFormatManager().getNumFormats(); ++i)
+            {
+                auto* format = mainWindow->getFormatManager().getFormat(i);
+                DBG("  " + String(i) + ": " + format->getName());
+            }
+            
+            // Check if the format exists in the MainHostWindow's format manager
+            bool formatFound = false;
+            for (int i = 0; i < mainWindow->getFormatManager().getNumFormats(); ++i)
+            {
+                auto* format = mainWindow->getFormatManager().getFormat(i);
+                if (format->getName() == desc.pluginDescription.pluginFormatName)
+                {
+                    formatFound = true;
+                    DBG("Format found in MainHostWindow's format manager");
+                    break;
+                }
+            }
+            
+            if (!formatFound)
+            {
+                DBG("WARNING: Format '" + desc.pluginDescription.pluginFormatName + "' not found in MainHostWindow's format manager");
+            }
+        }
+        else
+        {
+            DBG("WARNING: Could not find MainHostWindow to check formats");
+        }
+        
+        // Try to add the plugin directly to the graph
+        graphEditor->graph->addPlugin(desc, {pos.x / (double)graphEditor->getWidth(), 
+                                           pos.y / (double)graphEditor->getHeight()});
+    }
+    else
+    {
+        DBG("Cannot create plugin: graphEditor or graph is null");
     }
 }
 

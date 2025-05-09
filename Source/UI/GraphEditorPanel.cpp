@@ -38,6 +38,8 @@
 #include "../Player/UI/PlayerEditorComponent.h"
 #include "MainHostWindow.h"
 
+// Ensure PlayerLibraryComponent is fully defined before use
+#include "../Player/UI/PlayerLibraryComponent.h"
 
 namespace covertracks {
 
@@ -184,12 +186,12 @@ struct GraphEditorPanel::PinComponent final : public Component,
 
 //==============================================================================
 struct GraphEditorPanel::PluginComponent final : public Component,
-                                                 public Timer,
-                                                 private AudioProcessorParameter::Listener,
-                                                 private AsyncUpdater
+    public Timer,
+    private AudioProcessorParameter::Listener,
+    private AsyncUpdater
 {
-    PluginComponent (GraphEditorPanel& p, AudioProcessorGraph::NodeID id)  : panel (p), graph (p.graph), pluginID (id)
-    {
+PluginComponent (GraphEditorPanel& p, AudioProcessorGraph::NodeID id)  : panel (p), graph (p.graph), pluginID (id)
+{
         shadow.setShadowProperties (DropShadow (Colours::black.withAlpha (0.5f), 3, { 0, 1 }));
         setComponentEffect (&shadow);
 
@@ -469,7 +471,7 @@ struct GraphEditorPanel::PluginComponent final : public Component,
             playerEditorComponent->addPluginsToMenu(*menu);
 
             menu->showMenuAsync({},
-                            ModalCallbackFunction::create([this, playerEditorComponent, position](int r)
+                            ModalCallbackFunction::create([playerEditorComponent, position](int r)
                             {
                                 if (playerEditorComponent != nullptr)
                                     if (const auto chosen = playerEditorComponent->getChosenType(r))
@@ -488,10 +490,16 @@ struct GraphEditorPanel::PluginComponent final : public Component,
                                     if (mainWindow != nullptr)
                                         if (const auto chosen = mainWindow->getChosenType(r))
                                         {
-                                            // In the instrument/player approach, plugins should be added through the player interface
-                                            String message = "Please use the Player Editor to add plugins.\n\n"
-                                                           "Plugin: " + chosen->pluginDescription.name + " (" + chosen->pluginDescription.pluginFormatName + ")";
-                                            AlertWindow::showMessageBoxAsync(AlertWindow::InfoIcon, "Plugin Selection", message);
+                                            // Try to find an open PlayerEditorComponent
+                                            if (auto* playerLibrary = dynamic_cast<PlayerLibraryComponent*>(mainWindow->getContentComponent()))
+                                            {
+                                                if (auto* playerEditor = playerLibrary->getPlayerEditor())
+                                                {
+                                                    playerEditor->createPlugin(*chosen, position);
+                                                    return;
+                                                }
+                                            }
+                                            // If no editor is open, do nothing (could also disable menu)
                                         }
                                 }));
             }
@@ -836,6 +844,11 @@ void GraphEditorPanel::paint (Graphics& g)
     }
 }
 
+void GraphEditorPanel::setOwnerPlayerEditorComponent(PlayerEditorComponent* owner)
+{
+    ownerPlayerEditorComponent = owner;
+}
+
 void GraphEditorPanel::mouseDown(const MouseEvent& e)
 {
     if (isOnTouchDevice())
@@ -845,18 +858,14 @@ void GraphEditorPanel::mouseDown(const MouseEvent& e)
     }
 
     if (e.mods.isPopupMenu())
-    {
-        // Check if this was called from the PlayerEditorComponent
-        if (auto* editor = dynamic_cast<PlayerEditorComponent*>(getTopLevelComponent()))
-        {
-            showPopupMenu(e.position.toInt(), editor);
-        }
+        showPopupMenu(e.position.toInt(), ownerPlayerEditorComponent);
+    else if (e.mods.isLeftButtonDown())
+        beginConnectorDrag ({}, {}, e);
         else
         {
             // Default behavior for MainHostWindow
             showPopupMenu(e.position.toInt());
         }
-    }
 }
 
 void GraphEditorPanel::mouseUp (const MouseEvent&)
@@ -876,40 +885,20 @@ void GraphEditorPanel::mouseDrag (const MouseEvent& e)
 
 void GraphEditorPanel::showPopupMenu(Point<int> position, PlayerEditorComponent* playerEditorComponent)
 {
-    auto popupMenu = PopupMenu();
-    
     if (playerEditorComponent != nullptr)
     {
+        PopupMenu popupMenu;
         playerEditorComponent->addPluginsToMenu(popupMenu);
-        
+
         popupMenu.showMenuAsync({},
-                        ModalCallbackFunction::create([playerEditorComponent, position](int r)
-                        {
-                            if (playerEditorComponent != nullptr)
-                                if (const auto chosen = playerEditorComponent->getChosenType(r))
-                                    playerEditorComponent->createPlugin(*chosen, position);
-                        }));
+            ModalCallbackFunction::create([playerEditorComponent, position](int r)
+            {
+                if (playerEditorComponent != nullptr)
+                    if (const auto chosen = playerEditorComponent->getChosenType(r))
+                        playerEditorComponent->createPlugin(*chosen, position);
+            }));
     }
-    else
-    {
-        if (auto* mainWindow = findParentComponentOfClass<MainHostWindow>())
-        {
-            mainWindow->addPluginsToMenu(popupMenu);
-            
-            popupMenu.showMenuAsync({},
-                            ModalCallbackFunction::create([mainWindow, position](int r)
-                            {
-                                if (mainWindow != nullptr)
-                                    if (const auto chosen = mainWindow->getChosenType(r))
-                                    {
-                                        // In the instrument/player approach, plugins should be added through the player interface
-                                        String message = "Please use the Player Editor to add plugins.\n\n"
-                                                       "Plugin: " + chosen->pluginDescription.name + " (" + chosen->pluginDescription.pluginFormatName + ")";
-                                        AlertWindow::showMessageBoxAsync(AlertWindow::InfoIcon, "Plugin Selection", message);
-                                    }
-                            }));
-        }
-    }
+    // else: Do nothing (plugin addition only allowed through Player Editor)
 }
 
 void GraphEditorPanel::createNewPlugin (const PluginDescriptionAndPreference& desc, Point<int> position)

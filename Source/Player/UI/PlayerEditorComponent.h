@@ -12,7 +12,8 @@ class PlayerEditorComponent : public Component,
                               public Button::Listener
 {
 public:
-    PlayerEditorComponent(Player* playerToEdit = nullptr);
+    // Constructor
+    PlayerEditorComponent(Player* playerToEdit = nullptr, MainHostWindow* mainWindow = nullptr);
     ~PlayerEditorComponent() override;
     
     void resized() override;

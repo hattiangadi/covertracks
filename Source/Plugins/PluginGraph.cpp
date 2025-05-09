@@ -96,8 +96,51 @@ AudioProcessorGraph::Node::Ptr PluginGraph::getNodeForName (const String& name) 
 void PluginGraph::addPlugin (const PluginDescriptionAndPreference& desc, Point<double> pos)
 {
     std::shared_ptr<ScopedDPIAwarenessDisabler> dpiDisabler = makeDPIAwarenessDisablerForPlugin (desc.pluginDescription);
-
-    formatManager.createPluginInstanceAsync (desc.pluginDescription,
+    
+    // Create a copy of the plugin description to ensure we have the correct format name
+    PluginDescription correctedDesc = desc.pluginDescription;
+    
+    // Find the correct format for this plugin
+    for (int i = 0; i < formatManager.getNumFormats(); ++i)
+    {
+        auto* format = formatManager.getFormat(i);
+        
+        // Check if this format can handle the plugin
+        if (format->fileMightContainThisPluginType(correctedDesc.fileOrIdentifier))
+        {
+            // If the format name doesn't match, update it
+            if (format->getName() != correctedDesc.pluginFormatName)
+            {
+                DBG("Correcting plugin format name from '" + correctedDesc.pluginFormatName + "' to '" + format->getName() + "'");
+                correctedDesc.pluginFormatName = format->getName();
+            }
+            break;
+        }
+    }
+    
+    // For internal plugins, ensure the format name is correct
+    if (correctedDesc.fileOrIdentifier.isEmpty() && correctedDesc.name.isNotEmpty())
+    {
+        for (int i = 0; i < formatManager.getNumFormats(); ++i)
+        {
+            auto* format = formatManager.getFormat(i);
+            if (format->getName() == "Internal")
+            {
+                if (correctedDesc.pluginFormatName != format->getName())
+                {
+                    DBG("Correcting internal plugin format name from '" + correctedDesc.pluginFormatName + "' to 'Internal'");
+                    correctedDesc.pluginFormatName = format->getName();
+                }
+                break;
+            }
+        }
+    }
+    
+    // Create the plugin with the corrected description
+    PluginDescriptionAndPreference correctedDescAndPref = desc;
+    correctedDescAndPref.pluginDescription = correctedDesc;
+    
+    formatManager.createPluginInstanceAsync (correctedDesc,
                                              graph.getSampleRate(),
                                              graph.getBlockSize(),
                                              [this, pos, dpiDisabler, useARA = desc.useARA] (std::unique_ptr<AudioPluginInstance> instance, const String& error)
@@ -113,9 +156,13 @@ void PluginGraph::addPluginCallback (std::unique_ptr<AudioPluginInstance> instan
 {
     if (instance == nullptr)
     {
+        // Log detailed error information
+        DBG("Plugin creation failed with error: " + error);
+        
+        // Show more detailed error message to the user
         auto options = MessageBoxOptions::makeOptionsOk (MessageBoxIconType::WarningIcon,
                                                          TRANS ("Couldn't create plugin"),
-                                                         error);
+                                                         "Error details: " + error);
         messageBox = AlertWindow::showScopedAsync (options, nullptr);
     }
     else
