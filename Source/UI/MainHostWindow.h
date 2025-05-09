@@ -54,7 +54,6 @@ namespace CommandIDs
     static const int allWindowsForward      = 0x30400;
     static const int toggleDoublePrecision  = 0x30500;
     static const int autoScalePluginWindows = 0x30600;
-    static const int showPlayerLibrary      = 0x30700;
 }
 
 //==============================================================================
@@ -123,6 +122,11 @@ public:
     // Plugin-related functionality is now handled at the player level
     void addPluginsToMenu (PopupMenu&);
     std::optional<PluginDescriptionAndPreference> getChosenType (int menuID) const;
+    
+    // Accessor methods for shared resources
+    AudioPluginFormatManager& getFormatManager() { return formatManager; }
+    AudioDeviceManager& getDeviceManager() { return deviceManager; }
+    KnownPluginList& getKnownPluginList() { return knownPluginList; }
 
     // Main components
     std::unique_ptr<PlayerLibraryComponent> playerLibraryWindow;

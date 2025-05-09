@@ -506,8 +506,6 @@ PopupMenu MainHostWindow::getMenuForIndex (int topLevelMenuIndex, const String& 
         if (autoScaleOptionAvailable)
             menu.addCommandItem (&getCommandManager(), CommandIDs::autoScalePluginWindows);
         
-        menu.addSeparator();
-        menu.addCommandItem(&getCommandManager(), CommandIDs::showPlayerLibrary);
         
         menu.addSeparator();
         menu.addCommandItem (&getCommandManager(), CommandIDs::aboutBox);
@@ -676,8 +674,7 @@ void covertracks::MainHostWindow::getAllCommands (Array<CommandID>& commands)
                               CommandIDs::toggleDoublePrecision,
                               CommandIDs::aboutBox,
                               CommandIDs::allWindowsForward,
-                              CommandIDs::autoScalePluginWindows,
-                              CommandIDs::showPlayerLibrary
+                              CommandIDs::autoScalePluginWindows
                             };
 
     commands.addArray (ids, numElementsInArray (ids));
@@ -738,11 +735,6 @@ void covertracks::MainHostWindow::getCommandInfo (const CommandID commandID, App
 
     case CommandIDs::autoScalePluginWindows:
         updateAutoScaleMenuItem (result);
-        break;
-
-    case CommandIDs::showPlayerLibrary:
-        result.setInfo("Player Library", "Manage player configurations", category, 0);
-        result.addDefaultKeypress('l', ModifierKeys::commandModifier);
         break;
 
     default:
@@ -809,27 +801,7 @@ bool covertracks::MainHostWindow::perform (const InvocationInfo& info)
         break;
     }
 
-    case CommandIDs::showPlayerLibrary:
-    {
-        // Create the component
-        auto* component = new PlayerLibraryComponent(playerManager);
-        component->setSize(800, 600);
-        
-        DialogWindow::LaunchOptions o;
-        o.content.setNonOwned(component);
-        o.dialogTitle = "Player Library";
-        o.componentToCentreAround = this;
-        o.dialogBackgroundColour = getLookAndFeel().findColour(ResizableWindow::backgroundColourId);
-        o.escapeKeyTriggersCloseButton = true;
-        o.useNativeTitleBar = false;
-        o.resizable = true;
-        
-        // Launch the dialog and have it delete the component when closed
-        DialogWindow* dialog = o.launchAsync();
-        if (dialog != nullptr)
-            dialog->setVisible(true);
-        break;
-    }
+    // Player Library command removed - now integrated into main window
 
     default:
         return false;
