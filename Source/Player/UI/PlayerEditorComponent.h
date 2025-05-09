@@ -57,23 +57,29 @@ public:
 private:
     Player* player = nullptr;
     std::unique_ptr<Player> ownedPlayer;
-    
+
     TextEditor nameEditor;
     TextEditor categoryEditor;
     TextEditor descriptionEditor;
-    
+
+    // Metadata labels
+    Label nameLabel;
+    Label categoryLabel;
+    Label descriptionLabel;
+
     TextButton saveButton;
     TextButton cancelButton;
     TextButton loadGraphButton;
-    
+
     std::unique_ptr<GraphDocumentComponent> graphEditor;
-    
+
     ListenerList<Listener> listeners;
-    
+
     void updatePlayerFromUI();
     void updateUIFromPlayer();
-    
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PlayerEditorComponent)
+
 };
 
 } // namespace covertracks

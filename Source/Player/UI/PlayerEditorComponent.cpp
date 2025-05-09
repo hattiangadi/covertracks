@@ -8,6 +8,19 @@ namespace covertracks {
 PlayerEditorComponent::PlayerEditorComponent(Player* playerToEdit)
     : player(playerToEdit)
 {
+    // Initialize and add metadata labels
+    nameLabel.setText("Name:", dontSendNotification);
+    nameLabel.setJustificationType(Justification::centredRight);
+    addAndMakeVisible(nameLabel);
+
+    categoryLabel.setText("Category:", dontSendNotification);
+    categoryLabel.setJustificationType(Justification::centredRight);
+    addAndMakeVisible(categoryLabel);
+
+    descriptionLabel.setText("Description:", dontSendNotification);
+    descriptionLabel.setJustificationType(Justification::centredRight);
+    addAndMakeVisible(descriptionLabel);
+
     // Set up UI components
     nameEditor.setMultiLine(false);
     nameEditor.setReturnKeyStartsNewLine(false);
@@ -77,68 +90,62 @@ PlayerEditorComponent::~PlayerEditorComponent()
 void PlayerEditorComponent::resized()
 {
     auto area = getLocalBounds();
-    
-    // Reserve space for the form at the top
-    auto formArea = area.removeFromTop(150);
-    
-    // Layout the form fields
-    auto labelWidth = 100;
-    auto fieldHeight = 24;
-    auto margin = 10;
-    
-    // Name field
-    auto nameRow = formArea.removeFromTop(fieldHeight + margin);
-    nameEditor.setBounds(nameRow.withTrimmedLeft(labelWidth));
-    
-    // Category field
-    auto categoryRow = formArea.removeFromTop(fieldHeight + margin);
-    categoryEditor.setBounds(categoryRow.withTrimmedLeft(labelWidth));
-    
-    // Description field
-    auto descriptionRow = formArea.removeFromTop(fieldHeight * 2 + margin);
-    descriptionEditor.setBounds(descriptionRow.withTrimmedLeft(labelWidth));
-    
-    // Reserve space for buttons at the bottom
-    auto buttonArea = area.removeFromBottom(40);
-    
-    // Divide the button area into three equal parts
-    auto buttonWidth = buttonArea.getWidth() / 3;
-    
-    saveButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(5));
-    cancelButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(5));
-    loadGraphButton.setBounds(buttonArea.reduced(5));
-    
-    // Use the remaining area for the graph editor
+
+    // --- Side panel for metadata and buttons ---
+    const int sidePanelWidth = 320;
+    auto sidePanel = area.removeFromLeft(sidePanelWidth);
+
+    // Consistent margins and spacing
+    const int panelMargin = 16;
+    const int labelWidth = 80;
+    const int fieldHeight = 28;
+    const int fieldSpacing = 12;
+    const int labelFieldGap = 8;
+    int fieldWidth = sidePanel.getWidth() - 2 * panelMargin - labelWidth - labelFieldGap;
+    int y = sidePanel.getY() + panelMargin;
+
+    // Name label and field
+    nameLabel.setBounds(sidePanel.getX() + panelMargin, y, labelWidth, fieldHeight);
+    nameEditor.setBounds(sidePanel.getX() + panelMargin + labelWidth + labelFieldGap, y, fieldWidth, fieldHeight);
+    y += fieldHeight + fieldSpacing;
+
+    // Category label and field
+    categoryLabel.setBounds(sidePanel.getX() + panelMargin, y, labelWidth, fieldHeight);
+    categoryEditor.setBounds(sidePanel.getX() + panelMargin + labelWidth + labelFieldGap, y, fieldWidth, fieldHeight);
+    y += fieldHeight + fieldSpacing;
+
+    // Description label and field (taller)
+    int descHeight = fieldHeight * 2;
+    descriptionLabel.setBounds(sidePanel.getX() + panelMargin, y, labelWidth, fieldHeight);
+    descriptionEditor.setBounds(sidePanel.getX() + panelMargin + labelWidth + labelFieldGap, y, fieldWidth, descHeight);
+    y += descHeight + fieldSpacing;
+
+    // Buttons at the bottom of side panel (unchanged)
+    int buttonHeight = 32;
+    int buttonWidth = (sidePanel.getWidth() - 4 * panelMargin) / 3;
+    int buttonY = sidePanel.getBottom() - buttonHeight - panelMargin;
+    saveButton.setBounds(sidePanel.getX() + panelMargin, buttonY, buttonWidth, buttonHeight);
+    cancelButton.setBounds(sidePanel.getX() + panelMargin + buttonWidth + panelMargin, buttonY, buttonWidth, buttonHeight);
+    loadGraphButton.setBounds(sidePanel.getX() + panelMargin + 2 * (buttonWidth + panelMargin), buttonY, buttonWidth, buttonHeight);
+
+    // --- Main area for graph editor ---
     if (graphEditor != nullptr)
     {
         graphEditor->setBounds(area);
+        DBG("[PlayerEditorComponent::resized] graphEditor bounds: " << graphEditor->getBounds().toString());
     }
 }
 
 void PlayerEditorComponent::paint(Graphics& g)
 {
     g.fillAll(getLookAndFeel().findColour(ResizableWindow::backgroundColourId));
-    
-    g.setColour(Colours::white);
-    g.setFont(14.0f);
-    
-    // Draw labels for the form fields
-    auto labelWidth = 100;
-    auto fieldHeight = 24;
-    auto margin = 10;
-    auto y = 0;
-    
-    // Name label
-    g.drawText("Name:", 0, y, labelWidth, fieldHeight, Justification::centredRight, true);
-    y += fieldHeight + margin;
-    
-    // Category label
-    g.drawText("Category:", 0, y, labelWidth, fieldHeight, Justification::centredRight, true);
-    y += fieldHeight + margin;
-    
-    // Description label
-    g.drawText("Description:", 0, y, labelWidth, fieldHeight, Justification::centredRight, true);
+
+    // Draw separator for side panel
+    const int sidePanelWidth = 320;
+    g.setColour(Colours::darkgrey.withAlpha(0.4f));
+    g.drawLine((float)sidePanelWidth, 0.0f, (float)sidePanelWidth, (float)getHeight(), 2.0f);
 }
+
 
 void PlayerEditorComponent::mouseDown(const MouseEvent& e)
 {

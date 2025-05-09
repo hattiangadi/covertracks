@@ -817,7 +817,23 @@ GraphEditorPanel::~GraphEditorPanel()
 
 void GraphEditorPanel::paint (Graphics& g)
 {
-    g.fillAll (getLookAndFeel().findColour (ResizableWindow::backgroundColourId));
+    // Fill background with white
+    g.fillAll (Colours::white);
+
+    // Draw a subtle grid
+    Colour gridColour = Colour (0xffe0e0e0); // Light gray
+    int gridSpacing = 24;
+    auto bounds = getLocalBounds();
+    for (int x = bounds.getX(); x < bounds.getRight(); x += gridSpacing)
+    {
+        g.setColour (gridColour);
+        g.drawLine ((float)x, (float)bounds.getY(), (float)x, (float)bounds.getBottom(), 1.0f);
+    }
+    for (int y = bounds.getY(); y < bounds.getBottom(); y += gridSpacing)
+    {
+        g.setColour (gridColour);
+        g.drawLine ((float)bounds.getX(), (float)y, (float)bounds.getRight(), (float)y, 1.0f);
+    }
 }
 
 void GraphEditorPanel::mouseDown(const MouseEvent& e)
@@ -936,6 +952,7 @@ GraphEditorPanel::PinComponent* GraphEditorPanel::findPinAt (Point<float> pos) c
 
 void GraphEditorPanel::resized()
 {
+    DBG("[GraphEditorPanel::resized] bounds: " << getBounds().toString());
     updateComponents();
 }
 
@@ -1094,9 +1111,18 @@ struct GraphDocumentComponent::TooltipBar final : public Component,
 
     void paint (Graphics& g) override
     {
-        g.setFont (FontOptions ((float) getHeight() * 0.7f, Font::bold));
-        g.setColour (Colours::black);
-        g.drawFittedText (tip, 10, 0, getWidth() - 12, getHeight(), Justification::centredLeft, 1);
+        // Draw a dark gray background for the status bar
+        Colour bgColour = Colour (0xff23272a); // Dark gray
+        g.setColour (bgColour);
+        g.fillRect (getLocalBounds());
+
+        // Draw tooltip overlay if present
+        if (!tip.isEmpty())
+        {
+            g.setFont (FontOptions ((float) getHeight() * 0.7f, Font::bold));
+            g.setColour (Colours::white);
+            g.drawFittedText (tip, 10, 0, getWidth() - 12, getHeight(), Justification::centredLeft, 1);
+        }
     }
 
     void timerCallback() override
@@ -1365,7 +1391,7 @@ void GraphDocumentComponent::resized()
 
         if (auto* display = Desktop::getInstance().getDisplays().getDisplayForRect (getScreenBounds()))
             return display->safeAreaInsets.subtractedFrom (bounds);
-
+        DBG("GraphDocumentComponent::resized: bounds: " << bounds.toString());
         return bounds;
     }();
 
