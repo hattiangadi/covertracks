@@ -452,6 +452,14 @@ void PlayerEditorComponent::timerCallback()
             // Now restore the graph state - this should work correctly since the audio device is initialized
             graphEditor->graph->restoreFromXml(*graphState);
             
+            // Make sure the graph panel is updated to display the plugins
+            if (graphEditor->graphPanel != nullptr)
+            {
+                graphEditor->graphPanel->updateComponents();
+                graphEditor->graphPanel->repaint();
+                std::cout << "PlayerEditorComponent::timerCallback - Updated graph panel to display plugins" << std::endl;
+            }
+            
             // Check if audio output nodes have the correct channel configuration
             if (graphEditor->graph != nullptr)
             {
