@@ -210,38 +210,98 @@ void PlayerEditorComponent::buttonClicked(Button* button)
     }
     else if (button == &loadGraphButton)
     {
-        // Show a file chooser to load a graph file
-        FileChooser chooser("Select a graph file to load...",
-                            File::getSpecialLocation(File::userHomeDirectory),
-                            "*.filtergraph");
+        std::cout << "Load Graph button clicked" << std::endl;
         
-        // Use launchAsync instead of browseForFileToOpen
-        chooser.launchAsync(FileBrowserComponent::openMode, [this](const FileChooser& fc)
+        // Check if graphEditor is valid
+        if (graphEditor == nullptr)
         {
-            auto file = fc.getResult();
-            
-            if (file.existsAsFile())
+            std::cerr << "ERROR: graphEditor is null" << std::endl;
+            return;
+        }
+        
+        if (graphEditor->graph == nullptr)
+        {
+            std::cerr << "ERROR: graphEditor->graph is null" << std::endl;
+            return;
+        }
+        
+        std::cout << "Opening file chooser dialog using FileBasedDocument's loadFromUserSpecifiedFileAsync" << std::endl;
+        
+        // Use the FileBasedDocument method to load a file asynchronously
+        graphEditor->graph->loadFromUserSpecifiedFileAsync(true, [this](Result result)
+        {
+            if (result.wasOk())
             {
-                // Load the graph file
-                auto xml = XmlDocument::parse(file);
+                std::cout << "Graph loaded successfully" << std::endl;
                 
-                if (xml != nullptr && graphEditor != nullptr)
+                // Get the XML representation of the loaded graph
+                auto xml = graphEditor->graph->createXml();
+                
+                if (xml != nullptr)
                 {
-                    // Update the graph editor
-                    graphEditor->graph->restoreFromXml(*xml);
+                    // The graph is already loaded by loadFromUserSpecifiedFileAsync
+                    // Now we just need to update the UI and player
+                    std::cout << "Updating UI from loaded graph" << std::endl;
+                    
+                    // Force the graph panel to update
+                    if (graphEditor != nullptr && graphEditor->graphPanel != nullptr)
+                    {
+                        std::cout << "Updating graph panel components" << std::endl;
+                        graphEditor->graphPanel->updateComponents();
+                        graphEditor->repaint();
+                        std::cout << "Graph panel updated" << std::endl;
+                    }
+                    else
+                    {
+                        std::cerr << "ERROR: graphEditor or graphPanel is null" << std::endl;
+                    }
                     
                     // Update the player's graph state by loading it
                     if (player != nullptr)
                     {
+                        std::cout << "Loading graph into player" << std::endl;
                         player->loadPluginGraph(*xml);
+                        std::cout << "Graph loaded into player" << std::endl;
+                        
+                        // Check if the audio output nodes have the correct channel configuration
+                        if (player->getInstrument() != nullptr && player->getInstrument()->getPluginGraph() != nullptr)
+                        {
+                            auto* pluginGraph = player->getInstrument()->getPluginGraph();
+                            for (auto* node : pluginGraph->graph.getNodes())
+                            {
+                                if (auto* processor = node->getProcessor())
+                                {
+                                    if (auto* ioProcessor = dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(processor))
+                                    {
+                                        if (ioProcessor->getType() == AudioProcessorGraph::AudioGraphIOProcessor::audioOutputNode)
+                                        {
+                                            std::cout << "Audio output node has " << ioProcessor->getTotalNumInputChannels() 
+                                                      << " input channels after loading" << std::endl;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        std::cerr << "ERROR: player is null" << std::endl;
                     }
                 }
+                else
+                {
+                    std::cerr << "ERROR: Failed to create XML from graph" << std::endl;
+                }
+            }
+            else
+            {
+                std::cerr << "Failed to load graph: " << result.getErrorMessage() << std::endl;
             }
         });
     }
 }
 
-void PlayerEditorComponent::createPlugin(const PluginDescriptionAndPreference& desc, Point<int> pos)
+void covertracks::PlayerEditorComponent::createPlugin(const covertracks::PluginDescriptionAndPreference& desc, Point<int> pos)
 {
     // Create a plugin in the graph editor
     if (graphEditor != nullptr && graphEditor->graph != nullptr)
@@ -294,7 +354,7 @@ void PlayerEditorComponent::createPlugin(const PluginDescriptionAndPreference& d
     }
 }
 
-void PlayerEditorComponent::addPluginsToMenu(PopupMenu& menu)
+void covertracks::PlayerEditorComponent::addPluginsToMenu(PopupMenu& menu)
 {
     // Get the main window to access the plugin list
     if (auto* mainWindow = dynamic_cast<MainHostWindow*>(getTopLevelComponent()))
@@ -303,7 +363,7 @@ void PlayerEditorComponent::addPluginsToMenu(PopupMenu& menu)
     }
 }
 
-std::optional<PluginDescriptionAndPreference> PlayerEditorComponent::getChosenType(int menuID) const
+std::optional<covertracks::PluginDescriptionAndPreference> covertracks::PlayerEditorComponent::getChosenType(int menuID) const
 {
     // Get the main window to access the plugin descriptions
     if (auto* mainWindow = dynamic_cast<MainHostWindow*>(getTopLevelComponent()))
@@ -314,9 +374,9 @@ std::optional<PluginDescriptionAndPreference> PlayerEditorComponent::getChosenTy
     return std::nullopt;
 }
 
-void PlayerEditorComponent::addToMenu(const KnownPluginList::PluginTree& /*tree*/,
-                                     PopupMenu& menu,
-                                     const Array<PluginDescription>& allPlugins,
+void covertracks::PlayerEditorComponent::addToMenu(const KnownPluginList::PluginTree& /*tree*/,
+                                    PopupMenu& menu,
+                                    const Array<PluginDescription>& allPlugins,
                                      Array<PluginDescriptionAndPreference>& addedPlugins)
 {
     // Add all plugins to the menu
@@ -331,7 +391,7 @@ void PlayerEditorComponent::addToMenu(const KnownPluginList::PluginTree& /*tree*
     }
 }
 
-void PlayerEditorComponent::takeOwnershipOfPlayer(std::unique_ptr<Player> newPlayer)
+void covertracks::PlayerEditorComponent::takeOwnershipOfPlayer(std::unique_ptr<Player> newPlayer)
 {
     // Take ownership of the player
     ownedPlayer = std::move(newPlayer);
@@ -341,7 +401,7 @@ void PlayerEditorComponent::takeOwnershipOfPlayer(std::unique_ptr<Player> newPla
     updateUIFromPlayer();
 }
 
-void PlayerEditorComponent::updatePlayerFromUI()
+void covertracks::PlayerEditorComponent::updatePlayerFromUI()
 {
     if (player != nullptr)
     {
@@ -364,7 +424,7 @@ void PlayerEditorComponent::updatePlayerFromUI()
     }
 }
 
-void PlayerEditorComponent::updateUIFromPlayer()
+void covertracks::PlayerEditorComponent::updateUIFromPlayer()
 {
     if (player == nullptr)
     {
@@ -397,17 +457,17 @@ void PlayerEditorComponent::updateUIFromPlayer()
     std::cout << "PlayerEditorComponent::updateUIFromPlayer - Complete" << std::endl;
 }
 
-void PlayerEditorComponent::addListener(Listener* listener)
+void covertracks::PlayerEditorComponent::addListener(Listener* listener)
 {
     listeners.add(listener);
 }
 
-void PlayerEditorComponent::removeListener(Listener* listener)
+void covertracks::PlayerEditorComponent::removeListener(Listener* listener)
 {
     listeners.remove(listener);
 }
 
-void PlayerEditorComponent::timerCallback()
+void covertracks::PlayerEditorComponent::timerCallback()
 {
     // This is called after a short delay to ensure the audio device is fully initialized
     // and the AudioGraphIOProcessor nodes have the correct channel configuration
@@ -481,7 +541,7 @@ void PlayerEditorComponent::timerCallback()
         }
         else
         {
-            std::cout << "PlayerEditorComponent::timerCallback - No graph state available" << std::endl;
+            std::cout << "PlayerEditorComponent::timerCallback - No graph state available";
         }
     }
 }

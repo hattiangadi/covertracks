@@ -525,7 +525,27 @@ void PluginGraph::createNodeFromXml (const XmlElement& xml)
                 MemoryBlock m;
                 m.fromBase64Encoding (state->getAllSubText());
 
-                node->getProcessor()->setStateInformation (m.getData(), (int) m.getSize());
+                // Add safety check to prevent crash
+                if (node->getProcessor() != nullptr)
+                {
+                    try
+                    {
+                        std::cout << "Setting state information for node: " << node->nodeID.uid << std::endl;
+                        node->getProcessor()->setStateInformation (m.getData(), (int) m.getSize());
+                    }
+                    catch (const std::exception& e)
+                    {
+                        std::cerr << "Exception when setting state information: " << e.what() << std::endl;
+                    }
+                    catch (...)
+                    {
+                        std::cerr << "Unknown exception when setting state information" << std::endl;
+                    }
+                }
+                else
+                {
+                    std::cerr << "Cannot set state information: processor is null for node " << node->nodeID.uid << std::endl;
+                }
             }
 
             node->properties.set ("x", xml.getDoubleAttribute ("x"));
