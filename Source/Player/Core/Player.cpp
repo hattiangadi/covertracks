@@ -173,7 +173,40 @@ bool Player::loadPluginGraph(const XmlElement& graphState)
             return false;
         }
         
-        return instrument->loadPluginGraph(graphState);
+        // Debug: Count connections in the graph state
+        int connectionCount = 0;
+        int midiConnectionCount = 0;
+        int audioConnectionCount = 0;
+        
+        for (auto* conn : graphState.getChildWithTagNameIterator("CONNECTION"))
+        {
+            connectionCount++;
+            
+            auto srcChannel = conn->getIntAttribute("srcChannel");
+            auto dstChannel = conn->getIntAttribute("dstChannel");
+            
+            // Get connection type if available
+            String type = conn->hasAttribute("type") ? conn->getStringAttribute("type") : "unknown";
+            bool isMidi = (type == "midi") || srcChannel == 4096 || dstChannel == 4096;
+            
+            if (isMidi)
+                midiConnectionCount++;
+            else
+                audioConnectionCount++;
+        }
+        
+        std::cout << "Player " << metadata.name << " loading graph with " << connectionCount 
+                  << " connections (MIDI: " << midiConnectionCount 
+                  << ", Audio: " << audioConnectionCount << ")" << std::endl;
+        
+        bool result = instrument->loadPluginGraph(graphState);
+        
+        if (result)
+            std::cout << "Graph loaded successfully for player " << metadata.name << std::endl;
+        else
+            std::cerr << "Failed to load graph for player " << metadata.name << std::endl;
+            
+        return result;
     }
     catch (const std::exception& e)
     {

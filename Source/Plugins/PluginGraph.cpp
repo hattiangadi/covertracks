@@ -559,18 +559,54 @@ std::unique_ptr<XmlElement> PluginGraph::createXml() const
 {
     auto xml = std::make_unique<XmlElement> ("FILTERGRAPH");
 
+    // Save all nodes
+    int nodeCount = 0;
     for (auto* node : graph.getNodes())
+    {
         xml->addChildElement (createNodeXml (node));
+        nodeCount++;
+    }
+    std::cout << "Saving " << nodeCount << " nodes to XML" << std::endl;
 
+    // Then save all connections
+    int connectionCount = 0;
+    int midiConnectionCount = 0;
+    int audioConnectionCount = 0;
+    
     for (auto& connection : graph.getConnections())
     {
-        auto e = xml->createNewChildElement ("CONNECTION");
+        auto* e = xml->createNewChildElement ("CONNECTION");
 
         e->setAttribute ("srcFilter", (int) connection.source.nodeID.uid);
         e->setAttribute ("srcChannel", connection.source.channelIndex);
         e->setAttribute ("dstFilter", (int) connection.destination.nodeID.uid);
         e->setAttribute ("dstChannel", connection.destination.channelIndex);
+        
+        // Determine if this is a MIDI or audio connection
+        bool isMidi = connection.source.isMIDI() || connection.destination.isMIDI();
+        if (isMidi)
+        {
+            e->setAttribute ("type", "midi");
+            midiConnectionCount++;
+        }
+        else
+        {
+            e->setAttribute ("type", "audio");
+            audioConnectionCount++;
+        }
+        
+        connectionCount++;
+        std::cout << "Saving connection " << connectionCount << ": " 
+                  << connection.source.nodeID.uid << "/" << connection.source.channelIndex
+                  << " -> " 
+                  << connection.destination.nodeID.uid << "/" << connection.destination.channelIndex
+                  << " (" << (isMidi ? "MIDI" : "Audio") << ")"
+                  << std::endl;
     }
+    
+    std::cout << "Total connections saved: " << connectionCount 
+              << " (MIDI: " << midiConnectionCount 
+              << ", Audio: " << audioConnectionCount << ")" << std::endl;
 
     return xml;
 }
@@ -579,19 +615,176 @@ void PluginGraph::restoreFromXml (const XmlElement& xml)
 {
     clear();
 
+    // First restore all nodes
+    int nodeCount = 0;
     for (auto* e : xml.getChildWithTagNameIterator ("FILTER"))
     {
         createNodeFromXml (*e);
         changed();
+        nodeCount++;
+    }
+    std::cout << "Restored " << nodeCount << " nodes" << std::endl;
+    
+    // Ensure audio output node is properly configured
+    for (auto* node : graph.getNodes())
+    {
+        if (auto* processor = node->getProcessor())
+        {
+            if (auto* ioProcessor = dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(processor))
+            {
+                if (ioProcessor->getType() == AudioProcessorGraph::AudioGraphIOProcessor::audioOutputNode)
+                {
+                    // Make sure the audio output node has at least 2 input channels
+                    std::cout << "Found audio output node (ID: " << node->nodeID.uid 
+                              << "), current inputs: " << ioProcessor->getTotalNumInputChannels() << std::endl;
+                    
+                    // The AudioGraphIOProcessor doesn't directly expose methods to set its channel count
+                    // but it should reflect the main output bus configuration of the parent graph
+                    // We'll add a workaround to ensure it has the right number of channels
+                    if (ioProcessor->getTotalNumInputChannels() == 0)
+                    {
+                        std::cout << "  Audio output node has 0 inputs, attempting to fix..." << std::endl;
+                        
+                        // Try to set the bus layout to match what we need
+                        AudioProcessor::BusesLayout layout = ioProcessor->getBusesLayout();
+                        if (layout.inputBuses.size() > 0)
+                        {
+                            layout.inputBuses.getReference(0) = AudioChannelSet::stereo();
+                            if (ioProcessor->setBusesLayout(layout))
+                            {
+                                std::cout << "  Successfully set audio output node to have stereo input" << std::endl;
+                            }
+                            else
+                            {
+                                std::cout << "  Failed to set audio output node bus layout" << std::endl;
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
+    // Then restore all connections
+    int connectionCount = 0;
+    int successCount = 0;
+    int midiConnectionCount = 0;
+    int audioConnectionCount = 0;
+    
     for (auto* e : xml.getChildWithTagNameIterator ("CONNECTION"))
     {
-        graph.addConnection ({ { NodeID ((uint32) e->getIntAttribute ("srcFilter")), e->getIntAttribute ("srcChannel") },
-                               { NodeID ((uint32) e->getIntAttribute ("dstFilter")), e->getIntAttribute ("dstChannel") } });
+        auto srcFilter = (uint32) e->getIntAttribute ("srcFilter");
+        auto srcChannel = e->getIntAttribute ("srcChannel");
+        auto dstFilter = (uint32) e->getIntAttribute ("dstFilter");
+        auto dstChannel = e->getIntAttribute ("dstChannel");
+        
+        // Get connection type if available
+        String type = e->hasAttribute("type") ? e->getStringAttribute("type") : "unknown";
+        bool isMidi = (type == "midi") || srcChannel == 4096 || dstChannel == 4096;
+        
+        if (isMidi)
+            midiConnectionCount++;
+        else
+            audioConnectionCount++;
+        
+        connectionCount++;
+        std::cout << "Restoring connection " << connectionCount << ": " 
+                  << srcFilter << "/" << srcChannel
+                  << " -> " 
+                  << dstFilter << "/" << dstChannel
+                  << " (" << (isMidi ? "MIDI" : "Audio") << ")"
+                  << std::endl;
+        
+        // Create the connection
+        AudioProcessorGraph::Connection connection = { 
+            { NodeID(srcFilter), srcChannel },
+            { NodeID(dstFilter), dstChannel }
+        };
+        
+        // Check if the connection can be made
+        if (graph.canConnect(connection))
+        {
+            bool result = graph.addConnection(connection);
+            if (result)
+            {
+                successCount++;
+                std::cout << "  Connection added successfully" << std::endl;
+            }
+            else
+            {
+                std::cout << "  Failed to add connection" << std::endl;
+                
+                // Debug info about the nodes
+                auto sourceNode = graph.getNodeForId(NodeID(srcFilter));
+                auto destNode = graph.getNodeForId(NodeID(dstFilter));
+                
+                if (sourceNode != nullptr && destNode != nullptr)
+                {
+                    std::cout << "  Source node: " << sourceNode->getProcessor()->getName() 
+                              << " (outputs: " << sourceNode->getProcessor()->getTotalNumOutputChannels() << ")" << std::endl;
+                    std::cout << "  Dest node: " << destNode->getProcessor()->getName() 
+                              << " (inputs: " << destNode->getProcessor()->getTotalNumInputChannels() << ")" << std::endl;
+                }
+                else
+                {
+                    std::cout << "  Source or destination node not found" << std::endl;
+                }
+            }
+        }
+        else
+        {
+            std::cout << "  Cannot make connection (incompatible types or missing nodes)" << std::endl;
+            
+            // Debug info about the nodes
+            auto sourceNode = graph.getNodeForId(NodeID(srcFilter));
+            auto destNode = graph.getNodeForId(NodeID(dstFilter));
+            
+            if (sourceNode != nullptr && destNode != nullptr)
+            {
+                std::cout << "  Source node: " << sourceNode->getProcessor()->getName() 
+                          << " (outputs: " << sourceNode->getProcessor()->getTotalNumOutputChannels() << ")" << std::endl;
+                std::cout << "  Dest node: " << destNode->getProcessor()->getName() 
+                          << " (inputs: " << destNode->getProcessor()->getTotalNumInputChannels() << ")" << std::endl;
+                
+                // Check if the channel indices are valid
+                bool validSrcChannel = srcChannel < sourceNode->getProcessor()->getTotalNumOutputChannels();
+                bool validDstChannel = dstChannel < destNode->getProcessor()->getTotalNumInputChannels();
+                
+                if (!validSrcChannel || !validDstChannel)
+                {
+                    std::cout << "  Invalid channel indices: src channel " << srcChannel 
+                              << (validSrcChannel ? " is valid" : " is invalid")
+                              << ", dst channel " << dstChannel 
+                              << (validDstChannel ? " is valid" : " is invalid") << std::endl;
+                }
+            }
+            else
+            {
+                std::cout << "  Source or destination node not found" << std::endl;
+            }
+        }
     }
+    
+    std::cout << "Successfully restored " << successCount << " out of " << connectionCount 
+              << " connections (MIDI: " << midiConnectionCount 
+              << ", Audio: " << audioConnectionCount << ")" << std::endl;
 
+    // Clean up any illegal connections
     graph.removeIllegalConnections();
+    
+    // Debug: Print all connections after restoration
+    auto connections = graph.getConnections();
+    std::cout << "After restoration, graph has " << connections.size() << " connections:" << std::endl;
+    int index = 0;
+    for (auto& connection : connections)
+    {
+        bool isMidi = connection.source.isMIDI() || connection.destination.isMIDI();
+        std::cout << "  Connection " << ++index << ": " 
+                  << connection.source.nodeID.uid << "/" << connection.source.channelIndex
+                  << " -> " 
+                  << connection.destination.nodeID.uid << "/" << connection.destination.channelIndex
+                  << " (" << (isMidi ? "MIDI" : "Audio") << ")" << std::endl;
+    }
 }
 
 File PluginGraph::getDefaultGraphDocumentOnMobile()

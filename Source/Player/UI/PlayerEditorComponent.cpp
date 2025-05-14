@@ -358,14 +358,91 @@ void PlayerEditorComponent::updatePlayerFromUI()
 
 void PlayerEditorComponent::updateUIFromPlayer()
 {
+    if (player == nullptr)
+    {
+        std::cout << "PlayerEditorComponent::updateUIFromPlayer - player is null" << std::endl;
+        return;
+    }
+    
+    std::cout << "PlayerEditorComponent::updateUIFromPlayer - Updating UI for player: " << player->getMetadata().name << std::endl;
+    
+    // Load the plugin graph state
+    if (auto graphState = player->getPluginGraphState())
+    {
+        std::cout << "PlayerEditorComponent::updateUIFromPlayer - Got graph state XML" << std::endl;
+        
+        if (graphEditor != nullptr && graphEditor->graph != nullptr)
+        {
+            // Count connections in the graph state before restoration
+            int connectionCount = 0;
+            int midiConnectionCount = 0;
+            int audioConnectionCount = 0;
+            
+            for (auto* conn : graphState->getChildWithTagNameIterator("CONNECTION"))
+            {
+                connectionCount++;
+                
+                auto srcChannel = conn->getIntAttribute("srcChannel");
+                auto dstChannel = conn->getIntAttribute("dstChannel");
+                
+                // Get connection type if available
+                String type = conn->hasAttribute("type") ? conn->getStringAttribute("type") : "unknown";
+                bool isMidi = (type == "midi") || srcChannel == 4096 || dstChannel == 4096;
+                
+                if (isMidi)
+                    midiConnectionCount++;
+                else
+                    audioConnectionCount++;
+            }
+            
+            std::cout << "PlayerEditorComponent::updateUIFromPlayer - Graph XML has " << connectionCount 
+                      << " connections (MIDI: " << midiConnectionCount 
+                      << ", Audio: " << audioConnectionCount << ")" << std::endl;
+            
+            // Restore the graph state
+            std::cout << "PlayerEditorComponent::updateUIFromPlayer - Calling graphEditor->graph->restoreFromXml" << std::endl;
+            graphEditor->graph->restoreFromXml(*graphState);
+            
+            // Check connections after restoration
+            auto connections = graphEditor->graph->graph.getConnections();
+            int restoredCount = connections.size();
+            int restoredMidiCount = 0;
+            int restoredAudioCount = 0;
+            
+            for (auto& connection : connections)
+            {
+                bool isMidi = connection.source.isMIDI() || connection.destination.isMIDI();
+                if (isMidi)
+                    restoredMidiCount++;
+                else
+                    restoredAudioCount++;
+            }
+            
+            std::cout << "PlayerEditorComponent::updateUIFromPlayer - After restoration, graph has " << restoredCount 
+                      << " connections (MIDI: " << restoredMidiCount 
+                      << ", Audio: " << restoredAudioCount << ")" << std::endl;
+        }
+        else
+        {
+            std::cout << "PlayerEditorComponent::updateUIFromPlayer - graphEditor or graph is null, cannot restore" << std::endl;
+        }
+    }
+    else
+    {
+        std::cout << "PlayerEditorComponent::updateUIFromPlayer - No graph state available" << std::endl;
+    }
+    
+    // Update the UI components
     if (player != nullptr)
     {
-        // Update UI components
+        std::cout << "PlayerEditorComponent::updateUIFromPlayer - Updating UI components" << std::endl;
         auto& metadata = player->getMetadata();
         nameEditor.setText(metadata.name);
         categoryEditor.setText(metadata.category);
         descriptionEditor.setText(metadata.description);
     }
+    
+    std::cout << "PlayerEditorComponent::updateUIFromPlayer - Complete" << std::endl;
 }
 
 void PlayerEditorComponent::addListener(Listener* listener)
