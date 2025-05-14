@@ -338,7 +338,7 @@ MainHostWindow::MainHostWindow()
     knownPluginList.setCustomScanner (std::make_unique<CustomPluginScanner>());
 
     // Create a PlayerManager instance
-    playerManager = std::make_shared<PlayerManager>();
+    playerManager = std::make_shared<PlayerManager>(formatManager, knownPluginList);
     
     // Create PlayerLibraryComponent as the main content
     playerLibraryWindow = std::make_unique<PlayerLibraryComponent>(playerManager);
@@ -914,4 +914,3 @@ void covertracks::MainHostWindow::updateAutoScaleMenuItem (ApplicationCommandInf
     info.setInfo ("Auto-Scale Plugin Windows", {}, "General", 0);
     info.setTicked (isAutoScalePluginWindowsEnabled());
 }
-

@@ -3,7 +3,10 @@
 
 namespace covertracks {
 
-PlayerManager::PlayerManager()
+PlayerManager::PlayerManager(AudioPluginFormatManager& fm,
+                           KnownPluginList& kpl)
+    : formatManager(fm),
+      knownPluginList(kpl)
 {
     loadAllPlayers();
 }
@@ -54,26 +57,49 @@ bool PlayerManager::savePlayer(Player* player)
     auto& metadata = player->getMetadata();
     metadata.lastModified = Time::getCurrentTime();
     
+    // Make sure the player is in our list
+    bool playerInList = false;
+    for (auto* existingPlayer : players)
+    {
+        if (existingPlayer == player)
+        {
+            playerInList = true;
+            break;
+        }
+    }
+    
+    // If the player isn't in our list, add it
+    if (!playerInList)
+    {
+        std::cout << "Adding player to manager: " << metadata.name << std::endl;
+        players.add(player);
+    }
+    
     // Convert to JSON
     var playerJson = player->toVar();
     
     // Get the file path
-    File playerFile = getPlayersDirectory().getChildFile(metadata.name + ".json");
+    File playerFile = getPlayersDirectory().getChildFile(metadata.name + ".player");
     
     // Save to file
     String jsonStr = JSON::toString(playerJson);
-    return playerFile.replaceWithText(jsonStr);
+    bool success = playerFile.replaceWithText(jsonStr);
+    
+    if (success)
+        std::cout << "Saved player to file: " << playerFile.getFullPathName() << std::endl;
+    else
+        std::cout << "Failed to save player to file: " << playerFile.getFullPathName() << std::endl;
+        
+    return success;
 }
 
 std::unique_ptr<Player> PlayerManager::createPlayer()
 {
     // Generate a unique ID
-    String playerId = String::toHexString(Random::getSystemRandom().nextInt());
+    String id = String::toHexString(Random::getSystemRandom().nextInt());
     
     // Create a new player with default settings
-    auto player = std::make_unique<Player>(playerId, "New Player");
-    
-    // Initialize it
+    auto player = std::make_unique<Player>(id, "New Player", formatManager, knownPluginList);
     player->initialize();
     
     // Set default metadata
@@ -89,15 +115,20 @@ std::unique_ptr<Player> PlayerManager::createPlayer()
 std::unique_ptr<Player> PlayerManager::loadPlayer(const File& file)
 {
     if (!file.existsAsFile())
-    {
         return nullptr;
+    
+    // Read the file content
+    String content = file.loadFileAsString();
+    var json;
+    Result result = JSON::parse(content, json);
+    
+    if (result.wasOk() && json.isObject())
+    {
+        // Use the fromVar method to create a player with the shared format manager and plugin list
+        return Player::fromVar(json, formatManager, knownPluginList);
     }
     
-    // Read the file
-    auto json = JSON::parse(file);
-    
-    // Convert to player
-    return Player::fromVar(json);
+    return nullptr;
 }
 
 bool PlayerManager::deletePlayer(Player* player)
@@ -140,16 +171,54 @@ void PlayerManager::loadAllPlayers()
     
     // Get the players directory
     File playersDir = getPlayersDirectory();
-    playersDir.createDirectory();
+    std::cout << "Loading players from directory: " << playersDir.getFullPathName() << std::endl;
     
-    // Load all JSON files
-    for (auto& file : playersDir.findChildFiles(File::findFiles, false, "*.json"))
+    // Create the directory if it doesn't exist
+    if (!playersDir.exists())
     {
-        if (auto player = loadPlayer(file))
+        std::cout << "Players directory doesn't exist, creating it." << std::endl;
+        playersDir.createDirectory();
+        return;
+    }
+    
+    // Load all player files
+    Array<File> playerFiles;
+    
+    // Try both .player and .json extensions since we might have old files
+    playersDir.findChildFiles(playerFiles, File::findFiles, false, "*.player");
+    std::cout << "Found " << playerFiles.size() << " .player files" << std::endl;
+    
+    // Also look for .json files and add them to the array
+    Array<File> jsonFiles;
+    playersDir.findChildFiles(jsonFiles, File::findFiles, false, "*.json");
+    std::cout << "Found " << jsonFiles.size() << " .json files" << std::endl;
+    
+    // Add json files to player files
+    playerFiles.addArray(jsonFiles);
+    
+    if (playerFiles.isEmpty())
+    {
+        std::cout << "No player files found in directory" << std::endl;
+        return;
+    }
+    
+    // Load each player file
+    for (auto& file : playerFiles)
+    {
+        std::cout << "Loading player from file: " << file.getFileName() << std::endl;
+        auto player = loadPlayer(file);
+        if (player != nullptr)
         {
-            players.add(player.release());
+            std::cout << "Successfully loaded player: " << player->getMetadata().name << std::endl;
+            addPlayer(std::move(player));
+        }
+        else
+        {
+            std::cout << "Failed to load player from file: " << file.getFileName() << std::endl;
         }
     }
+    
+    std::cout << "Loaded " << players.size() << " players in total" << std::endl;
 }
 
 } // namespace covertracks

@@ -1027,6 +1027,14 @@ void GraphEditorPanel::dragConnector (const MouseEvent& e)
             if (connection.source.nodeID == AudioProcessorGraph::NodeID() && ! pin->isInput)
             {
                 connection.source = pin->pin;
+                
+                // Set the initial position to the pin's position
+                if (auto* sourcePin = dynamic_cast<PinComponent*>(e.originalComponent))
+                {
+                    auto sourcePos = (sourcePin->getParentComponent()->getPosition() + 
+                                     sourcePin->getBounds().getCentre()).toFloat();
+                    draggingConnector->dragStart(sourcePos);
+                }
             }
             else if (connection.destination.nodeID == AudioProcessorGraph::NodeID() && pin->isInput)
             {
@@ -1076,7 +1084,11 @@ void GraphEditorPanel::endDraggingConnector (const MouseEvent& e)
             connection.destination = pin->pin;
         }
 
-        graph.graph.addConnection (connection);
+        if (graph.graph.addConnection (connection))
+        {
+            // Connection was successfully added, update the components to show it
+            updateComponents();
+        }
     }
 }
 

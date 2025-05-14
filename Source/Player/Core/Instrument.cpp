@@ -3,23 +3,16 @@
 
 namespace covertracks {
 
-Instrument::Instrument(const String& name)
+Instrument::Instrument(const String& name, 
+                   AudioPluginFormatManager& formatManager,
+                   KnownPluginList& knownPluginList)
     : instrumentName(name), 
-      deviceManager(std::make_unique<AudioDeviceManager>())
+      deviceManager(std::make_unique<AudioDeviceManager>()),
+      formatManager(formatManager),
+      knownPluginList(knownPluginList)
 {
-    // Create format manager and plugin list for the graph
-    auto formatManager = std::make_unique<AudioPluginFormatManager>();
-    formatManager->addDefaultFormats();
-    
-    auto knownPluginList = std::make_unique<KnownPluginList>();
-    
-    // Initialize the plugin graph
-    pluginGraph = std::make_unique<PluginGraph>(*formatManager, *knownPluginList);
-    
-    // Store the format manager and plugin list as they're needed by the graph
-    // We need to keep these alive as long as the graph exists
-    pluginFormatManager = std::move(formatManager);
-    pluginList = std::move(knownPluginList);
+    // Initialize the plugin graph with the shared format manager and plugin list
+    pluginGraph = std::make_unique<PluginGraph>(formatManager, knownPluginList);
     
     // Output initialization message
     std::cout << "Creating Instrument: " << name << std::endl;
@@ -98,27 +91,47 @@ void Instrument::initialize()
 
 bool Instrument::loadPluginGraph(const XmlElement& graphState)
 {
-    // Check if the XML is valid
-    if (!graphState.hasTagName("FILTERGRAPH"))
+    try
     {
-        std::cerr << "Invalid plugin graph XML for " << instrumentName << std::endl;
+        // Check if the XML is valid
+        if (!graphState.hasTagName("FILTERGRAPH"))
+        {
+            std::cerr << "Invalid plugin graph XML for " << instrumentName << std::endl;
+            return false;
+        }
+        
+        // Ensure we have a processor graph
+        if (processorGraph == nullptr)
+        {
+            processorGraph = std::make_unique<AudioProcessorGraph>();
+        }
+        
+        // Ensure we have a plugin graph
+        if (pluginGraph == nullptr)
+        {
+            std::cerr << "Plugin graph is null for " << instrumentName << std::endl;
+            return false;
+        }
+        
+        // Restore the plugin graph from XML
+        pluginGraph->restoreFromXml(graphState);
+        
+        // In a real implementation, we would need to update the processor graph
+        // based on the plugin graph configuration
+        
+        std::cout << "Plugin graph loaded successfully for " << instrumentName << std::endl;
+        return true;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Exception in Instrument::loadPluginGraph: " << e.what() << std::endl;
         return false;
     }
-    
-    // Ensure we have a processor graph
-    if (processorGraph == nullptr)
+    catch (...)
     {
-        processorGraph = std::make_unique<AudioProcessorGraph>();
+        std::cerr << "Unknown exception in Instrument::loadPluginGraph" << std::endl;
+        return false;
     }
-    
-    // Restore the plugin graph from XML
-    pluginGraph->restoreFromXml(graphState);
-    
-    // In a real implementation, we would need to update the processor graph
-    // based on the plugin graph configuration
-    
-    std::cout << "Plugin graph loaded successfully for " << instrumentName << std::endl;
-    return true;
 }
 
 std::unique_ptr<XmlElement> Instrument::getPluginGraphState()

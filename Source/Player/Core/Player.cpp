@@ -31,8 +31,12 @@ void PlayerMetadata::fromVar(const var& v)
 }
 
 // Player implementation
-Player::Player(const String& playerId, const String& name)
-    : id(playerId)
+Player::Player(const String& playerId, const String& name,
+               AudioPluginFormatManager& formatManager,
+               KnownPluginList& knownPluginList)
+    : id(playerId),
+      formatManager(formatManager),
+      knownPluginList(knownPluginList)
 {
     // Initialize metadata
     metadata.name = name;
@@ -57,7 +61,7 @@ bool Player::initialize()
     // Create instrument if needed
     if (instrument == nullptr)
     {
-        instrument = std::make_unique<Instrument>(metadata.name);
+        instrument = std::make_unique<Instrument>(metadata.name, formatManager, knownPluginList);
         
         // Set up pattern finished callback
         instrument->setPatternFinishedCallback([this]() {
@@ -154,13 +158,33 @@ bool Player::initialize()
 
 bool Player::loadPluginGraph(const XmlElement& graphState)
 {
-    if (instrument == nullptr)
+    try
     {
-        std::cerr << "Cannot load plugin graph: instrument not initialized" << std::endl;
+        if (instrument == nullptr)
+        {
+            std::cerr << "Cannot load plugin graph: instrument not initialized" << std::endl;
+            return false;
+        }
+        
+        // Check if the XML is valid
+        if (!graphState.hasTagName("FILTERGRAPH"))
+        {
+            std::cerr << "Invalid plugin graph XML for player " << id << ": wrong root tag" << std::endl;
+            return false;
+        }
+        
+        return instrument->loadPluginGraph(graphState);
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Exception in loadPluginGraph: " << e.what() << std::endl;
         return false;
     }
-    
-    return instrument->loadPluginGraph(graphState);
+    catch (...)
+    {
+        std::cerr << "Unknown exception in loadPluginGraph" << std::endl;
+        return false;
+    }
 }
 
 std::unique_ptr<XmlElement> Player::getPluginGraphState()
@@ -273,6 +297,9 @@ var Player::toVar() const
 {
     DynamicObject* obj = new DynamicObject();
     
+    // Add ID to ensure it's preserved
+    obj->setProperty("id", id);
+    
     // Add metadata
     obj->setProperty("metadata", metadata.toVar());
     
@@ -282,9 +309,29 @@ var Player::toVar() const
         auto graphState = instrument->getPluginGraphState();
         if (graphState != nullptr)
         {
-            // Convert the graph state (which includes plugin states) to base64
+            try
+            {
+                // Convert the graph state (which includes plugin states) to base64
+                MemoryOutputStream mo;
+                graphState->writeTo(mo, {});
+                obj->setProperty("pluginGraph", mo.getMemoryBlock().toBase64Encoding());
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "Error serializing graph state: " << e.what() << std::endl;
+                // Create an empty graph state to avoid crashes
+                auto emptyGraph = std::make_unique<XmlElement>("FILTERGRAPH");
+                MemoryOutputStream mo;
+                emptyGraph->writeTo(mo, {});
+                obj->setProperty("pluginGraph", mo.getMemoryBlock().toBase64Encoding());
+            }
+        }
+        else
+        {
+            // Create an empty graph state to avoid crashes
+            auto emptyGraph = std::make_unique<XmlElement>("FILTERGRAPH");
             MemoryOutputStream mo;
-            graphState->writeTo(mo, {});
+            emptyGraph->writeTo(mo, {});
             obj->setProperty("pluginGraph", mo.getMemoryBlock().toBase64Encoding());
         }
     }
@@ -296,39 +343,40 @@ var Player::toVar() const
     return var(obj);
 }
 
-std::unique_ptr<Player> Player::fromVar(const var& v)
+std::unique_ptr<Player> Player::fromVar(const var& v, AudioPluginFormatManager& formatManager, KnownPluginList& knownPluginList)
 {
-    if (auto* obj = v.getDynamicObject())
+    if (v.isObject())
     {
+        auto obj = v.getDynamicObject();
+        if (obj == nullptr)
+            return nullptr;
+        
         // Extract ID and name
-        String playerId = obj->getProperty("id").toString();
+        String playerId;
+        String name = "Unknown Player";
         
-        // If ID is missing, generate a new one
-        if (playerId.isEmpty())
-        {
-            // Generate a random ID
+        if (obj->hasProperty("id"))
+            playerId = obj->getProperty("id").toString();
+        else
             playerId = String::toHexString(Random::getSystemRandom().nextInt());
-        }
         
-        // Get metadata
-        var metadataVar = obj->getProperty("metadata");
-        String name;
-        
-        if (auto* metadataObj = metadataVar.getDynamicObject())
+        if (obj->hasProperty("metadata"))
         {
-            name = metadataObj->getProperty("name").toString();
+            auto metadataVar = obj->getProperty("metadata");
+            if (metadataVar.isObject())
+            {
+                auto metadataObj = metadataVar.getDynamicObject();
+                if (metadataObj != nullptr && metadataObj->hasProperty("name"))
+                    name = metadataObj->getProperty("name").toString();
+            }
         }
         
-        if (name.isEmpty())
-        {
-            name = "Unnamed Player";
-        }
-        
-        // Create the player
-        auto player = std::make_unique<Player>(playerId, name);
+        // Create the player with the provided format manager and plugin list
+        auto player = std::make_unique<Player>(playerId, name, formatManager, knownPluginList);
         
         // Load metadata
-        player->metadata.fromVar(metadataVar);
+        if (obj->hasProperty("metadata"))
+            player->metadata.fromVar(obj->getProperty("metadata"));
         
         // Initialize the player
         player->initialize();
@@ -348,14 +396,12 @@ std::unique_ptr<Player> Player::fromVar(const var& v)
             }
         }
         
-        // Load musician state if available
-        // This is a placeholder for future implementation
-        
         return player;
     }
     
     // If parsing failed, return a default player
-    return std::make_unique<Player>(String::toHexString(Random::getSystemRandom().nextInt()), "Default Player");
+    return std::make_unique<Player>(String::toHexString(Random::getSystemRandom().nextInt()), 
+                                  "Default Player", formatManager, knownPluginList);
 }
 
 } // namespace covertracks

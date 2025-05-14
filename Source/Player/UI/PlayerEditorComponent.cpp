@@ -85,32 +85,29 @@ PlayerEditorComponent::PlayerEditorComponent(Player* playerToEdit, MainHostWindo
             }
             else
             {
-                // Last resort: create a temporary environment
-                DBG("WARNING: MainHostWindow not found, creating temporary plugin environment");
-                AudioPluginFormatManager formatManager;
-                formatManager.addDefaultFormats();
-                formatManager.addFormat(new InternalPluginFormat());
-                
-                AudioDeviceManager deviceManager;
-                KnownPluginList knownPluginList;
-                
-                graphEditor = std::make_unique<GraphDocumentComponent>(formatManager, deviceManager, knownPluginList);
+                // If we can't find the MainHostWindow, we can't create a GraphDocumentComponent
+                // This is a critical error since we need the shared plugin environment
+                DBG("CRITICAL ERROR: MainHostWindow not found, cannot create GraphDocumentComponent");
+                // We'll continue without a graph editor, but functionality will be limited
             }
         }
         
-        if (graphEditor->graphPanel)
-            graphEditor->graphPanel->setOwnerPlayerEditorComponent(this);
-        addAndMakeVisible(graphEditor.get());
-        
-        // Load the graph state if available
-        auto graphState = player->getPluginGraphState();
-        if (graphState != nullptr)
+        if (graphEditor != nullptr)
         {
-            graphEditor->graph->restoreFromXml(*graphState);
+            if (graphEditor->graphPanel)
+                graphEditor->graphPanel->setOwnerPlayerEditorComponent(this);
+            addAndMakeVisible(graphEditor.get());
+            
+            // Load the graph state if available
+            auto graphState = player->getPluginGraphState();
+            if (graphState != nullptr)
+            {
+                graphEditor->graph->restoreFromXml(*graphState);
+            }
+            
+            // Update the UI from the player data
+            updateUIFromPlayer();
         }
-        
-        // Update the UI from the player data
-        updateUIFromPlayer();
     }
 }
 
@@ -183,9 +180,9 @@ void PlayerEditorComponent::paint(Graphics& g)
 }
 
 
-void PlayerEditorComponent::mouseDown(const MouseEvent& e)
+void PlayerEditorComponent::mouseDown(const MouseEvent& /*e*/)
 {
-    // Handle mouse clicks in the graph editor
+    // Handle mouse down events in the graph editor
 }
 
 void PlayerEditorComponent::buttonClicked(Button* button)
@@ -309,17 +306,20 @@ std::optional<PluginDescriptionAndPreference> PlayerEditorComponent::getChosenTy
     return std::nullopt;
 }
 
-void PlayerEditorComponent::addToMenu(const KnownPluginList::PluginTree& tree,
-                                     PopupMenu& m,
+void PlayerEditorComponent::addToMenu(const KnownPluginList::PluginTree& /*tree*/,
+                                     PopupMenu& menu,
                                      const Array<PluginDescription>& allPlugins,
                                      Array<PluginDescriptionAndPreference>& addedPlugins)
 {
-    // For simplicity, just add all plugins in a flat list
-    for (int i = 0; i < allPlugins.size(); ++i)
+    // Add all plugins to the menu
+    for (const auto& plugin : allPlugins)
     {
-        const auto& plugin = allPlugins.getReference(i);
-        addedPlugins.add(PluginDescriptionAndPreference(plugin));
-        m.addItem(addedPlugins.size() + 1000, plugin.name + " (" + plugin.pluginFormatName + ")");
+        // Skip internal plugins
+        if (plugin.pluginFormatName == "Internal")
+            continue;
+        
+        menu.addItem(addedPlugins.size() + 1000, plugin.name + " (" + plugin.pluginFormatName + ")");
+        addedPlugins.add(PluginDescriptionAndPreference { plugin });
     }
 }
 
@@ -347,10 +347,10 @@ void PlayerEditorComponent::updatePlayerFromUI()
         // Update graph state
         if (graphEditor != nullptr)
         {
-            auto graphXml = graphEditor->graph->createXml();
-            if (graphXml != nullptr)
-            {
-                player->loadPluginGraph(*graphXml);
+                auto graphXml = graphEditor->graph->createXml();
+                if (graphXml != nullptr)
+                {
+                    player->loadPluginGraph(*graphXml);
             }
         }
     }

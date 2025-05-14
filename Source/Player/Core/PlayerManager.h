@@ -11,7 +11,15 @@ namespace covertracks {
 class PlayerManager
 {
 public:
-    PlayerManager();
+    /**
+     * @brief Construct a new Player Manager
+     * 
+     * @param formatManager Reference to the shared AudioPluginFormatManager
+     * @param knownPluginList Reference to the shared KnownPluginList
+     */
+    PlayerManager(AudioPluginFormatManager& formatManager,
+                  KnownPluginList& knownPluginList);
+                  
     ~PlayerManager();
     
     // Get all players
@@ -38,6 +46,10 @@ private:
     
     // Load all players from disk
     void loadAllPlayers();
+    
+    // References to shared plugin environment (not owned)
+    AudioPluginFormatManager& formatManager;
+    KnownPluginList& knownPluginList;
     
     // List of managed players
     OwnedArray<Player> players;

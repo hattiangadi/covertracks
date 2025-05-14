@@ -35,8 +35,12 @@ public:
      * 
      * @param id Unique identifier for this player
      * @param name Display name for this player
+     * @param formatManager Reference to the shared AudioPluginFormatManager
+     * @param knownPluginList Reference to the shared KnownPluginList
      */
-    Player(const String& id, const String& name);
+    Player(const String& id, const String& name, 
+           AudioPluginFormatManager& formatManager,
+           KnownPluginList& knownPluginList);
     
     /**
      * @brief Destroy the Player
@@ -124,9 +128,13 @@ public:
      * @brief Create a Player from JSON
      * 
      * @param v JSON representation
+     * @param formatManager Reference to the shared AudioPluginFormatManager
+     * @param knownPluginList Reference to the shared KnownPluginList
      * @return std::unique_ptr<Player> The created player
      */
-    static std::unique_ptr<Player> fromVar(const var& v);
+    static std::unique_ptr<Player> fromVar(const var& v, 
+                                           AudioPluginFormatManager& formatManager,
+                                           KnownPluginList& knownPluginList);
     
     /**
      * @brief Get the ID of this player
@@ -161,6 +169,10 @@ private:
     // Core properties
     String id;
     PlayerMetadata metadata;
+    
+    // References to shared plugin environment (not owned)
+    AudioPluginFormatManager& formatManager;
+    KnownPluginList& knownPluginList;
     
     // Core components
     std::unique_ptr<Instrument> instrument;

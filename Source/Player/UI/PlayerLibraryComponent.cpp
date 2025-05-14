@@ -1,5 +1,6 @@
 // PlayerLibraryComponent.cpp
 #include "PlayerLibraryComponent.h"
+#include "../../UI/MainHostWindow.h"
 
 namespace covertracks {
 
@@ -82,11 +83,34 @@ void PlayerLibraryComponent::playerEditorSaveRequested(PlayerEditorComponent* ed
         
         if (player != nullptr)
         {
-            // Save the player
-            playerManager->savePlayer(player);
-            
-            // Refresh the list
-            playerList->refresh();
+            try
+            {
+                // Save the player
+                std::cout << "Saving player: " << player->getMetadata().name << std::endl;
+                bool success = playerManager->savePlayer(player);
+                
+                if (success)
+                    std::cout << "Player saved successfully" << std::endl;
+                else
+                    std::cout << "Failed to save player" << std::endl;
+                
+                // Refresh the list
+                playerList->refresh();
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "Exception when saving player: " << e.what() << std::endl;
+                AlertWindow::showMessageBoxAsync(AlertWindow::WarningIcon,
+                                               "Save Error",
+                                               "There was an error saving the player: " + String(e.what()));
+            }
+            catch (...)
+            {
+                std::cerr << "Unknown exception when saving player" << std::endl;
+                AlertWindow::showMessageBoxAsync(AlertWindow::WarningIcon,
+                                               "Save Error",
+                                               "There was an unknown error saving the player.");
+            }
         }
     }
     
@@ -109,8 +133,11 @@ void PlayerLibraryComponent::showPlayerEditor(Player* playerToEdit)
         playerToEdit = newPlayer.get();
     }
     
-    // Create the editor component
-    playerEditor = std::make_unique<PlayerEditorComponent>(playerToEdit);
+    // Find the MainHostWindow to pass to the editor
+    MainHostWindow* mainWindow = dynamic_cast<MainHostWindow*>(TopLevelWindow::getTopLevelWindow(0));
+    
+    // Create the editor component with the MainHostWindow reference
+    playerEditor = std::make_unique<PlayerEditorComponent>(playerToEdit, mainWindow);
     playerEditor->addListener(this);
     
     // If we created a new player, transfer ownership to the editor

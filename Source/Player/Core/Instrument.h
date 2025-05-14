@@ -21,8 +21,12 @@ public:
      * @brief Construct a new Instrument
      * 
      * @param name The name of the instrument
+     * @param formatManager Reference to the shared AudioPluginFormatManager
+     * @param knownPluginList Reference to the shared KnownPluginList
      */
-    Instrument(const String& name);
+    Instrument(const String& name, 
+               AudioPluginFormatManager& formatManager,
+               KnownPluginList& knownPluginList);
     
     /**
      * @brief Destroy the Instrument
@@ -174,8 +178,11 @@ private:
     // Core components
     String instrumentName;
     std::unique_ptr<AudioDeviceManager> deviceManager;
-    std::unique_ptr<AudioPluginFormatManager> pluginFormatManager;
-    std::unique_ptr<KnownPluginList> pluginList;
+    
+    // References to shared plugin environment (not owned)
+    AudioPluginFormatManager& formatManager;
+    KnownPluginList& knownPluginList;
+    
     std::unique_ptr<PluginGraph> pluginGraph;
     std::unique_ptr<AudioProcessorGraph> processorGraph; // For actual audio processing
     
