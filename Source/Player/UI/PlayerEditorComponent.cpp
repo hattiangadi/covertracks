@@ -98,15 +98,23 @@ PlayerEditorComponent::PlayerEditorComponent(Player* playerToEdit, MainHostWindo
                 graphEditor->graphPanel->setOwnerPlayerEditorComponent(this);
             addAndMakeVisible(graphEditor.get());
             
-            // Load the graph state if available
-            auto graphState = player->getPluginGraphState();
-            if (graphState != nullptr)
-            {
-                graphEditor->graph->restoreFromXml(*graphState);
-            }
+            // We need to ensure the audio device is fully configured and connected to the graph
+            // before restoring connections to ensure AudioGraphIOProcessor nodes get proper channel configuration
             
-            // Update the UI from the player data
-            updateUIFromPlayer();
+            // First, make sure the graph player is properly connected to the audio device
+            // This ensures the graph's audio I/O processors get the correct channel configuration
+            // from the audio device before we try to restore connections
+            
+            // Wait a moment to ensure the audio device is fully initialized
+            // This is a critical step that ensures the AudioGraphIOProcessor nodes get their channel configuration
+            // from the graph, which gets it from the audio device
+            startTimer(100); // Will call timerCallback after 100ms to load the graph state
+            
+            // Update the UI from the player data (except graph connections which will load after timer)
+            auto& metadata = player->getMetadata();
+            nameEditor.setText(metadata.name);
+            categoryEditor.setText(metadata.category);
+            descriptionEditor.setText(metadata.description);
         }
     }
 }
@@ -366,13 +374,55 @@ void PlayerEditorComponent::updateUIFromPlayer()
     
     std::cout << "PlayerEditorComponent::updateUIFromPlayer - Updating UI for player: " << player->getMetadata().name << std::endl;
     
-    // Load the plugin graph state
-    if (auto graphState = player->getPluginGraphState())
+    // Update the UI components
+    auto& metadata = player->getMetadata();
+    nameEditor.setText(metadata.name);
+    categoryEditor.setText(metadata.category);
+    descriptionEditor.setText(metadata.description);
+    
+    // For the graph state, we'll use the delayed loading approach
+    // This ensures the audio device is fully initialized before loading connections
+    if (graphEditor != nullptr && graphEditor->graph != nullptr)
     {
-        std::cout << "PlayerEditorComponent::updateUIFromPlayer - Got graph state XML" << std::endl;
-        
-        if (graphEditor != nullptr && graphEditor->graph != nullptr)
+        // Start the timer to load the graph state after a short delay
+        // This ensures the audio device is fully initialized
+        startTimer(100);
+        std::cout << "PlayerEditorComponent::updateUIFromPlayer - Started timer for delayed graph loading" << std::endl;
+    }
+    else
+    {
+        std::cout << "PlayerEditorComponent::updateUIFromPlayer - graphEditor or graph is null, cannot restore" << std::endl;
+    }
+    
+    std::cout << "PlayerEditorComponent::updateUIFromPlayer - Complete" << std::endl;
+}
+
+void PlayerEditorComponent::addListener(Listener* listener)
+{
+    listeners.add(listener);
+}
+
+void PlayerEditorComponent::removeListener(Listener* listener)
+{
+    listeners.remove(listener);
+}
+
+void PlayerEditorComponent::timerCallback()
+{
+    // This is called after a short delay to ensure the audio device is fully initialized
+    // and the AudioGraphIOProcessor nodes have the correct channel configuration
+    stopTimer(); // Stop the timer as we only need to do this once
+    
+    std::cout << "PlayerEditorComponent::timerCallback - Loading graph state after device initialization" << std::endl;
+    
+    if (player != nullptr && graphEditor != nullptr)
+    {
+        // Load the graph state if available
+        auto graphState = player->getPluginGraphState();
+        if (graphState != nullptr)
         {
+            std::cout << "PlayerEditorComponent::timerCallback - Graph state available, restoring" << std::endl;
+            
             // Count connections in the graph state before restoration
             int connectionCount = 0;
             int midiConnectionCount = 0;
@@ -395,64 +445,37 @@ void PlayerEditorComponent::updateUIFromPlayer()
                     audioConnectionCount++;
             }
             
-            std::cout << "PlayerEditorComponent::updateUIFromPlayer - Graph XML has " << connectionCount 
+            std::cout << "PlayerEditorComponent::timerCallback - Graph XML has " << connectionCount 
                       << " connections (MIDI: " << midiConnectionCount 
                       << ", Audio: " << audioConnectionCount << ")" << std::endl;
             
-            // Restore the graph state
-            std::cout << "PlayerEditorComponent::updateUIFromPlayer - Calling graphEditor->graph->restoreFromXml" << std::endl;
+            // Now restore the graph state - this should work correctly since the audio device is initialized
             graphEditor->graph->restoreFromXml(*graphState);
             
-            // Check connections after restoration
-            auto connections = graphEditor->graph->graph.getConnections();
-            int restoredCount = connections.size();
-            int restoredMidiCount = 0;
-            int restoredAudioCount = 0;
-            
-            for (auto& connection : connections)
+            // Check if audio output nodes have the correct channel configuration
+            if (graphEditor->graph != nullptr)
             {
-                bool isMidi = connection.source.isMIDI() || connection.destination.isMIDI();
-                if (isMidi)
-                    restoredMidiCount++;
-                else
-                    restoredAudioCount++;
+                for (auto* node : graphEditor->graph->graph.getNodes())
+                {
+                    if (auto* processor = node->getProcessor())
+                    {
+                        if (auto* ioProcessor = dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(processor))
+                        {
+                            if (ioProcessor->getType() == AudioProcessorGraph::AudioGraphIOProcessor::audioOutputNode)
+                            {
+                                std::cout << "PlayerEditorComponent::timerCallback - Audio output node has " 
+                                          << ioProcessor->getTotalNumInputChannels() << " input channels" << std::endl;
+                            }
+                        }
+                    }
+                }
             }
-            
-            std::cout << "PlayerEditorComponent::updateUIFromPlayer - After restoration, graph has " << restoredCount 
-                      << " connections (MIDI: " << restoredMidiCount 
-                      << ", Audio: " << restoredAudioCount << ")" << std::endl;
         }
         else
         {
-            std::cout << "PlayerEditorComponent::updateUIFromPlayer - graphEditor or graph is null, cannot restore" << std::endl;
+            std::cout << "PlayerEditorComponent::timerCallback - No graph state available" << std::endl;
         }
     }
-    else
-    {
-        std::cout << "PlayerEditorComponent::updateUIFromPlayer - No graph state available" << std::endl;
-    }
-    
-    // Update the UI components
-    if (player != nullptr)
-    {
-        std::cout << "PlayerEditorComponent::updateUIFromPlayer - Updating UI components" << std::endl;
-        auto& metadata = player->getMetadata();
-        nameEditor.setText(metadata.name);
-        categoryEditor.setText(metadata.category);
-        descriptionEditor.setText(metadata.description);
-    }
-    
-    std::cout << "PlayerEditorComponent::updateUIFromPlayer - Complete" << std::endl;
-}
-
-void PlayerEditorComponent::addListener(Listener* listener)
-{
-    listeners.add(listener);
-}
-
-void PlayerEditorComponent::removeListener(Listener* listener)
-{
-    listeners.remove(listener);
 }
 
 } // namespace covertracks

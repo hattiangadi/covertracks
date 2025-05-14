@@ -9,7 +9,8 @@
 namespace covertracks {
 
 class PlayerEditorComponent : public Component,
-                              public Button::Listener
+                              public Button::Listener,
+                              public Timer
 {
 public:
     // Constructor
@@ -78,6 +79,9 @@ private:
 
     void updatePlayerFromUI();
     void updateUIFromPlayer();
+    
+    // Timer callback for delayed graph loading
+    void timerCallback() override;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PlayerEditorComponent)
 

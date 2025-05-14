@@ -113,8 +113,106 @@ bool Instrument::loadPluginGraph(const XmlElement& graphState)
             return false;
         }
         
-        // Restore the plugin graph from XML
+        // We need to use the public API to restore the graph
+        // First, we'll restore the entire graph using the standard method
         pluginGraph->restoreFromXml(graphState);
+        
+        // Then check if we have any audio output nodes that need fixing
+        bool audioOutputNodeFixed = false;
+        
+        // Check for audio output nodes and fix them if needed
+        for (auto* node : pluginGraph->graph.getNodes())
+        {
+            if (auto* processor = node->getProcessor())
+            {
+                if (auto* ioProcessor = dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(processor))
+                {
+                    if (ioProcessor->getType() == AudioProcessorGraph::AudioGraphIOProcessor::audioOutputNode)
+                    {
+                        std::cout << "Instrument::loadPluginGraph - Found audio output node (ID: " << node->nodeID.uid 
+                                  << "), current inputs: " << ioProcessor->getTotalNumInputChannels() << std::endl;
+                        
+                        if (ioProcessor->getTotalNumInputChannels() == 0)
+                        {
+                            // If the audio output node has no input channels, we need to fix it
+                            std::cout << "  Audio output node has 0 inputs, attempting to fix..." << std::endl;
+                            
+                            // Try to set the bus layout to match what we need
+                            AudioProcessor::BusesLayout layout = ioProcessor->getBusesLayout();
+                            if (layout.inputBuses.size() > 0)
+                            {
+                                layout.inputBuses.getReference(0) = AudioChannelSet::stereo();
+                                if (ioProcessor->setBusesLayout(layout))
+                                {
+                                    std::cout << "  Successfully set audio output node to have stereo input" << std::endl;
+                                    audioOutputNodeFixed = true;
+                                }
+                                else
+                                {
+                                    std::cout << "  Failed to set audio output node bus layout" << std::endl;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // If we fixed any audio output nodes, we need to restore the connections again
+        if (audioOutputNodeFixed)
+        {
+            std::cout << "Instrument::loadPluginGraph - Audio output node fixed, restoring connections again" << std::endl;
+            
+            // Save all the connections from the original XML
+            Array<AudioProcessorGraph::Connection> connectionsToRestore;
+            
+            for (auto* e : graphState.getChildWithTagNameIterator("CONNECTION"))
+            {
+                auto srcFilter = (uint32) e->getIntAttribute("srcFilter");
+                auto srcChannel = e->getIntAttribute("srcChannel");
+                auto dstFilter = (uint32) e->getIntAttribute("dstFilter");
+                auto dstChannel = e->getIntAttribute("dstChannel");
+                
+                // Create the connection
+                AudioProcessorGraph::Connection connection = { 
+                    { AudioProcessorGraph::NodeID(srcFilter), srcChannel },
+                    { AudioProcessorGraph::NodeID(dstFilter), dstChannel }
+                };
+                
+                connectionsToRestore.add(connection);
+            }
+            
+            // Clear all existing connections
+            for (auto& connection : pluginGraph->graph.getConnections())
+            {
+                pluginGraph->graph.removeConnection(connection);
+            }
+            
+            // Restore all connections
+            int connectionCount = 0;
+            int successCount = 0;
+            
+            for (auto& connection : connectionsToRestore)
+            {
+                connectionCount++;
+                
+                // Check if the connection can be made
+                if (pluginGraph->graph.canConnect(connection))
+                {
+                    bool result = pluginGraph->graph.addConnection(connection);
+                    if (result)
+                    {
+                        successCount++;
+                    }
+                }
+            }
+            
+            std::cout << "Instrument::loadPluginGraph - Successfully restored " << successCount 
+                      << " out of " << connectionCount << " connections after fixing audio output nodes" << std::endl;
+        }
+        
+        // Clean up any illegal connections
+        pluginGraph->graph.removeIllegalConnections();
         
         // In a real implementation, we would need to update the processor graph
         // based on the plugin graph configuration

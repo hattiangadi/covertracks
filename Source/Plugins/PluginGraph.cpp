@@ -625,7 +625,8 @@ void PluginGraph::restoreFromXml (const XmlElement& xml)
     }
     std::cout << "Restored " << nodeCount << " nodes" << std::endl;
     
-    // Ensure audio output node is properly configured
+    // Check for audio output nodes and log their channel configuration
+    // This is just for debugging purposes now that we have a proper initialization sequence
     for (auto* node : graph.getNodes())
     {
         if (auto* processor = node->getProcessor())
@@ -634,32 +635,8 @@ void PluginGraph::restoreFromXml (const XmlElement& xml)
             {
                 if (ioProcessor->getType() == AudioProcessorGraph::AudioGraphIOProcessor::audioOutputNode)
                 {
-                    // Make sure the audio output node has at least 2 input channels
                     std::cout << "Found audio output node (ID: " << node->nodeID.uid 
                               << "), current inputs: " << ioProcessor->getTotalNumInputChannels() << std::endl;
-                    
-                    // The AudioGraphIOProcessor doesn't directly expose methods to set its channel count
-                    // but it should reflect the main output bus configuration of the parent graph
-                    // We'll add a workaround to ensure it has the right number of channels
-                    if (ioProcessor->getTotalNumInputChannels() == 0)
-                    {
-                        std::cout << "  Audio output node has 0 inputs, attempting to fix..." << std::endl;
-                        
-                        // Try to set the bus layout to match what we need
-                        AudioProcessor::BusesLayout layout = ioProcessor->getBusesLayout();
-                        if (layout.inputBuses.size() > 0)
-                        {
-                            layout.inputBuses.getReference(0) = AudioChannelSet::stereo();
-                            if (ioProcessor->setBusesLayout(layout))
-                            {
-                                std::cout << "  Successfully set audio output node to have stereo input" << std::endl;
-                            }
-                            else
-                            {
-                                std::cout << "  Failed to set audio output node bus layout" << std::endl;
-                            }
-                        }
-                    }
                 }
             }
         }
