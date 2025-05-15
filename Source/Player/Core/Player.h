@@ -158,61 +158,7 @@ public:
      */
     PlayerMetadata& getMetadata() { return metadata; }
     
-    /**
-     * @brief Safely get a metadata value with fallback to default
-     * 
-     * @param field Which metadata field to get (1=name, 2=category, 3=description)
-     * @return String The metadata value or a default if metadata is invalid
-     */
-    String getSafeMetadataValue(int field) const
-    {
-        // Default values for each field
-        static const String DEFAULT_NAME = "[Unnamed]";
-        static const String DEFAULT_CATEGORY = "[No Category]";
-        static const String DEFAULT_DESCRIPTION = "[No Description]";
-        
-        try
-        {
-            // Use a simple approach that's still defensive
-            switch (field)
-            {
-                case 1: // Name
-                    {
-                        String name;
-                        try { name = metadata.name; } catch (...) { return DEFAULT_NAME; }
-                        return name.isNotEmpty() ? name : DEFAULT_NAME;
-                    }
-                    
-                case 2: // Category
-                    {
-                        String category;
-                        try { category = metadata.category; } catch (...) { return DEFAULT_CATEGORY; }
-                        return category.isNotEmpty() ? category : DEFAULT_CATEGORY;
-                    }
-                    
-                case 3: // Description
-                    {
-                        String description;
-                        try { description = metadata.description; } catch (...) { return DEFAULT_DESCRIPTION; }
-                        return description.isNotEmpty() ? description : DEFAULT_DESCRIPTION;
-                    }
-                    
-                default:
-                    return "";
-            }
-        }
-        catch (...)
-        {
-            // Return defaults if anything goes wrong
-            switch (field)
-            {
-                case 1: return DEFAULT_NAME;
-                case 2: return DEFAULT_CATEGORY;
-                case 3: return DEFAULT_DESCRIPTION;
-                default: return "";
-            }
-        }
-    }
+
     
     /**
      * @brief Get the instrument component

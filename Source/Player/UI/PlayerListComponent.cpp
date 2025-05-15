@@ -101,24 +101,24 @@ void PlayerListComponent::paintCell(Graphics& g, int rowNumber, int columnId, in
         {
             g.setColour(rowIsSelected ? Colours::white : getLookAndFeel().findColour(ListBox::textColourId));
             
-            // Default text in case we can't access metadata
             String text = "";
             
-            // Use the new safe method that handles all error cases internally
             if (player != nullptr)
             {
+                const auto& metadata = player->getMetadata();
+                
                 switch (columnId)
                 {
                     case NameColumn:
-                        text = player->getSafeMetadataValue(1); // 1 = name
+                        text = metadata.name.isNotEmpty() ? metadata.name : "[Unnamed]";
                         break;
                         
                     case CategoryColumn:
-                        text = player->getSafeMetadataValue(2); // 2 = category
+                        text = metadata.category.isNotEmpty() ? metadata.category : "[No Category]";
                         break;
                         
                     case DescriptionColumn:
-                        text = player->getSafeMetadataValue(3); // 3 = description
+                        text = metadata.description.isNotEmpty() ? metadata.description : "[No Description]";
                         break;
                         
                     default:
@@ -152,24 +152,27 @@ void PlayerListComponent::sortOrderChanged(int newSortColumnId, bool isForwards)
                 if (a == nullptr) return !isForwards; // Null players at the end if sorting ascending
                 if (b == nullptr) return isForwards;  // Null players at the end if sorting ascending
                 
-                // Use the safe metadata accessor that handles all error cases internally
+                // Get metadata values for comparison
                 String aValue, bValue;
+                
+                const auto& aMetadata = a->getMetadata();
+                const auto& bMetadata = b->getMetadata();
                 
                 switch (newSortColumnId)
                 {
                     case NameColumn:
-                        aValue = a->getSafeMetadataValue(1); // 1 = name
-                        bValue = b->getSafeMetadataValue(1);
+                        aValue = aMetadata.name;
+                        bValue = bMetadata.name;
                         break;
                         
                     case CategoryColumn:
-                        aValue = a->getSafeMetadataValue(2); // 2 = category
-                        bValue = b->getSafeMetadataValue(2);
+                        aValue = aMetadata.category;
+                        bValue = bMetadata.category;
                         break;
                         
                     case DescriptionColumn:
-                        aValue = a->getSafeMetadataValue(3); // 3 = description
-                        bValue = b->getSafeMetadataValue(3);
+                        aValue = aMetadata.description;
+                        bValue = bMetadata.description;
                         break;
                         
                     default:
