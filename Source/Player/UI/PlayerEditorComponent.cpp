@@ -259,9 +259,28 @@ void PlayerEditorComponent::buttonClicked(Button* button)
                     // Update the player's graph state by loading it
                     if (player != nullptr)
                     {
-                        std::cout << "Loading graph into player" << std::endl;
+                        // Count nodes in the graph for debugging
+                        int nodeCount = 0;
+                        for (auto* filterNode : xml->getChildWithTagNameIterator("FILTER"))
+                        {
+                            nodeCount++;
+                            // Use the node to avoid unused variable warning
+                            std::cout << "  Found node: " << filterNode->getIntAttribute("uid") << std::endl;
+                        }
+                        std::cout << "Loading graph with " << nodeCount << " nodes into player" << std::endl;
+                        
                         player->loadPluginGraph(*xml);
                         std::cout << "Graph loaded into player" << std::endl;
+                        
+                        // Explicitly save the player to ensure the graph state is persisted
+                        if (auto* mainWindow = dynamic_cast<MainHostWindow*>(getTopLevelComponent()))
+                        {
+                            if (mainWindow->playerManager != nullptr)
+                            {
+                                std::cout << "Explicitly saving player to persist graph state" << std::endl;
+                                mainWindow->playerManager->savePlayer(player);
+                            }
+                        }
                         
                         // Check if the audio output nodes have the correct channel configuration
                         if (player->getInstrument() != nullptr && player->getInstrument()->getPluginGraph() != nullptr)
@@ -413,12 +432,39 @@ void covertracks::PlayerEditorComponent::updatePlayerFromUI()
         metadata.lastModified = Time::getCurrentTime();
         
         // Update graph state
-        if (graphEditor != nullptr)
+        if (graphEditor != nullptr && graphEditor->graph != nullptr)
         {
-                auto graphXml = graphEditor->graph->createXml();
-                if (graphXml != nullptr)
+            auto graphXml = graphEditor->graph->createXml();
+            if (graphXml != nullptr)
+            {
+                std::cout << "Saving graph state from UI to player" << std::endl;
+                
+                // Count nodes in the graph for debugging
+                int nodeCount = 0;
+                for (auto* filterNode : graphXml->getChildWithTagNameIterator("FILTER"))
                 {
-                    player->loadPluginGraph(*graphXml);
+                    nodeCount++;
+                    // Use the node to avoid unused variable warning
+                    std::cout << "  Found node in UI graph: " << filterNode->getIntAttribute("uid") << std::endl;
+                }
+                std::cout << "Updating player with graph containing " << nodeCount << " nodes" << std::endl;
+                
+                // Load the graph into the player
+                player->loadPluginGraph(*graphXml);
+                
+                // Explicitly save the player to ensure the graph state is persisted
+                if (auto* mainWindow = dynamic_cast<MainHostWindow*>(getTopLevelComponent()))
+                {
+                    if (mainWindow->playerManager != nullptr)
+                    {
+                        std::cout << "Explicitly saving player to persist graph state" << std::endl;
+                        mainWindow->playerManager->savePlayer(player);
+                    }
+                }
+            }
+            else
+            {
+                std::cerr << "Failed to create XML from graph editor" << std::endl;
             }
         }
     }

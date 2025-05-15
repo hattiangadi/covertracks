@@ -75,6 +75,13 @@ bool PlayerManager::savePlayer(Player* player)
         players.add(player);
     }
     
+    // Explicitly save the graph state to a file
+    bool graphSaved = player->saveGraphState();
+    if (graphSaved)
+    {
+        std::cout << "Graph state saved successfully for player: " << metadata.name << std::endl;
+    }
+    
     // Convert to JSON
     var playerJson = player->toVar();
     

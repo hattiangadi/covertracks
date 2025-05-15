@@ -65,6 +65,14 @@ public:
     bool loadPluginGraph(const XmlElement& graphState);
     
     /**
+     * @brief Save the current graph state to a file
+     * 
+     * @return true if successful
+     * @return false if failed
+     */
+    bool saveGraphState();
+    
+    /**
      * @brief Get the current plugin graph state
      * 
      * @return std::unique_ptr<XmlElement> XML representation of the current graph
@@ -177,6 +185,22 @@ private:
     // Core components
     std::unique_ptr<Instrument> instrument;
     // std::unique_ptr<Musician> musician; // Temporarily commented out
+    
+    /**
+     * @brief Get the path to the graph file for this player
+     * 
+     * @return File The graph file path
+     */
+    File getGraphFilePath() const
+    {
+        // Get the application data directory
+        File appDataDir = File::getSpecialLocation(File::userApplicationDataDirectory)
+                          .getChildFile("Covertracks")
+                          .getChildFile("Graphs");
+        
+        // Create a filename based on the player ID
+        return appDataDir.getChildFile(id + ".filtergraph");
+    }
     
     // Most recently generated pattern
     var lastGeneratedPattern;
