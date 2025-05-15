@@ -100,6 +100,64 @@ bool PlayerManager::savePlayer(Player* player)
     return success;
 }
 
+bool PlayerManager::savePlayerAndTakeOwnership(std::unique_ptr<Player> player)
+{
+    if (player == nullptr)
+    {
+        return false;
+    }
+    
+    // Get a raw pointer to the player before we move it
+    Player* playerPtr = player.get();
+    
+    // Update the last modified time
+    auto& metadata = playerPtr->getMetadata();
+    metadata.lastModified = Time::getCurrentTime();
+    
+    // Explicitly save the graph state to a file
+    bool graphSaved = playerPtr->saveGraphState();
+    if (graphSaved)
+    {
+        std::cout << "Graph state saved successfully for player: " << metadata.name << std::endl;
+    }
+    
+    // Convert to JSON
+    var playerJson = playerPtr->toVar();
+    
+    // Get the file path
+    File playerFile = getPlayersDirectory().getChildFile(metadata.name + ".player");
+    
+    // Save to file
+    String jsonStr = JSON::toString(playerJson);
+    bool success = playerFile.replaceWithText(jsonStr);
+    
+    if (success)
+    {
+        std::cout << "Saved player to file: " << playerFile.getFullPathName() << std::endl;
+        
+        // Take ownership of the player and add it to our list
+        // This will replace any existing player with the same pointer
+        for (int i = 0; i < players.size(); ++i)
+        {
+            if (players[i] == playerPtr)
+            {
+                players.remove(i, false); // Remove without deleting
+                break;
+            }
+        }
+        
+        // Now add the player we own
+        players.add(player.release());
+        std::cout << "Player ownership transferred to PlayerManager" << std::endl;
+    }
+    else
+    {
+        std::cout << "Failed to save player to file: " << playerFile.getFullPathName() << std::endl;
+    }
+    
+    return success;
+}
+
 std::unique_ptr<Player> PlayerManager::createPlayer()
 {
     // Generate a unique ID
@@ -145,19 +203,38 @@ bool PlayerManager::deletePlayer(Player* player)
         return false;
     }
     
-    // Get the file path
-    File playerFile = getPlayersDirectory().getChildFile(player->getMetadata().name + ".json");
+    // Get the player file path
+    auto& metadata = player->getMetadata();
+    File playerFile = getPlayersDirectory().getChildFile(metadata.name + ".player");
     
-    // Delete the file
-    bool fileDeleted = true;
+    // Also get the graph file path
+    File graphFile = File::getSpecialLocation(File::userApplicationDataDirectory)
+                      .getChildFile("Covertracks")
+                      .getChildFile("Graphs")
+                      .getChildFile(player->getId() + ".filtergraph");
+    
+    std::cout << "Deleting player: " << metadata.name << " (ID: " << player->getId() << ")" << std::endl;
+    std::cout << "Player file: " << playerFile.getFullPathName() << std::endl;
+    std::cout << "Graph file: " << graphFile.getFullPathName() << std::endl;
+    
+    // Delete the files
+    bool playerFileDeleted = true;
     if (playerFile.existsAsFile())
     {
-        fileDeleted = playerFile.deleteFile();
+        playerFileDeleted = playerFile.deleteFile();
+        std::cout << "Player file deleted: " << (playerFileDeleted ? "yes" : "no") << std::endl;
+    }
+    
+    bool graphFileDeleted = true;
+    if (graphFile.existsAsFile())
+    {
+        graphFileDeleted = graphFile.deleteFile();
+        std::cout << "Graph file deleted: " << (graphFileDeleted ? "yes" : "no") << std::endl;
     }
     
     // Remove from the list
     players.removeObject(player, true);
-    return fileDeleted;
+    return playerFileDeleted && graphFileDeleted;
 }
 
 File PlayerManager::getPlayersDirectory()

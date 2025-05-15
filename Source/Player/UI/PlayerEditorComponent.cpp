@@ -420,6 +420,19 @@ void covertracks::PlayerEditorComponent::takeOwnershipOfPlayer(std::unique_ptr<P
     updateUIFromPlayer();
 }
 
+std::unique_ptr<Player> covertracks::PlayerEditorComponent::releaseOwnedPlayer()
+{
+    // If we don't own a player, return nullptr
+    if (!ownedPlayer)
+        return nullptr;
+    
+    // Get a copy of the player pointer before we release ownership
+    player = nullptr;
+    
+    // Return ownership to the caller
+    return std::move(ownedPlayer);
+}
+
 void covertracks::PlayerEditorComponent::updatePlayerFromUI()
 {
     if (player != nullptr)

@@ -31,6 +31,10 @@ public:
     // Save a player to disk
     bool savePlayer(Player* player);
     
+    // Save a player to disk and take ownership of it
+    // This should be used when saving a player that is owned by another component
+    bool savePlayerAndTakeOwnership(std::unique_ptr<Player> player);
+    
     // Create a new player with default settings
     std::unique_ptr<Player> createPlayer();
     

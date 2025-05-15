@@ -43,6 +43,12 @@ public:
     // Take ownership of a player (for new players)
     void takeOwnershipOfPlayer(std::unique_ptr<Player> newPlayer);
     
+    // Check if this editor owns a player
+    bool hasOwnedPlayer() const { return ownedPlayer != nullptr; }
+    
+    // Release ownership of the player (returns nullptr if no owned player)
+    std::unique_ptr<Player> releaseOwnedPlayer();
+    
     // Listener interface for receiving events from the PlayerEditorComponent
     class Listener
     {

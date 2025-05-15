@@ -101,25 +101,37 @@ void PlayerListComponent::paintCell(Graphics& g, int rowNumber, int columnId, in
         {
             g.setColour(rowIsSelected ? Colours::white : getLookAndFeel().findColour(ListBox::textColourId));
             
-            String text;
-            auto& metadata = player->getMetadata();
+            // Default text in case we can't access metadata
+            String text = "";
             
-            switch (columnId)
+            // Use the new safe method that handles all error cases internally
+            if (player != nullptr)
             {
-                case NameColumn:
-                    text = metadata.name;
-                    break;
-                    
-                case CategoryColumn:
-                    text = metadata.category;
-                    break;
-                    
-                case DescriptionColumn:
-                    text = metadata.description;
-                    break;
-                    
-                default:
-                    break;
+                switch (columnId)
+                {
+                    case NameColumn:
+                        text = player->getSafeMetadataValue(1); // 1 = name
+                        break;
+                        
+                    case CategoryColumn:
+                        text = player->getSafeMetadataValue(2); // 2 = category
+                        break;
+                        
+                    case DescriptionColumn:
+                        text = player->getSafeMetadataValue(3); // 3 = description
+                        break;
+                        
+                    default:
+                        text = "";
+                        break;
+                }
+            }
+            else
+            {
+                // Player is null, use default text
+                text = columnId == NameColumn ? "[Unnamed]" : 
+                       columnId == CategoryColumn ? "[No Category]" : 
+                       columnId == DescriptionColumn ? "[No Description]" : "";
             }
             
             g.drawText(text, 2, 0, width - 4, height, Justification::centredLeft, true);
@@ -132,36 +144,51 @@ void PlayerListComponent::sortOrderChanged(int newSortColumnId, bool isForwards)
     // Sort the players based on the column
     if (newSortColumnId != 0)
     {
-        std::sort(displayedPlayers.begin(), displayedPlayers.end(), [newSortColumnId, isForwards](Player* a, Player* b) {
-            String aValue, bValue;
-            auto& aMetadata = a->getMetadata();
-            auto& bMetadata = b->getMetadata();
+        try
+        {
+            std::sort(displayedPlayers.begin(), displayedPlayers.end(), [newSortColumnId, isForwards](Player* a, Player* b) {
+                // Handle null pointers
+                if (a == nullptr && b == nullptr) return false;
+                if (a == nullptr) return !isForwards; // Null players at the end if sorting ascending
+                if (b == nullptr) return isForwards;  // Null players at the end if sorting ascending
+                
+                // Use the safe metadata accessor that handles all error cases internally
+                String aValue, bValue;
+                
+                switch (newSortColumnId)
+                {
+                    case NameColumn:
+                        aValue = a->getSafeMetadataValue(1); // 1 = name
+                        bValue = b->getSafeMetadataValue(1);
+                        break;
+                        
+                    case CategoryColumn:
+                        aValue = a->getSafeMetadataValue(2); // 2 = category
+                        bValue = b->getSafeMetadataValue(2);
+                        break;
+                        
+                    case DescriptionColumn:
+                        aValue = a->getSafeMetadataValue(3); // 3 = description
+                        bValue = b->getSafeMetadataValue(3);
+                        break;
+                        
+                    default:
+                        return false;
+                }
+                
+                return isForwards ? (aValue.compareIgnoreCase(bValue) < 0) : (aValue.compareIgnoreCase(bValue) > 0);
+            });
             
-            switch (newSortColumnId)
-            {
-                case NameColumn:
-                    aValue = aMetadata.name;
-                    bValue = bMetadata.name;
-                    break;
-                    
-                case CategoryColumn:
-                    aValue = aMetadata.category;
-                    bValue = bMetadata.category;
-                    break;
-                    
-                case DescriptionColumn:
-                    aValue = aMetadata.description;
-                    bValue = bMetadata.description;
-                    break;
-                    
-                default:
-                    return false;
-            }
-            
-            return isForwards ? (aValue.compareIgnoreCase(bValue) < 0) : (aValue.compareIgnoreCase(bValue) > 0);
-        });
-        
-        playerTable.updateContent();
+            playerTable.updateContent();
+        }
+        catch (const std::exception& e)
+        {
+            std::cerr << "Exception during player sorting: " << e.what() << std::endl;
+        }
+        catch (...)
+        {
+            std::cerr << "Unknown exception during player sorting" << std::endl;
+        }
     }
 }
 

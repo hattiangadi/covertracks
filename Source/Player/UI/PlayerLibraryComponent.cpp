@@ -79,38 +79,53 @@ void PlayerLibraryComponent::playerEditorSaveRequested(PlayerEditorComponent* ed
 {
     if (editor != nullptr)
     {
-        auto player = editor->getPlayer();
-        
-        if (player != nullptr)
+        try
         {
-            try
+            bool success = false;
+            
+            // Check if this is a new player that the editor owns
+            if (editor->hasOwnedPlayer())
             {
-                // Save the player
-                std::cout << "Saving player: " << player->getMetadata().name << std::endl;
-                bool success = playerManager->savePlayer(player);
-                
-                if (success)
-                    std::cout << "Player saved successfully" << std::endl;
-                else
-                    std::cout << "Failed to save player" << std::endl;
-                
-                // Refresh the list
-                playerList->refresh();
+                // Get the owned player from the editor and transfer ownership to the PlayerManager
+                auto ownedPlayer = editor->releaseOwnedPlayer();
+                if (ownedPlayer != nullptr)
+                {
+                    std::cout << "Saving new player and transferring ownership to PlayerManager" << std::endl;
+                    success = playerManager->savePlayerAndTakeOwnership(std::move(ownedPlayer));
+                }
             }
-            catch (const std::exception& e)
+            else
             {
-                std::cerr << "Exception when saving player: " << e.what() << std::endl;
-                AlertWindow::showMessageBoxAsync(AlertWindow::WarningIcon,
-                                               "Save Error",
-                                               "There was an error saving the player: " + String(e.what()));
+                // This is an existing player that the PlayerManager already owns
+                auto player = editor->getPlayer();
+                if (player != nullptr)
+                {
+                    std::cout << "Saving existing player: " << player->getMetadata().name << std::endl;
+                    success = playerManager->savePlayer(player);
+                }
             }
-            catch (...)
-            {
-                std::cerr << "Unknown exception when saving player" << std::endl;
-                AlertWindow::showMessageBoxAsync(AlertWindow::WarningIcon,
-                                               "Save Error",
-                                               "There was an unknown error saving the player.");
-            }
+            
+            if (success)
+                std::cout << "Player saved successfully" << std::endl;
+            else
+                std::cout << "Failed to save player" << std::endl;
+            
+            // Refresh the list
+            playerList->refresh();
+        }
+        catch (const std::exception& e)
+        {
+            std::cerr << "Exception when saving player: " << e.what() << std::endl;
+            AlertWindow::showMessageBoxAsync(AlertWindow::WarningIcon,
+                                           "Save Error",
+                                           "There was an error saving the player: " + String(e.what()));
+        }
+        catch (...)
+        {
+            std::cerr << "Unknown exception when saving player" << std::endl;
+            AlertWindow::showMessageBoxAsync(AlertWindow::WarningIcon,
+                                           "Save Error",
+                                           "There was an unknown error saving the player.");
         }
     }
     
