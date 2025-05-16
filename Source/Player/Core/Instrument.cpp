@@ -5,89 +5,167 @@ namespace covertracks {
 
 Instrument::Instrument(const String& name, 
                    AudioPluginFormatManager& formatManager,
-                   KnownPluginList& knownPluginList)
+                   KnownPluginList& knownPluginList,
+                   AudioEngine* engine)
     : instrumentName(name), 
-      deviceManager(std::make_unique<AudioDeviceManager>()),
       formatManager(formatManager),
-      knownPluginList(knownPluginList)
+      knownPluginList(knownPluginList),
+      audioEngine(engine)
 {
+       // Check if we're using the shared AudioEngine
+    usingSharedAudioEngine = (audioEngine != nullptr);
+    
+    // If we're not using a shared engine, we'll create the device manager when needed
+    // This allows for switching between modes later if needed
+    
     // Initialize the plugin graph with the shared format manager and plugin list
     pluginGraph = std::make_unique<PluginGraph>(formatManager, knownPluginList);
     
-    // Output initialization message
-    std::cout << "Creating Instrument: " << name << std::endl;
+    std::cout << "Creating Instrument: " << name 
+              << " (using " << (usingSharedAudioEngine ? "shared" : "dedicated") 
+              << " audio engine)" << std::endl;
 }
 
 Instrument::~Instrument()
 {
-    // Stop playback and cleanup
-    stopPlayback();
+    // Clean up all resources
+    cleanup();
     
+    std::cout << "Destroying Instrument: " << instrumentName << std::endl;
+}
+
+void Instrument::cleanup()
+{
     // Stop timer if running
     stopTimer();
-    
-    // Clean up MIDI input callbacks
-    if (deviceManager != nullptr)
+
+    // Unregister from AudioEngine if using it
+    if (usingSharedAudioEngine && audioEngine != nullptr)
+    {
+        if (processorGraph != nullptr)
+        {
+            audioEngine->unregisterProcessor(processorGraph.get());
+        }
+            
+        audioEngine->unregisterMidiInput(String(), this);
+    }
+    // Clean up MIDI input callbacks if using dedicated device manager
+    else if (deviceManager != nullptr)
     {
         deviceManager->removeMidiInputDeviceCallback(String(), this);
-        deviceManager->closeAudioDevice();
+        deviceManager->removeAudioCallback(this);
     }
     
-    // Output cleanup message
-    std::cout << "Destroying Instrument: " << instrumentName << std::endl;
+    // Release processor graph resources
+    if (processorGraph != nullptr)
+    {
+        processorGraph->releaseResources();
+    }
+    
+    std::cout << "Cleaned up Instrument resources: " << instrumentName << std::endl;
 }
 
 void Instrument::initialize()
 {
-    // Initialize the audio device manager
-    deviceManager->initialiseWithDefaultDevices(2, 2);
+    // Clean up any existing resources first to avoid conflicts
+    cleanup();
     
-    // Register as an audio callback
-    deviceManager->addAudioCallback(this);
-    
-    // Enable MIDI input
-    deviceManager->setMidiInputDeviceEnabled(String(), true);
-    deviceManager->addMidiInputDeviceCallback(String(), this);
-    
-    // Initialize the processor graph if it doesn't exist
+    // Create processor graph if it doesn't exist
     if (!processorGraph)
     {
         processorGraph = std::make_unique<AudioProcessorGraph>();
     }
     
-    auto& deviceManagerRef = *deviceManager;
-    auto currentAudioDevice = deviceManager->getCurrentAudioDevice();
-    
-    if (currentAudioDevice != nullptr)
+    // If using the shared AudioEngine, register with it
+    if (usingSharedAudioEngine && audioEngine != nullptr)
     {
-        // Get device settings
-        double sampleRateValue = currentAudioDevice->getCurrentSampleRate();
-        int bufferSize = currentAudioDevice->getCurrentBufferSizeSamples();
+        std::cout << "Instrument " << instrumentName << ": Using shared AudioEngine" << std::endl;
+        
+        // Get the device info from the shared engine
+        double sampleRateValue = audioEngine->getSampleRate();
+        int bufferSize = audioEngine->getBufferSize();
         
         // Configure the processor graph
-        processorGraph->setPlayConfigDetails(
-            currentAudioDevice->getActiveInputChannels().countNumberOfSetBits(),
-            currentAudioDevice->getActiveOutputChannels().countNumberOfSetBits(),
-            sampleRateValue,
-            bufferSize);
-            
+        processorGraph->setPlayConfigDetails(2, 2, sampleRateValue, bufferSize);
+        
         // Update the sample rate
         sampleRate = sampleRateValue;
+        
+        // Prepare the processor graph for playback
+        processorGraph->prepareToPlay(sampleRate, bufferSize);
+        
+        // Register with the audio engine
+        if (!audioEngine->registerProcessor(processorGraph.get()))
+        {
+            std::cerr << "Failed to register processor with AudioEngine" << std::endl;
+        }
+        
+        // Register for MIDI input
+        if (!audioEngine->registerMidiInput(String(), this))
+        {
+            std::cerr << "Failed to register MIDI input with AudioEngine" << std::endl;
+        }
     }
+    // Otherwise initialize our own audio device manager
     else
     {
-        // Default configuration if no audio device is available
-        processorGraph->setPlayConfigDetails(2, 2, 44100.0, 512);
+        std::cout << "Instrument " << instrumentName << ": Using dedicated audio device manager" << std::endl;
+        
+        // Make sure we have a device manager
+        if (!deviceManager)
+        {
+            deviceManager = std::make_unique<AudioDeviceManager>();
+        }
+        
+        // Initialize the audio device manager
+        deviceManager->initialiseWithDefaultDevices(2, 2);
+        
+        // Register as an audio callback
+        deviceManager->addAudioCallback(this);
+        
+        // Enable MIDI input
+        deviceManager->setMidiInputDeviceEnabled(String(), true);
+        deviceManager->addMidiInputDeviceCallback(String(), this);
+        
+        auto currentAudioDevice = deviceManager->getCurrentAudioDevice();
+        
+        if (currentAudioDevice != nullptr)
+        {
+            // Get device settings
+            double sampleRateValue = currentAudioDevice->getCurrentSampleRate();
+            int bufferSize = currentAudioDevice->getCurrentBufferSizeSamples();
+            
+            // Configure the processor graph
+            processorGraph->setPlayConfigDetails(
+                currentAudioDevice->getActiveInputChannels().countNumberOfSetBits(),
+                currentAudioDevice->getActiveOutputChannels().countNumberOfSetBits(),
+                sampleRateValue,
+                bufferSize);
+                
+            // Update the sample rate
+            sampleRate = sampleRateValue;
+            
+            // Prepare the processor graph for playback
+            processorGraph->prepareToPlay(sampleRate, bufferSize);
+        }
+        else
+        {
+            // Default configuration if no audio device is available
+            processorGraph->setPlayConfigDetails(2, 2, 44100.0, 512);
+            sampleRate = 44100.0;
+            
+            // Prepare the processor graph for playback
+            processorGraph->prepareToPlay(sampleRate, 512);
+        }
     }
-    
-    // Prepare the processor graph for playback
-    processorGraph->prepareToPlay(sampleRate, 512);
     
     // Start the timer at 20ms interval (50Hz) for MIDI playback tracking
     startTimer(20);
     
-    std::cout << "Initialized Instrument: " << instrumentName << std::endl;
+    std::cout << "Initialized Instrument: " << instrumentName 
+              << " (sample rate: " << sampleRate << ")" << std::endl;
 }
+
 
 bool Instrument::loadPluginGraph(const XmlElement& graphState)
 {
@@ -361,47 +439,51 @@ bool Instrument::isPaused() const
 }
 
 void Instrument::audioDeviceIOCallback(const float** inputChannelData, int numInputChannels,
-                                     float** outputChannelData, int numOutputChannels,
-                                     int numSamples)
+    float** outputChannelData, int numOutputChannels,
+    int numSamples)
 {
+    // Only called when using our own device manager, not when using shared AudioEngine
+
     // Create audio buffer wrapper around the output channels
     AudioBuffer<float> buffer(outputChannelData, numOutputChannels, numSamples);
-    
+
     // Clear the output buffer
     buffer.clear();
-    
+
     // Create a MIDI buffer for this block
     MidiBuffer midiBuffer;
-    
+
     // If playing, add MIDI events for this block
     if (playing && !paused)
     {
-        processMIDIEvents(midiBuffer, numSamples);
+    processMIDIEvents(midiBuffer, numSamples);
     }
-    
+
     // Process audio with the processor graph
     if (processorGraph != nullptr)
     {
-        // Add any input audio to the buffer if needed
-        if (numInputChannels > 0)
-        {
-            for (int channel = 0; channel < std::min(numInputChannels, numOutputChannels); ++channel)
-            {
-                buffer.copyFrom(channel, 0, inputChannelData[channel], numSamples);
-            }
-        }
-        
-        // Process the block through the processor graph
-        if (processorGraph)
-            processorGraph->processBlock(buffer, midiBuffer);
+    // Add any input audio to the buffer if needed
+    if (numInputChannels > 0)
+    {
+    for (int channel = 0; channel < std::min(numInputChannels, numOutputChannels); ++channel)
+    {
+    buffer.copyFrom(channel, 0, inputChannelData[channel], numSamples);
     }
-    
+    }
+
+    // Process the block through the processor graph
+    if (processorGraph)
+    processorGraph->processBlock(buffer, midiBuffer);
+    }
+
     // Update current time
     updateCurrentTime(numSamples);
 }
 
 void Instrument::audioDeviceAboutToStart(AudioIODevice* device)
 {
+    // Only called when using our own device manager, not when using shared AudioEngine
+    
     if (device != nullptr)
     {
         sampleRate = device->getCurrentSampleRate();
@@ -421,6 +503,8 @@ void Instrument::audioDeviceAboutToStart(AudioIODevice* device)
 
 void Instrument::audioDeviceStopped()
 {
+    // Only called when using our own device manager, not when using shared AudioEngine
+    
     if (processorGraph != nullptr)
     {
         processorGraph->releaseResources();

@@ -32,11 +32,13 @@ void PlayerMetadata::fromVar(const var& v)
 
 // Player implementation
 Player::Player(const String& playerId, const String& name,
-               AudioPluginFormatManager& formatManager,
-               KnownPluginList& knownPluginList)
+               AudioPluginFormatManager& fm,
+               KnownPluginList& kpl,
+               AudioEngine* engine)
     : id(playerId),
-      formatManager(formatManager),
-      knownPluginList(knownPluginList)
+      formatManager(fm),
+      knownPluginList(kpl),
+      audioEngine(engine)
 {
     // Initialize metadata
     metadata.name = name;
@@ -44,8 +46,10 @@ Player::Player(const String& playerId, const String& name,
     metadata.description = "A new player";
     metadata.created = Time::getCurrentTime();
     metadata.lastModified = metadata.created;
-    
-    std::cout << "Creating Player: " << name << " (ID: " << playerId << ")" << std::endl;
+
+    std::cout << "Creating Player: " << name << " (ID: " << playerId << ")" 
+              << " with " << (audioEngine != nullptr ? "shared" : "dedicated") 
+              << " audio engine" << std::endl;
 }
 
 Player::~Player()
@@ -61,7 +65,7 @@ bool Player::initialize()
     // Create instrument if needed
     if (instrument == nullptr)
     {
-        instrument = std::make_unique<Instrument>(metadata.name, formatManager, knownPluginList);
+        instrument = std::make_unique<Instrument>(metadata.name, formatManager, knownPluginList, audioEngine);
         
         // Set up pattern finished callback
         instrument->setPatternFinishedCallback([this]() {
@@ -306,7 +310,7 @@ void Player::setLLMClient(std::shared_ptr<LLMClient> client)
 */
 
 // Updated to use var instead of json and stubbed implementation
-var Player::generatePattern(const var& parameters)
+var Player::generatePattern(const var& /*parameters*/)
 {
     // Create a simple empty pattern for testing
     DynamicObject* errorObj = new DynamicObject();
@@ -407,56 +411,47 @@ var Player::toVar() const
         if (graphState != nullptr)
         {
             try
+{
+            // Save the graph state to a separate file in the same directory as player files
+            File graphFile = getGraphFilePath();
+            graphFile.deleteFile();
+            
+            // Make sure the directory exists
+            graphFile.getParentDirectory().createDirectory();
+            
+            // Write the XML to the file
+            FileOutputStream fos(graphFile);
+            if (fos.openedOk())
             {
-                // Save the graph state to a separate file in the same directory as player files
-                File graphFile = getGraphFilePath();
-                graphFile.deleteFile();
+                graphState->writeTo(fos);
+                fos.flush();
                 
-                // Make sure the directory exists
-                graphFile.getParentDirectory().createDirectory();
+                // Store the filename in the player data
+                obj->setProperty("graphFile", graphFile.getFileName());
                 
-                // Write the XML to the file
-                FileOutputStream fos(graphFile);
-                if (fos.openedOk())
-                {
-                    graphState->writeTo(fos);
-                    fos.flush();
-                    
-                    // Store the filename in the player data
-                    obj->setProperty("graphFile", graphFile.getFileName());
-                    
-                    // ALSO embed the graph state in the player data as a backup
-                    // This ensures we always have a graph state even if the file reference is lost
-                    MemoryOutputStream mo;
-                    graphState->writeTo(mo, {});
-                    obj->setProperty("pluginGraph", mo.getMemoryBlock().toBase64Encoding());
-                    
-                    std::cout << "Saved graph state to file AND embedded in player data: " << graphFile.getFullPathName() << std::endl;
-                }
-                else
-                {
-                    std::cerr << "Failed to open graph file for writing: " << graphFile.getFullPathName() << std::endl;
-                    
-                    // Fall back to embedding the graph state in the player data
-                    MemoryOutputStream mo;
-                    graphState->writeTo(mo, {});
-                    obj->setProperty("pluginGraph", mo.getMemoryBlock().toBase64Encoding());
-                    std::cout << "Embedded graph state in player data as fallback" << std::endl;
-                }
-            }
-            catch (const std::exception& e)
-            {
-                std::cerr << "Exception when serializing graph state: " << e.what() << std::endl;
-                
-                // Create an empty graph state to avoid crashes
-                auto emptyGraph = std::make_unique<XmlElement>("FILTERGRAPH");
+                // ALSO embed the graph state in the player data as a backup
+                // This ensures we always have a graph state even if the file reference is lost
                 MemoryOutputStream mo;
-                emptyGraph->writeTo(mo, {});
+                graphState->writeTo(mo, {});
                 obj->setProperty("pluginGraph", mo.getMemoryBlock().toBase64Encoding());
+                
+                std::cout << "Saved graph state to file AND embedded in player data: " << graphFile.getFullPathName() << std::endl;
+            }
+            else
+            {
+                std::cerr << "Failed to open graph file for writing: " << graphFile.getFullPathName() << std::endl;
+                
+                // Fall back to embedding the graph state in the player data
+                MemoryOutputStream mo;
+                graphState->writeTo(mo, {});
+                obj->setProperty("pluginGraph", mo.getMemoryBlock().toBase64Encoding());
+                std::cout << "Embedded graph state in player data as fallback" << std::endl;
             }
         }
-        else
+        catch (const std::exception& e)
         {
+            std::cerr << "Exception when serializing graph state: " << e.what() << std::endl;
+            
             // Create an empty graph state to avoid crashes
             auto emptyGraph = std::make_unique<XmlElement>("FILTERGRAPH");
             MemoryOutputStream mo;
@@ -464,6 +459,15 @@ var Player::toVar() const
             obj->setProperty("pluginGraph", mo.getMemoryBlock().toBase64Encoding());
         }
     }
+    else
+    {
+        // Create an empty graph state to avoid crashes
+        auto emptyGraph = std::make_unique<XmlElement>("FILTERGRAPH");
+        MemoryOutputStream mo;
+        emptyGraph->writeTo(mo, {});
+        obj->setProperty("pluginGraph", mo.getMemoryBlock().toBase64Encoding());
+    }
+}
     
     // Add musician state if available
     // This is a placeholder for future implementation
@@ -472,36 +476,36 @@ var Player::toVar() const
     return var(obj);
 }
 
-std::unique_ptr<Player> Player::fromVar(const var& v, AudioPluginFormatManager& formatManager, KnownPluginList& knownPluginList)
+std::unique_ptr<Player> Player::fromVar(const var& v, AudioPluginFormatManager& fm, KnownPluginList& kpl, AudioEngine* engine)
 {
     if (v.isObject())
     {
-        auto obj = v.getDynamicObject();
+        auto* obj = v.getDynamicObject();
+        
         if (obj == nullptr)
             return nullptr;
         
-        // Extract ID and name
+        // Extract player ID
         String playerId;
-        String name = "Unknown Player";
-        
         if (obj->hasProperty("id"))
-            playerId = obj->getProperty("id").toString();
-        else
-            playerId = String::toHexString(Random::getSystemRandom().nextInt());
-        
-        if (obj->hasProperty("metadata"))
         {
-            auto metadataVar = obj->getProperty("metadata");
-            if (metadataVar.isObject())
-            {
-                auto metadataObj = metadataVar.getDynamicObject();
-                if (metadataObj != nullptr && metadataObj->hasProperty("name"))
-                    name = metadataObj->getProperty("name").toString();
-            }
+            playerId = obj->getProperty("id").toString();
+        }
+        else
+        {
+            // Generate a random ID if none is provided
+            playerId = String::toHexString(Random::getSystemRandom().nextInt());
+        }
+        
+        // Extract player name
+        String name = "Unnamed Player";
+        if (obj->hasProperty("name"))
+        {
+            name = obj->getProperty("name").toString();
         }
         
         // Create the player with the provided format manager and plugin list
-        auto player = std::make_unique<Player>(playerId, name, formatManager, knownPluginList);
+        auto player = std::make_unique<Player>(playerId, name, fm, kpl, engine);
         
         // Load metadata
         if (obj->hasProperty("metadata"))
@@ -597,7 +601,7 @@ std::unique_ptr<Player> Player::fromVar(const var& v, AudioPluginFormatManager& 
     
     // If parsing failed, return a default player
     return std::make_unique<Player>(String::toHexString(Random::getSystemRandom().nextInt()), 
-                                  "Default Player", formatManager, knownPluginList);
+                                   "Default Player", fm, kpl, engine);
 }
 
 } // namespace covertracks

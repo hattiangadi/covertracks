@@ -5,6 +5,7 @@
 #include <JuceHeader.h>
 #include "../Core/Player.h" // Include the new Player class
 #include "../../Plugins/PluginGraph.h"
+#include "../../Audio/AudioEngine.h"
 
 namespace covertracks {
 
@@ -18,7 +19,8 @@ public:
      * @param knownPluginList Reference to the shared KnownPluginList
      */
     PlayerManager(AudioPluginFormatManager& formatManager,
-                  KnownPluginList& knownPluginList);
+                  KnownPluginList& knownPluginList,
+                  AudioEngine* engine=nullptr);
                   
     ~PlayerManager();
     
@@ -54,6 +56,7 @@ private:
     // References to shared plugin environment (not owned)
     AudioPluginFormatManager& formatManager;
     KnownPluginList& knownPluginList;
+    AudioEngine* audioEngine = nullptr;
     
     // List of managed players
     OwnedArray<Player> players;

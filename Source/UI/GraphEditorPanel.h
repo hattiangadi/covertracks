@@ -34,6 +34,8 @@
 
 #pragma once
 
+#include <JuceHeader.h>
+#include "../Audio/AudioEngine.h"
 #include "../Plugins/PluginGraph.h"
 
 namespace covertracks {
@@ -122,7 +124,8 @@ public:
     GraphDocumentComponent (AudioPluginFormatManager& formatManager,
                             AudioDeviceManager& deviceManager,
                             KnownPluginList& pluginList,
-                            bool loadDefaultGraph = true);
+                            bool loadDefaultGraph = true,
+                            AudioEngine* engine = nullptr);
 
     ~GraphDocumentComponent() override;
 
@@ -157,6 +160,7 @@ private:
     KnownPluginList& pluginList;
 
     AudioProcessorPlayer graphPlayer;
+    AudioEngine* sharedAudioEngine = nullptr;
     MidiKeyboardState keyState;
     MidiOutput* midiOutput = nullptr;
 
@@ -179,7 +183,14 @@ private:
     //==============================================================================
     void changeListenerCallback (ChangeBroadcaster*) override;
 
-    void init();
+    void init(AudioEngine* engine = nullptr);
+    
+    /**
+     * @brief Check if using shared AudioEngine
+     * 
+     * @return true if using shared AudioEngine, false if using dedicated device manager
+     */
+    bool isUsingSharedAudioEngine() const { return sharedAudioEngine != nullptr; }
     void checkAvailableWidth();
     void updateMidiOutput();
 

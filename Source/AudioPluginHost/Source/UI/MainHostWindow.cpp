@@ -335,7 +335,7 @@ MainHostWindow::MainHostWindow()
 
     knownPluginList.setCustomScanner (std::make_unique<CustomPluginScanner>());
 
-    graphHolder.reset (new GraphDocumentComponent (formatManager, deviceManager, knownPluginList));
+    graphHolder.reset(new GraphDocumentComponent(formatManager, deviceManager, knownPluginList, true, audioEngine.get()));
 
     setContentNonOwned (graphHolder.get(), false);
 

@@ -1315,11 +1315,14 @@ struct GraphDocumentComponent::PluginListBoxModel final : public ListBoxModel,
 GraphDocumentComponent::GraphDocumentComponent (AudioPluginFormatManager& fm,
                                                 AudioDeviceManager& dm,
                                                 KnownPluginList& kpl,
-                                                bool loadDefaultGraph)
+                                                bool loadDefaultGraph,
+                                                AudioEngine* engine)
     : graph (new PluginGraph (fm, kpl)),
       deviceManager (dm),
       pluginList (kpl),
-      graphPlayer (getAppProperties().getUserSettings()->getBoolValue ("doublePrecisionProcessing", false))
+      graphPlayer (engine != nullptr ? engine->isDoublePrecisionProcessing() 
+                  : getAppProperties().getUserSettings()->getBoolValue("doublePrecisionProcessing", false)),
+      sharedAudioEngine(engine)
 {
     // If we don't want to load a default graph, create an empty one without default plugins
     if (!loadDefaultGraph)
@@ -1328,51 +1331,72 @@ GraphDocumentComponent::GraphDocumentComponent (AudioPluginFormatManager& fm,
         graph->newDocument(false);
     }
     
-    init();
-
-    deviceManager.addChangeListener (graphPanel.get());
-    deviceManager.addAudioCallback (&graphPlayer);
-    deviceManager.addMidiInputDeviceCallback ({}, &graphPlayer.getMidiMessageCollector());
-    deviceManager.addChangeListener (this);
+    std::cout << "Creating GraphDocumentComponent with " 
+              << (sharedAudioEngine != nullptr ? "shared AudioEngine" : "dedicated audio device manager") 
+              << std::endl;
+              
+    init(engine);
 }
 
-void GraphDocumentComponent::init()
+void GraphDocumentComponent::init(AudioEngine* engine)
 {
+    // First create the graph panel
+    graphPanel.reset(new GraphEditorPanel(*graph));
+    addAndMakeVisible(graphPanel.get());
+    graphPlayer.setProcessor(&graph->graph);
+    
+    // Store the AudioEngine reference
+    sharedAudioEngine = engine;
+    
+    // If AudioEngine is provided, register with it
+    if (engine != nullptr)
+    {
+        // Register the graph processor with the engine
+        engine->registerProcessor(&graph->graph);
+        
+        // Register MIDI input with the engine
+        engine->registerMidiInput(String(), &graphPlayer.getMidiMessageCollector());
+    }
+    // Otherwise use direct audio device callbacks
+    else
+    {
+        deviceManager.addChangeListener(graphPanel.get());
+        deviceManager.addAudioCallback(&graphPlayer);
+        deviceManager.addMidiInputDeviceCallback(String(), &graphPlayer.getMidiMessageCollector());
+    }
+    
     updateMidiOutput();
 
-    graphPanel.reset (new GraphEditorPanel (*graph));
-    addAndMakeVisible (graphPanel.get());
-    graphPlayer.setProcessor (&graph->graph);
+    keyState.addListener(&graphPlayer.getMidiMessageCollector());
 
-    keyState.addListener (&graphPlayer.getMidiMessageCollector());
-
-    keyboardComp.reset (new MidiKeyboardComponent (keyState, MidiKeyboardComponent::horizontalKeyboard));
-    addAndMakeVisible (keyboardComp.get());
-    statusBar.reset (new TooltipBar());
-    addAndMakeVisible (statusBar.get());
+    keyboardComp.reset(new MidiKeyboardComponent(keyState, MidiKeyboardComponent::horizontalKeyboard));
+    addAndMakeVisible(keyboardComp.get());
+    statusBar.reset(new TooltipBar());
+    addAndMakeVisible(statusBar.get());
 
     graphPanel->updateComponents();
 
     if (isOnTouchDevice())
     {
-        titleBarComponent.reset (new TitleBarComponent (*this));
-        addAndMakeVisible (titleBarComponent.get());
+        titleBarComponent.reset(new TitleBarComponent(*this));
+        addAndMakeVisible(titleBarComponent.get());
 
-        pluginListBoxModel.reset (new PluginListBoxModel (pluginListBox, pluginList));
+        pluginListBoxModel.reset(new PluginListBoxModel(pluginListBox, pluginList));
 
-        pluginListBox.setModel (pluginListBoxModel.get());
-        pluginListBox.setRowHeight (40);
+        pluginListBox.setModel(pluginListBoxModel.get());
+        pluginListBox.setRowHeight(40);
 
-        pluginListSidePanel.setContent (&pluginListBox, false);
+        pluginListSidePanel.setContent(&pluginListBox, false);
 
-        mobileSettingsSidePanel.setContent (new AudioDeviceSelectorComponent (deviceManager,
-                                                                              0, 2, 0, 2,
-                                                                              true, true, true, false));
+        mobileSettingsSidePanel.setContent(new AudioDeviceSelectorComponent(deviceManager,
+                                                                         0, 2, 0, 2,
+                                                                         true, true, true, false));
 
-        addAndMakeVisible (pluginListSidePanel);
-        addAndMakeVisible (mobileSettingsSidePanel);
+        addAndMakeVisible(pluginListSidePanel);
+        addAndMakeVisible(mobileSettingsSidePanel);
     }
 }
+
 
 GraphDocumentComponent::~GraphDocumentComponent()
 {
@@ -1381,7 +1405,7 @@ GraphDocumentComponent::~GraphDocumentComponent()
 
     releaseGraph();
 
-    keyState.removeListener (&graphPlayer.getMidiMessageCollector());
+    keyState.removeListener(&graphPlayer.getMidiMessageCollector());
 }
 
 void GraphDocumentComponent::resized()
@@ -1417,19 +1441,35 @@ void GraphDocumentComponent::createNewPlugin (const PluginDescriptionAndPreferen
 
 void GraphDocumentComponent::releaseGraph()
 {
-    deviceManager.removeAudioCallback (&graphPlayer);
-    deviceManager.removeMidiInputDeviceCallback ({}, &graphPlayer.getMidiMessageCollector());
+    // Get reference to AudioEngine if available
+    AudioEngine* engine = nullptr;
+    if (auto* mainHostWindow = dynamic_cast<MainHostWindow*>(getTopLevelComponent()))
+    {
+        engine = &mainHostWindow->getAudioEngine();
+    }
+    
+    if (engine != nullptr)
+    {
+        // Unregister from AudioEngine
+        engine->unregisterProcessor(&graph->graph);
+        engine->unregisterMidiInput(String(), &graphPlayer.getMidiMessageCollector());
+    }
+    else
+    {
+        deviceManager.removeAudioCallback(&graphPlayer);
+        deviceManager.removeMidiInputDeviceCallback(String(), &graphPlayer.getMidiMessageCollector());
+    }
 
     if (graphPanel != nullptr)
     {
-        deviceManager.removeChangeListener (graphPanel.get());
+        deviceManager.removeChangeListener(graphPanel.get());
         graphPanel = nullptr;
     }
 
     keyboardComp = nullptr;
     statusBar = nullptr;
 
-    graphPlayer.setProcessor (nullptr);
+    graphPlayer.setProcessor(nullptr);
     graph = nullptr;
 }
 
@@ -1488,9 +1528,25 @@ void GraphDocumentComponent::checkAvailableWidth()
     }
 }
 
-void GraphDocumentComponent::setDoublePrecision (bool doublePrecision)
+void GraphDocumentComponent::setDoublePrecision(bool doublePrecision)
 {
-    graphPlayer.setDoublePrecisionProcessing (doublePrecision);
+    // Check if we have access to the AudioEngine
+    AudioEngine* engine = nullptr;
+    if (auto* mainHostWindow = dynamic_cast<MainHostWindow*>(getTopLevelComponent()))
+    {
+        engine = &mainHostWindow->getAudioEngine();
+    }
+    
+    if (engine != nullptr)
+    {
+        // Use the AudioEngine to set double precision
+        engine->setDoublePrecisionProcessing(doublePrecision);
+    }
+    else
+    {
+        // Fall back to setting it directly on the graphPlayer
+        graphPlayer.setDoublePrecisionProcessing(doublePrecision);
+    }
 }
 
 bool GraphDocumentComponent::closeAnyOpenPluginWindows()

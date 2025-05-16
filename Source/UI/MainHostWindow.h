@@ -37,6 +37,7 @@
 #include "../Plugins/PluginGraph.h"
 #include "GraphEditorPanel.h"
 #include "../Player/Core/PlayerManager.h"
+#include "../Audio/AudioEngine.h"
 
 namespace covertracks {
 //==============================================================================
@@ -128,6 +129,8 @@ public:
     AudioDeviceManager& getDeviceManager() { return deviceManager; }
     KnownPluginList& getKnownPluginList() { return knownPluginList; }
 
+    AudioEngine& getAudioEngine() { return *audioEngine; }
+
     // Main components
     std::unique_ptr<PlayerLibraryComponent> playerLibraryWindow;
     std::shared_ptr<PlayerManager> playerManager;
@@ -152,6 +155,8 @@ private:
     KnownPluginList::SortMethod pluginSortMethod;
     Array<PluginDescriptionAndPreference> pluginDescriptionsAndPreference;
 
+    std::unique_ptr<AudioEngine> audioEngine;
+    
     class PluginListWindow;
     std::unique_ptr<PluginListWindow> pluginListWindow;
 

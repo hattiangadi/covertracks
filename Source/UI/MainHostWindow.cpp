@@ -36,6 +36,7 @@
 #include "MainHostWindow.h"
 #include "../Plugins/InternalPlugins.h"
 #include "../Player/UI/PlayerLibraryComponent.h"
+#include "../Audio/AudioEngine.h"
 
 namespace covertracks {
 constexpr const char* scanModeKey = "pluginScanMode";
@@ -337,6 +338,8 @@ MainHostWindow::MainHostWindow()
 
     knownPluginList.setCustomScanner (std::make_unique<CustomPluginScanner>());
 
+    audioEngine = std::make_unique<AudioEngine>(deviceManager, formatManager, knownPluginList);
+
     // Create a PlayerManager instance
     playerManager = std::make_shared<PlayerManager>(formatManager, knownPluginList);
     
@@ -390,6 +393,8 @@ MainHostWindow::~MainHostWindow()
 
     getAppProperties().getUserSettings()->setValue ("mainWindowPos", getWindowStateAsString());
     clearContentComponent();
+
+    audioEngine = nullptr;
 
   #if ! (JUCE_ANDROID || JUCE_IOS)
    #if JUCE_MAC
@@ -781,9 +786,10 @@ bool covertracks::MainHostWindow::perform (const InvocationInfo& info)
             updatePrecisionMenuItem (cmdInfo);
             menuItemsChanged();
             
-            // Double precision setting is now handled at the player level
+            // Use AudioEngine to set double precision
+            audioEngine->setDoublePrecisionProcessing(newIsDoublePrecision);
         }
-        break;
+    break;
 
     case CommandIDs::autoScalePluginWindows:
         if (auto* props = getAppProperties().getUserSettings())
@@ -822,37 +828,8 @@ bool covertracks::MainHostWindow::perform (const InvocationInfo& info)
 
 void covertracks::MainHostWindow::showAudioSettings()
 {
-    auto* audioSettingsComp = new AudioDeviceSelectorComponent (deviceManager,
-                                                                0, 256,
-                                                                0, 256,
-                                                                true, true,
-                                                                true, false);
-
-    audioSettingsComp->setSize (500, 450);
-
-    DialogWindow::LaunchOptions o;
-    o.content.setOwned (audioSettingsComp);
-    o.dialogTitle                   = "Audio Settings";
-    o.componentToCentreAround       = this;
-    o.dialogBackgroundColour        = getLookAndFeel().findColour (ResizableWindow::backgroundColourId);
-    o.escapeKeyTriggersCloseButton  = true;
-    o.useNativeTitleBar             = false;
-    o.resizable                     = false;
-
-     auto* w = o.create();
-     auto safeThis = SafePointer<MainHostWindow> (this);
-
-     w->enterModalState (true,
-                         ModalCallbackFunction::create
-                         ([safeThis] (int)
-                         {
-                             auto audioState = safeThis->deviceManager.createStateXml();
-
-                             getAppProperties().getUserSettings()->setValue ("audioDeviceState", audioState.get());
-                             getAppProperties().getUserSettings()->saveIfNeeded();
-                             
-                             // Graph connections are now handled at the player level
-                         }), true);
+    // Use AudioEngine's method instead of directly implementing it here
+    audioEngine->showAudioSettings(this);
 }
 
 bool covertracks::MainHostWindow::isInterestedInFileDrag (const StringArray&)

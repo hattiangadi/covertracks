@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 #include "Instrument.h"
+#include "../../Audio/AudioEngine.h"
 // Temporarily commenting out Musician for compilation
 // #include "../../Musician/Musician.h"
 
@@ -37,10 +38,12 @@ public:
      * @param name Display name for this player
      * @param formatManager Reference to the shared AudioPluginFormatManager
      * @param knownPluginList Reference to the shared KnownPluginList
+     * @param audioEngine Optional AudioEngine reference for centralized audio management
      */
-    Player(const String& id, const String& name, 
-           AudioPluginFormatManager& formatManager,
-           KnownPluginList& knownPluginList);
+     Player(const String& id, const String& name, 
+        AudioPluginFormatManager& formatManager,
+        KnownPluginList& knownPluginList,
+        AudioEngine* audioEngine = nullptr);
     
     /**
      * @brief Destroy the Player
@@ -138,11 +141,13 @@ public:
      * @param v JSON representation
      * @param formatManager Reference to the shared AudioPluginFormatManager
      * @param knownPluginList Reference to the shared KnownPluginList
+     * @param audioEngine Optional AudioEngine reference for centralized audio management
      * @return std::unique_ptr<Player> The created player
      */
     static std::unique_ptr<Player> fromVar(const var& v, 
                                            AudioPluginFormatManager& formatManager,
-                                           KnownPluginList& knownPluginList);
+                                           KnownPluginList& knownPluginList,
+                                           AudioEngine* audioEngine = nullptr);
     
     /**
      * @brief Get the ID of this player
@@ -183,6 +188,9 @@ private:
     // References to shared plugin environment (not owned)
     AudioPluginFormatManager& formatManager;
     KnownPluginList& knownPluginList;
+
+    AudioEngine* audioEngine = nullptr;
+
     
     // Core components
     std::unique_ptr<Instrument> instrument;

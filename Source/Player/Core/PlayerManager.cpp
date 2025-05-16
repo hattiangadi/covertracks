@@ -4,10 +4,24 @@
 namespace covertracks {
 
 PlayerManager::PlayerManager(AudioPluginFormatManager& fm,
-                           KnownPluginList& kpl)
+                           KnownPluginList& kpl,
+                           AudioEngine* engine)
     : formatManager(fm),
-      knownPluginList(kpl)
+      knownPluginList(kpl),
+      audioEngine(engine)
 {
+    std::cout << "Creating PlayerManager with " 
+    << (audioEngine != nullptr ? "shared" : "dedicated") 
+    << " audio engine" << std::endl;
+    
+    // Check if we have a valid AudioEngine
+    if (audioEngine != nullptr)
+    {
+        std::cout << "PlayerManager using AudioEngine with sample rate: " 
+        << audioEngine->getSampleRate() << "Hz, buffer size: "
+        << audioEngine->getBufferSize() << " samples" << std::endl;
+    }
+    
     loadAllPlayers();
 }
 
@@ -163,8 +177,8 @@ std::unique_ptr<Player> PlayerManager::createPlayer()
     // Generate a unique ID
     String id = String::toHexString(Random::getSystemRandom().nextInt());
     
-    // Create a new player with default settings
-    auto player = std::make_unique<Player>(id, "New Player", formatManager, knownPluginList);
+    // Create a new player with default settings, passing the AudioEngine
+    auto player = std::make_unique<Player>(id, "New Player", formatManager, knownPluginList, audioEngine);
     player->initialize();
     
     // Set default metadata
@@ -190,7 +204,7 @@ std::unique_ptr<Player> PlayerManager::loadPlayer(const File& file)
     if (result.wasOk() && json.isObject())
     {
         // Use the fromVar method to create a player with the shared format manager and plugin list
-        return Player::fromVar(json, formatManager, knownPluginList);
+        return Player::fromVar(json, formatManager, knownPluginList, audioEngine);
     }
     
     return nullptr;

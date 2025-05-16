@@ -34,6 +34,10 @@
   </EXPORTFORMATS>
   <MAINGROUP id="YdWL7hi7p" name="Covertracks">
     <GROUP id="{CFED5B3D-D1D8-0F3F-4D67-B2A810D057EF}" name="Source">
+      <GROUP id="{7ECD7D00-FEA6-F942-0B50-69DFADAB75E1}" name="Audio">
+        <FILE id="ylQuZ8" name="AudioEngine.cpp" compile="1" resource="0" file="Source/Audio/AudioEngine.cpp"/>
+        <FILE id="vOsdTR" name="AudioEngine.h" compile="0" resource="0" file="Source/Audio/AudioEngine.h"/>
+      </GROUP>
       <GROUP id="{63C773C8-4305-87DD-DB3F-6D1143EFEC61}" name="Musician">
         <FILE id="hKhTKd" name="LLMClient.h" compile="0" resource="0" file="Source/Musician/LLMClient.h"/>
         <FILE id="tdBLJO" name="MusicalShorthand.h" compile="0" resource="0"

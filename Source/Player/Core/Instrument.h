@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 #include "../../Plugins/PluginGraph.h"
+#include "../../Audio/AudioEngine.h"
 
 namespace covertracks {
 
@@ -26,7 +27,8 @@ public:
      */
     Instrument(const String& name, 
                AudioPluginFormatManager& formatManager,
-               KnownPluginList& knownPluginList);
+               KnownPluginList& knownPluginList,
+               AudioEngine* audioEngine);
     
     /**
      * @brief Destroy the Instrument
@@ -36,10 +38,18 @@ public:
     /**
      * @brief Initialize the instrument
      * 
-     * @return true If initialization was successful
-     * @return false If initialization failed
+     * Sets up the audio device manager, processor graph, and other resources.
+     * Will clean up any existing resources first.
      */
     void initialize();
+    
+    /**
+     * @brief Clean up all audio resources
+     * 
+     * Releases audio callbacks, processors, and other resources.
+     * Called automatically by the destructor and initialize().
+     */
+    void cleanup();
     
     /**
      * @brief Load a plugin graph configuration
@@ -182,6 +192,9 @@ private:
     // References to shared plugin environment (not owned)
     AudioPluginFormatManager& formatManager;
     KnownPluginList& knownPluginList;
+
+    AudioEngine* audioEngine = nullptr;
+    bool usingSharedAudioEngine = false;
     
     std::unique_ptr<PluginGraph> pluginGraph;
     std::unique_ptr<AudioProcessorGraph> processorGraph; // For actual audio processing
