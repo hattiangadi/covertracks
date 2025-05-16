@@ -4,17 +4,21 @@
 namespace covertracks {
 
 Instrument::Instrument(const String& name, 
-                   AudioPluginFormatManager& formatManager,
-                   KnownPluginList& knownPluginList,
+                   AudioPluginFormatManager& fm,
+                   KnownPluginList& kpl,
                    AudioEngine* engine)
     : instrumentName(name), 
-      formatManager(formatManager),
-      knownPluginList(knownPluginList),
+      formatManager(fm),
+      knownPluginList(kpl),
       audioEngine(engine)
 {
        // Check if we're using the shared AudioEngine
     usingSharedAudioEngine = (audioEngine != nullptr);
     
+    std::cout << "[Instrument] " << instrumentName << " created with " 
+              << (usingSharedAudioEngine ? "SHARED" : "DEDICATED") 
+              << " audio engine" << std::endl;
+              
     // If we're not using a shared engine, we'll create the device manager when needed
     // This allows for switching between modes later if needed
     
@@ -26,12 +30,32 @@ Instrument::Instrument(const String& name,
               << " audio engine)" << std::endl;
 }
 
+// Static method to notify all Instruments that the AudioEngine is being destroyed
+void Instrument::notifyAudioEngineDestroyed()
+{
+    static bool audioEngineDestroyed = true;
+    std::cout << "[Instrument] Static notification: AudioEngine is being destroyed" << std::endl;
+}
+
 Instrument::~Instrument()
 {
-    // Clean up all resources
-    cleanup();
+    // Stop any ongoing playback
+    stopPlayback();
     
-    std::cout << "Destroying Instrument: " << instrumentName << std::endl;
+    // Stop timer if running
+    stopTimer();
+    
+    try
+    {
+        // Make sure we clean up resources
+        cleanup();
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "[Instrument] Error during destructor cleanup: " << e.what() << std::endl;
+    }
+    
+    std::cout << "[Instrument] Destroyed: " << instrumentName << std::endl;
 }
 
 void Instrument::cleanup()
@@ -39,22 +63,101 @@ void Instrument::cleanup()
     // Stop timer if running
     stopTimer();
 
-    // Unregister from AudioEngine if using it
+    // Unregister from AudioEngine if using it and if the engine is still valid
     if (usingSharedAudioEngine && audioEngine != nullptr)
     {
-        if (processorGraph != nullptr)
+        // Add a log message
+        std::cout << "DEBUG: [Instrument] " << instrumentName << ": Attempting to use AudioEngine" << std::endl;
+        
+        // Check if AudioEngine is already destroyed
+        static bool audioEngineDestroyed = false;
+        
+        if (audioEngineDestroyed)
         {
-            audioEngine->unregisterProcessor(processorGraph.get());
+            std::cout << "DEBUG: [Instrument] " << instrumentName << ": AudioEngine already destroyed, skipping unregistration" << std::endl;
         }
+        else
+        {
+            // Unregister processor graph
+            if (processorGraph != nullptr)
+            {
+                try
+                {
+                    std::cout << "DEBUG: [Instrument] " << instrumentName << ": Unregistering processor from AudioEngine" << std::endl;
+                    audioEngine->unregisterProcessor(processorGraph.get());
+                }
+                catch (...)
+                {
+                    std::cerr << "DEBUG: [Instrument] " << instrumentName << ": Failed to unregister processor - AudioEngine may be invalid" << std::endl;
+                    audioEngineDestroyed = true;
+                }
+            }
             
-        audioEngine->unregisterMidiInput(String(), this);
+            // Only try to unregister MIDI inputs if AudioEngine is still valid
+            if (!audioEngineDestroyed)
+            {
+                // Unregister all MIDI inputs that were registered
+                std::cout << "DEBUG: [Instrument] " << instrumentName << ": Unregistering " 
+                          << registeredMidiInputs.size() << " MIDI inputs from AudioEngine" << std::endl;
+                          
+                for (int i = 0; i < registeredMidiInputs.size(); ++i)
+                {
+                    const String& midiInputId = registeredMidiInputs[i];
+                    
+                    try
+                    {
+                        std::cout << "DEBUG: [Instrument] " << instrumentName << ": Unregistering MIDI input '" 
+                                  << midiInputId << "' from AudioEngine" << std::endl;
+                                  
+                        audioEngine->unregisterMidiInput(midiInputId, this);
+                    }
+                    catch (...)
+                    {
+                        std::cerr << "DEBUG: [Instrument] " << instrumentName << ": Failed to unregister MIDI input '" 
+                                  << midiInputId << "' - AudioEngine may be invalid" << std::endl;
+                        // Mark AudioEngine as destroyed and stop trying to use it
+                        audioEngineDestroyed = true;
+                        break;
+                    }
+                }
+            }
+        }
     }
     // Clean up MIDI input callbacks if using dedicated device manager
     else if (deviceManager != nullptr)
     {
-        deviceManager->removeMidiInputDeviceCallback(String(), this);
-        deviceManager->removeAudioCallback(this);
+        try
+        {
+            // Remove all MIDI input callbacks that were registered
+            std::cout << "DEBUG: [Instrument] " << instrumentName << ": Unregistering " 
+                      << registeredMidiInputs.size() << " MIDI inputs from dedicated device manager" << std::endl;
+                      
+            for (int i = 0; i < registeredMidiInputs.size(); ++i)
+            {
+                const String& midiInputId = registeredMidiInputs[i];
+                std::cout << "DEBUG: [Instrument] " << instrumentName << ": Unregistering MIDI input '" 
+                          << midiInputId << "' from dedicated device manager" << std::endl;
+                          
+                // Don't check if enabled, just try to remove
+                deviceManager->removeMidiInputDeviceCallback(midiInputId, this);
+            }
+            
+            deviceManager->removeAudioCallback(this);
+        }
+        catch (const std::exception& e)
+        {
+            std::cerr << "[Instrument] Error during device manager cleanup: " << e.what() << std::endl;
+        }
     }
+    
+    // Clear the list of registered MIDI inputs
+    std::cout << "DEBUG: [Instrument] " << instrumentName << ": Clearing registeredMidiInputs (size before: " 
+              << registeredMidiInputs.size() << ")" << std::endl;
+              
+    registeredMidiInputs.clear();
+    
+    std::cout << "DEBUG: [Instrument] " << instrumentName << ": registeredMidiInputs size after clear: " 
+              << registeredMidiInputs.size() << std::endl;
     
     // Release processor graph resources
     if (processorGraph != nullptr)
@@ -64,6 +167,8 @@ void Instrument::cleanup()
     
     std::cout << "Cleaned up Instrument resources: " << instrumentName << std::endl;
 }
+
+// Method removed as it's not declared in the header
 
 void Instrument::initialize()
 {
@@ -79,7 +184,7 @@ void Instrument::initialize()
     // If using the shared AudioEngine, register with it
     if (usingSharedAudioEngine && audioEngine != nullptr)
     {
-        std::cout << "Instrument " << instrumentName << ": Using shared AudioEngine" << std::endl;
+        std::cout << "[Instrument] " << instrumentName << ": Initializing with SHARED AudioEngine" << std::endl;
         
         // Get the device info from the shared engine
         double sampleRateValue = audioEngine->getSampleRate();
@@ -101,15 +206,32 @@ void Instrument::initialize()
         }
         
         // Register for MIDI input
-        if (!audioEngine->registerMidiInput(String(), this))
+        // Use a specific identifier instead of an empty string
+        String midiInputId = instrumentName + "_MidiInput";
+        
+        std::cout << "DEBUG: [Instrument] " << instrumentName << ": Adding MIDI input ID '" 
+                  << midiInputId << "' to registeredMidiInputs (size before: " 
+                  << registeredMidiInputs.size() << ")" << std::endl;
+                  
+        registeredMidiInputs.add(midiInputId);
+        
+        std::cout << "DEBUG: [Instrument] " << instrumentName << ": registeredMidiInputs size after add: " 
+                  << registeredMidiInputs.size() << std::endl;
+        
+        if (!audioEngine->registerMidiInput(midiInputId, this))
         {
             std::cerr << "Failed to register MIDI input with AudioEngine" << std::endl;
+        }
+        else
+        {
+            std::cout << "DEBUG: [Instrument] " << instrumentName 
+                      << ": Successfully registered MIDI input with AudioEngine" << std::endl;
         }
     }
     // Otherwise initialize our own audio device manager
     else
     {
-        std::cout << "Instrument " << instrumentName << ": Using dedicated audio device manager" << std::endl;
+        std::cout << "[Instrument] " << instrumentName << ": Initializing with DEDICATED audio device manager" << std::endl;
         
         // Make sure we have a device manager
         if (!deviceManager)
@@ -124,8 +246,23 @@ void Instrument::initialize()
         deviceManager->addAudioCallback(this);
         
         // Enable MIDI input
-        deviceManager->setMidiInputDeviceEnabled(String(), true);
-        deviceManager->addMidiInputDeviceCallback(String(), this);
+        // Use a specific identifier instead of an empty string
+        String midiInputId = instrumentName + "_MidiInput";
+        
+        std::cout << "DEBUG: [Instrument] " << instrumentName << ": Adding MIDI input ID '" 
+                  << midiInputId << "' to registeredMidiInputs (size before: " 
+                  << registeredMidiInputs.size() << ")" << std::endl;
+                  
+        registeredMidiInputs.add(midiInputId);
+        
+        std::cout << "DEBUG: [Instrument] " << instrumentName << ": registeredMidiInputs size after add: " 
+                  << registeredMidiInputs.size() << std::endl;
+        
+        deviceManager->setMidiInputDeviceEnabled(midiInputId, true);
+        deviceManager->addMidiInputDeviceCallback(midiInputId, this);
+        
+        std::cout << "DEBUG: [Instrument] " << instrumentName 
+                  << ": Successfully registered MIDI input with dedicated device manager" << std::endl;
         
         auto currentAudioDevice = deviceManager->getCurrentAudioDevice();
         

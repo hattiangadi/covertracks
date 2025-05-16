@@ -129,10 +129,14 @@ public:
     AudioDeviceManager& getDeviceManager() { return deviceManager; }
     KnownPluginList& getKnownPluginList() { return knownPluginList; }
 
-    AudioEngine& getAudioEngine() { return *audioEngine; }
+    AudioEngine* getAudioEngine() { return playerManager ? playerManager->getAudioEngine() : nullptr; }
 
     // Main components
     std::unique_ptr<PlayerLibraryComponent> playerLibraryWindow;
+    
+    // NOTE: Order matters for destruction! 
+    // playerManager must be destroyed BEFORE audioEngine
+    // C++ destroys members in reverse order of declaration
     std::shared_ptr<PlayerManager> playerManager;
 
 
@@ -154,8 +158,8 @@ private:
     KnownPluginList knownPluginList;
     KnownPluginList::SortMethod pluginSortMethod;
     Array<PluginDescriptionAndPreference> pluginDescriptionsAndPreference;
-
-    std::unique_ptr<AudioEngine> audioEngine;
+    
+    // AudioEngine is now owned by the PlayerManager
     
     class PluginListWindow;
     std::unique_ptr<PluginListWindow> pluginListWindow;

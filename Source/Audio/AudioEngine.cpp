@@ -7,8 +7,8 @@
 */
 
 #include "AudioEngine.h"
-#include <iostream>
 #include "../UI/MainHostWindow.h"
+#include <iostream>
 
 namespace covertracks {
 
@@ -23,7 +23,7 @@ AudioEngine::AudioEngine(AudioDeviceManager& dm,
     deviceManager.addChangeListener(this);
     
     // Check the current double precision setting from user settings
-    if (auto* props = covertracks::getAppProperties().getUserSettings())
+    if (auto* props = getAppProperties().getUserSettings())
         doublePrecisionProcessing = props->getBoolValue("doublePrecisionProcessing", false);
         
     std::cout << "AudioEngine initialized (double precision: " 
@@ -32,6 +32,11 @@ AudioEngine::AudioEngine(AudioDeviceManager& dm,
 
 AudioEngine::~AudioEngine()
 {
+    // Notify all Instruments that the AudioEngine is being destroyed
+    // This prevents them from trying to unregister when they're destroyed
+    std::cout << "AudioEngine destructor: Notifying Instruments of destruction" << std::endl;
+    covertracks::Instrument::notifyAudioEngineDestroyed();
+    
     // Stop all audio processing
     const ScopedLock sl(processorLock);
     
@@ -115,18 +120,27 @@ void AudioEngine::unregisterProcessor(AudioProcessor* processor)
 bool AudioEngine::registerMidiInput(const String& midiInputDeviceName, MidiInputCallback* callbackObject)
 {
     if (callbackObject == nullptr)
+    {
+        std::cerr << "ERROR: Attempted to register null MIDI callback" << std::endl;
         return false;
+    }
         
     try
     {
+        std::cout << "DEBUG: Before registering MIDI callback for '" 
+                  << (midiInputDeviceName.isEmpty() ? "default" : midiInputDeviceName) 
+                  << "', callback ptr: " << callbackObject << std::endl;
+                  
         deviceManager.addMidiInputDeviceCallback(midiInputDeviceName, callbackObject);
-        std::cout << "Registered MIDI input callback for device: " 
-                  << (midiInputDeviceName.isEmpty() ? "default" : midiInputDeviceName) << std::endl;
+        
+        std::cout << "SUCCESS: Registered MIDI input callback for device: " 
+                  << (midiInputDeviceName.isEmpty() ? "default" : midiInputDeviceName) 
+                  << ", callback ptr: " << callbackObject << std::endl;
         return true;
     }
     catch (const std::exception& e)
     {
-        std::cerr << "Failed to register MIDI input callback: " << e.what() << std::endl;
+        std::cerr << "ERROR: Failed to register MIDI input callback: " << e.what() << std::endl;
         return false;
     }
 }
@@ -134,11 +148,35 @@ bool AudioEngine::registerMidiInput(const String& midiInputDeviceName, MidiInput
 void AudioEngine::unregisterMidiInput(const String& midiInputDeviceName, MidiInputCallback* callbackObject)
 {
     if (callbackObject == nullptr)
+    {
+        std::cerr << "ERROR: Attempted to unregister null MIDI callback" << std::endl;
         return;
+    }
+    
+    try
+    {
+        std::cout << "DEBUG: Before unregistering MIDI callback for '" 
+                  << (midiInputDeviceName.isEmpty() ? "default" : midiInputDeviceName) 
+                  << "', callback ptr: " << callbackObject << std::endl;
+                  
+        // Get list of available MIDI inputs for debugging
+        auto midiInputs = MidiInput::getAvailableDevices();
+        std::cout << "DEBUG: Available MIDI inputs: " << midiInputs.size() << std::endl;
+        for (auto& input : midiInputs)
+        {
+            std::cout << "  - " << input.name << " (ID: " << input.identifier << ")" << std::endl;
+        }
         
-    deviceManager.removeMidiInputDeviceCallback(midiInputDeviceName, callbackObject);
-    std::cout << "Unregistered MIDI input callback for device: " 
-              << (midiInputDeviceName.isEmpty() ? "default" : midiInputDeviceName) << std::endl;
+        deviceManager.removeMidiInputDeviceCallback(midiInputDeviceName, callbackObject);
+        
+        std::cout << "SUCCESS: Unregistered MIDI input callback for device: " 
+                  << (midiInputDeviceName.isEmpty() ? "default" : midiInputDeviceName) 
+                  << ", callback ptr: " << callbackObject << std::endl;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "ERROR: Failed to unregister MIDI input callback: " << e.what() << std::endl;
+    }
 }
 
 std::unique_ptr<XmlElement> AudioEngine::getAudioDeviceState() const
@@ -151,22 +189,14 @@ bool AudioEngine::setAudioDeviceState(const XmlElement* stateXml)
     if (stateXml == nullptr)
         return false;
         
-    try
-    {
-        // Get current channel counts
-        int inputChannels = deviceManager.getAudioDeviceSetup().inputChannels.countNumberOfSetBits();
-        int outputChannels = deviceManager.getAudioDeviceSetup().outputChannels.countNumberOfSetBits();
-        
-        // Initialize with the state XML
-        // Just call the method and return true if no exception is thrown
-        deviceManager.initialise(inputChannels, outputChannels, stateXml, true);
-        return true;
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "Failed to set audio device state: " << e.what() << std::endl;
-        return false;
-    }
+    // Initialize the device manager with the saved state
+    auto result = deviceManager.initialise(
+        deviceManager.getAudioDeviceSetup().inputChannels.countNumberOfSetBits(),
+        deviceManager.getAudioDeviceSetup().outputChannels.countNumberOfSetBits(),
+        stateXml,
+        true);
+    // Convert result to bool - true if no error
+    return (result == juce::String());
 }
 
 void AudioEngine::showAudioSettings(Component* parentComponent)
@@ -200,7 +230,7 @@ void AudioEngine::showAudioSettings(Component* parentComponent)
             // Save audio state when dialog closes
             auto audioState = this->getAudioDeviceState();
             
-            if (auto* props = covertracks::getAppProperties().getUserSettings())
+            if (auto* props = getAppProperties().getUserSettings())
             {
                 props->setValue("audioDeviceState", audioState.get());
                 props->saveIfNeeded();
@@ -260,7 +290,7 @@ void AudioEngine::setDoublePrecisionProcessing(bool doublePrecision)
     }
     
     // Save the setting
-    if (auto* props = covertracks::getAppProperties().getUserSettings())
+    if (auto* props = getAppProperties().getUserSettings())
     {
         props->setValue("doublePrecisionProcessing", doublePrecision);
         props->saveIfNeeded();
@@ -338,7 +368,6 @@ int AudioEngine::getOutputLatencySamples() const
 StringArray AudioEngine::getAvailableAudioDeviceNames() const
 {
     StringArray deviceNames;
-    
     // Get available device types without copying the OwnedArray
     for (int i = 0; i < deviceManager.getAvailableDeviceTypes().size(); ++i)
     {

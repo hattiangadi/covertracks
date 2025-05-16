@@ -5,28 +5,31 @@ namespace covertracks {
 
 PlayerManager::PlayerManager(AudioPluginFormatManager& fm,
                            KnownPluginList& kpl,
-                           AudioEngine* engine)
+                           AudioDeviceManager& deviceManager)
     : formatManager(fm),
-      knownPluginList(kpl),
-      audioEngine(engine)
+      knownPluginList(kpl)
 {
-    std::cout << "Creating PlayerManager with " 
-    << (audioEngine != nullptr ? "shared" : "dedicated") 
-    << " audio engine" << std::endl;
+    // Create our own AudioEngine instance
+    audioEngine = std::make_unique<AudioEngine>(deviceManager, formatManager, knownPluginList);
     
-    // Check if we have a valid AudioEngine
-    if (audioEngine != nullptr)
-    {
-        std::cout << "PlayerManager using AudioEngine with sample rate: " 
-        << audioEngine->getSampleRate() << "Hz, buffer size: "
-        << audioEngine->getBufferSize() << " samples" << std::endl;
-    }
+    std::cout << "Creating PlayerManager with owned AudioEngine" << std::endl;
+    std::cout << "PlayerManager using AudioEngine with sample rate: " 
+              << audioEngine->getSampleRate() << "Hz, buffer size: "
+              << audioEngine->getBufferSize() << " samples" << std::endl;
     
     loadAllPlayers();
 }
 
 PlayerManager::~PlayerManager()
 {
+    // Log the start of cleanup
+    std::cout << "PlayerManager destructor: Starting cleanup of " << players.size() << " players" << std::endl;
+    
+    // Clear all players - this will call each Player's destructor
+    // which in turn will clean up their Instruments
+    players.clear();
+    
+    std::cout << "PlayerManager destructor: All players cleaned up" << std::endl;
 }
 
 Array<Player*> PlayerManager::getPlayers() const
@@ -177,8 +180,8 @@ std::unique_ptr<Player> PlayerManager::createPlayer()
     // Generate a unique ID
     String id = String::toHexString(Random::getSystemRandom().nextInt());
     
-    // Create a new player with default settings, passing the AudioEngine
-    auto player = std::make_unique<Player>(id, "New Player", formatManager, knownPluginList, audioEngine);
+    // Create a new player with default settings, passing the AudioEngine as a raw pointer
+    auto player = std::make_unique<Player>(id, "New Player", formatManager, knownPluginList, audioEngine.get());
     player->initialize();
     
     // Set default metadata
@@ -204,7 +207,7 @@ std::unique_ptr<Player> PlayerManager::loadPlayer(const File& file)
     if (result.wasOk() && json.isObject())
     {
         // Use the fromVar method to create a player with the shared format manager and plugin list
-        return Player::fromVar(json, formatManager, knownPluginList, audioEngine);
+        return Player::fromVar(json, formatManager, knownPluginList, audioEngine.get());
     }
     
     return nullptr;

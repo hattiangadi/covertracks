@@ -17,10 +17,11 @@ public:
      * 
      * @param formatManager Reference to the shared AudioPluginFormatManager
      * @param knownPluginList Reference to the shared KnownPluginList
+     * @param deviceManager Reference to the shared AudioDeviceManager
      */
     PlayerManager(AudioPluginFormatManager& formatManager,
                   KnownPluginList& knownPluginList,
-                  AudioEngine* engine=nullptr);
+                  AudioDeviceManager& deviceManager);
                   
     ~PlayerManager();
     
@@ -46,6 +47,9 @@ public:
     // Delete a player
     bool deletePlayer(Player* player);
     
+    // Get the AudioEngine
+    AudioEngine* getAudioEngine() { return audioEngine.get(); }
+    
 private:
     // Get the directory where players are stored
     File getPlayersDirectory();
@@ -56,7 +60,9 @@ private:
     // References to shared plugin environment (not owned)
     AudioPluginFormatManager& formatManager;
     KnownPluginList& knownPluginList;
-    AudioEngine* audioEngine = nullptr;
+    
+    // AudioEngine is now owned by the PlayerManager
+    std::unique_ptr<AudioEngine> audioEngine;
     
     // List of managed players
     OwnedArray<Player> players;

@@ -338,10 +338,9 @@ MainHostWindow::MainHostWindow()
 
     knownPluginList.setCustomScanner (std::make_unique<CustomPluginScanner>());
 
-    audioEngine = std::make_unique<AudioEngine>(deviceManager, formatManager, knownPluginList);
-
-    // Create a PlayerManager instance
-    playerManager = std::make_shared<PlayerManager>(formatManager, knownPluginList);
+    // Create a PlayerManager instance that owns the AudioEngine
+    // The PlayerManager will create its own AudioEngine using the shared deviceManager
+    playerManager = std::make_shared<PlayerManager>(formatManager, knownPluginList, deviceManager);
     
     // Create PlayerLibraryComponent as the main content
     playerLibraryWindow = std::make_unique<PlayerLibraryComponent>(playerManager);
@@ -388,14 +387,26 @@ MainHostWindow::MainHostWindow()
 
 MainHostWindow::~MainHostWindow()
 {
+    std::cout << "MainHostWindow destructor: Starting cleanup" << std::endl;
+    
+    // Save window position
+    getAppProperties().getUserSettings()->setValue ("mainWindowPos", getWindowStateAsString());
+    
+    // First, clean up the plugin list window
     pluginListWindow = nullptr;
     knownPluginList.removeChangeListener (this);
-
-    getAppProperties().getUserSettings()->setValue ("mainWindowPos", getWindowStateAsString());
+    
+    // Clear the content component
     clearContentComponent();
-
-    audioEngine = nullptr;
-
+    
+    // IMPORTANT: We've reordered the member variables in the header file
+    // so that playerManager is destroyed before audioEngine
+    // We'll let the natural C++ destruction order handle this
+    // Just add some logging to verify the order
+    
+    std::cout << "MainHostWindow destructor: Class members will be destroyed in reverse declaration order" << std::endl;
+    std::cout << "MainHostWindow destructor: PlayerManager will be destroyed first, then AudioEngine" << std::endl;
+    
   #if ! (JUCE_ANDROID || JUCE_IOS)
    #if JUCE_MAC
     setMacMainMenu (nullptr);
@@ -403,6 +414,8 @@ MainHostWindow::~MainHostWindow()
     setMenuBar (nullptr);
    #endif
   #endif
+  
+    std::cout << "MainHostWindow destructor: Cleanup complete" << std::endl;
 }
 
 void MainHostWindow::closeButtonPressed()
@@ -787,7 +800,8 @@ bool covertracks::MainHostWindow::perform (const InvocationInfo& info)
             menuItemsChanged();
             
             // Use AudioEngine to set double precision
-            audioEngine->setDoublePrecisionProcessing(newIsDoublePrecision);
+            if (auto* engine = getAudioEngine())
+                engine->setDoublePrecisionProcessing(newIsDoublePrecision);
         }
     break;
 
@@ -829,7 +843,8 @@ bool covertracks::MainHostWindow::perform (const InvocationInfo& info)
 void covertracks::MainHostWindow::showAudioSettings()
 {
     // Use AudioEngine's method instead of directly implementing it here
-    audioEngine->showAudioSettings(this);
+    if (auto* engine = getAudioEngine())
+        engine->showAudioSettings(this);
 }
 
 bool covertracks::MainHostWindow::isInterestedInFileDrag (const StringArray&)

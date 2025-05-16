@@ -57,7 +57,17 @@ Player::~Player()
     // Stop playback before destruction
     stopPlayback();
     
-    std::cout << "Destroying Player: " << metadata.name << " (ID: " << id << ")" << std::endl;
+    std::cout << "Player destructor: Cleaning up " << metadata.name << " (ID: " << id << ")" << std::endl;
+    
+    // Explicitly clean up the instrument first
+    // This ensures the instrument is destroyed before the player
+    if (instrument)
+    {
+        std::cout << "Player destructor: Explicitly cleaning up instrument for " << metadata.name << std::endl;
+        instrument.reset();
+    }
+    
+    std::cout << "Player destructor: Finished cleaning up " << metadata.name << " (ID: " << id << ")" << std::endl;
 }
 
 bool Player::initialize()

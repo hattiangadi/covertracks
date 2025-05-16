@@ -1445,7 +1445,7 @@ void GraphDocumentComponent::releaseGraph()
     AudioEngine* engine = nullptr;
     if (auto* mainHostWindow = dynamic_cast<MainHostWindow*>(getTopLevelComponent()))
     {
-        engine = &mainHostWindow->getAudioEngine();
+        engine = mainHostWindow->getAudioEngine();
     }
     
     if (engine != nullptr)
@@ -1534,7 +1534,7 @@ void GraphDocumentComponent::setDoublePrecision(bool doublePrecision)
     AudioEngine* engine = nullptr;
     if (auto* mainHostWindow = dynamic_cast<MainHostWindow*>(getTopLevelComponent()))
     {
-        engine = &mainHostWindow->getAudioEngine();
+        engine = mainHostWindow->getAudioEngine();
     }
     
     if (engine != nullptr)

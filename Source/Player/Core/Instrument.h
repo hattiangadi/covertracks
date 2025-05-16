@@ -52,6 +52,14 @@ public:
     void cleanup();
     
     /**
+     * @brief Static method to notify all Instruments that the AudioEngine is being destroyed
+     * 
+     * This is called by the AudioEngine destructor to let Instruments know they should
+     * not try to unregister from the AudioEngine anymore.
+     */
+    static void notifyAudioEngineDestroyed();
+    
+    /**
      * @brief Load a plugin graph configuration
      * 
      * @param graphState XML representation of plugin graph
@@ -214,6 +222,9 @@ private:
     
     // MIDI input listeners
     Array<MidiInputCallback*> midiInputListeners;
+    
+    // Track registered MIDI input device names
+    StringArray registeredMidiInputs;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Instrument)
 };
