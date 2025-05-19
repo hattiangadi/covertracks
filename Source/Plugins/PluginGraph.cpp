@@ -143,7 +143,7 @@ void PluginGraph::addPlugin (const PluginDescriptionAndPreference& desc, Point<d
     formatManager.createPluginInstanceAsync (correctedDesc,
                                              graph.getSampleRate(),
                                              graph.getBlockSize(),
-                                             [this, pos, dpiDisabler, useARA = desc.useARA] (std::unique_ptr<AudioPluginInstance> instance, const String& error)
+                                             [this, pos, useARA = desc.useARA] (std::unique_ptr<AudioPluginInstance> instance, const String& error)
                                              {
                                                  addPluginCallback (std::move (instance), error, pos, useARA);
                                              });
@@ -183,6 +183,9 @@ void PluginGraph::addPluginCallback (std::unique_ptr<AudioPluginInstance> instan
             node->properties.set ("y", pos.y);
             node->properties.set ("useARA", useARA == PluginDescriptionAndPreference::UseARA::yes);
             changed();
+            
+            // Fix audio output nodes after adding a new plugin
+            fixAudioOutputNodes();
         }
     }
 }
@@ -662,6 +665,91 @@ std::unique_ptr<XmlElement> PluginGraph::createXml() const
     return xml;
 }
 
+void PluginGraph::fixAudioOutputNodes()
+{
+    // Check for audio output nodes with 0 input channels
+    bool outputNodesFixed = false;
+    
+    // Get all nodes in the graph
+    for (auto* node : graph.getNodes())
+    {
+        auto* processor = node->getProcessor();
+        
+        // Check if this is an audio output node
+        auto* ioProcessor = dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(processor);
+        if (ioProcessor != nullptr && ioProcessor->getType() == AudioProcessorGraph::AudioGraphIOProcessor::audioOutputNode)
+        {
+            std::cout << "Found audio output node (ID: " << node->nodeID.uid << "), current inputs: " 
+                      << processor->getTotalNumInputChannels() << std::endl;
+            
+            // Always try to set the audio output node to have stereo input
+            // This is more aggressive than just checking for 0 inputs
+            try
+            {
+                // Try multiple approaches to set the channel configuration
+                
+                // Approach 1: Set the bus layout directly
+                AudioProcessor::BusesLayout layout = processor->getBusesLayout();
+                if (layout.inputBuses.size() > 0)
+                {
+                    layout.inputBuses[0] = AudioChannelSet::stereo();
+                    bool success = processor->setBusesLayout(layout);
+                    std::cout << "Approach 1 (setBusesLayout): " << (success ? "success" : "failed") << std::endl;
+                }
+                
+                // Approach 2: Try to enable the input bus with stereo configuration
+                if (processor->getBus(true, 0) != nullptr)
+                {
+                    bool success = processor->getBus(true, 0)->enable(true);
+                    std::cout << "Approach 2 (enable bus): " << (success ? "success" : "failed") << std::endl;
+                    
+                    if (success)
+                    {
+                        success = processor->getBus(true, 0)->setCurrentLayout(AudioChannelSet::stereo());
+                        std::cout << "Approach 2 (setCurrentLayout): " << (success ? "success" : "failed") << std::endl;
+                    }
+                }
+                
+                // Approach 3: Try to disable and re-enable the bus
+                if (processor->getBus(true, 0) != nullptr)
+                {
+                    processor->getBus(true, 0)->enable(false);
+                    bool success = processor->getBus(true, 0)->enable(true);
+                    std::cout << "Approach 3 (disable/enable): " << (success ? "success" : "failed") << std::endl;
+                }
+                
+                // Check if any of our approaches worked
+                if (processor->getTotalNumInputChannels() > 0)
+                {
+                    std::cout << "Successfully fixed audio output node to have " 
+                              << processor->getTotalNumInputChannels() << " input channels" << std::endl;
+                    outputNodesFixed = true;
+                }
+                else
+                {
+                    std::cout << "Failed to fix audio output node - still has 0 input channels" << std::endl;
+                }
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "Exception while fixing audio output node: " << e.what() << std::endl;
+            }
+        }
+    }
+    
+    // Log the final connection state
+    std::cout << "After fixing audio output nodes, graph has " << graph.getConnections().size() 
+              << " connections:" << std::endl;
+    for (auto& connection : graph.getConnections())
+    {
+        std::cout << "  Connection: " << connection.source.nodeID.uid << "/" 
+                  << connection.source.channelIndex << " -> " 
+                  << connection.destination.nodeID.uid << "/" 
+                  << connection.destination.channelIndex 
+                  << (connection.source.channelIndex >= 4096 ? " (MIDI)" : " (Audio)") << std::endl;
+    }
+}
+
 void PluginGraph::restoreFromXml (const XmlElement& xml)
 {
     clear();
@@ -675,6 +763,9 @@ void PluginGraph::restoreFromXml (const XmlElement& xml)
         nodeCount++;
     }
     std::cout << "Restored " << nodeCount << " nodes" << std::endl;
+    
+    // Fix any audio output nodes after restoring
+    fixAudioOutputNodes();
     
     // Check for audio output nodes and log their channel configuration
     // This is just for debugging purposes now that we have a proper initialization sequence

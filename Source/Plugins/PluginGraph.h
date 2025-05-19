@@ -109,6 +109,9 @@ public:
     Result saveDocument (const File& file) override;
     File getLastDocumentOpened() override;
     void setLastDocumentOpened (const File& file) override;
+    
+    // Fix audio output nodes to ensure they have proper input channels
+    void fixAudioOutputNodes();
 
     static File getDefaultGraphDocumentOnMobile();
 

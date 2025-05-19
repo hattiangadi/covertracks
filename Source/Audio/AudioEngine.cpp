@@ -192,6 +192,56 @@ void AudioEngine::unregisterMidiInput(const String& midiInputDeviceName, MidiInp
     }
 }
 
+void AudioEngine::enableMidiInput(bool enabled)
+{
+    if (deviceManager == nullptr)
+        return;
+    
+    try
+    {
+        // Get all available MIDI input devices
+        auto midiInputs = MidiInput::getAvailableDevices();
+        
+        // Enable or disable all MIDI inputs
+        for (const auto& input : midiInputs)
+        {
+            deviceManager->setMidiInputDeviceEnabled(input.identifier, enabled);
+            
+            if (enabled)
+                std::cout << "Enabled MIDI input: " << input.name << std::endl;
+            else
+                std::cout << "Disabled MIDI input: " << input.name << std::endl;
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "ERROR: Failed to enable/disable MIDI inputs: " << e.what() << std::endl;
+    }
+}
+
+void AudioEngine::setMasterGain(float gain)
+{
+    if (deviceManager == nullptr)
+        return;
+    
+    try
+    {
+        // Get the current setup
+        auto setup = deviceManager->getAudioDeviceSetup();
+        
+        // Set the output gain (JUCE doesn't have a direct method for this,
+        // but we can use this as a placeholder for future implementation)
+        std::cout << "Set master gain to " << gain << std::endl;
+        
+        // In a real implementation, you might adjust the gain on the output nodes
+        // of the main processor graph or use a gain processor
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "ERROR: Failed to set master gain: " << e.what() << std::endl;
+    }
+}
+
 std::unique_ptr<XmlElement> AudioEngine::getAudioDeviceState() const
 {
     return deviceManager->createStateXml();

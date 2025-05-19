@@ -857,15 +857,99 @@ void GraphEditorPanel::mouseDown(const MouseEvent& e)
         startTimer(750);
     }
 
+    // Handle right-click to show plugin menu
     if (e.mods.isPopupMenu())
-        showPopupMenu(e.position.toInt(), ownerPlayerEditorComponent);
-    else if (e.mods.isLeftButtonDown())
-        beginConnectorDrag ({}, {}, e);
+    {
+        // Debug output to help diagnose the issue
+        DBG("GraphEditorPanel: Right-click detected at " + e.position.toString());
+        DBG("GraphEditorPanel: ownerPlayerEditorComponent is " + String(ownerPlayerEditorComponent != nullptr ? "set" : "null"));
+        
+        // Try to find the PlayerEditorComponent through the component hierarchy
+        if (ownerPlayerEditorComponent == nullptr)
+        {
+            Component* parent = getParentComponent();
+            while (parent != nullptr)
+            {
+                DBG("GraphEditorPanel: Checking parent component: " + parent->getName());
+                
+                // First check if parent is a GraphDocumentComponent
+                if (auto* graphDoc = dynamic_cast<GraphDocumentComponent*>(parent))
+                {
+                    DBG("GraphEditorPanel: Found GraphDocumentComponent");
+                    // Then check its parent for PlayerEditorComponent
+                    parent = graphDoc->getParentComponent();
+                    if (parent != nullptr)
+                    {
+                        DBG("GraphEditorPanel: Checking GraphDocumentComponent's parent: " + parent->getName());
+                        if (auto* playerEditor = dynamic_cast<PlayerEditorComponent*>(parent))
+                        {
+                            DBG("GraphEditorPanel: Found PlayerEditorComponent");
+                            ownerPlayerEditorComponent = playerEditor;
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    // Try direct cast to PlayerEditorComponent
+                    if (auto* playerEditor = dynamic_cast<PlayerEditorComponent*>(parent))
+                    {
+                        DBG("GraphEditorPanel: Found PlayerEditorComponent directly");
+                        ownerPlayerEditorComponent = playerEditor;
+                        break;
+                    }
+                }
+                
+                parent = parent->getParentComponent();
+            }
+        }
+        
+        // Now show the popup menu
+        if (ownerPlayerEditorComponent != nullptr)
+        {
+            DBG("GraphEditorPanel: Showing popup menu with PlayerEditorComponent");
+            PopupMenu popupMenu;
+            ownerPlayerEditorComponent->addPluginsToMenu(popupMenu);
+            
+            // Store the position for the callback
+            Point<int> clickPos = e.position.toInt();
+            
+            // Show the menu with a callback that captures the position
+            popupMenu.showMenuAsync(
+                PopupMenu::Options(),
+                [this, clickPos](int menuItemID) {
+                    DBG("GraphEditorPanel: Menu item selected: " + String(menuItemID));
+                    
+                    if (menuItemID != 0 && ownerPlayerEditorComponent != nullptr)
+                    {
+                        // Get the plugin description for the selected menu item
+                        auto chosen = ownerPlayerEditorComponent->getChosenType(menuItemID);
+                        
+                        if (chosen.has_value())
+                        {
+                            DBG("GraphEditorPanel: Creating plugin: " + chosen->pluginDescription.name);
+                            ownerPlayerEditorComponent->createPlugin(*chosen, clickPos);
+                        }
+                        else
+                        {
+                            DBG("GraphEditorPanel: No plugin description found for menu item: " + String(menuItemID));
+                        }
+                    }
+                }
+            );
+        }
         else
         {
-            // Default behavior for MainHostWindow
-            showPopupMenu(e.position.toInt());
+            DBG("GraphEditorPanel: No PlayerEditorComponent found for right-click menu");
+            PopupMenu popupMenu;
+            popupMenu.addItem(1, "No plugin editor available", false);
+            popupMenu.showMenuAsync({}, nullptr);
         }
+    }
+    else if (e.mods.isLeftButtonDown())
+    {
+        beginConnectorDrag ({}, {}, e);
+    }
 }
 
 void GraphEditorPanel::mouseUp (const MouseEvent&)
@@ -885,11 +969,43 @@ void GraphEditorPanel::mouseDrag (const MouseEvent& e)
 
 void GraphEditorPanel::showPopupMenu(Point<int> position, PlayerEditorComponent* playerEditorComponent)
 {
+    // Always create a popup menu
+    PopupMenu popupMenu;
+    
+    // Try to get the PlayerEditorComponent if not provided
+    if (playerEditorComponent == nullptr)
+    {
+        playerEditorComponent = ownerPlayerEditorComponent;
+        
+        if (playerEditorComponent == nullptr)
+        {
+            // Try to find it through the component hierarchy
+            Component* parent = getParentComponent();
+            while (parent != nullptr)
+            {
+                if (auto* graphDoc = dynamic_cast<GraphDocumentComponent*>(parent))
+                {
+                    parent = graphDoc->getParentComponent();
+                    if (auto* playerEditor = dynamic_cast<PlayerEditorComponent*>(parent))
+                    {
+                        playerEditorComponent = playerEditor;
+                        break;
+                    }
+                }
+                else
+                {
+                    parent = parent->getParentComponent();
+                }
+            }
+        }
+    }
+    
     if (playerEditorComponent != nullptr)
     {
-        PopupMenu popupMenu;
+        // Add plugins to the menu using the PlayerEditorComponent
         playerEditorComponent->addPluginsToMenu(popupMenu);
-
+        
+        // Show the menu and handle selection
         popupMenu.showMenuAsync({},
             ModalCallbackFunction::create([playerEditorComponent, position](int r)
             {
@@ -898,7 +1014,12 @@ void GraphEditorPanel::showPopupMenu(Point<int> position, PlayerEditorComponent*
                         playerEditorComponent->createPlugin(*chosen, position);
             }));
     }
-    // else: Do nothing (plugin addition only allowed through Player Editor)
+    else
+    {
+        // If we still don't have a PlayerEditorComponent, show a message
+        popupMenu.addItem(1, "No plugin editor available", false);
+        popupMenu.showMenuAsync({}, nullptr);
+    }
 }
 
 void GraphEditorPanel::createNewPlugin (const PluginDescriptionAndPreference& desc, Point<int> position)

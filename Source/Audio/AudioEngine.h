@@ -70,6 +70,12 @@ namespace covertracks {
      bool setAudioDeviceState(const XmlElement* stateXml);
      void showAudioSettings(Component* parentComponent);
      
+     // MIDI input management
+     void enableMidiInput(bool enabled);
+     
+     // Audio output management
+     void setMasterGain(float gain);
+     
      // Audio state getters
      double getSampleRate() const;
      int getBufferSize() const;
