@@ -148,11 +148,11 @@ void PlayerLibraryComponent::showPlayerEditor(Player* playerToEdit)
         playerToEdit = newPlayer.get();
     }
     
-    // Find the MainHostWindow to pass to the editor
-    MainHostWindow* mainWindow = dynamic_cast<MainHostWindow*>(TopLevelWindow::getTopLevelWindow(0));
+    // Get the AudioEngine from the PlayerManager
+    AudioEngine* audioEngine = playerManager->getAudioEngine();
     
-    // Create the editor component with the MainHostWindow reference
-    playerEditor = std::make_unique<PlayerEditorComponent>(playerToEdit, mainWindow);
+    // Create the editor component with the AudioEngine reference
+    playerEditor = std::make_unique<PlayerEditorComponent>(playerToEdit, audioEngine);
     playerEditor->addListener(this);
     
     // If we created a new player, transfer ownership to the editor

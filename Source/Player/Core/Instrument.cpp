@@ -4,36 +4,144 @@
 namespace covertracks {
 
 Instrument::Instrument(const String& name, 
-                   AudioPluginFormatManager& fm,
-                   KnownPluginList& kpl,
-                   AudioEngine* engine)
+                     AudioPluginFormatManager& fm,
+                     KnownPluginList& kpl,
+                     AudioEngine* engine)
     : instrumentName(name), 
+      resourceState(ResourceState::Unloaded),
+      audioEngine(engine),
       formatManager(fm),
-      knownPluginList(kpl),
-      audioEngine(engine)
+      knownPluginList(kpl)
 {
-       // Check if we're using the shared AudioEngine
-    usingSharedAudioEngine = (audioEngine != nullptr);
-    
-    std::cout << "[Instrument] " << instrumentName << " created with " 
-              << (usingSharedAudioEngine ? "SHARED" : "DEDICATED") 
-              << " audio engine" << std::endl;
-              
-    // If we're not using a shared engine, we'll create the device manager when needed
-    // This allows for switching between modes later if needed
+    std::cout << "Creating Instrument: " << name << std::endl;
     
     // Initialize the plugin graph with the shared format manager and plugin list
     pluginGraph = std::make_unique<PluginGraph>(formatManager, knownPluginList);
     
-    std::cout << "Creating Instrument: " << name 
-              << " (using " << (usingSharedAudioEngine ? "shared" : "dedicated") 
-              << " audio engine)" << std::endl;
+    // We'll create the processor graph when needed
+    
+    // Start the timer at 20ms interval (50Hz) for MIDI playback tracking
+    startTimer(20);
 }
 
+void Instrument::prepareForEditing()
+{
+    // Only load what's needed for editing
+    if (resourceState == ResourceState::Unloaded)
+    {
+        // Create processor graph if it doesn't exist
+        if (!processorGraph)
+        {
+            processorGraph = std::make_unique<AudioProcessorGraph>();
+        }
+        
+        // Set basic configuration so the graph can be edited
+        double sampleRateToUse = audioEngine ? audioEngine->getSampleRate() : 44100.0;
+        int bufferSizeToUse = audioEngine ? audioEngine->getBufferSize() : 512;
+        
+        processorGraph->setPlayConfigDetails(2, 2, sampleRateToUse, bufferSizeToUse);
+        
+        resourceState = ResourceState::EditReady;
+        std::cout << "Instrument " << instrumentName << " prepared for editing" << std::endl;
+    }
+}
+
+void Instrument::prepareForPlayback()
+{
+    // Load all resources needed for playback
+    if (resourceState != ResourceState::PlaybackReady)
+    {
+        // First make sure we're edit-ready
+        if (resourceState == ResourceState::Unloaded)
+            prepareForEditing();
+        
+        // Then prepare for playback
+        if (audioEngine)
+        {
+            double sampleRateToUse = audioEngine->getSampleRate();
+            int bufferSizeToUse = audioEngine->getBufferSize();
+            
+            // Update the processor graph
+            processorGraph->setPlayConfigDetails(2, 2, sampleRateToUse, bufferSizeToUse);
+            processorGraph->prepareToPlay(sampleRateToUse, bufferSizeToUse);
+            
+            // Connect to the AudioEngine
+            connectToAudioEngine(audioEngine);
+            
+            sampleRate = sampleRateToUse;
+        }
+        
+        resourceState = ResourceState::PlaybackReady;
+        std::cout << "Instrument " << instrumentName << " prepared for playback" << std::endl;
+    }
+}
+
+void Instrument::releaseResources()
+{
+    // Release all heavy resources
+    if (resourceState != ResourceState::Unloaded)
+    {
+        // Disconnect from AudioEngine
+        disconnectFromAudioEngine();
+        
+        // Release processor graph resources
+        if (processorGraph)
+            processorGraph->releaseResources();
+        
+        resourceState = ResourceState::Unloaded;
+        std::cout << "Instrument " << instrumentName << " resources released" << std::endl;
+    }
+}
+
+bool Instrument::connectToAudioEngine(AudioEngine* engine)
+{
+    if (engine == nullptr)
+        return false;
+    
+    // Store the engine reference
+    audioEngine = engine;
+    
+    // Register the processor graph
+    if (processorGraph && !engine->registerProcessor(processorGraph.get()))
+    {
+        std::cerr << "Failed to register processor with AudioEngine" << std::endl;
+        return false;
+    }
+    
+    // Register for MIDI input
+    String midiInputId = instrumentName + "_MidiInput";
+    registeredMidiInputs.add(midiInputId);
+    
+    if (!engine->registerMidiInput(midiInputId, this))
+    {
+        std::cerr << "Failed to register MIDI input with AudioEngine" << std::endl;
+        return false;
+    }
+    
+    return true;
+}
+
+void Instrument::disconnectFromAudioEngine()
+{
+    if (audioEngine)
+    {
+        // Unregister processor graph
+        if (processorGraph)
+            audioEngine->unregisterProcessor(processorGraph.get());
+        
+        // Unregister MIDI inputs
+        for (const auto& midiInputId : registeredMidiInputs)
+            audioEngine->unregisterMidiInput(midiInputId, this);
+        
+        registeredMidiInputs.clear();
+        
+        // Clear engine reference
+        audioEngine = nullptr;
+    }
+}
 // Static method to notify all Instruments that the AudioEngine is being destroyed
 void Instrument::notifyAudioEngineDestroyed()
 {
-    static bool audioEngineDestroyed = true;
     std::cout << "[Instrument] Static notification: AudioEngine is being destroyed" << std::endl;
 }
 
@@ -45,417 +153,87 @@ Instrument::~Instrument()
     // Stop timer if running
     stopTimer();
     
-    try
-    {
-        // Make sure we clean up resources
-        cleanup();
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "[Instrument] Error during destructor cleanup: " << e.what() << std::endl;
-    }
+    // Release all resources
+    releaseResources();
     
     std::cout << "[Instrument] Destroyed: " << instrumentName << std::endl;
 }
 
-void Instrument::cleanup()
+// The initialize method has been replaced by prepareForEditing and prepareForPlayback methods
+
+bool Instrument::loadPluginGraph(const XmlElement& graphState)
 {
-    // Stop timer if running
-    stopTimer();
-
-    // Unregister from AudioEngine if using it and if the engine is still valid
-    if (usingSharedAudioEngine && audioEngine != nullptr)
+    if (!pluginGraph)
     {
-        // Add a log message
-        std::cout << "DEBUG: [Instrument] " << instrumentName << ": Attempting to use AudioEngine" << std::endl;
-        
-        // Check if AudioEngine is already destroyed
-        static bool audioEngineDestroyed = false;
-        
-        if (audioEngineDestroyed)
-        {
-            std::cout << "DEBUG: [Instrument] " << instrumentName << ": AudioEngine already destroyed, skipping unregistration" << std::endl;
-        }
-        else
-        {
-            // Unregister processor graph
-            if (processorGraph != nullptr)
-            {
-                try
-                {
-                    std::cout << "DEBUG: [Instrument] " << instrumentName << ": Unregistering processor from AudioEngine" << std::endl;
-                    audioEngine->unregisterProcessor(processorGraph.get());
-                }
-                catch (...)
-                {
-                    std::cerr << "DEBUG: [Instrument] " << instrumentName << ": Failed to unregister processor - AudioEngine may be invalid" << std::endl;
-                    audioEngineDestroyed = true;
-                }
-            }
-            
-            // Only try to unregister MIDI inputs if AudioEngine is still valid
-            if (!audioEngineDestroyed)
-            {
-                // Unregister all MIDI inputs that were registered
-                std::cout << "DEBUG: [Instrument] " << instrumentName << ": Unregistering " 
-                          << registeredMidiInputs.size() << " MIDI inputs from AudioEngine" << std::endl;
-                          
-                for (int i = 0; i < registeredMidiInputs.size(); ++i)
-                {
-                    const String& midiInputId = registeredMidiInputs[i];
-                    
-                    try
-                    {
-                        std::cout << "DEBUG: [Instrument] " << instrumentName << ": Unregistering MIDI input '" 
-                                  << midiInputId << "' from AudioEngine" << std::endl;
-                                  
-                        audioEngine->unregisterMidiInput(midiInputId, this);
-                    }
-                    catch (...)
-                    {
-                        std::cerr << "DEBUG: [Instrument] " << instrumentName << ": Failed to unregister MIDI input '" 
-                                  << midiInputId << "' - AudioEngine may be invalid" << std::endl;
-                        // Mark AudioEngine as destroyed and stop trying to use it
-                        audioEngineDestroyed = true;
-                        break;
-                    }
-                }
-            }
-        }
-    }
-    // Clean up MIDI input callbacks if using dedicated device manager
-    else if (deviceManager != nullptr)
-    {
-        try
-        {
-            // Remove all MIDI input callbacks that were registered
-            std::cout << "DEBUG: [Instrument] " << instrumentName << ": Unregistering " 
-                      << registeredMidiInputs.size() << " MIDI inputs from dedicated device manager" << std::endl;
-                      
-            for (int i = 0; i < registeredMidiInputs.size(); ++i)
-            {
-                const String& midiInputId = registeredMidiInputs[i];
-                std::cout << "DEBUG: [Instrument] " << instrumentName << ": Unregistering MIDI input '" 
-                          << midiInputId << "' from dedicated device manager" << std::endl;
-                          
-                // Don't check if enabled, just try to remove
-                deviceManager->removeMidiInputDeviceCallback(midiInputId, this);
-            }
-            
-            deviceManager->removeAudioCallback(this);
-        }
-        catch (const std::exception& e)
-        {
-            std::cerr << "[Instrument] Error during device manager cleanup: " << e.what() << std::endl;
-        }
+        std::cerr << "Cannot load plugin graph - no plugin graph exists" << std::endl;
+        return false;
     }
     
-    // Clear the list of registered MIDI inputs
-    std::cout << "DEBUG: [Instrument] " << instrumentName << ": Clearing registeredMidiInputs (size before: " 
-              << registeredMidiInputs.size() << ")" << std::endl;
-              
-    registeredMidiInputs.clear();
-    
-    std::cout << "DEBUG: [Instrument] " << instrumentName << ": registeredMidiInputs size after clear: " 
-              << registeredMidiInputs.size() << std::endl;
-    
-    // Release processor graph resources
-    if (processorGraph != nullptr)
-    {
-        processorGraph->releaseResources();
-    }
-    
-    std::cout << "Cleaned up Instrument resources: " << instrumentName << std::endl;
-}
-
-// Method removed as it's not declared in the header
-
-void Instrument::initialize()
-{
-    // Clean up any existing resources first to avoid conflicts
-    cleanup();
-    
-    // Create processor graph if it doesn't exist
+    // Make sure we have a processor graph
     if (!processorGraph)
     {
         processorGraph = std::make_unique<AudioProcessorGraph>();
     }
     
-    // If using the shared AudioEngine, register with it
-    if (usingSharedAudioEngine && audioEngine != nullptr)
+    // First attempt to restore the graph state
+    pluginGraph->restoreFromXml(graphState);
+    
+    // Check for audio output nodes with 0 input channels
+    bool outputNodesFixed = false;
+    
+    // Get all nodes in the graph
+    auto& graph = pluginGraph->graph;
+    for (auto* node : graph.getNodes())
     {
-        std::cout << "[Instrument] " << instrumentName << ": Initializing with SHARED AudioEngine" << std::endl;
+        auto* processor = node->getProcessor();
         
-        // Get the device info from the shared engine
-        double sampleRateValue = audioEngine->getSampleRate();
-        int bufferSize = audioEngine->getBufferSize();
-        
-        // Configure the processor graph
-        processorGraph->setPlayConfigDetails(2, 2, sampleRateValue, bufferSize);
-        
-        // Update the sample rate
-        sampleRate = sampleRateValue;
-        
-        // Prepare the processor graph for playback
-        processorGraph->prepareToPlay(sampleRate, bufferSize);
-        
-        // Register with the audio engine
-        if (!audioEngine->registerProcessor(processorGraph.get()))
+        // Check if this is an audio output node
+        auto* ioProcessor = dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(processor);
+        if (ioProcessor != nullptr && ioProcessor->getType() == AudioProcessorGraph::AudioGraphIOProcessor::audioOutputNode)
         {
-            std::cerr << "Failed to register processor with AudioEngine" << std::endl;
-        }
-        
-        // Register for MIDI input
-        // Use a specific identifier instead of an empty string
-        String midiInputId = instrumentName + "_MidiInput";
-        
-        std::cout << "DEBUG: [Instrument] " << instrumentName << ": Adding MIDI input ID '" 
-                  << midiInputId << "' to registeredMidiInputs (size before: " 
-                  << registeredMidiInputs.size() << ")" << std::endl;
-                  
-        registeredMidiInputs.add(midiInputId);
-        
-        std::cout << "DEBUG: [Instrument] " << instrumentName << ": registeredMidiInputs size after add: " 
-                  << registeredMidiInputs.size() << std::endl;
-        
-        if (!audioEngine->registerMidiInput(midiInputId, this))
-        {
-            std::cerr << "Failed to register MIDI input with AudioEngine" << std::endl;
-        }
-        else
-        {
-            std::cout << "DEBUG: [Instrument] " << instrumentName 
-                      << ": Successfully registered MIDI input with AudioEngine" << std::endl;
-        }
-    }
-    // Otherwise initialize our own audio device manager
-    else
-    {
-        std::cout << "[Instrument] " << instrumentName << ": Initializing with DEDICATED audio device manager" << std::endl;
-        
-        // Make sure we have a device manager
-        if (!deviceManager)
-        {
-            deviceManager = std::make_unique<AudioDeviceManager>();
-        }
-        
-        // Initialize the audio device manager
-        deviceManager->initialiseWithDefaultDevices(2, 2);
-        
-        // Register as an audio callback
-        deviceManager->addAudioCallback(this);
-        
-        // Enable MIDI input
-        // Use a specific identifier instead of an empty string
-        String midiInputId = instrumentName + "_MidiInput";
-        
-        std::cout << "DEBUG: [Instrument] " << instrumentName << ": Adding MIDI input ID '" 
-                  << midiInputId << "' to registeredMidiInputs (size before: " 
-                  << registeredMidiInputs.size() << ")" << std::endl;
-                  
-        registeredMidiInputs.add(midiInputId);
-        
-        std::cout << "DEBUG: [Instrument] " << instrumentName << ": registeredMidiInputs size after add: " 
-                  << registeredMidiInputs.size() << std::endl;
-        
-        deviceManager->setMidiInputDeviceEnabled(midiInputId, true);
-        deviceManager->addMidiInputDeviceCallback(midiInputId, this);
-        
-        std::cout << "DEBUG: [Instrument] " << instrumentName 
-                  << ": Successfully registered MIDI input with dedicated device manager" << std::endl;
-        
-        auto currentAudioDevice = deviceManager->getCurrentAudioDevice();
-        
-        if (currentAudioDevice != nullptr)
-        {
-            // Get device settings
-            double sampleRateValue = currentAudioDevice->getCurrentSampleRate();
-            int bufferSize = currentAudioDevice->getCurrentBufferSizeSamples();
+            std::cout << "Found audio output node (ID: " << node->nodeID.uid << "), current inputs: " 
+                      << processor->getTotalNumInputChannels() << std::endl;
             
-            // Configure the processor graph
-            processorGraph->setPlayConfigDetails(
-                currentAudioDevice->getActiveInputChannels().countNumberOfSetBits(),
-                currentAudioDevice->getActiveOutputChannels().countNumberOfSetBits(),
-                sampleRateValue,
-                bufferSize);
-                
-            // Update the sample rate
-            sampleRate = sampleRateValue;
-            
-            // Prepare the processor graph for playback
-            processorGraph->prepareToPlay(sampleRate, bufferSize);
-        }
-        else
-        {
-            // Default configuration if no audio device is available
-            processorGraph->setPlayConfigDetails(2, 2, 44100.0, 512);
-            sampleRate = 44100.0;
-            
-            // Prepare the processor graph for playback
-            processorGraph->prepareToPlay(sampleRate, 512);
+            // If the audio output node has 0 input channels, we need to fix it
+            if (processor->getTotalNumInputChannels() == 0)
+            {
+                // Configure the node for stereo input
+                AudioProcessor::BusesLayout layout = processor->getBusesLayout();
+                if (layout.inputBuses.size() > 0)
+                {
+                    layout.inputBuses[0] = AudioChannelSet::stereo();
+                    processor->setBusesLayout(layout);
+                    outputNodesFixed = true;
+                    
+                    std::cout << "Fixed audio output node to have stereo input" << std::endl;
+                }
+            }
         }
     }
     
-    // Start the timer at 20ms interval (50Hz) for MIDI playback tracking
-    startTimer(20);
-    
-    std::cout << "Initialized Instrument: " << instrumentName 
-              << " (sample rate: " << sampleRate << ")" << std::endl;
-}
-
-
-bool Instrument::loadPluginGraph(const XmlElement& graphState)
-{
-    try
+    // If we fixed any output nodes, we need to restore connections again
+    if (outputNodesFixed)
     {
-        // Check if the XML is valid
-        if (!graphState.hasTagName("FILTERGRAPH"))
-        {
-            std::cerr << "Invalid plugin graph XML for " << instrumentName << std::endl;
-            return false;
-        }
-        
-        // Ensure we have a processor graph
-        if (processorGraph == nullptr)
-        {
-            processorGraph = std::make_unique<AudioProcessorGraph>();
-        }
-        
-        // Ensure we have a plugin graph
-        if (pluginGraph == nullptr)
-        {
-            std::cerr << "Plugin graph is null for " << instrumentName << std::endl;
-            return false;
-        }
-        
-        // We need to use the public API to restore the graph
-        // First, we'll restore the entire graph using the standard method
+        std::cout << "Re-restoring connections after fixing audio output nodes" << std::endl;
         pluginGraph->restoreFromXml(graphState);
-        
-        // Then check if we have any audio output nodes that need fixing
-        bool audioOutputNodeFixed = false;
-        
-        // Check for audio output nodes and fix them if needed
-        for (auto* node : pluginGraph->graph.getNodes())
-        {
-            if (auto* processor = node->getProcessor())
-            {
-                if (auto* ioProcessor = dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(processor))
-                {
-                    if (ioProcessor->getType() == AudioProcessorGraph::AudioGraphIOProcessor::audioOutputNode)
-                    {
-                        std::cout << "Instrument::loadPluginGraph - Found audio output node (ID: " << node->nodeID.uid 
-                                  << "), current inputs: " << ioProcessor->getTotalNumInputChannels() << std::endl;
-                        
-                        if (ioProcessor->getTotalNumInputChannels() == 0)
-                        {
-                            // If the audio output node has no input channels, we need to fix it
-                            std::cout << "  Audio output node has 0 inputs, attempting to fix..." << std::endl;
-                            
-                            // Try to set the bus layout to match what we need
-                            AudioProcessor::BusesLayout layout = ioProcessor->getBusesLayout();
-                            if (layout.inputBuses.size() > 0)
-                            {
-                                layout.inputBuses.getReference(0) = AudioChannelSet::stereo();
-                                if (ioProcessor->setBusesLayout(layout))
-                                {
-                                    std::cout << "  Successfully set audio output node to have stereo input" << std::endl;
-                                    audioOutputNodeFixed = true;
-                                }
-                                else
-                                {
-                                    std::cout << "  Failed to set audio output node bus layout" << std::endl;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        // If we fixed any audio output nodes, we need to restore the connections again
-        if (audioOutputNodeFixed)
-        {
-            std::cout << "Instrument::loadPluginGraph - Audio output node fixed, restoring connections again" << std::endl;
-            
-            // Save all the connections from the original XML
-            Array<AudioProcessorGraph::Connection> connectionsToRestore;
-            
-            for (auto* e : graphState.getChildWithTagNameIterator("CONNECTION"))
-            {
-                auto srcFilter = (uint32) e->getIntAttribute("srcFilter");
-                auto srcChannel = e->getIntAttribute("srcChannel");
-                auto dstFilter = (uint32) e->getIntAttribute("dstFilter");
-                auto dstChannel = e->getIntAttribute("dstChannel");
-                
-                // Create the connection
-                AudioProcessorGraph::Connection connection = { 
-                    { AudioProcessorGraph::NodeID(srcFilter), srcChannel },
-                    { AudioProcessorGraph::NodeID(dstFilter), dstChannel }
-                };
-                
-                connectionsToRestore.add(connection);
-            }
-            
-            // Clear all existing connections
-            for (auto& connection : pluginGraph->graph.getConnections())
-            {
-                pluginGraph->graph.removeConnection(connection);
-            }
-            
-            // Restore all connections
-            int connectionCount = 0;
-            int successCount = 0;
-            
-            for (auto& connection : connectionsToRestore)
-            {
-                connectionCount++;
-                
-                // Check if the connection can be made
-                if (pluginGraph->graph.canConnect(connection))
-                {
-                    bool result = pluginGraph->graph.addConnection(connection);
-                    if (result)
-                    {
-                        successCount++;
-                    }
-                }
-            }
-            
-            std::cout << "Instrument::loadPluginGraph - Successfully restored " << successCount 
-                      << " out of " << connectionCount << " connections after fixing audio output nodes" << std::endl;
-        }
-        
-        // Clean up any illegal connections
-        pluginGraph->graph.removeIllegalConnections();
-        
-        // In a real implementation, we would need to update the processor graph
-        // based on the plugin graph configuration
-        
-        std::cout << "Plugin graph loaded successfully for " << instrumentName << std::endl;
-        return true;
     }
-    catch (const std::exception& e)
-    {
-        std::cerr << "Exception in Instrument::loadPluginGraph: " << e.what() << std::endl;
-        return false;
-    }
-    catch (...)
-    {
-        std::cerr << "Unknown exception in Instrument::loadPluginGraph" << std::endl;
-        return false;
-    }
+    
+    return true;
 }
 
 std::unique_ptr<XmlElement> Instrument::getPluginGraphState()
 {
-    if (pluginGraph == nullptr)
+    if (!pluginGraph)
     {
+        std::cerr << "Cannot get plugin graph state - no plugin graph exists" << std::endl;
         return nullptr;
     }
     
     return pluginGraph->createXml();
 }
+
+
+// The detailed implementation is already defined above
 
 bool Instrument::playMIDIPattern(const var& pattern, double newTempo)
 {
@@ -575,78 +353,6 @@ bool Instrument::isPaused() const
     return playing && paused;
 }
 
-void Instrument::audioDeviceIOCallback(const float** inputChannelData, int numInputChannels,
-    float** outputChannelData, int numOutputChannels,
-    int numSamples)
-{
-    // Only called when using our own device manager, not when using shared AudioEngine
-
-    // Create audio buffer wrapper around the output channels
-    AudioBuffer<float> buffer(outputChannelData, numOutputChannels, numSamples);
-
-    // Clear the output buffer
-    buffer.clear();
-
-    // Create a MIDI buffer for this block
-    MidiBuffer midiBuffer;
-
-    // If playing, add MIDI events for this block
-    if (playing && !paused)
-    {
-    processMIDIEvents(midiBuffer, numSamples);
-    }
-
-    // Process audio with the processor graph
-    if (processorGraph != nullptr)
-    {
-    // Add any input audio to the buffer if needed
-    if (numInputChannels > 0)
-    {
-    for (int channel = 0; channel < std::min(numInputChannels, numOutputChannels); ++channel)
-    {
-    buffer.copyFrom(channel, 0, inputChannelData[channel], numSamples);
-    }
-    }
-
-    // Process the block through the processor graph
-    if (processorGraph)
-    processorGraph->processBlock(buffer, midiBuffer);
-    }
-
-    // Update current time
-    updateCurrentTime(numSamples);
-}
-
-void Instrument::audioDeviceAboutToStart(AudioIODevice* device)
-{
-    // Only called when using our own device manager, not when using shared AudioEngine
-    
-    if (device != nullptr)
-    {
-        sampleRate = device->getCurrentSampleRate();
-        
-        if (processorGraph != nullptr)
-        {
-            processorGraph->setPlayConfigDetails(
-                device->getActiveInputChannels().countNumberOfSetBits(),
-                device->getActiveOutputChannels().countNumberOfSetBits(),
-                sampleRate,
-                device->getCurrentBufferSizeSamples());
-            
-            processorGraph->prepareToPlay(sampleRate, device->getCurrentBufferSizeSamples());
-        }
-    }
-}
-
-void Instrument::audioDeviceStopped()
-{
-    // Only called when using our own device manager, not when using shared AudioEngine
-    
-    if (processorGraph != nullptr)
-    {
-        processorGraph->releaseResources();
-    }
-}
 
 void Instrument::handleIncomingMidiMessage(MidiInput* source, const MidiMessage& message)
 {
@@ -710,7 +416,7 @@ void Instrument::timerCallback()
     }
 }
 
-void Instrument::setOnPatternFinishedCallback(std::function<void()> callback)
+void Instrument::setPatternFinishedCallback(std::function<void()> callback)
 {
     onPatternFinished = std::move(callback);
 }

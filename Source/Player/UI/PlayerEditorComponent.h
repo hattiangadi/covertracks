@@ -8,89 +8,83 @@
 
 namespace covertracks {
 
-class PlayerEditorComponent : public Component,
-                              public Button::Listener,
-                              public Timer
+    class PlayerEditorComponent : public Component,
+    public Button::Listener,
+    public Timer
 {
 public:
-    // Constructor
-    PlayerEditorComponent(Player* playerToEdit = nullptr, MainHostWindow* mainWindow = nullptr);
-    ~PlayerEditorComponent() override;
-    
-    void resized() override;
-    void paint(Graphics& g) override;
-    void mouseDown(const MouseEvent& e) override;
-    
-    // Button::Listener overrides
-    void buttonClicked(Button* button) override;
-    
-    void createPlugin(const PluginDescriptionAndPreference& desc, Point<int> pos);
-    
-    void addPluginsToMenu(PopupMenu& menu);
-    
-    void addToMenu(const KnownPluginList::PluginTree& tree,
-                  PopupMenu& m,
-                  const Array<PluginDescription>& allPlugins,
-                  Array<PluginDescriptionAndPreference>& addedPlugins);
-    
-    Player* getPlayer() const { return player; }
-    
-    GraphDocumentComponent* getGraphEditor() const { return graphEditor.get(); }
-    
-    // Get the chosen plugin type from a menu ID
-    std::optional<PluginDescriptionAndPreference> getChosenType(int menuID) const;
-    
-    // Take ownership of a player (for new players)
-    void takeOwnershipOfPlayer(std::unique_ptr<Player> newPlayer);
-    
-    // Check if this editor owns a player
-    bool hasOwnedPlayer() const { return ownedPlayer != nullptr; }
-    
-    // Release ownership of the player (returns nullptr if no owned player)
-    std::unique_ptr<Player> releaseOwnedPlayer();
-    
-    // Listener interface for receiving events from the PlayerEditorComponent
-    class Listener
-    {
-    public:
-        virtual ~Listener() = default;
-        
-        virtual void playerEditorSaveRequested(PlayerEditorComponent* editor) = 0;
-        virtual void playerEditorCancelRequested(PlayerEditorComponent* editor) = 0;
-    };
-    
-    void addListener(Listener* listener);
-    void removeListener(Listener* listener);
-    
+// Modified constructor with engine reference
+PlayerEditorComponent(Player* playerToEdit = nullptr, 
+AudioEngine* audioEngine = nullptr);
+~PlayerEditorComponent() override;
+
+// Resource management tied to UI
+void loadPlayerForEditing();
+void saveAndReleaseResources();
+
+// Existing methods
+void resized() override;
+void paint(Graphics& g) override;
+void mouseDown(const MouseEvent& e) override;
+void buttonClicked(Button* button) override;
+
+// Plugin creation and management
+void createPlugin(const PluginDescriptionAndPreference& desc, Point<int> pos);
+void addPluginsToMenu(PopupMenu& menu);
+
+// Player management
+Player* getPlayer() const { return player; }
+GraphDocumentComponent* getGraphEditor() const { return graphEditor.get(); }
+std::optional<PluginDescriptionAndPreference> getChosenType(int menuID) const;
+void takeOwnershipOfPlayer(std::unique_ptr<Player> newPlayer);
+bool hasOwnedPlayer() const { return ownedPlayer != nullptr; }
+std::unique_ptr<Player> releaseOwnedPlayer();
+
+// Listener interface
+class Listener
+{
+public:
+virtual ~Listener() = default;
+virtual void playerEditorSaveRequested(PlayerEditorComponent* editor) = 0;
+virtual void playerEditorCancelRequested(PlayerEditorComponent* editor) = 0;
+};
+
+void addListener(Listener* listener);
+void removeListener(Listener* listener);
+
 private:
-    Player* player = nullptr;
-    std::unique_ptr<Player> ownedPlayer;
+// State values
+Player* player = nullptr;
+std::unique_ptr<Player> ownedPlayer;
 
-    TextEditor nameEditor;
-    TextEditor categoryEditor;
-    TextEditor descriptionEditor;
+// UI components
+TextEditor nameEditor;
+TextEditor categoryEditor;
+TextEditor descriptionEditor;
+Label nameLabel;
+Label categoryLabel;
+Label descriptionLabel;
+TextButton saveButton;
+TextButton cancelButton;
+TextButton loadGraphButton;
 
-    // Metadata labels
-    Label nameLabel;
-    Label categoryLabel;
-    Label descriptionLabel;
+// Graph editor
+std::unique_ptr<GraphDocumentComponent> graphEditor;
 
-    TextButton saveButton;
-    TextButton cancelButton;
-    TextButton loadGraphButton;
+// Listeners
+ListenerList<Listener> listeners;
 
-    std::unique_ptr<GraphDocumentComponent> graphEditor;
+// Reference to AudioEngine
+AudioEngine* audioEngine = nullptr;
 
-    ListenerList<Listener> listeners;
+// Player state update methods
+void updatePlayerFromUI();
+void updateUIFromPlayer();
 
-    void updatePlayerFromUI();
-    void updateUIFromPlayer();
-    
-    // Timer callback for delayed graph loading
-    void timerCallback() override;
+// Timer callback
+void timerCallback() override;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PlayerEditorComponent)
-
+JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PlayerEditorComponent)
 };
 
 } // namespace covertracks

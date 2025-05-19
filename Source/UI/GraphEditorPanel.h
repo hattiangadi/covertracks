@@ -116,86 +116,84 @@ private:
     It also manages the graph itself, and plays it.
 */
 class GraphDocumentComponent final : public Component,
-                                     public DragAndDropTarget,
-                                     public DragAndDropContainer,
-                                     private ChangeListener
+                                    public DragAndDropTarget,
+                                    public DragAndDropContainer,
+                                    public ChangeListener
 {
 public:
-    GraphDocumentComponent (AudioPluginFormatManager& formatManager,
-                            AudioDeviceManager& deviceManager,
-                            KnownPluginList& pluginList,
-                            bool loadDefaultGraph = true,
-                            AudioEngine* engine = nullptr);
-
+    // Modified constructor
+    GraphDocumentComponent(AudioPluginFormatManager& fm,
+                          KnownPluginList& kpl,
+                          AudioEngine& engine);
+    
     ~GraphDocumentComponent() override;
-
-    //==============================================================================
-    void createNewPlugin (const PluginDescriptionAndPreference&, Point<int> position);
-    void setDoublePrecision (bool doublePrecision);
+    
+    // Plugin creation
+    void createNewPlugin(const PluginDescriptionAndPreference& desc, Point<int> pos);
     bool closeAnyOpenPluginWindows();
-
-    //==============================================================================
-    std::unique_ptr<PluginGraph> graph;
-
+    
+    // UI updates
+    void updateComponents();
+    
+    // Resized override
     void resized() override;
+    
+    // ChangeListener implementation
+    void changeListenerCallback(ChangeBroadcaster*) override;
+    
+    // Double precision setting
+    void setDoublePrecision(bool doublePrecision);
+    
+    // Drag and drop
+    bool isInterestedInDragSource(const SourceDetails&) override;
+    void itemDropped(const SourceDetails&) override;
+    
+    // Side panel management
+    void showSidePanel(bool isSettingsPanel);
+    void hideLastSidePanel();
+    
+    // Graph release
     void releaseGraph();
-
-    //==============================================================================
-    bool isInterestedInDragSource (const SourceDetails&) override;
-    void itemDropped (const SourceDetails&) override;
-
-    //==============================================================================
+    
+    // Graph pointer
+    std::unique_ptr<PluginGraph> graph;
+    
+    // UI components
     std::unique_ptr<GraphEditorPanel> graphPanel;
     std::unique_ptr<MidiKeyboardComponent> keyboardComp;
-
-    //==============================================================================
-    void showSidePanel (bool isSettingsPanel);
-    void hideLastSidePanel();
-
-    BurgerMenuComponent burgerMenu;
-
+    
+    // AudioEngine reference (not owned)
+    AudioEngine& audioEngine;
+    
 private:
-    //==============================================================================
-    AudioDeviceManager& deviceManager;
+    // References to shared resources (not owned)
     KnownPluginList& pluginList;
-
-    AudioProcessorPlayer graphPlayer;
-    AudioEngine* sharedAudioEngine = nullptr;
+    
+    // Keyboard state for MIDI input
     MidiKeyboardState keyState;
-    MidiOutput* midiOutput = nullptr;
-
+    
+    // Status bar
     struct TooltipBar;
     std::unique_ptr<TooltipBar> statusBar;
-
+    
+    // Mobile UI components
     class TitleBarComponent;
     std::unique_ptr<TitleBarComponent> titleBarComponent;
-
-    //==============================================================================
+    
+    // Plugin list
     struct PluginListBoxModel;
     std::unique_ptr<PluginListBoxModel> pluginListBoxModel;
-
     ListBox pluginListBox;
-
+    
+    // Side panels
     SidePanel mobileSettingsSidePanel { "Settings", 300, true };
     SidePanel pluginListSidePanel    { "Plugins", 250, false };
     SidePanel* lastOpenedSidePanel = nullptr;
-
-    //==============================================================================
-    void changeListenerCallback (ChangeBroadcaster*) override;
-
-    void init(AudioEngine* engine = nullptr);
     
-    /**
-     * @brief Check if using shared AudioEngine
-     * 
-     * @return true if using shared AudioEngine, false if using dedicated device manager
-     */
-    bool isUsingSharedAudioEngine() const { return sharedAudioEngine != nullptr; }
+    // Utility methods
     void checkAvailableWidth();
     void updateMidiOutput();
-
-    //==============================================================================
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GraphDocumentComponent)
+    
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(GraphDocumentComponent)
 };
-
 } // namespace covertracks

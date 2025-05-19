@@ -124,20 +124,19 @@ public:
     void addPluginsToMenu (PopupMenu&);
     std::optional<PluginDescriptionAndPreference> getChosenType (int menuID) const;
     
-    // Accessor methods for shared resources
-    AudioPluginFormatManager& getFormatManager() { return formatManager; }
-    AudioDeviceManager& getDeviceManager() { return deviceManager; }
-    KnownPluginList& getKnownPluginList() { return knownPluginList; }
+    // Accessor methods for shared resources - these now access through PlayerManager
+    AudioPluginFormatManager& getFormatManager() const;
+    AudioDeviceManager& getDeviceManager();
+    KnownPluginList& getPluginList() const;
 
     AudioEngine* getAudioEngine() { return playerManager ? playerManager->getAudioEngine() : nullptr; }
 
+    // PlayerManager owns the AudioEngine and all audio resources
+    std::shared_ptr<PlayerManager> playerManager; 
+    
     // Main components
     std::unique_ptr<PlayerLibraryComponent> playerLibraryWindow;
     
-    // NOTE: Order matters for destruction! 
-    // playerManager must be destroyed BEFORE audioEngine
-    // C++ destroys members in reverse order of declaration
-    std::shared_ptr<PlayerManager> playerManager;
 
 
 private:
@@ -151,15 +150,8 @@ private:
     void showAudioSettings();
 
     //==============================================================================
-    AudioDeviceManager deviceManager;
-    AudioPluginFormatManager formatManager;
-
-    std::vector<PluginDescription> internalTypes;
-    KnownPluginList knownPluginList;
     KnownPluginList::SortMethod pluginSortMethod;
     Array<PluginDescriptionAndPreference> pluginDescriptionsAndPreference;
-    
-    // AudioEngine is now owned by the PlayerManager
     
     class PluginListWindow;
     std::unique_ptr<PluginListWindow> pluginListWindow;

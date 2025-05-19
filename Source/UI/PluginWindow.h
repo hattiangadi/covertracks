@@ -177,12 +177,37 @@ public:
           activeWindowList (windowList),
           node (n), type (t)
     {
+        std::cout << "[PluginWindow] Constructor starting for " << n->getProcessor()->getName() 
+                  << ", format: " << getFormatSuffix(n->getProcessor()) 
+                  << ", type: " << static_cast<int>(type) << std::endl;
+        
         setSize (400, 300);
 
-        if (auto* ui = createProcessorEditor (*node->getProcessor(), type))
+        AudioProcessorEditor* ui = nullptr;
+        try
         {
-            setContentOwned (ui, true);
-            setResizable (ui->isResizable(), false);
+            std::cout << "[PluginWindow] Attempting to create processor editor" << std::endl;
+            ui = createProcessorEditor (*node->getProcessor(), type);
+            
+            if (ui != nullptr)
+            {
+                std::cout << "[PluginWindow] Editor created successfully, size: " 
+                          << ui->getWidth() << "x" << ui->getHeight() << std::endl;
+                setContentOwned (ui, true);
+                setResizable (ui->isResizable(), false);
+            }
+            else
+            {
+                std::cout << "[PluginWindow] Failed to create editor - createProcessorEditor returned nullptr" << std::endl;
+            }
+        }
+        catch (const std::exception& e)
+        {
+            std::cerr << "[PluginWindow] Exception creating editor: " << e.what() << std::endl;
+        }
+        catch (...)
+        {
+            std::cerr << "[PluginWindow] Unknown exception creating editor" << std::endl;
         }
 
         setConstrainer (&constrainer);
@@ -206,7 +231,10 @@ public:
 
         node->properties.set (getOpenProp (type), true);
 
+        std::cout << "[PluginWindow] Making window visible, size: " << getWidth() << "x" << getHeight() << std::endl;
         setVisible (true);
+        toFront (true);
+        std::cout << "[PluginWindow] Constructor complete" << std::endl;
     }
 
     ~PluginWindow() override
@@ -280,43 +308,101 @@ private:
     float getDesktopScaleFactor() const override     { return 1.0f; }
 
     static AudioProcessorEditor* createProcessorEditor (AudioProcessor& processor,
-                                                        PluginWindow::Type type)
+                                                         PluginWindow::Type type)
     {
+        std::cout << "[PluginWindow] createProcessorEditor called for " << processor.getName() 
+                  << ", type: " << static_cast<int>(type) << std::endl;
+        
         if (type == PluginWindow::Type::normal)
         {
             if (processor.hasEditor())
-                if (auto* ui = processor.createEditorIfNeeded())
-                    return ui;
+            {
+                std::cout << "[PluginWindow] Processor has editor, calling createEditorIfNeeded()" << std::endl;
+                try
+                {
+                    auto* ui = processor.createEditorIfNeeded();
+                    if (ui != nullptr)
+                    {
+                        std::cout << "[PluginWindow] Editor created successfully, size: " 
+                                  << ui->getWidth() << "x" << ui->getHeight() << std::endl;
+                        return ui;
+                    }
+                    else
+                    {
+                        std::cout << "[PluginWindow] createEditorIfNeeded() returned nullptr" << std::endl;
+                    }
+                }
+                catch (const std::exception& e)
+                {
+                    std::cerr << "[PluginWindow] Exception in createEditorIfNeeded(): " << e.what() << std::endl;
+                }
+                catch (...)
+                {
+                    std::cerr << "[PluginWindow] Unknown exception in createEditorIfNeeded()" << std::endl;
+                }
+            }
+            else
+            {
+                std::cout << "[PluginWindow] Processor doesn't have an editor" << std::endl;
+            }
 
+            std::cout << "[PluginWindow] Falling back to generic editor" << std::endl;
             type = PluginWindow::Type::generic;
         }
 
         if (type == PluginWindow::Type::araHost)
         {
            #if JUCE_PLUGINHOST_ARA && (JUCE_MAC || JUCE_WINDOWS || JUCE_LINUX)
+            std::cout << "[PluginWindow] Attempting to create ARA host editor" << std::endl;
             if (auto* araPluginInstanceWrapper = dynamic_cast<ARAPluginInstanceWrapper*> (&processor))
                 if (auto* ui = araPluginInstanceWrapper->createARAHostEditor())
                     return ui;
            #endif
+            std::cout << "[PluginWindow] ARA host editor creation failed" << std::endl;
             return {};
         }
 
         if (type == PluginWindow::Type::generic)
         {
-            auto* result = new GenericAudioProcessorEditor (processor);
-            result->setResizeLimits (200, 300, 1'000, 10'000);
-            return result;
+            std::cout << "[PluginWindow] Creating GenericAudioProcessorEditor" << std::endl;
+            try
+            {
+                auto* result = new GenericAudioProcessorEditor (processor);
+                result->setResizeLimits (200, 300, 1'000, 10'000);
+                std::cout << "[PluginWindow] GenericAudioProcessorEditor created successfully" << std::endl;
+                return result;
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "[PluginWindow] Exception creating GenericAudioProcessorEditor: " << e.what() << std::endl;
+                return {};
+            }
+            catch (...)
+            {
+                std::cerr << "[PluginWindow] Unknown exception creating GenericAudioProcessorEditor" << std::endl;
+                return {};
+            }
         }
 
         if (type == PluginWindow::Type::programs)
+        {
+            std::cout << "[PluginWindow] Creating ProgramAudioProcessorEditor" << std::endl;
             return new ProgramAudioProcessorEditor (processor);
+        }
 
         if (type == PluginWindow::Type::audioIO)
+        {
+            std::cout << "[PluginWindow] Creating IOConfigurationWindow" << std::endl;
             return new IOConfigurationWindow (processor);
+        }
 
         if (type == PluginWindow::Type::debug)
+        {
+            std::cout << "[PluginWindow] Creating PluginDebugWindow" << std::endl;
             return new PluginDebugWindow (processor);
+        }
 
+        std::cerr << "[PluginWindow] Invalid window type: " << static_cast<int>(type) << std::endl;
         jassertfalse;
         return {};
     }

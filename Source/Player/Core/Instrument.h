@@ -13,220 +13,107 @@ namespace covertracks {
  * and playing MIDI patterns through it. It serves as the sound engine
  * component of the Player architecture.
  */
-class Instrument : public AudioIODeviceCallback,
-                   public MidiInputCallback,
-                   public Timer
+ class Instrument : public MidiInputCallback,
+ public Timer
 {
 public:
-    /**
-     * @brief Construct a new Instrument
-     * 
-     * @param name The name of the instrument
-     * @param formatManager Reference to the shared AudioPluginFormatManager
-     * @param knownPluginList Reference to the shared KnownPluginList
-     */
-    Instrument(const String& name, 
-               AudioPluginFormatManager& formatManager,
-               KnownPluginList& knownPluginList,
-               AudioEngine* audioEngine);
-    
-    /**
-     * @brief Destroy the Instrument
-     */
-    ~Instrument() override;
-    
-    /**
-     * @brief Initialize the instrument
-     * 
-     * Sets up the audio device manager, processor graph, and other resources.
-     * Will clean up any existing resources first.
-     */
-    void initialize();
-    
-    /**
-     * @brief Clean up all audio resources
-     * 
-     * Releases audio callbacks, processors, and other resources.
-     * Called automatically by the destructor and initialize().
-     */
-    void cleanup();
-    
-    /**
-     * @brief Static method to notify all Instruments that the AudioEngine is being destroyed
-     * 
-     * This is called by the AudioEngine destructor to let Instruments know they should
-     * not try to unregister from the AudioEngine anymore.
-     */
-    static void notifyAudioEngineDestroyed();
-    
-    /**
-     * @brief Load a plugin graph configuration
-     * 
-     * @param graphState XML representation of plugin graph
-     * @return true If loaded successfully
-     * @return false If loading failed
-     */
-    bool loadPluginGraph(const XmlElement& graphState);
-    
-    /**
-     * @brief Get the current plugin graph state
-     * 
-     * @return std::unique_ptr<XmlElement> XML representation of the current graph
-     */
-    std::unique_ptr<XmlElement> getPluginGraphState();
-    
-    /**
-     * @brief Play a MIDI pattern
-     * 
-     * @param pattern MIDI events in JUCE var/JSON format
-     * @param tempo Tempo in BPM
-     * @return true If playback started successfully
-     * @return false If playback failed to start
-     */
-    bool playMIDIPattern(const var& pattern, double tempo = 120.0);
-    
-    /**
-     * @brief Stop current playback
-     */
-    void stopPlayback();
-    
-    /**
-     * @brief Pause current playback
-     */
-    void pausePlayback();
-    
-    /**
-     * @brief Resume paused playback
-     */
-    void resumePlayback();
-    
-    /**
-     * @brief Add MIDI listener for incoming MIDI messages
-     * 
-     * @param listener The listener to add
-     */
-    void addMidiInputListener(MidiInputCallback* listener);
-    
-    /**
-     * @brief Remove MIDI listener
-     * 
-     * @param listener The listener to remove
-     */
-    void removeMidiInputListener(MidiInputCallback* listener);
-    
-    /**
-     * @brief Get direct access to the plugin graph
-     * 
-     * @return PluginGraph* Pointer to the plugin graph (not owned)
-     */
-    PluginGraph* getPluginGraph() { return pluginGraph.get(); }
-    
-    /**
-     * @brief Check if the instrument is currently playing
-     * 
-     * @return true If playing
-     * @return false If not playing
-     */
-    bool isPlaying() const;
-    
-    /**
-     * @brief Check if the instrument is currently paused
-     * 
-     * @return true If paused
-     * @return false If not paused
-     */
-    bool isPaused() const;
-    
-    /**
-     * @brief Set callback for pattern completion
-     * 
-     * @param callback Function to call when pattern playback completes
-     */
-    void setOnPatternFinishedCallback(std::function<void()> callback);
-    
-    /**
-     * @brief Get the current playback position in seconds
-     * 
-     * @return double Current position in seconds
-     */
-    double getCurrentPosition() const { return currentTime; }
-    
-    /**
-     * @brief Get the total duration of the current pattern in seconds
-     * 
-     * @return double Total duration in seconds
-     */
-    double getTotalDuration() const { return totalDuration; }
-    
-    /**
-     * @brief Set callback for pattern completion
-     * 
-     * @param callback Function to call when pattern playback completes
-     */
-    void setPatternFinishedCallback(std::function<void()> callback) {
-        onPatternFinished = std::move(callback);
-    }
-    
-private:
-    // AudioIODeviceCallback implementation
-    void audioDeviceIOCallback(const float** inputChannelData,
-                              int numInputChannels,
-                              float** outputChannelData,
-                              int numOutputChannels,
-                              int numSamples);
-    
-    void audioDeviceAboutToStart(AudioIODevice* device) override;
-    void audioDeviceStopped() override;
-    
-    // MidiInputCallback implementation
-    void handleIncomingMidiMessage(MidiInput* source, const MidiMessage& message) override;
-    
-    // Timer implementation
-    void timerCallback() override;
-    
-    // Process MIDI events for the current buffer
-    void processMIDIEvents(MidiBuffer& midiBuffer, int numSamples);
-    
-    // Update the current time based on sample count
-    void updateCurrentTime(int numSamples);
-    
-    // Convert JSON pattern to MIDI sequence
-    std::unique_ptr<MidiMessageSequence> convertJSONToMIDISequence(const var& events);
-    
-    // Core components
-    String instrumentName;
-    std::unique_ptr<AudioDeviceManager> deviceManager;
-    
-    // References to shared plugin environment (not owned)
-    AudioPluginFormatManager& formatManager;
-    KnownPluginList& knownPluginList;
+// New constructor without AudioDeviceManager
+Instrument(const String& name, 
+AudioPluginFormatManager& formatManager,
+KnownPluginList& knownPluginList,
+AudioEngine* engine = nullptr);
+~Instrument() override;
 
-    AudioEngine* audioEngine = nullptr;
-    bool usingSharedAudioEngine = false;
+// Resource state management
+enum class ResourceState {
+Unloaded,      // Minimal resources loaded
+EditReady,     // Resources needed for editing loaded
+PlaybackReady  // Resources needed for playback loaded
+};
+
+ResourceState getResourceState() const { return resourceState; }
+
+// Resource lifecycle methods
+void prepareForEditing();   // Load resources needed for editing
+void prepareForPlayback();  // Load resources needed for playback
+void releaseResources();    // Release all heavy resources
+
+// AudioEngine connection methods
+bool connectToAudioEngine(AudioEngine* engine);
+void disconnectFromAudioEngine();
+bool isConnectedToAudioEngine() const { return audioEngine != nullptr; }
     
-    std::unique_ptr<PluginGraph> pluginGraph;
-    std::unique_ptr<AudioProcessorGraph> processorGraph; // For actual audio processing
-    
-    // MIDI playback state
-    bool playing = false;
-    bool paused = false;
-    std::unique_ptr<MidiMessageSequence> currentSequence;
-    int nextEventIndex = 0;
-    double currentTime = 0.0;
-    double sampleRate = 44100.0;
-    double totalDuration = 0.0;
-    double tempo = 120.0; // BPM
-    
-    // Callback for pattern completion
-    std::function<void()> onPatternFinished;
-    
-    // MIDI input listeners
-    Array<MidiInputCallback*> midiInputListeners;
-    
-    // Track registered MIDI input device names
-    StringArray registeredMidiInputs;
-    
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Instrument)
+// Static method to notify all instruments that the AudioEngine is being destroyed
+static void notifyAudioEngineDestroyed();
+
+// Graph management (existing methods)
+bool loadPluginGraph(const XmlElement& graphState);
+std::unique_ptr<XmlElement> getPluginGraphState();
+PluginGraph* getPluginGraph() { return pluginGraph.get(); }
+AudioProcessorGraph* getProcessorGraph() { return processorGraph.get(); }
+
+// MIDI pattern playback (existing methods)
+bool playMIDIPattern(const var& pattern, double tempo = 120.0);
+void stopPlayback();
+void pausePlayback();
+void resumePlayback();
+
+// MidiInputCallback implementation
+void handleIncomingMidiMessage(MidiInput* source, const MidiMessage& message) override;
+
+// Timer implementation
+void timerCallback() override;
+
+// MIDI callback management
+void addMidiInputListener(MidiInputCallback* listener);
+void removeMidiInputListener(MidiInputCallback* listener);
+
+// State queries
+bool isPlaying() const;
+bool isPaused() const;
+
+// Callback for pattern completion
+void setPatternFinishedCallback(std::function<void()> callback);
+
+private:
+// Core state
+String instrumentName;
+ResourceState resourceState = ResourceState::Unloaded;
+AudioEngine* audioEngine = nullptr;
+
+// References to shared plugin environment (not owned)
+AudioPluginFormatManager& formatManager;
+KnownPluginList& knownPluginList;
+
+// Plugin and processor graphs
+std::unique_ptr<PluginGraph> pluginGraph;
+std::unique_ptr<AudioProcessorGraph> processorGraph;
+
+// MIDI playback state
+bool playing = false;
+bool paused = false;
+std::unique_ptr<MidiMessageSequence> currentSequence;
+int nextEventIndex = 0;
+double currentTime = 0.0;
+double sampleRate = 44100.0;
+double totalDuration = 0.0;
+double tempo = 120.0; // BPM
+
+// Callback for pattern completion
+std::function<void()> onPatternFinished;
+
+// MIDI input listeners
+Array<MidiInputCallback*> midiInputListeners;
+
+// Track registered MIDI input device names
+StringArray registeredMidiInputs;
+
+// Helper methods
+void processMIDIEvents(MidiBuffer& midiBuffer, int numSamples);
+void updateCurrentTime(int numSamples);
+std::unique_ptr<MidiMessageSequence> convertJSONToMIDISequence(const var& events);
+
+JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Instrument)
 };
 
 } // namespace covertracks

@@ -216,30 +216,55 @@ void PluginGraph::clear()
 PluginWindow* PluginGraph::getOrCreateWindowFor (AudioProcessorGraph::Node* node, PluginWindow::Type type)
 {
     jassert (node != nullptr);
+    
+    std::cout << "[PluginGraph] getOrCreateWindowFor called for node: " << node->getProcessor()->getName() 
+              << ", type: " << static_cast<int>(type) << std::endl;
 
    #if JUCE_IOS || JUCE_ANDROID
     closeAnyOpenPluginWindows();
    #else
     for (auto* w : activePluginWindows)
+    {
         if (w->node.get() == node && w->type == type)
+        {
+            std::cout << "[PluginGraph] Found existing window, bringing to front" << std::endl;
             return w;
+        }
+    }
    #endif
 
     if (auto* processor = node->getProcessor())
     {
+        std::cout << "[PluginGraph] Creating window for processor: " << processor->getName() << std::endl;
+        
         if (auto* plugin = dynamic_cast<AudioPluginInstance*> (processor))
         {
             auto description = plugin->getPluginDescription();
+            
+            std::cout << "[PluginGraph] Plugin format: " << description.pluginFormatName 
+                      << ", hasEditor: " << (plugin->hasEditor() ? "yes" : "no") << std::endl;
 
             if (! plugin->hasEditor() && description.pluginFormatName == "Internal")
             {
+                std::cout << "[PluginGraph] Internal plugin without editor, showing audio settings instead" << std::endl;
                 getCommandManager().invokeDirectly (CommandIDs::showAudioSettings, false);
                 return nullptr;
             }
 
             auto localDpiDisabler = makeDPIAwarenessDisablerForPlugin (description);
-            return activePluginWindows.add (new PluginWindow (node, type, activePluginWindows));
+            std::cout << "[PluginGraph] Creating new PluginWindow" << std::endl;
+            auto* window = activePluginWindows.add (new PluginWindow (node, type, activePluginWindows));
+            std::cout << "[PluginGraph] Window created, size: " << window->getWidth() << "x" << window->getHeight() << std::endl;
+            return window;
         }
+        else
+        {
+            std::cout << "[PluginGraph] Processor is not an AudioPluginInstance" << std::endl;
+        }
+    }
+    else
+    {
+        std::cout << "[PluginGraph] Node has no processor" << std::endl;
     }
 
     return nullptr;
@@ -558,17 +583,23 @@ void PluginGraph::createNodeFromXml (const XmlElement& xml)
 
                 if (xml.hasAttribute (PluginWindow::getOpenProp (type)))
                 {
+                    // Store the window position properties but don't automatically open windows
                     node->properties.set (PluginWindow::getLastXProp (type), xml.getIntAttribute (PluginWindow::getLastXProp (type)));
                     node->properties.set (PluginWindow::getLastYProp (type), xml.getIntAttribute (PluginWindow::getLastYProp (type)));
-                    node->properties.set (PluginWindow::getOpenProp  (type), xml.getIntAttribute (PluginWindow::getOpenProp (type)));
-
-                    if (node->properties[PluginWindow::getOpenProp (type)])
+                    
+                    // Store the open state but set it to false to prevent automatic opening
+                    // This way the position is remembered but windows don't open automatically
+                    node->properties.set (PluginWindow::getOpenProp (type), false);
+                    
+                    // Log that we're preventing a window from automatically opening
+                    if (xml.getIntAttribute (PluginWindow::getOpenProp (type)))
                     {
-                        jassert (node->getProcessor() != nullptr);
-
-                        if (auto w = getOrCreateWindowFor (node, type))
-                            w->toFront (true);
+                        std::cout << "Prevented automatic opening of plugin window for node: " 
+                                  << node->nodeID.uid << ", type: " << (int)type << std::endl;
                     }
+                    
+                    // We no longer automatically open windows during initialization
+                    // This prevents crashes and unexpected UI behavior
                 }
             }
         }

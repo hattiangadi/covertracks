@@ -281,10 +281,10 @@ public:
                                    ->getFile().getSiblingFile ("RecentlyCrashedPluginsList");
 
         setContentOwned (new CustomPluginListComponent (pluginFormatManager,
-                                                        owner.knownPluginList,
-                                                        deadMansPedalFile,
-                                                        getAppProperties().getUserSettings(),
-                                                        true), true);
+                                                         owner.getPluginList(),
+                                                         deadMansPedalFile,
+                                                         getAppProperties().getUserSettings(),
+                                                         true), true);
 
         setResizable (true, false);
         setResizeLimits (300, 400, 800, 1500);
@@ -317,15 +317,14 @@ MainHostWindow::MainHostWindow()
                       LookAndFeel::getDefaultLookAndFeel().findColour (ResizableWindow::backgroundColourId),
                       DocumentWindow::allButtons)
 {
-    formatManager.addDefaultFormats();
-    formatManager.addFormat (new InternalPluginFormat());
-
-    auto safeThis = SafePointer<MainHostWindow> (this);
+    std::cout << "[MainHostWindow] Constructor starting..." << std::endl;
+    
+    // Request audio permissions - this will be used when creating the AudioEngine in PlayerManager
+    std::cout << "[MainHostWindow] Requesting audio permissions" << std::endl;
     RuntimePermissions::request (RuntimePermissions::recordAudio,
-                                 [safeThis] (bool granted) mutable
+                                 [] (bool granted) mutable
                                  {
-                                     auto savedState = getAppProperties().getUserSettings()->getXmlValue ("audioDeviceState");
-                                     safeThis->deviceManager.initialise (granted ? 256 : 0, 256, savedState.get(), true);
+                                     std::cout << "[MainHostWindow] Audio permissions " << (granted ? "granted" : "denied") << std::endl;
                                  });
 
    #if JUCE_IOS || JUCE_ANDROID
@@ -336,53 +335,68 @@ MainHostWindow::MainHostWindow()
     centreWithSize (800, 600);
    #endif
 
-    knownPluginList.setCustomScanner (std::make_unique<CustomPluginScanner>());
-
     // Create a PlayerManager instance that owns the AudioEngine
-    // The PlayerManager will create its own AudioEngine using the shared deviceManager
-    playerManager = std::make_shared<PlayerManager>(formatManager, knownPluginList, deviceManager);
+    // The PlayerManager will create its own AudioEngine, plugin formats, and plugin list
+    std::cout << "[MainHostWindow] Creating PlayerManager" << std::endl;
+    playerManager = std::make_shared<PlayerManager>();
+    std::cout << "[MainHostWindow] PlayerManager created" << std::endl;
+
     
     // Create PlayerLibraryComponent as the main content
+    std::cout << "[MainHostWindow] Creating PlayerLibraryComponent" << std::endl;
     playerLibraryWindow = std::make_unique<PlayerLibraryComponent>(playerManager);
+    std::cout << "[MainHostWindow] PlayerLibraryComponent created" << std::endl;
     
     // Set it as the main content
+    std::cout << "[MainHostWindow] Setting content" << std::endl;
     setContentNonOwned (playerLibraryWindow.get(), true);
 
     setUsingNativeTitleBar (true);
 
+    std::cout << "[MainHostWindow] Restoring window state" << std::endl;
     restoreWindowStateFromString (getAppProperties().getUserSettings()->getValue ("mainWindowPos"));
 
     setVisible (true);
-
-    InternalPluginFormat internalFormat;
-    internalTypes = internalFormat.getAllTypes();
-
+    
+    // Load saved plugin list into the PlayerManager's KnownPluginList
+    std::cout << "[MainHostWindow] Loading saved plugin list" << std::endl;
     if (auto savedPluginList = getAppProperties().getUserSettings()->getXmlValue ("pluginList"))
-        knownPluginList.recreateFromXml (*savedPluginList);
-
-    for (auto& t : internalTypes)
-        knownPluginList.addType (t);
-
+    {
+        std::cout << "[MainHostWindow] Recreating plugin list from XML" << std::endl;
+        getPluginList().recreateFromXml (*savedPluginList);
+    }
+    
+    // The internal plugin types are now added by the PlayerManager during initialization
+    std::cout << "[MainHostWindow] Setting plugin sort method" << std::endl;
+    // Set plugin sort method
     pluginSortMethod = (KnownPluginList::SortMethod) getAppProperties().getUserSettings()
                             ->getIntValue ("pluginSortMethod", KnownPluginList::sortByManufacturer);
 
-    knownPluginList.addChangeListener (this);
+    // Register as a change listener for the plugin list
+    std::cout << "[MainHostWindow] Adding change listener for plugin list" << std::endl;
+    getPluginList().addChangeListener (this);
 
+    std::cout << "[MainHostWindow] Adding key listener" << std::endl;
     addKeyListener (getCommandManager().getKeyMappings());
 
+    std::cout << "[MainHostWindow] Setting process priority" << std::endl;
     Process::setPriority (Process::HighPriority);
 
   #if JUCE_IOS || JUCE_ANDROID
     // Mobile menu setup - removed graph holder reference
   #else
    #if JUCE_MAC
+    std::cout << "[MainHostWindow] Setting Mac main menu" << std::endl;
     setMacMainMenu (this);
    #else
+    std::cout << "[MainHostWindow] Setting menu bar" << std::endl;
     setMenuBar (this);
    #endif
   #endif
 
+    std::cout << "[MainHostWindow] Setting first command target" << std::endl;
     getCommandManager().setFirstCommandTarget (this);
+    std::cout << "[MainHostWindow] Constructor complete" << std::endl;
 }
 
 MainHostWindow::~MainHostWindow()
@@ -394,7 +408,10 @@ MainHostWindow::~MainHostWindow()
     
     // First, clean up the plugin list window
     pluginListWindow = nullptr;
-    knownPluginList.removeChangeListener (this);
+    
+    // Remove ourselves as a change listener from the plugin list
+    if (playerManager)
+        getPluginList().removeChangeListener(this);
     
     // Clear the content component
     clearContentComponent();
@@ -455,22 +472,49 @@ void MainHostWindow::tryToQuitApplication()
 
 void MainHostWindow::changeListenerCallback (ChangeBroadcaster* changed)
 {
-    if (changed == &knownPluginList)
+    try
     {
-        menuItemsChanged();
-
-        // save the plugin list every time it gets changed, so that if we're scanning
-        // and it crashes, we've still saved the previous ones
-        if (auto savedPluginList = std::unique_ptr<XmlElement> (knownPluginList.createXml()))
+        // Check if the change came from the plugin list
+        if (playerManager && changed == &getPluginList())
         {
-            getAppProperties().getUserSettings()->setValue ("pluginList", savedPluginList.get());
-            getAppProperties().getUserSettings()->saveIfNeeded();
+            std::cout << "[MainHostWindow] Change from plugin list detected" << std::endl;
+            
+            // Update menu items
+            menuItemsChanged();
+
+            // Save the plugin list every time it gets changed, so that if we're scanning
+            // and it crashes, we've still saved the previous ones
+            try
+            {
+                if (auto savedPluginList = std::unique_ptr<XmlElement>(getPluginList().createXml()))
+                {
+                    auto* settings = getAppProperties().getUserSettings();
+                    if (settings != nullptr)
+                    {
+                        settings->setValue("pluginList", savedPluginList.get());
+                        settings->saveIfNeeded();
+                        std::cout << "[MainHostWindow] Plugin list saved" << std::endl;
+                    }
+                }
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "[MainHostWindow] Error saving plugin list: " << e.what() << std::endl;
+            }
         }
+        // We no longer need to handle audio device changes here as that's now fully handled by the AudioEngine
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "[MainHostWindow] Unhandled exception in changeListenerCallback: " << e.what() << std::endl;
     }
     
     // Set the window title to the application name
-    auto title = JUCEApplication::getInstance()->getApplicationName();
-    setName (title);
+    if (auto* app = JUCEApplication::getInstance())
+    {
+        auto title = app->getApplicationName();
+        setName(title);
+    }
 }
 
 StringArray MainHostWindow::getMenuBarNames()
@@ -647,12 +691,31 @@ void covertracks::MainHostWindow::addPluginsToMenu (PopupMenu& m)
     // even though they'll be added through the player interface
     int i = 0;
     
-    for (auto& t : internalTypes)
-        m.addItem (++i, t.name + " (" + t.pluginFormatName + ")");
+    // Access internal types through the PlayerManager
+    if (playerManager)
+    {
+        const auto& internalTypes = playerManager->getInternalPluginTypes();
+        for (auto& t : internalTypes)
+            m.addItem (++i, t.name + " (" + t.pluginFormatName + ")");
+    }
         
     m.addSeparator();
 
-    auto pluginDescriptions = knownPluginList.getTypes();
+    // Make sure we have a valid playerManager before proceeding
+    if (!playerManager)
+    {
+        std::cerr << "Warning: playerManager is null in addPluginsToMenu" << std::endl;
+        return;
+    }
+    
+    auto pluginDescriptions = getPluginList().getTypes();
+    
+    // Check if we have any plugin descriptions
+    if (pluginDescriptions.isEmpty())
+    {
+        std::cerr << "Warning: No plugin descriptions available" << std::endl;
+        return;
+    }
 
     // This avoids showing the internal types again later on in the list
     pluginDescriptions.removeIf ([] (PluginDescription& desc)
@@ -664,14 +727,14 @@ void covertracks::MainHostWindow::addPluginsToMenu (PopupMenu& m)
     pluginDescriptionsAndPreference = {};
     addToMenu (*tree, m, pluginDescriptions, pluginDescriptionsAndPreference);
 }
-}
 
 std::optional<covertracks::PluginDescriptionAndPreference> covertracks::MainHostWindow::getChosenType (const int menuID) const
 {
     const auto internalIndex = menuID - 1;
 
-    if (isPositiveAndBelow (internalIndex, internalTypes.size()))
-        return PluginDescriptionAndPreference { internalTypes[(size_t) internalIndex] };
+    // Access internal types through the PlayerManager
+    if (playerManager && isPositiveAndBelow(internalIndex, playerManager->getInternalPluginTypes().size()))
+        return PluginDescriptionAndPreference { playerManager->getInternalPluginTypes()[(size_t) internalIndex] };
 
     const auto externalIndex = menuID - menuIDBase;
 
@@ -780,7 +843,7 @@ bool covertracks::MainHostWindow::perform (const InvocationInfo& info)
 
     case CommandIDs::showPluginListEditor:
         if (pluginListWindow == nullptr)
-            pluginListWindow.reset (new PluginListWindow (*this, formatManager));
+            pluginListWindow.reset (new PluginListWindow (*this, getFormatManager()));
 
         pluginListWindow->toFront (true);
         break;
@@ -868,14 +931,17 @@ void covertracks::MainHostWindow::filesDropped (const StringArray& files, int /*
 {
     // In the instrument/player approach, plugin files should be handled by the PlayerEditorComponent
     // This is just a stub that adds the plugins to the known plugin list
-    OwnedArray<PluginDescription> typesFound;
-    knownPluginList.scanAndAddDragAndDroppedFiles (formatManager, files, typesFound);
-    
-    // Notify the user that plugins were added to the list
-    if (typesFound.size() > 0)
+    if (playerManager != nullptr)
     {
-        String message = String(typesFound.size()) + " plugin(s) added to the list.";
-        AlertWindow::showMessageBoxAsync(AlertWindow::InfoIcon, "Plugins Added", message);
+        OwnedArray<PluginDescription> typesFound;
+        playerManager->getKnownPluginList().scanAndAddDragAndDroppedFiles(playerManager->getFormatManager(), files, typesFound);
+        
+        // Notify the user that plugins were added to the list
+        if (typesFound.size() > 0)
+        {
+            String message = String(typesFound.size()) + " plugin(s) added to the list.";
+            AlertWindow::showMessageBoxAsync(AlertWindow::InfoIcon, "Plugins Added", message);
+        }
     }
 }
 
@@ -895,6 +961,42 @@ bool covertracks::MainHostWindow::isAutoScalePluginWindowsEnabled()
     return false;
 }
 
+// Accessor method implementations
+AudioPluginFormatManager& covertracks::MainHostWindow::getFormatManager() const
+{
+    if (playerManager != nullptr)
+        return playerManager->getFormatManager();
+        
+    // This should never happen in practice since we create PlayerManager in the constructor
+    jassertfalse;
+    static AudioPluginFormatManager fallbackManager;
+    return fallbackManager;
+}
+
+AudioDeviceManager& covertracks::MainHostWindow::getDeviceManager()
+{
+    // PlayerManager should always be created in the constructor before this is called
+    jassert(playerManager != nullptr);
+    
+    if (playerManager != nullptr)
+        return playerManager->getAudioEngine()->getDeviceManager();
+        
+    // This should never happen, but we need to return something
+    static AudioDeviceManager fallbackManager;
+    return fallbackManager;
+}
+
+KnownPluginList& covertracks::MainHostWindow::getPluginList() const
+{
+    if (playerManager != nullptr)
+        return playerManager->getKnownPluginList();
+        
+    // This should never happen in practice since we create PlayerManager in the constructor
+    jassertfalse;
+    static KnownPluginList fallbackList;
+    return fallbackList;
+}
+
 void covertracks::MainHostWindow::updatePrecisionMenuItem (ApplicationCommandInfo& info)
 {
     info.setInfo ("Double Floating-Point Precision Rendering", {}, "General", 0);
@@ -906,3 +1008,5 @@ void covertracks::MainHostWindow::updateAutoScaleMenuItem (ApplicationCommandInf
     info.setInfo ("Auto-Scale Plugin Windows", {}, "General", 0);
     info.setTicked (isAutoScalePluginWindowsEnabled());
 }
+
+}//namespace covertracks

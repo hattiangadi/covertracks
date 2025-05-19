@@ -1,23 +1,48 @@
 // PlayerManager.cpp
 #include "PlayerManager.h"
+#include "../../Plugins/InternalPlugins.h"
 
 namespace covertracks {
 
-PlayerManager::PlayerManager(AudioPluginFormatManager& fm,
-                           KnownPluginList& kpl,
-                           AudioDeviceManager& deviceManager)
-    : formatManager(fm),
-      knownPluginList(kpl)
+PlayerManager::PlayerManager()
 {
-    // Create our own AudioEngine instance
-    audioEngine = std::make_unique<AudioEngine>(deviceManager, formatManager, knownPluginList);
+    std::cout << "[PlayerManager] Constructor starting..." << std::endl;
     
-    std::cout << "Creating PlayerManager with owned AudioEngine" << std::endl;
-    std::cout << "PlayerManager using AudioEngine with sample rate: " 
+    // Create and own the plugin format manager
+    std::cout << "[PlayerManager] Creating plugin format manager" << std::endl;
+    formatManager = std::make_unique<AudioPluginFormatManager>();
+    formatManager->addDefaultFormats();
+    
+    // Add the internal plugin format
+    std::cout << "[PlayerManager] Adding internal plugin format" << std::endl;
+    internalPluginFormat = std::make_unique<InternalPluginFormat>();
+    formatManager->addFormat(internalPluginFormat.get());
+    
+    // Store internal plugin types for later use
+    std::cout << "[PlayerManager] Storing internal plugin types" << std::endl;
+    internalTypes = internalPluginFormat->getAllTypes();
+    std::cout << "[PlayerManager] Got " << internalTypes.size() << " internal plugin types" << std::endl;
+    
+    // Create and own the plugin list
+    std::cout << "[PlayerManager] Creating known plugin list" << std::endl;
+    knownPluginList = std::make_unique<KnownPluginList>();
+    
+    // Add internal plugin types to the known plugin list
+    std::cout << "[PlayerManager] Adding internal plugin types to known plugin list" << std::endl;
+    for (auto& type : internalTypes)
+        knownPluginList->addType(type);
+    
+    // Create our own AudioEngine instance with enhanced capabilities
+    std::cout << "[PlayerManager] Creating AudioEngine" << std::endl;
+    audioEngine = std::make_unique<AudioEngine>(*formatManager, *knownPluginList);
+    
+    std::cout << "[PlayerManager] AudioEngine created with sample rate: " 
               << audioEngine->getSampleRate() << "Hz, buffer size: "
               << audioEngine->getBufferSize() << " samples" << std::endl;
     
+    std::cout << "[PlayerManager] Loading all players" << std::endl;
     loadAllPlayers();
+    std::cout << "[PlayerManager] Constructor complete" << std::endl;
 }
 
 PlayerManager::~PlayerManager()
@@ -25,11 +50,82 @@ PlayerManager::~PlayerManager()
     // Log the start of cleanup
     std::cout << "PlayerManager destructor: Starting cleanup of " << players.size() << " players" << std::endl;
     
+    // Deactivate any active player
+    if (activePlayer != nullptr)
+        deactivatePlayer(activePlayer);
+    
     // Clear all players - this will call each Player's destructor
     // which in turn will clean up their Instruments
     players.clear();
     
+    // The AudioEngine will be destroyed automatically
     std::cout << "PlayerManager destructor: All players cleaned up" << std::endl;
+}
+void PlayerManager::activatePlayer(Player* player)
+{
+    if (player == nullptr || player == activePlayer)
+        return;
+    
+    // Deactivate current player if any
+    if (activePlayer != nullptr)
+        deactivatePlayer(activePlayer);
+    
+    // Prepare player for playback
+    player->prepareForPlayback();
+    
+    // Connect to AudioEngine
+    if (!player->connectToAudioEngine(audioEngine.get()))
+    {
+        std::cerr << "Failed to connect player to AudioEngine" << std::endl;
+        player->releaseResources();
+        return;
+    }
+    
+    // Add player's graph to the main processor graph in AudioEngine
+    if (auto* instrument = player->getInstrument())
+    {
+        if (auto* processorGraph = instrument->getProcessorGraph())
+        {
+            audioEngine->addPlayerGraph(*processorGraph);
+        }
+    }
+    
+    // Set as active player
+    activePlayer = player;
+    std::cout << "Player " << player->getMetadata().name << " activated" << std::endl;
+}
+
+void PlayerManager::deactivatePlayer(Player* player)
+{
+    if (player == nullptr || player != activePlayer)
+        return;
+    
+    // Remove player's graph from AudioEngine
+    if (auto* instrument = player->getInstrument())
+    {
+        if (auto* processorGraph = instrument->getProcessorGraph())
+        {
+            // Get the node ID of the player graph in the main processor graph
+            auto nodeId = audioEngine->getPlayerGraphNodeId(processorGraph);
+            if (nodeId.uid != 0) // Valid node ID
+                audioEngine->removePlayerGraph(nodeId);
+        }
+    }
+    
+    // Disconnect from AudioEngine
+    player->disconnectFromAudioEngine();
+    
+    // Release resources
+    player->releaseResources();
+    
+    // Clear active player
+    activePlayer = nullptr;
+    std::cout << "Player " << player->getMetadata().name << " deactivated" << std::endl;
+}
+
+bool PlayerManager::isPlayerActive(Player* player) const
+{
+    return player != nullptr && player == activePlayer;
 }
 
 Array<Player*> PlayerManager::getPlayers() const
@@ -181,7 +277,7 @@ std::unique_ptr<Player> PlayerManager::createPlayer()
     String id = String::toHexString(Random::getSystemRandom().nextInt());
     
     // Create a new player with default settings, passing the AudioEngine as a raw pointer
-    auto player = std::make_unique<Player>(id, "New Player", formatManager, knownPluginList, audioEngine.get());
+    auto player = std::make_unique<Player>(id, "New Player", *formatManager, *knownPluginList, audioEngine.get());
     player->initialize();
     
     // Set default metadata
@@ -207,7 +303,7 @@ std::unique_ptr<Player> PlayerManager::loadPlayer(const File& file)
     if (result.wasOk() && json.isObject())
     {
         // Use the fromVar method to create a player with the shared format manager and plugin list
-        return Player::fromVar(json, formatManager, knownPluginList, audioEngine.get());
+        return Player::fromVar(json, *formatManager, *knownPluginList, audioEngine.get());
     }
     
     return nullptr;

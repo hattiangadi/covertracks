@@ -70,6 +70,139 @@ Player::~Player()
     std::cout << "Player destructor: Finished cleaning up " << metadata.name << " (ID: " << id << ")" << std::endl;
 }
 
+void Player::loadMinimalResources()
+{
+    // Just load metadata and minimal state
+    if (!fullyLoaded)
+    {
+        // Create instrument if needed (but don't initialize)
+        if (instrument == nullptr)
+        {
+            instrument = std::make_unique<Instrument>(metadata.name, formatManager, knownPluginList);
+            
+            // Set up pattern finished callback
+            instrument->setPatternFinishedCallback([this]() {
+                this->handlePatternFinished();
+            });
+        }
+        
+        fullyLoaded = true;
+        std::cout << "Player " << metadata.name << " minimal resources loaded" << std::endl;
+    }
+}
+
+void Player::prepareForEditing()
+{
+    // Prepare for UI editing
+    if (!readyForEditing)
+    {
+        // Make sure minimal resources are loaded
+        if (!fullyLoaded)
+            loadMinimalResources();
+        
+        // Prepare instrument for editing
+        if (instrument)
+            instrument->prepareForEditing();
+        
+        readyForEditing = true;
+        std::cout << "Player " << metadata.name << " prepared for editing" << std::endl;
+    }
+}
+
+void Player::prepareForPlayback()
+{
+    // Prepare for audio playback
+    if (!readyForPlayback)
+    {
+        // Make sure we're edit-ready
+        if (!readyForEditing)
+            prepareForEditing();
+        
+        // Connect to AudioEngine if available
+        if (audioEngine && !isConnectedToAudioEngine())
+            connectToAudioEngine(audioEngine);
+        
+        // Prepare instrument for playback
+        if (instrument)
+            instrument->prepareForPlayback();
+        
+        readyForPlayback = true;
+        std::cout << "Player " << metadata.name << " prepared for playback" << std::endl;
+    }
+}
+
+void Player::releaseResources()
+{
+    // Release all heavy resources
+    if (fullyLoaded)
+    {
+        // Disconnect from AudioEngine if connected
+        if (isConnectedToAudioEngine())
+            disconnectFromAudioEngine();
+        
+        // Release instrument resources
+        if (instrument)
+            instrument->releaseResources();
+        
+        readyForEditing = false;
+        readyForPlayback = false;
+        fullyLoaded = false;
+        std::cout << "Player " << metadata.name << " resources released" << std::endl;
+    }
+}
+
+bool Player::connectToAudioEngine(AudioEngine* engine)
+{
+    if (engine == nullptr)
+        return false;
+    
+    audioEngine = engine;
+    
+    // Connect instrument to the engine
+    if (instrument && !instrument->connectToAudioEngine(engine))
+        return false;
+    
+    // Activate this player in the engine
+    engine->activatePlayer(this);
+    
+    return true;
+}
+
+void Player::disconnectFromAudioEngine()
+{
+    if (audioEngine)
+    {
+        // Deactivate this player in the engine
+        audioEngine->deactivatePlayer(this);
+        
+        // Disconnect instrument from the engine
+        if (instrument)
+            instrument->disconnectFromAudioEngine();
+        
+        audioEngine = nullptr;
+    }
+}
+
+bool Player::isConnectedToAudioEngine() const
+{
+    return audioEngine != nullptr && instrument && instrument->isConnectedToAudioEngine();
+}
+
+bool Player::isFullyLoaded() const
+{
+    return fullyLoaded;
+}
+
+bool Player::isReadyForPlayback() const
+{
+    return readyForPlayback;
+}
+
+bool Player::isReadyForEditing() const
+{
+    return readyForEditing;
+}
+
 bool Player::initialize()
 {
     // Create instrument if needed
@@ -83,8 +216,8 @@ bool Player::initialize()
         });
     }
     
-    // Initialize the instrument
-    instrument->initialize();
+    // Prepare the instrument for editing
+    instrument->prepareForEditing();
     bool instrumentInitialized = true; // Assume initialization succeeded
     
     // Temporarily commented out Musician initialization for compilation

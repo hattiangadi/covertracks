@@ -147,14 +147,17 @@ public:
 
     void initialise (const String& commandLine) override
     {
+        std::cout << "[PluginHostApp] Starting initialization..." << std::endl;
         auto scannerSubprocess = std::make_unique<PluginScannerSubprocess>();
 
         if (scannerSubprocess->initialiseFromCommandLine (commandLine, processUID))
         {
+            std::cout << "[PluginHostApp] Initializing as scanner subprocess" << std::endl;
             storedScannerSubprocess = std::move (scannerSubprocess);
             return;
         }
 
+        std::cout << "[PluginHostApp] Initializing settings file" << std::endl;
         // initialise our settings file..
 
         PropertiesFile::Options options;
@@ -165,12 +168,17 @@ public:
         appProperties.reset (new ApplicationProperties());
         appProperties->setStorageParameters (options);
 
+        std::cout << "[PluginHostApp] Creating MainHostWindow" << std::endl;
         mainWindow.reset (new MainHostWindow());
+        std::cout << "[PluginHostApp] MainHostWindow created" << std::endl;
 
+        std::cout << "[PluginHostApp] Registering commands" << std::endl;
         commandManager.registerAllCommandsForTarget (this);
         commandManager.registerAllCommandsForTarget (mainWindow.get());
 
+        std::cout << "[PluginHostApp] Updating menu items" << std::endl;
         mainWindow->menuItemsChanged();
+        std::cout << "[PluginHostApp] Menu items updated" << std::endl;
 
         // Important note! We're going to use an async update here so that if we need
         // to re-open a file and instantiate some plugins, it will happen AFTER this
@@ -180,7 +188,9 @@ public:
         // being loaded. If that happens inside this method, the OSX event loop seems to be in some
         // kind of special "initialisation" mode and things get confused. But if we load the plugin
         // later when the normal event loop is running, everything's fine.
+        std::cout << "[PluginHostApp] Triggering async update" << std::endl;
         triggerAsyncUpdate();
+        std::cout << "[PluginHostApp] Initialization complete" << std::endl;
     }
 
     void handleAsyncUpdate() override

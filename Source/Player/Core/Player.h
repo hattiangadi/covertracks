@@ -49,6 +49,22 @@ public:
      * @brief Destroy the Player
      */
     ~Player();
+
+    // Resource management
+    void loadMinimalResources();  // Load metadata and minimal state
+    void prepareForEditing();     // Prepare for UI editing
+    void prepareForPlayback();    // Prepare for audio playback
+    void releaseResources();      // Release heavy resources
+        
+    // AudioEngine connection
+    bool connectToAudioEngine(AudioEngine* engine);
+    void disconnectFromAudioEngine();
+    bool isConnectedToAudioEngine() const;
+        
+    // Resource state tracking
+    bool isFullyLoaded() const;
+    bool isReadyForPlayback() const;
+    bool isReadyForEditing() const;
     
     /**
      * @brief Initialize the player with default settings
@@ -195,6 +211,11 @@ private:
     // Core components
     std::unique_ptr<Instrument> instrument;
     // std::unique_ptr<Musician> musician; // Temporarily commented out
+    
+    // Resource state
+    bool fullyLoaded = false;
+    bool readyForEditing = false;
+    bool readyForPlayback = false;
     
     /**
      * @brief Get the path to the graph file for this player

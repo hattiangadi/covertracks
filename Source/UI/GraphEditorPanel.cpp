@@ -1312,100 +1312,84 @@ struct GraphDocumentComponent::PluginListBoxModel final : public ListBoxModel,
 };
 
 //==============================================================================
-GraphDocumentComponent::GraphDocumentComponent (AudioPluginFormatManager& fm,
-                                                AudioDeviceManager& dm,
-                                                KnownPluginList& kpl,
-                                                bool loadDefaultGraph,
-                                                AudioEngine* engine)
-    : graph (new PluginGraph (fm, kpl)),
-      deviceManager (dm),
-      pluginList (kpl),
-      graphPlayer (engine != nullptr ? engine->isDoublePrecisionProcessing() 
-                  : getAppProperties().getUserSettings()->getBoolValue("doublePrecisionProcessing", false)),
-      sharedAudioEngine(engine)
+GraphDocumentComponent::GraphDocumentComponent(AudioPluginFormatManager& fm,
+                                             KnownPluginList& kpl,
+                                             AudioEngine& engine)
+    : graph(new PluginGraph(fm, kpl)),
+      audioEngine(engine),
+      pluginList(kpl)
 {
-    // If we don't want to load a default graph, create an empty one without default plugins
-    if (!loadDefaultGraph)
-    {
-        // Clear any existing graph and create a new empty one without default plugins
-        graph->newDocument(false);
-    }
+    // Create an empty graph without default plugins
+    graph->newDocument(false);
     
-    std::cout << "Creating GraphDocumentComponent with " 
-              << (sharedAudioEngine != nullptr ? "shared AudioEngine" : "dedicated audio device manager") 
-              << std::endl;
-              
-    init(engine);
-}
-
-void GraphDocumentComponent::init(AudioEngine* engine)
-{
-    // First create the graph panel
+    // Create the graph panel
     graphPanel.reset(new GraphEditorPanel(*graph));
     addAndMakeVisible(graphPanel.get());
-    graphPlayer.setProcessor(&graph->graph);
     
-    // Store the AudioEngine reference
-    sharedAudioEngine = engine;
-    
-    // If AudioEngine is provided, register with it
-    if (engine != nullptr)
-    {
-        // Register the graph processor with the engine
-        engine->registerProcessor(&graph->graph);
-        
-        // Register MIDI input with the engine
-        engine->registerMidiInput(String(), &graphPlayer.getMidiMessageCollector());
-    }
-    // Otherwise use direct audio device callbacks
-    else
-    {
-        deviceManager.addChangeListener(graphPanel.get());
-        deviceManager.addAudioCallback(&graphPlayer);
-        deviceManager.addMidiInputDeviceCallback(String(), &graphPlayer.getMidiMessageCollector());
-    }
-    
-    updateMidiOutput();
-
-    keyState.addListener(&graphPlayer.getMidiMessageCollector());
-
+    // Set up MIDI keyboard
     keyboardComp.reset(new MidiKeyboardComponent(keyState, MidiKeyboardComponent::horizontalKeyboard));
     addAndMakeVisible(keyboardComp.get());
+    
+    // Create status bar
     statusBar.reset(new TooltipBar());
     addAndMakeVisible(statusBar.get());
-
+    
+    // We can't directly connect the keyboard state to the AudioEngine
+    // Instead, we'll handle MIDI messages in the AudioEngine
+    
+    // Update the UI
     graphPanel->updateComponents();
-
+    
+    // Set up touch device UI components if needed
     if (isOnTouchDevice())
     {
         titleBarComponent.reset(new TitleBarComponent(*this));
         addAndMakeVisible(titleBarComponent.get());
-
+        
         pluginListBoxModel.reset(new PluginListBoxModel(pluginListBox, pluginList));
-
+        
         pluginListBox.setModel(pluginListBoxModel.get());
         pluginListBox.setRowHeight(40);
-
+        
         pluginListSidePanel.setContent(&pluginListBox, false);
-
-        mobileSettingsSidePanel.setContent(new AudioDeviceSelectorComponent(deviceManager,
-                                                                         0, 2, 0, 2,
-                                                                         true, true, true, false));
-
+        
+        // Create audio settings panel linked to engine's device manager
+        mobileSettingsSidePanel.setContent(new AudioDeviceSelectorComponent(
+            audioEngine.getDeviceManager(), 0, 2, 0, 2, true, true, true, false));
+        
         addAndMakeVisible(pluginListSidePanel);
         addAndMakeVisible(mobileSettingsSidePanel);
     }
 }
 
+void GraphDocumentComponent::releaseGraph()
+{
+    // Disconnect the graph from the audio engine
+    if (graph && !graph->graph.getNodes().isEmpty()) // Check if graph has nodes
+        audioEngine.unregisterProcessor(&graph->graph);
+    
+    // Clear UI components
+    graphPanel = nullptr;
+    keyboardComp = nullptr;
+    statusBar = nullptr;
+    
+    // Release the graph
+    graph = nullptr;
+}
+
+void GraphDocumentComponent::setDoublePrecision(bool doublePrecision)
+{
+    // Use the AudioEngine to set double precision
+    audioEngine.setDoublePrecisionProcessing(doublePrecision);
+}
+
+// This method has been removed as it's been replaced by the constructor
+
 
 GraphDocumentComponent::~GraphDocumentComponent()
 {
-    if (midiOutput != nullptr)
-        midiOutput->stopBackgroundThread();
-
+    // Release all resources
     releaseGraph();
-
-    keyState.removeListener(&graphPlayer.getMidiMessageCollector());
 }
 
 void GraphDocumentComponent::resized()
@@ -1439,39 +1423,7 @@ void GraphDocumentComponent::createNewPlugin (const PluginDescriptionAndPreferen
     graphPanel->createNewPlugin (desc, pos);
 }
 
-void GraphDocumentComponent::releaseGraph()
-{
-    // Get reference to AudioEngine if available
-    AudioEngine* engine = nullptr;
-    if (auto* mainHostWindow = dynamic_cast<MainHostWindow*>(getTopLevelComponent()))
-    {
-        engine = mainHostWindow->getAudioEngine();
-    }
-    
-    if (engine != nullptr)
-    {
-        // Unregister from AudioEngine
-        engine->unregisterProcessor(&graph->graph);
-        engine->unregisterMidiInput(String(), &graphPlayer.getMidiMessageCollector());
-    }
-    else
-    {
-        deviceManager.removeAudioCallback(&graphPlayer);
-        deviceManager.removeMidiInputDeviceCallback(String(), &graphPlayer.getMidiMessageCollector());
-    }
 
-    if (graphPanel != nullptr)
-    {
-        deviceManager.removeChangeListener(graphPanel.get());
-        graphPanel = nullptr;
-    }
-
-    keyboardComp = nullptr;
-    statusBar = nullptr;
-
-    graphPlayer.setProcessor(nullptr);
-    graph = nullptr;
-}
 
 bool GraphDocumentComponent::isInterestedInDragSource (const SourceDetails& details)
 {
@@ -1528,26 +1480,7 @@ void GraphDocumentComponent::checkAvailableWidth()
     }
 }
 
-void GraphDocumentComponent::setDoublePrecision(bool doublePrecision)
-{
-    // Check if we have access to the AudioEngine
-    AudioEngine* engine = nullptr;
-    if (auto* mainHostWindow = dynamic_cast<MainHostWindow*>(getTopLevelComponent()))
-    {
-        engine = mainHostWindow->getAudioEngine();
-    }
-    
-    if (engine != nullptr)
-    {
-        // Use the AudioEngine to set double precision
-        engine->setDoublePrecisionProcessing(doublePrecision);
-    }
-    else
-    {
-        // Fall back to setting it directly on the graphPlayer
-        graphPlayer.setDoublePrecisionProcessing(doublePrecision);
-    }
-}
+
 
 bool GraphDocumentComponent::closeAnyOpenPluginWindows()
 {
@@ -1556,22 +1489,14 @@ bool GraphDocumentComponent::closeAnyOpenPluginWindows()
 
 void GraphDocumentComponent::changeListenerCallback (ChangeBroadcaster*)
 {
-    updateMidiOutput();
+    // Update UI when AudioEngine changes
+    graphPanel->updateComponents();
 }
 
 void GraphDocumentComponent::updateMidiOutput()
 {
-    auto* defaultMidiOutput = deviceManager.getDefaultMidiOutput();
-
-    if (midiOutput != defaultMidiOutput)
-    {
-        midiOutput = defaultMidiOutput;
-
-        if (midiOutput != nullptr)
-            midiOutput->startBackgroundThread();
-
-        graphPlayer.setMidiOutput (midiOutput);
-    }
+    // This method has been simplified since AudioEngine now handles MIDI output
+    // No action needed here as AudioEngine manages MIDI devices
 }
 
 }// namespace covertracks
