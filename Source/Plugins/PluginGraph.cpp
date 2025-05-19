@@ -671,7 +671,7 @@ void PluginGraph::restoreFromXml (const XmlElement& xml)
     for (auto* e : xml.getChildWithTagNameIterator ("FILTER"))
     {
         createNodeFromXml (*e);
-        changed();
+        // Don't call changed() for each node to prevent continuous save/load cycles
         nodeCount++;
     }
     std::cout << "Restored " << nodeCount << " nodes" << std::endl;
@@ -796,26 +796,15 @@ void PluginGraph::restoreFromXml (const XmlElement& xml)
     std::cout << "Successfully restored " << successCount << " out of " << connectionCount 
               << " connections (MIDI: " << midiConnectionCount 
               << ", Audio: " << audioConnectionCount << ")" << std::endl;
-
-    // Clean up any illegal connections
-    graph.removeIllegalConnections();
     
-    // Debug: Print all connections after restoration
-    auto connections = graph.getConnections();
-    std::cout << "After restoration, graph has " << connections.size() << " connections:" << std::endl;
-    int index = 0;
-    for (auto& connection : connections)
-    {
-        bool isMidi = connection.source.isMIDI() || connection.destination.isMIDI();
-        std::cout << "  Connection " << ++index << ": " 
-                  << connection.source.nodeID.uid << "/" << connection.source.channelIndex
-                  << " -> " 
-                  << connection.destination.nodeID.uid << "/" << connection.destination.channelIndex
-                  << " (" << (isMidi ? "MIDI" : "Audio") << ")" << std::endl;
-    }
+    // Log the current connections in the graph
+    std::cout << "After restoration, graph has " << graph.getConnections().size() << " connections:" << std::endl;
+    
+    // Call changed() only once at the end of the restoration process
+    changed();
 }
 
-File PluginGraph::getDefaultGraphDocumentOnMobile()
+File covertracks::PluginGraph::getDefaultGraphDocumentOnMobile()
 {
     auto persistantStorageLocation = File::getSpecialLocation (File::userApplicationDataDirectory);
     return persistantStorageLocation.getChildFile ("state.filtergraph");

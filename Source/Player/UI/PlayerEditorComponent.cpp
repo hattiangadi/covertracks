@@ -2,6 +2,7 @@
 #include "PlayerEditorComponent.h"
 #include "../../Plugins/InternalPlugins.h"
 #include "../../UI/MainHostWindow.h"
+#include <unordered_map>
 
 namespace covertracks {
 
@@ -93,10 +94,23 @@ PlayerEditorComponent::~PlayerEditorComponent()
     loadGraphButton.removeListener(this);
 }
 
+// Add a static flag to track if we've already loaded this player for editing
+static std::unordered_map<Player*, bool> playerLoadedMap;
+
 void PlayerEditorComponent::loadPlayerForEditing()
 {
     if (player != nullptr)
     {
+        // Check if this player has already been loaded for editing
+        if (playerLoadedMap.find(player) != playerLoadedMap.end() && playerLoadedMap[player])
+        {
+            // Player already loaded, just update UI if needed
+            return;
+        }
+        
+        // Mark this player as loaded
+        playerLoadedMap[player] = true;
+        
         // Prepare the player for editing
         player->prepareForEditing();
         
@@ -145,6 +159,12 @@ void PlayerEditorComponent::saveAndReleaseResources()
         if (player->isConnectedToAudioEngine() && audioEngine != nullptr)
         {
             player->disconnectFromAudioEngine();
+        }
+        
+        // Remove the player from our tracking map
+        if (playerLoadedMap.find(player) != playerLoadedMap.end())
+        {
+            playerLoadedMap.erase(player);
         }
         
         // Release resources
@@ -410,6 +430,12 @@ std::unique_ptr<Player> covertracks::PlayerEditorComponent::releaseOwnedPlayer()
     // If we don't own a player, return nullptr
     if (!ownedPlayer)
         return nullptr;
+    
+    // Remove the player from our tracking map
+    if (playerLoadedMap.find(ownedPlayer.get()) != playerLoadedMap.end())
+    {
+        playerLoadedMap.erase(ownedPlayer.get());
+    }
     
     // Get a copy of the player pointer before we release ownership
     player = nullptr;
