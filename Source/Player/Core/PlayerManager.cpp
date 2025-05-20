@@ -13,24 +13,32 @@ PlayerManager::PlayerManager()
     formatManager = std::make_unique<AudioPluginFormatManager>();
     formatManager->addDefaultFormats();
     
-    // Add the internal plugin format
-    std::cout << "[PlayerManager] Adding internal plugin format" << std::endl;
-    internalPluginFormat = std::make_unique<InternalPluginFormat>();
-    formatManager->addFormat(internalPluginFormat.get());
+    // Create a single internal plugin format that will be owned by the formatManager
+    std::cout << "[PlayerManager] Creating internal plugin format" << std::endl;
+    auto* internalFormat = new InternalPluginFormat();
+    formatManager->addFormat(internalFormat); // formatManager takes ownership
     
-    // Store internal plugin types for later use
-    std::cout << "[PlayerManager] Storing internal plugin types" << std::endl;
-    internalTypes = internalPluginFormat->getAllTypes();
-    std::cout << "[PlayerManager] Got " << internalTypes.size() << " internal plugin types" << std::endl;
+    // Store a non-owning pointer to the internal format for our use
+    internalPluginFormat = internalFormat;
+    
+    // Get the internal plugin types but don't store them as copies
+    // This avoids the PluginDescription leak
+    std::cout << "[PlayerManager] Getting internal plugin types" << std::endl;
+    auto types = internalPluginFormat->getAllTypes();
+    std::cout << "[PlayerManager] Got " << types.size() << " internal plugin types" << std::endl;
     
     // Create and own the plugin list
     std::cout << "[PlayerManager] Creating known plugin list" << std::endl;
     knownPluginList = std::make_unique<KnownPluginList>();
     
     // Add internal plugin types to the known plugin list
+    // Use the types directly from the format to avoid creating copies
     std::cout << "[PlayerManager] Adding internal plugin types to known plugin list" << std::endl;
-    for (auto& type : internalTypes)
+    for (auto& type : types)
+    {
+        // Add the type by reference to avoid creating a copy
         knownPluginList->addType(type);
+    }
     
     // Create our own AudioEngine instance with enhanced capabilities
     std::cout << "[PlayerManager] Creating AudioEngine" << std::endl;
@@ -47,19 +55,65 @@ PlayerManager::PlayerManager()
 
 PlayerManager::~PlayerManager()
 {
-    // Log the start of cleanup
-    std::cout << "PlayerManager destructor: Starting cleanup of " << players.size() << " players" << std::endl;
-    
-    // Deactivate any active player
-    if (activePlayer != nullptr)
-        deactivatePlayer(activePlayer);
-    
-    // Clear all players - this will call each Player's destructor
-    // which in turn will clean up their Instruments
-    players.clear();
-    
-    // The AudioEngine will be destroyed automatically
-    std::cout << "PlayerManager destructor: All players cleaned up" << std::endl;
+    try
+    {
+        // Log the start of cleanup with detailed address information
+        std::cout << "PlayerManager destructor: Starting cleanup of " << players.size() << " players" << std::endl;
+        std::cout << "  audioEngine address: " << audioEngine.get() << std::endl;
+        std::cout << "  knownPluginList address: " << knownPluginList.get() << std::endl;
+        std::cout << "  formatManager address: " << formatManager.get() << std::endl;
+        std::cout << "  internalPluginFormat address: " << internalPluginFormat << std::endl;
+        
+        // Deactivate any active player
+        std::cout << "PlayerManager destructor: Deactivating active player" << std::endl;
+        if (activePlayer != nullptr)
+            deactivatePlayer(activePlayer);
+        
+        // Clear all players - this will call each Player's destructor
+        // which in turn will clean up their Instruments
+        std::cout << "PlayerManager destructor: Clearing players array" << std::endl;
+        players.clear();
+        std::cout << "PlayerManager destructor: Players cleared" << std::endl;
+        
+        // Explicitly destroy each member in a controlled order with detailed logging
+        std::cout << "PlayerManager destructor: Explicitly destroying audioEngine" << std::endl;
+        audioEngine.reset();
+        std::cout << "PlayerManager destructor: audioEngine destroyed" << std::endl;
+        
+        std::cout << "PlayerManager destructor: Explicitly destroying knownPluginList" << std::endl;
+        knownPluginList.reset();
+        std::cout << "PlayerManager destructor: knownPluginList destroyed" << std::endl;
+        
+        // Before destroying formatManager, log its state
+        if (formatManager)
+        {
+            std::cout << "PlayerManager destructor: formatManager has " << formatManager->getNumFormats() << " formats" << std::endl;
+            for (int i = 0; i < formatManager->getNumFormats(); ++i)
+            {
+                auto* format = formatManager->getFormat(i);
+                std::cout << "  Format " << i << ": " << format->getName() << " (address: " << format << ")" << std::endl;
+            }
+        }
+        
+        std::cout << "PlayerManager destructor: Explicitly destroying formatManager" << std::endl;
+        formatManager.reset();
+        std::cout << "PlayerManager destructor: formatManager destroyed" << std::endl;
+        
+        // We don't reset the static plugin format here, as it should persist
+        // Just set our pointer to null
+        std::cout << "PlayerManager destructor: Setting internalPluginFormat to nullptr" << std::endl;
+        internalPluginFormat = nullptr;
+        
+        std::cout << "PlayerManager destructor: All resources cleaned up successfully" << std::endl;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "EXCEPTION in PlayerManager destructor: " << e.what() << std::endl;
+    }
+    catch (...)
+    {
+        std::cerr << "UNKNOWN EXCEPTION in PlayerManager destructor" << std::endl;
+    }
 }
 void PlayerManager::activatePlayer(Player* player)
 {

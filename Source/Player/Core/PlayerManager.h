@@ -54,8 +54,10 @@ namespace covertracks {
         KnownPluginList& getKnownPluginList() const { return *knownPluginList; }
         KnownPluginList& getPluginList() const { return *knownPluginList; }
         
-        // Get the internal plugin types
-        const std::vector<PluginDescription>& getInternalPluginTypes() const { return internalTypes; }
+        // Get the internal plugin types directly from the format
+        std::vector<PluginDescription> getInternalPluginTypes() const { 
+            return internalPluginFormat ? internalPluginFormat->getAllTypes() : std::vector<PluginDescription>(); 
+        }
         
         // Player state management
         void activatePlayer(Player* player);
@@ -71,17 +73,20 @@ namespace covertracks {
         void loadAllPlayers();
         
         // Plugin environment owned by the PlayerManager
-        std::unique_ptr<AudioPluginFormatManager> formatManager;
-        std::unique_ptr<KnownPluginList> knownPluginList;
+        // Note: Order matters for destruction - internalPluginFormat must be destroyed AFTER formatManager
+        // since formatManager holds a reference to it
         
-        // AudioEngine is owned by the PlayerManager
+        // AudioEngine is owned by the PlayerManager and must be destroyed first
         std::unique_ptr<AudioEngine> audioEngine;
         
-        // Own the internal plugin format to ensure proper lifecycle management
-        std::unique_ptr<InternalPluginFormat> internalPluginFormat;
+        // KnownPluginList doesn't hold references to formats
+        std::unique_ptr<KnownPluginList> knownPluginList;
         
-        // Store internal plugin types for use throughout the application
-        std::vector<PluginDescription> internalTypes;
+        // FormatManager holds references to formats, so it must be destroyed before internalPluginFormat
+        std::unique_ptr<AudioPluginFormatManager> formatManager;
+        
+        // Pointer to the internal plugin format (not owned, formatManager owns it)
+        InternalPluginFormat* internalPluginFormat = nullptr;
         
         // Currently active player (if any)
         Player* activePlayer = nullptr;
