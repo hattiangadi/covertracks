@@ -96,8 +96,6 @@ void Player::prepareForEditing()
     // Prepare for UI editing
     if (!readyForEditing)
     {
-        std::cout << "Preparing player " << metadata.name << " for editing" << std::endl;
-        
         // Make sure minimal resources are loaded
         if (!fullyLoaded)
             loadMinimalResources();
@@ -111,42 +109,11 @@ void Player::prepareForEditing()
             File graphFile = getGraphFilePath();
             if (graphFile.existsAsFile())
             {
-                std::cout << "Loading graph file for editing: " << graphFile.getFullPathName() << std::endl;
-                
                 // Parse the XML file
                 std::unique_ptr<XmlElement> graphState = parseXML(graphFile);
                 
                 if (graphState != nullptr && graphState->hasTagName("FILTERGRAPH"))
                 {
-                    // Count nodes in the graph state
-                    int nodeCount = 0;
-                    for (auto* node : graphState->getChildWithTagNameIterator("FILTER"))
-                    {
-                        nodeCount++;
-                        std::cout << "  Found node in file XML: " << node->getIntAttribute("uid") 
-                                  << " - " << node->getStringAttribute("name") << std::endl;
-                    }
-                    std::cout << "Graph file contains " << nodeCount << " nodes" << std::endl;
-                    
-                    // Count connections
-                    int midiConnections = 0;
-                    int audioConnections = 0;
-                    
-                    for (auto* e : graphState->getChildWithTagNameIterator("CONNECTION"))
-                    {
-                        auto srcChannel = e->getIntAttribute("srcChannel");
-                        bool isMidi = (srcChannel == 4096);
-                        
-                        if (isMidi)
-                            midiConnections++;
-                        else
-                            audioConnections++;
-                    }
-                    
-                    std::cout << "Graph file contains " << (midiConnections + audioConnections) 
-                              << " connections (MIDI: " << midiConnections 
-                              << ", Audio: " << audioConnections << ")" << std::endl;
-                    
                     // Load the graph state into the instrument
                     instrument->loadPluginGraph(*graphState);
                 }
@@ -156,14 +123,9 @@ void Player::prepareForEditing()
                               << graphFile.getFullPathName() << std::endl;
                 }
             }
-            else
-            {
-                std::cout << "No graph file found for player " << metadata.name << std::endl;
-            }
         }
         
         readyForEditing = true;
-        std::cout << "Player " << metadata.name << " prepared for editing" << std::endl;
     }
 }
 

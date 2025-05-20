@@ -10,7 +10,9 @@ namespace covertracks {
 
     class PlayerEditorComponent : public Component,
     public Button::Listener,
-    public Timer
+    public Timer,
+    public MidiKeyboardStateListener,
+    public MidiInputCallback
 {
 public:
 // Modified constructor with engine reference
@@ -83,6 +85,16 @@ void updateUIFromPlayer();
 
 // Timer callback
 void timerCallback() override;
+
+// MIDI keyboard support
+void connectMidiKeyboardToGraph();
+
+// MidiInputCallback implementation
+void handleIncomingMidiMessage(MidiInput* source, const MidiMessage& message) override;
+
+// MidiKeyboardStateListener implementation
+void handleNoteOn(MidiKeyboardState* source, int midiChannel, int midiNoteNumber, float velocity) override;
+void handleNoteOff(MidiKeyboardState* source, int midiChannel, int midiNoteNumber, float velocity) override;
 
 JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PlayerEditorComponent)
 };

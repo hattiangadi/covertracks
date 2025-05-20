@@ -118,8 +118,12 @@ private:
 class GraphDocumentComponent final : public Component,
                                     public DragAndDropTarget,
                                     public DragAndDropContainer,
-                                    public ChangeListener
+                                    public ChangeListener,
+                                    public MidiKeyboardStateListener,
+                                    public Timer
 {
+    // Allow PlayerEditorComponent to access private members
+    friend class PlayerEditorComponent;
 public:
     // Modified constructor
     GraphDocumentComponent(AudioPluginFormatManager& fm,
@@ -140,6 +144,13 @@ public:
     
     // ChangeListener implementation
     void changeListenerCallback(ChangeBroadcaster*) override;
+    
+    // MidiKeyboardStateListener implementation
+    void handleNoteOn(MidiKeyboardState* source, int midiChannel, int midiNoteNumber, float velocity) override;
+    void handleNoteOff(MidiKeyboardState* source, int midiChannel, int midiNoteNumber, float velocity) override;
+    
+    // Timer implementation
+    void timerCallback() override;
     
     // Double precision setting
     void setDoublePrecision(bool doublePrecision);
@@ -171,6 +182,9 @@ private:
     
     // Keyboard state for MIDI input
     MidiKeyboardState keyState;
+    
+    // Access to keyboard state for MIDI routing
+    MidiKeyboardState& getMidiKeyboardState() { return keyState; }
     
     // Status bar
     struct TooltipBar;

@@ -99,113 +99,51 @@ static std::unordered_map<Player*, bool> playerLoadedMap;
 
 void PlayerEditorComponent::loadPlayerForEditing()
 {
-    std::cout << "=== PlayerEditorComponent::loadPlayerForEditing ===" << std::endl;
-    
     if (player != nullptr)
     {
-        std::cout << "Loading player: " << player->getMetadata().name << std::endl;
-        
         // Check if this player has already been loaded for editing
         if (playerLoadedMap.find(player) != playerLoadedMap.end() && playerLoadedMap[player])
-        {
-            std::cout << "Player already loaded, just updating UI if needed" << std::endl;
             return;
-        }
         
         // Mark this player as loaded
         playerLoadedMap[player] = true;
         
         // Prepare the player for editing
-        std::cout << "Calling player->prepareForEditing()" << std::endl;
         player->prepareForEditing();
         
         // If we have graph editor and the player has a graph state, load it
         if (graphEditor != nullptr && graphEditor->graph != nullptr)
         {
-            std::cout << "Getting graph state from player" << std::endl;
             auto graphState = player->getPluginGraphState();
             
             if (graphState != nullptr)
             {
-                // Count nodes in the graph state
-                int nodeCount = 0;
-                for (auto* node : graphState->getChildWithTagNameIterator("FILTER"))
-                {
-                    nodeCount++;
-                    std::cout << "  Found node in graph state: " << node->getIntAttribute("uid") 
-                              << " - " << node->getStringAttribute("name") << std::endl;
-                }
-                std::cout << "Graph state contains " << nodeCount << " nodes" << std::endl;
-                
-                // Count connections
-                int midiConnections = 0;
-                int audioConnections = 0;
-                
-                for (auto* e : graphState->getChildWithTagNameIterator("CONNECTION"))
-                {
-                    auto srcChannel = e->getIntAttribute("srcChannel");
-                    bool isMidi = (srcChannel == 4096);
-                    
-                    if (isMidi)
-                        midiConnections++;
-                    else
-                        audioConnections++;
-                }
-                
-                std::cout << "Graph state contains " << (midiConnections + audioConnections) 
-                          << " connections (MIDI: " << midiConnections 
-                          << ", Audio: " << audioConnections << ")" << std::endl;
-                
-                std::cout << "Restoring graph from XML" << std::endl;
+                // Restore the graph from XML
                 graphEditor->graph->restoreFromXml(*graphState);
                 
                 // Fix audio output nodes after restoring
-                std::cout << "Fixing audio output nodes" << std::endl;
                 graphEditor->graph->fixAudioOutputNodes();
-                
-                // Log the connections after restoration
-                auto& graph = graphEditor->graph->graph;
-                std::cout << "After restoration, graph has " << graph.getConnections().size() << " connections:" << std::endl;
-                for (auto& connection : graph.getConnections())
-                {
-                    std::cout << "  Connection: " << connection.source.nodeID.uid << "/" 
-                              << connection.source.channelIndex << " -> " 
-                              << connection.destination.nodeID.uid << "/" 
-                              << connection.destination.channelIndex 
-                              << (connection.source.channelIndex >= 4096 ? " (MIDI)" : " (Audio)") << std::endl;
-                }
                 
                 // Force a complete UI update to show the graph
                 if (graphEditor->graphPanel != nullptr)
                 {
-                    std::cout << "Forcing complete UI update for graph display" << std::endl;
-                    
-                    // First update the components
+                    // Update the components
                     graphEditor->graphPanel->updateComponents();
-                    
-                    // Force a repaint
                     graphEditor->graphPanel->repaint();
-                    
-                    // Force a layout update
                     graphEditor->resized();
-                    
-                    // Make sure the graph panel is visible
                     graphEditor->graphPanel->setVisible(true);
                     
-                    // Schedule another update after a short delay
-                    startTimer(500); // This will call timerCallback after 500ms
+                    // Schedule another update after a short delay to ensure display
+                    startTimer(500);
                 }
                 
                 // Connect the graph to the AudioEngine for playback during editing
                 if (audioEngine != nullptr)
                 {
-                    std::cout << "Connecting graph to AudioEngine for playback during editing" << std::endl;
+                    // Make sure audio output nodes are properly configured before connecting
+                    graphEditor->graph->fixAudioOutputNodes();
                     
-                    // Register the processor graph with the AudioEngine
-                    bool success = audioEngine->registerProcessor(&graphEditor->graph->graph);
-                    std::cout << "AudioEngine registration " << (success ? "successful" : "failed") << std::endl;
-                    
-                    // Make sure the graph is prepared for playback
+                    // Get the processor graph
                     auto& graph = graphEditor->graph->graph;
                     
                     // Set the sample rate and block size to match the audio device
@@ -216,8 +154,22 @@ void PlayerEditorComponent::loadPlayerForEditing()
                         double sampleRate = currentDevice->getCurrentSampleRate();
                         int blockSize = currentDevice->getCurrentBufferSizeSamples();
                         
-                        std::cout << "Preparing graph for playback: " << sampleRate << " Hz, " << blockSize << " samples" << std::endl;
+                        // Prepare the graph for playback
                         graph.prepareToPlay(sampleRate, blockSize);
+                    }
+                    
+                    // Register the processor graph with the AudioEngine
+                    bool success = audioEngine->registerProcessor(&graph);
+                    if (!success)
+                    {
+                        // If registration failed, try unregistering first (in case it's already registered)
+                        audioEngine->unregisterProcessor(&graph);
+                        success = audioEngine->registerProcessor(&graph);
+                        
+                        if (!success)
+                        {
+                            std::cerr << "Failed to register graph with AudioEngine" << std::endl;
+                        }
                     }
                     
                     // Enable MIDI input for the graph
@@ -225,6 +177,9 @@ void PlayerEditorComponent::loadPlayerForEditing()
                     
                     // Set the audio output volume to a reasonable level
                     audioEngine->setMasterGain(0.8f);
+                    
+                    // Connect the keyboard to the graph
+                    connectMidiKeyboardToGraph();
                 }
             }
         }
@@ -258,12 +213,8 @@ void PlayerEditorComponent::saveAndReleaseResources()
                 std::cout << "Saving graph state with " << graphEditor->graph->graph.getConnections().size() << " connections" << std::endl;
                 
                 // Count nodes and connections for logging
-                int nodeCount = 0;
                 int midiConnections = 0;
                 int audioConnections = 0;
-                
-                for (auto* node : graphState->getChildWithTagNameIterator("FILTER"))
-                    nodeCount++;
                     
                 for (auto* e : graphState->getChildWithTagNameIterator("CONNECTION"))
                 {
@@ -276,9 +227,9 @@ void PlayerEditorComponent::saveAndReleaseResources()
                         audioConnections++;
                 }
                 
-                std::cout << "Saving " << nodeCount << " nodes to XML" << std::endl;
-                std::cout << "Total connections saved: " << (midiConnections + audioConnections) 
-                          << " (MIDI: " << midiConnections << ", Audio: " << audioConnections << ")" << std::endl;
+                std::cout << "Graph state contains " << (midiConnections + audioConnections) 
+                          << " connections (MIDI: " << midiConnections 
+                          << ", Audio: " << audioConnections << ")" << std::endl;
                 
                 // Save directly to the player's graph file
                 player->savePluginGraphToFile(*graphState);
@@ -356,44 +307,24 @@ void PlayerEditorComponent::timerCallback()
     // If this is the first call (from constructor), load the player
     if (updateCount == 0)
     {
-        std::cout << "Timer callback: initial load" << std::endl;
         loadPlayerForEditing();
         updateCount++;
     }
     // If this is a subsequent call (scheduled after loading), force a UI update
     else
     {
-        std::cout << "Timer callback: delayed update #" << updateCount << std::endl;
-        
         // Force another UI update after a short delay
-        if (graphEditor != nullptr && graphEditor->graphPanel != nullptr)
+        if (graphEditor != nullptr && graphEditor->graphPanel != nullptr && player != nullptr)
         {
-            std::cout << "Performing delayed UI update" << std::endl;
-            
-            // Get the current graph state
-            if (player != nullptr)
+            auto graphState = player->getPluginGraphState();
+            if (graphState != nullptr)
             {
-                auto graphState = player->getPluginGraphState();
-                if (graphState != nullptr)
-                {
-                    // Count nodes in the graph state
-                    int nodeCount = 0;
-                    for (auto* node : graphState->getChildWithTagNameIterator("FILTER"))
-                        nodeCount++;
-                    
-                    std::cout << "Current graph state has " << nodeCount << " nodes" << std::endl;
-                    
-                    // If we have nodes, make sure they're displayed
-                    if (nodeCount > 0)
-                    {
-                        // Force a complete refresh
-                        graphEditor->graph->restoreFromXml(*graphState);
-                        graphEditor->graph->fixAudioOutputNodes();
-                        graphEditor->graphPanel->updateComponents();
-                        graphEditor->graphPanel->repaint();
-                        graphEditor->resized();
-                    }
-                }
+                // Force a complete refresh
+                graphEditor->graph->restoreFromXml(*graphState);
+                graphEditor->graph->fixAudioOutputNodes();
+                graphEditor->graphPanel->updateComponents();
+                graphEditor->graphPanel->repaint();
+                graphEditor->resized();
             }
         }
         
@@ -401,11 +332,36 @@ void PlayerEditorComponent::timerCallback()
         
         // If we've done less than 3 updates, schedule another one
         if (updateCount < 3)
-        {
-            std::cout << "Scheduling another update" << std::endl;
             startTimer(500);
-        }
     }
+}
+
+void PlayerEditorComponent::connectMidiKeyboardToGraph()
+{
+    // Since GraphDocumentComponent now handles MIDI keyboard state directly,
+    // we just need to ensure MIDI input is enabled in the AudioEngine
+    if (audioEngine != nullptr)
+    {
+        audioEngine->enableMidiInput(true);
+    }
+}
+
+void PlayerEditorComponent::handleIncomingMidiMessage(MidiInput* /*source*/, const MidiMessage& /*message*/)
+{
+    // We don't need to handle external MIDI messages directly
+    // The AudioEngine will route them to the graph automatically
+}
+
+void PlayerEditorComponent::handleNoteOn(MidiKeyboardState* /*source*/, int /*midiChannel*/, int /*midiNoteNumber*/, float /*velocity*/)
+{
+    // GraphDocumentComponent now handles MIDI keyboard state directly
+    // No action needed here
+}
+
+void PlayerEditorComponent::handleNoteOff(MidiKeyboardState* /*source*/, int /*midiChannel*/, int /*midiNoteNumber*/, float /*velocity*/)
+{
+    // GraphDocumentComponent now handles MIDI keyboard state directly
+    // No action needed here
 }
 
 void PlayerEditorComponent::createPlugin(const PluginDescriptionAndPreference& desc, Point<int> pos)
