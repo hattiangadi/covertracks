@@ -92,11 +92,27 @@ public:
     bool saveGraphState();
     
     /**
+     * @brief Save a specific graph state XML to the player's graph file
+     * 
+     * @param graphState XML representation of plugin graph
+     * @return true if successful
+     * @return false if failed
+     */
+    bool savePluginGraphToFile(const XmlElement& graphState);
+    
+    /**
      * @brief Get the current plugin graph state
      * 
      * @return std::unique_ptr<XmlElement> XML representation of the current graph
      */
     std::unique_ptr<XmlElement> getPluginGraphState();
+    
+    /**
+     * @brief Load the plugin graph state from the saved file
+     * 
+     * @return std::unique_ptr<XmlElement> XML representation of the graph from file
+     */
+    std::unique_ptr<XmlElement> loadGraphStateFromFile();
     
     /**
      * @brief Set the LLM client for the musician (stubbed)

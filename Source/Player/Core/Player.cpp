@@ -96,13 +96,71 @@ void Player::prepareForEditing()
     // Prepare for UI editing
     if (!readyForEditing)
     {
+        std::cout << "Preparing player " << metadata.name << " for editing" << std::endl;
+        
         // Make sure minimal resources are loaded
         if (!fullyLoaded)
             loadMinimalResources();
         
         // Prepare instrument for editing
         if (instrument)
+        {
             instrument->prepareForEditing();
+            
+            // Check if we need to load the graph file
+            File graphFile = getGraphFilePath();
+            if (graphFile.existsAsFile())
+            {
+                std::cout << "Loading graph file for editing: " << graphFile.getFullPathName() << std::endl;
+                
+                // Parse the XML file
+                std::unique_ptr<XmlElement> graphState = parseXML(graphFile);
+                
+                if (graphState != nullptr && graphState->hasTagName("FILTERGRAPH"))
+                {
+                    // Count nodes in the graph state
+                    int nodeCount = 0;
+                    for (auto* node : graphState->getChildWithTagNameIterator("FILTER"))
+                    {
+                        nodeCount++;
+                        std::cout << "  Found node in file XML: " << node->getIntAttribute("uid") 
+                                  << " - " << node->getStringAttribute("name") << std::endl;
+                    }
+                    std::cout << "Graph file contains " << nodeCount << " nodes" << std::endl;
+                    
+                    // Count connections
+                    int midiConnections = 0;
+                    int audioConnections = 0;
+                    
+                    for (auto* e : graphState->getChildWithTagNameIterator("CONNECTION"))
+                    {
+                        auto srcChannel = e->getIntAttribute("srcChannel");
+                        bool isMidi = (srcChannel == 4096);
+                        
+                        if (isMidi)
+                            midiConnections++;
+                        else
+                            audioConnections++;
+                    }
+                    
+                    std::cout << "Graph file contains " << (midiConnections + audioConnections) 
+                              << " connections (MIDI: " << midiConnections 
+                              << ", Audio: " << audioConnections << ")" << std::endl;
+                    
+                    // Load the graph state into the instrument
+                    instrument->loadPluginGraph(*graphState);
+                }
+                else
+                {
+                    std::cerr << "Failed to parse graph file or invalid format: " 
+                              << graphFile.getFullPathName() << std::endl;
+                }
+            }
+            else
+            {
+                std::cout << "No graph file found for player " << metadata.name << std::endl;
+            }
+        }
         
         readyForEditing = true;
         std::cout << "Player " << metadata.name << " prepared for editing" << std::endl;
@@ -395,6 +453,11 @@ bool Player::saveGraphState()
         return false;
     }
     
+    return savePluginGraphToFile(*graphState);
+}
+
+bool Player::savePluginGraphToFile(const XmlElement& graphState)
+{
     try
     {
         // Save the graph state to a file
@@ -407,10 +470,18 @@ bool Player::saveGraphState()
         FileOutputStream fos(graphFile);
         if (fos.openedOk())
         {
-            graphState->writeTo(fos);
+            graphState.writeTo(fos);
             fos.flush();
             
             std::cout << "Saved graph state to file: " << graphFile.getFullPathName() << std::endl;
+            
+            // Also update the instrument's internal state with this graph
+            if (instrument != nullptr)
+            {
+                std::cout << "Updating instrument with the saved graph state" << std::endl;
+                instrument->loadPluginGraph(graphState);
+            }
+            
             return true;
         }
         else
@@ -435,10 +506,88 @@ std::unique_ptr<XmlElement> Player::getPluginGraphState()
 {
     if (instrument == nullptr)
     {
-        return nullptr;
+        std::cout << "Instrument is null, trying to load graph from file" << std::endl;
+        return loadGraphStateFromFile();
     }
     
-    return instrument->getPluginGraphState();
+    // First try to get the state from the instrument
+    auto graphState = instrument->getPluginGraphState();
+    
+    // If the instrument has no graph state, try to load from file
+    if (graphState == nullptr || !graphState->hasTagName("FILTERGRAPH") || 
+        graphState->getNumChildElements() == 0)
+    {
+        std::cout << "Instrument has no valid graph state, trying to load from file" << std::endl;
+        return loadGraphStateFromFile();
+    }
+    
+    return graphState;
+}
+
+std::unique_ptr<XmlElement> Player::loadGraphStateFromFile()
+{
+    // Try to load the graph state from file
+    File graphFile = getGraphFilePath();
+    
+    if (graphFile.existsAsFile())
+    {
+        std::cout << "Loading graph state from file: " << graphFile.getFullPathName() << std::endl;
+        
+        // Parse the XML file
+        std::unique_ptr<XmlElement> graphState = parseXML(graphFile);
+        
+        if (graphState != nullptr && graphState->hasTagName("FILTERGRAPH"))
+        {
+            // Count nodes in the graph state
+            int nodeCount = 0;
+            for (auto* node : graphState->getChildWithTagNameIterator("FILTER"))
+            {
+                nodeCount++;
+                std::cout << "  Found node in file XML: " << node->getIntAttribute("uid") 
+                          << " - " << node->getStringAttribute("name") << std::endl;
+            }
+            std::cout << "Graph file contains " << nodeCount << " nodes" << std::endl;
+            
+            // Count connections
+            int midiConnections = 0;
+            int audioConnections = 0;
+            
+            for (auto* e : graphState->getChildWithTagNameIterator("CONNECTION"))
+            {
+                auto srcChannel = e->getIntAttribute("srcChannel");
+                bool isMidi = (srcChannel == 4096);
+                
+                if (isMidi)
+                    midiConnections++;
+                else
+                    audioConnections++;
+            }
+            
+            std::cout << "Graph file contains " << (midiConnections + audioConnections) 
+                      << " connections (MIDI: " << midiConnections 
+                      << ", Audio: " << audioConnections << ")" << std::endl;
+            
+            // If we have an instrument, update it with this graph state
+            if (instrument != nullptr)
+            {
+                std::cout << "Updating instrument with loaded graph state" << std::endl;
+                instrument->loadPluginGraph(*graphState);
+            }
+            
+            return graphState;
+        }
+        else
+        {
+            std::cerr << "Failed to parse graph file or invalid format: " 
+                      << graphFile.getFullPathName() << std::endl;
+        }
+    }
+    else
+    {
+        std::cerr << "Graph file not found: " << graphFile.getFullPathName() << std::endl;
+    }
+    
+    return nullptr;
 }
 
 // Temporarily commented out for compilation

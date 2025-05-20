@@ -99,12 +99,16 @@ static std::unordered_map<Player*, bool> playerLoadedMap;
 
 void PlayerEditorComponent::loadPlayerForEditing()
 {
+    std::cout << "=== PlayerEditorComponent::loadPlayerForEditing ===" << std::endl;
+    
     if (player != nullptr)
     {
+        std::cout << "Loading player: " << player->getMetadata().name << std::endl;
+        
         // Check if this player has already been loaded for editing
         if (playerLoadedMap.find(player) != playerLoadedMap.end() && playerLoadedMap[player])
         {
-            // Player already loaded, just update UI if needed
+            std::cout << "Player already loaded, just updating UI if needed" << std::endl;
             return;
         }
         
@@ -112,21 +116,84 @@ void PlayerEditorComponent::loadPlayerForEditing()
         playerLoadedMap[player] = true;
         
         // Prepare the player for editing
+        std::cout << "Calling player->prepareForEditing()" << std::endl;
         player->prepareForEditing();
         
         // If we have graph editor and the player has a graph state, load it
         if (graphEditor != nullptr && graphEditor->graph != nullptr)
         {
+            std::cout << "Getting graph state from player" << std::endl;
             auto graphState = player->getPluginGraphState();
+            
             if (graphState != nullptr)
             {
-                std::cout << "Loading graph state for editing" << std::endl;
+                // Count nodes in the graph state
+                int nodeCount = 0;
+                for (auto* node : graphState->getChildWithTagNameIterator("FILTER"))
+                {
+                    nodeCount++;
+                    std::cout << "  Found node in graph state: " << node->getIntAttribute("uid") 
+                              << " - " << node->getStringAttribute("name") << std::endl;
+                }
+                std::cout << "Graph state contains " << nodeCount << " nodes" << std::endl;
+                
+                // Count connections
+                int midiConnections = 0;
+                int audioConnections = 0;
+                
+                for (auto* e : graphState->getChildWithTagNameIterator("CONNECTION"))
+                {
+                    auto srcChannel = e->getIntAttribute("srcChannel");
+                    bool isMidi = (srcChannel == 4096);
+                    
+                    if (isMidi)
+                        midiConnections++;
+                    else
+                        audioConnections++;
+                }
+                
+                std::cout << "Graph state contains " << (midiConnections + audioConnections) 
+                          << " connections (MIDI: " << midiConnections 
+                          << ", Audio: " << audioConnections << ")" << std::endl;
+                
+                std::cout << "Restoring graph from XML" << std::endl;
                 graphEditor->graph->restoreFromXml(*graphState);
                 
-                // Update the UI to show the graph
+                // Fix audio output nodes after restoring
+                std::cout << "Fixing audio output nodes" << std::endl;
+                graphEditor->graph->fixAudioOutputNodes();
+                
+                // Log the connections after restoration
+                auto& graph = graphEditor->graph->graph;
+                std::cout << "After restoration, graph has " << graph.getConnections().size() << " connections:" << std::endl;
+                for (auto& connection : graph.getConnections())
+                {
+                    std::cout << "  Connection: " << connection.source.nodeID.uid << "/" 
+                              << connection.source.channelIndex << " -> " 
+                              << connection.destination.nodeID.uid << "/" 
+                              << connection.destination.channelIndex 
+                              << (connection.source.channelIndex >= 4096 ? " (MIDI)" : " (Audio)") << std::endl;
+                }
+                
+                // Force a complete UI update to show the graph
                 if (graphEditor->graphPanel != nullptr)
                 {
+                    std::cout << "Forcing complete UI update for graph display" << std::endl;
+                    
+                    // First update the components
                     graphEditor->graphPanel->updateComponents();
+                    
+                    // Force a repaint
+                    graphEditor->graphPanel->repaint();
+                    
+                    // Force a layout update
+                    graphEditor->resized();
+                    
+                    // Make sure the graph panel is visible
+                    graphEditor->graphPanel->setVisible(true);
+                    
+                    // Schedule another update after a short delay
+                    startTimer(500); // This will call timerCallback after 500ms
                 }
                 
                 // Connect the graph to the AudioEngine for playback during editing
@@ -188,8 +255,33 @@ void PlayerEditorComponent::saveAndReleaseResources()
             auto graphState = graphEditor->graph->createXml();
             if (graphState != nullptr)
             {
-                player->loadPluginGraph(*graphState);
-                player->saveGraphState();
+                std::cout << "Saving graph state with " << graphEditor->graph->graph.getConnections().size() << " connections" << std::endl;
+                
+                // Count nodes and connections for logging
+                int nodeCount = 0;
+                int midiConnections = 0;
+                int audioConnections = 0;
+                
+                for (auto* node : graphState->getChildWithTagNameIterator("FILTER"))
+                    nodeCount++;
+                    
+                for (auto* e : graphState->getChildWithTagNameIterator("CONNECTION"))
+                {
+                    auto srcChannel = e->getIntAttribute("srcChannel");
+                    bool isMidi = (srcChannel == 4096);
+                    
+                    if (isMidi)
+                        midiConnections++;
+                    else
+                        audioConnections++;
+                }
+                
+                std::cout << "Saving " << nodeCount << " nodes to XML" << std::endl;
+                std::cout << "Total connections saved: " << (midiConnections + audioConnections) 
+                          << " (MIDI: " << midiConnections << ", Audio: " << audioConnections << ")" << std::endl;
+                
+                // Save directly to the player's graph file
+                player->savePluginGraphToFile(*graphState);
             }
         }
         
@@ -256,10 +348,64 @@ void PlayerEditorComponent::updateUIFromPlayer()
 
 void PlayerEditorComponent::timerCallback()
 {
-    stopTimer(); // Stop timer as we only need to do this once
+    static int updateCount = 0;
     
-    // Load the player for editing
-    loadPlayerForEditing();
+    // Stop the timer
+    stopTimer();
+    
+    // If this is the first call (from constructor), load the player
+    if (updateCount == 0)
+    {
+        std::cout << "Timer callback: initial load" << std::endl;
+        loadPlayerForEditing();
+        updateCount++;
+    }
+    // If this is a subsequent call (scheduled after loading), force a UI update
+    else
+    {
+        std::cout << "Timer callback: delayed update #" << updateCount << std::endl;
+        
+        // Force another UI update after a short delay
+        if (graphEditor != nullptr && graphEditor->graphPanel != nullptr)
+        {
+            std::cout << "Performing delayed UI update" << std::endl;
+            
+            // Get the current graph state
+            if (player != nullptr)
+            {
+                auto graphState = player->getPluginGraphState();
+                if (graphState != nullptr)
+                {
+                    // Count nodes in the graph state
+                    int nodeCount = 0;
+                    for (auto* node : graphState->getChildWithTagNameIterator("FILTER"))
+                        nodeCount++;
+                    
+                    std::cout << "Current graph state has " << nodeCount << " nodes" << std::endl;
+                    
+                    // If we have nodes, make sure they're displayed
+                    if (nodeCount > 0)
+                    {
+                        // Force a complete refresh
+                        graphEditor->graph->restoreFromXml(*graphState);
+                        graphEditor->graph->fixAudioOutputNodes();
+                        graphEditor->graphPanel->updateComponents();
+                        graphEditor->graphPanel->repaint();
+                        graphEditor->resized();
+                    }
+                }
+            }
+        }
+        
+        updateCount++;
+        
+        // If we've done less than 3 updates, schedule another one
+        if (updateCount < 3)
+        {
+            std::cout << "Scheduling another update" << std::endl;
+            startTimer(500);
+        }
+    }
 }
 
 void PlayerEditorComponent::createPlugin(const PluginDescriptionAndPreference& desc, Point<int> pos)
