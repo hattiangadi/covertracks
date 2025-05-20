@@ -1450,11 +1450,30 @@ GraphDocumentComponent::GraphDocumentComponent(AudioPluginFormatManager& fm,
     // Create keyboard component
     keyboardComp = std::make_unique<MidiKeyboardComponent>(keyState, MidiKeyboardComponent::horizontalKeyboard);
     
-    // Register ourselves as a listener to the keyboard state
-    keyState.addListener(this);
+    // Create and register our keyboard state listener
+    keyboardStateListener = std::make_unique<KeyboardStateListener>(midiCollector, audioEngine);
+    keyState.addListener(keyboardStateListener.get());
+    
+    // Initialize the MIDI message collector
+    double sampleRate = 44100.0; // Default, will be updated in timerCallback
+    midiCollector.reset(sampleRate);
     
     // Debug logging
     std::cout << "Created MidiKeyboardComponent and registered GraphDocumentComponent as listener" << std::endl;
+    std::cout << "Initialized MidiMessageCollector with sample rate: " << sampleRate << std::endl;
+    
+    // Register ourselves as a MIDI input callback with the AudioEngine
+    if (graph != nullptr)
+    {
+        // Enable MIDI input in the AudioEngine
+        audioEngine.enableMidiInput(true);
+        
+        // Register with an empty device name to receive from all MIDI devices
+        if (audioEngine.registerMidiInput("", this))
+        {
+            std::cout << "Registered GraphDocumentComponent as MIDI input callback in constructor" << std::endl;
+        }
+    }
     
     // Add a timer to periodically check if the keyboard state is active
     startTimer(1000); // Check every second
@@ -1463,9 +1482,6 @@ GraphDocumentComponent::GraphDocumentComponent(AudioPluginFormatManager& fm,
     // Create status bar
     statusBar.reset(new TooltipBar());
     addAndMakeVisible(statusBar.get());
-    
-    // We can't directly connect the keyboard state to the AudioEngine
-    // Instead, we'll handle MIDI messages in the AudioEngine
     
     // Update the UI
     graphPanel->updateComponents();
@@ -1629,119 +1645,50 @@ void GraphDocumentComponent::updateMidiOutput()
     // No action needed here as AudioEngine manages MIDI devices
 }
 
-void GraphDocumentComponent::handleNoteOn(MidiKeyboardState* /*source*/, int midiChannel, int midiNoteNumber, float velocity)
-{
-    // Debug logging
-    std::cout << "GraphDocumentComponent::handleNoteOn - Channel: " << midiChannel 
-              << ", Note: " << midiNoteNumber 
-              << ", Velocity: " << velocity << std::endl;
-    
-    // Forward MIDI note-on messages to the graph's MIDI input nodes
-    if (graph != nullptr)
-    {
-        // Create a MIDI message
-        MidiMessage message = MidiMessage::noteOn(midiChannel, midiNoteNumber, velocity);
-        
-        // Create a MIDI buffer with our message
-        MidiBuffer buffer;
-        buffer.addEvent(message, 0);
-        
-        std::cout << "Added note-on message to MIDI buffer" << std::endl;
-        
-        // Find all synth plugins in the graph and send the MIDI message directly to them
-        for (auto* node : graph->graph.getNodes())
-        {
-            auto* processor = node->getProcessor();
-            
-            // Skip audio I/O processors
-            if (dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(processor) != nullptr)
-                continue;
-            
-            // Check if this processor accepts MIDI input
-            if (processor->acceptsMidi())
-            {
-                std::cout << "Found processor that accepts MIDI: " << processor->getName() << std::endl;
-                
-                // Create a temporary audio buffer for the processor
-                AudioBuffer<float> audioBuffer;
-                audioBuffer.setSize(processor->getMainBusNumInputChannels(), 512);
-                
-                // Process the MIDI message
-                processor->processBlock(audioBuffer, buffer);
-                std::cout << "Processed MIDI message with processor: " << processor->getName() << std::endl;
-            }
-        }
-        
-        // Also make sure MIDI input is enabled in the AudioEngine
-        audioEngine.enableMidiInput(true);
-    }
-    else
-    {
-        std::cout << "Graph is null in handleNoteOn" << std::endl;
-    }
-}
+// Note: handleNoteOn and handleNoteOff methods have been moved to the KeyboardStateListener class
 
-void GraphDocumentComponent::handleNoteOff(MidiKeyboardState* /*source*/, int midiChannel, int midiNoteNumber, float velocity)
+void GraphDocumentComponent::handleIncomingMidiMessage(MidiInput* /*source*/, const MidiMessage& message)
 {
     // Debug logging
-    std::cout << "GraphDocumentComponent::handleNoteOff - Channel: " << midiChannel 
-              << ", Note: " << midiNoteNumber 
-              << ", Velocity: " << velocity << std::endl;
+    std::cout << "GraphDocumentComponent::handleIncomingMidiMessage - Received MIDI message" << std::endl;
     
-    // Forward MIDI note-off messages to the graph's MIDI input nodes
-    if (graph != nullptr)
+    // Create a timestamped message
+    MidiMessage timestampedMessage(message);
+    
+    // Set the timestamp if it doesn't have one
+    if (timestampedMessage.getTimeStamp() <= 0.0)
+        timestampedMessage.setTimeStamp(Time::getMillisecondCounterHiRes() * 0.001);
+    
+    // Add the message to our collector
+    midiCollector.addMessageToQueue(timestampedMessage);
+    
+    // Forward the message to all AudioProcessorPlayers in the AudioEngine
+    audioEngine.sendMidiMessage(timestampedMessage);
+    
+    // Update the keyboard state for visual feedback
+    if (message.isNoteOn())
     {
-        // Create a MIDI message
-        MidiMessage message = MidiMessage::noteOff(midiChannel, midiNoteNumber, velocity);
-        
-        // Create a MIDI buffer with our message
-        MidiBuffer buffer;
-        buffer.addEvent(message, 0);
-        
-        std::cout << "Added note-off message to MIDI buffer" << std::endl;
-        
-        // Find all synth plugins in the graph and send the MIDI message directly to them
-        for (auto* node : graph->graph.getNodes())
-        {
-            auto* processor = node->getProcessor();
-            
-            // Skip audio I/O processors
-            if (dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(processor) != nullptr)
-                continue;
-            
-            // Check if this processor accepts MIDI input
-            if (processor->acceptsMidi())
-            {
-                std::cout << "Found processor that accepts MIDI: " << processor->getName() << std::endl;
-                
-                // Create a temporary audio buffer for the processor
-                AudioBuffer<float> audioBuffer;
-                audioBuffer.setSize(processor->getMainBusNumInputChannels(), 512);
-                
-                // Process the MIDI message
-                processor->processBlock(audioBuffer, buffer);
-                std::cout << "Processed MIDI message with processor: " << processor->getName() << std::endl;
-            }
-        }
-        
-        // Also make sure MIDI input is enabled in the AudioEngine
-        audioEngine.enableMidiInput(true);
+        keyState.noteOn(message.getChannel(), message.getNoteNumber(), message.getFloatVelocity());
     }
-    else
+    else if (message.isNoteOff())
     {
-        std::cout << "Graph is null in handleNoteOff" << std::endl;
+        keyState.noteOff(message.getChannel(), message.getNoteNumber(), message.getFloatVelocity());
+    }
+    else if (message.isAllNotesOff())
+    {
+        keyState.allNotesOff(message.getChannel());
     }
 }
 
 void GraphDocumentComponent::timerCallback()
 {
-    // Debug logging to check if the keyboard state is active
-    std::cout << "Timer check: MidiKeyboardComponent active = " << (keyboardComp != nullptr ? "yes" : "no") << std::endl;
+    // Check if the keyboard component is active
+    bool keyboardActive = keyboardComp != nullptr && keyboardComp->isVisible();
     
-    // Check if there are any MIDI input nodes in the graph
+    // Check if the graph has a MIDI input node
+    bool hasMidiInputNode = false;
     if (graph != nullptr)
     {
-        bool hasMidiInputNode = false;
         for (auto* node : graph->graph.getNodes())
         {
             auto* processor = node->getProcessor();
@@ -1753,12 +1700,52 @@ void GraphDocumentComponent::timerCallback()
                 break;
             }
         }
+    }
+    
+    // Check MIDI status
+    String audioEngineStatus = "Invalid";
+    
+    // Try to enable MIDI and register the graph if all conditions are met
+    if (keyboardActive && hasMidiInputNode)
+    {
+        // AudioEngine is a reference, so it's always valid
+        // Check if MIDI is enabled using our new method
+        bool midiEnabled = audioEngine.isMidiInputEnabled();
         
-        std::cout << "Graph has MIDI input node = " << (hasMidiInputNode ? "yes" : "no") << std::endl;
+        // Update the MIDI collector's sample rate to match the current audio device
+        if (auto* currentDevice = audioEngine.getDeviceManager().getCurrentAudioDevice())
+        {
+            double sampleRate = currentDevice->getCurrentSampleRate();
+            midiCollector.reset(sampleRate);
+        }
+            
+        // Process the keyboard state to generate MIDI messages
+        // This is crucial for the keyboard to work properly
+        audioEngine.processMidiKeyboardState(keyState);
         
-        // Check if the AudioEngine has MIDI input enabled
-        std::cout << "AudioEngine is valid = " << (audioEngine.getDeviceManager().isMidiInputDeviceEnabled("")
-                                                  ? "MIDI enabled" : "MIDI disabled") << std::endl;
+        if (midiEnabled)
+        {
+            audioEngineStatus = "MIDI enabled";
+        }
+        else
+        {
+            audioEngineStatus = "MIDI disabled";
+            
+            std::cout << "Timer check: MidiKeyboardComponent active = " << (keyboardActive ? "yes" : "no") << std::endl;
+            std::cout << "Graph has MIDI input node = " << (hasMidiInputNode ? "yes" : "no") << std::endl;
+            std::cout << "AudioEngine is valid = " << audioEngineStatus << std::endl;
+            
+            std::cout << "Attempting to enable MIDI and register graph..." << std::endl;
+            
+            // Enable MIDI input
+            audioEngine.enableMidiInput(true);
+            
+            // Register the graph document component as a MIDI input callback
+            if (audioEngine.registerMidiInput("", this))
+            {
+                std::cout << "Successfully registered GraphDocumentComponent as MIDI input callback in timer" << std::endl;
+            }
+        }
     }
     else
     {

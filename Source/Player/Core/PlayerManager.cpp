@@ -422,7 +422,7 @@ void PlayerManager::loadAllPlayers()
     
     // Get the players directory
     File playersDir = getPlayersDirectory();
-    std::cout << "Loading players from directory: " << playersDir.getFullPathName() << std::endl;
+    std::cout << "Loading players with minimal resources from directory: " << playersDir.getFullPathName() << std::endl;
     
     // Create the directory if it doesn't exist
     if (!playersDir.exists())
@@ -453,14 +453,14 @@ void PlayerManager::loadAllPlayers()
         return;
     }
     
-    // Load each player file
+    // Load each player file with minimal resources
     for (auto& file : playerFiles)
     {
-        std::cout << "Loading player from file: " << file.getFileName() << std::endl;
+        std::cout << "Loading player with minimal resources from file: " << file.getFileName() << std::endl;
         auto player = loadPlayer(file);
         if (player != nullptr)
         {
-            std::cout << "Successfully loaded player: " << player->getMetadata().name << std::endl;
+            std::cout << "Successfully loaded player with minimal resources: " << player->getMetadata().name << std::endl;
             addPlayer(std::move(player));
         }
         else
@@ -469,7 +469,7 @@ void PlayerManager::loadAllPlayers()
         }
     }
     
-    std::cout << "Loaded " << players.size() << " players in total" << std::endl;
+    std::cout << "Loaded " << players.size() << " players with minimal resources in total" << std::endl;
 }
 
 } // namespace covertracks

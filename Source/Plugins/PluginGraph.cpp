@@ -667,73 +667,127 @@ std::unique_ptr<XmlElement> PluginGraph::createXml() const
 
 void PluginGraph::fixAudioOutputNodes()
 {
-    // Check for audio output nodes with 0 input channels
-    bool outputNodesFixed = false;
+    // Store existing connections to audio output nodes before making changes
+    std::vector<AudioProcessorGraph::Connection> outputConnections;
+    std::map<NodeID, std::vector<int>> outputNodeChannels;
     
     // Get all nodes in the graph
     for (auto* node : graph.getNodes())
     {
         auto* processor = node->getProcessor();
-        
-        // Check if this is an audio output node
         auto* ioProcessor = dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(processor);
+        
+        // Find audio output nodes and store their connections
         if (ioProcessor != nullptr && ioProcessor->getType() == AudioProcessorGraph::AudioGraphIOProcessor::audioOutputNode)
         {
-            std::cout << "Found audio output node (ID: " << node->nodeID.uid << "), current inputs: " 
-                      << processor->getTotalNumInputChannels() << std::endl;
+            NodeID outputNodeId = node->nodeID;
             
-            // Always try to set the audio output node to have stereo input
-            // This is more aggressive than just checking for 0 inputs
-            try
+            // Store all connections to this output node
+            for (auto& connection : graph.getConnections())
             {
-                // Try multiple approaches to set the channel configuration
-                
-                // Approach 1: Set the bus layout directly
-                AudioProcessor::BusesLayout layout = processor->getBusesLayout();
-                if (layout.inputBuses.size() > 0)
+                if (connection.destination.nodeID == outputNodeId)
                 {
-                    layout.inputBuses[0] = AudioChannelSet::stereo();
-                    bool success = processor->setBusesLayout(layout);
-                    std::cout << "Approach 1 (setBusesLayout): " << (success ? "success" : "failed") << std::endl;
+                    outputConnections.push_back(connection);
+                    outputNodeChannels[outputNodeId].push_back(connection.destination.channelIndex);
                 }
+            }
+            
+            std::cout << "Found audio output node (ID: " << outputNodeId.uid << "), current inputs: " 
+                      << processor->getTotalNumInputChannels() << ", stored " 
+                      << outputConnections.size() << " connections" << std::endl;
+        }
+    }
+    
+    // Now fix the audio output nodes
+    for (auto* node : graph.getNodes())
+    {
+        auto* processor = node->getProcessor();
+        auto* ioProcessor = dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(processor);
+        
+        // Check if this is an audio output node
+        if (ioProcessor != nullptr && ioProcessor->getType() == AudioProcessorGraph::AudioGraphIOProcessor::audioOutputNode)
+        {
+            // Only fix nodes with 0 input channels
+            if (processor->getTotalNumInputChannels() == 0)
+            {
+                std::cout << "Fixing audio output node (ID: " << node->nodeID.uid << ") with 0 input channels" << std::endl;
                 
-                // Approach 2: Try to enable the input bus with stereo configuration
-                if (processor->getBus(true, 0) != nullptr)
+                try
                 {
-                    bool success = processor->getBus(true, 0)->enable(true);
-                    std::cout << "Approach 2 (enable bus): " << (success ? "success" : "failed") << std::endl;
+                    // Try multiple approaches to set the channel configuration
                     
-                    if (success)
+                    // Approach 1: Set the bus layout directly
+                    AudioProcessor::BusesLayout layout = processor->getBusesLayout();
+                    if (layout.inputBuses.size() > 0)
                     {
-                        success = processor->getBus(true, 0)->setCurrentLayout(AudioChannelSet::stereo());
-                        std::cout << "Approach 2 (setCurrentLayout): " << (success ? "success" : "failed") << std::endl;
+                        layout.inputBuses[0] = AudioChannelSet::stereo();
+                        bool success = processor->setBusesLayout(layout);
+                        std::cout << "Approach 1 (setBusesLayout): " << (success ? "success" : "failed") << std::endl;
+                    }
+                    
+                    // Approach 2: Try to enable the input bus with stereo configuration
+                    if (processor->getBus(true, 0) != nullptr)
+                    {
+                        bool success = processor->getBus(true, 0)->enable(true);
+                        std::cout << "Approach 2 (enable bus): " << (success ? "success" : "failed") << std::endl;
+                        
+                        if (success)
+                        {
+                            success = processor->getBus(true, 0)->setCurrentLayout(AudioChannelSet::stereo());
+                            std::cout << "Approach 2 (setCurrentLayout): " << (success ? "success" : "failed") << std::endl;
+                        }
+                    }
+                    
+                    // Check if any of our approaches worked
+                    if (processor->getTotalNumInputChannels() > 0)
+                    {
+                        std::cout << "Successfully fixed audio output node to have " 
+                                  << processor->getTotalNumInputChannels() << " input channels" << std::endl;
+                    }
+                    else
+                    {
+                        std::cout << "Failed to fix audio output node - still has 0 input channels" << std::endl;
                     }
                 }
-                
-                // Approach 3: Try to disable and re-enable the bus
-                if (processor->getBus(true, 0) != nullptr)
+                catch (const std::exception& e)
                 {
-                    processor->getBus(true, 0)->enable(false);
-                    bool success = processor->getBus(true, 0)->enable(true);
-                    std::cout << "Approach 3 (disable/enable): " << (success ? "success" : "failed") << std::endl;
-                }
-                
-                // Check if any of our approaches worked
-                if (processor->getTotalNumInputChannels() > 0)
-                {
-                    std::cout << "Successfully fixed audio output node to have " 
-                              << processor->getTotalNumInputChannels() << " input channels" << std::endl;
-                    outputNodesFixed = true;
-                }
-                else
-                {
-                    std::cout << "Failed to fix audio output node - still has 0 input channels" << std::endl;
+                    std::cerr << "Exception while fixing audio output node: " << e.what() << std::endl;
                 }
             }
-            catch (const std::exception& e)
+            else
             {
-                std::cerr << "Exception while fixing audio output node: " << e.what() << std::endl;
+                std::cout << "Audio output node (ID: " << node->nodeID.uid << ") already has " 
+                          << processor->getTotalNumInputChannels() << " input channels, no need to fix" << std::endl;
             }
+        }
+    }
+    
+    // Restore connections to audio output nodes
+    for (auto& connection : outputConnections)
+    {
+        // Check if the connection still exists
+        bool connectionExists = false;
+        for (auto& existingConnection : graph.getConnections())
+        {
+            if (existingConnection.source.nodeID == connection.source.nodeID &&
+                existingConnection.source.channelIndex == connection.source.channelIndex &&
+                existingConnection.destination.nodeID == connection.destination.nodeID &&
+                existingConnection.destination.channelIndex == connection.destination.channelIndex)
+            {
+                connectionExists = true;
+                break;
+            }
+        }
+        
+        // If the connection doesn't exist, add it back
+        if (!connectionExists)
+        {
+            bool success = graph.addConnection(connection);
+            std::cout << "Restored connection: " << connection.source.nodeID.uid << "/" 
+                      << connection.source.channelIndex << " -> " 
+                      << connection.destination.nodeID.uid << "/" 
+                      << connection.destination.channelIndex 
+                      << (success ? " (success)" : " (failed)") << std::endl;
         }
     }
     

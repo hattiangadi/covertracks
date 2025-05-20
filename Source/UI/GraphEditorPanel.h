@@ -116,11 +116,11 @@ private:
     It also manages the graph itself, and plays it.
 */
 class GraphDocumentComponent final : public Component,
-                                    public DragAndDropTarget,
-                                    public DragAndDropContainer,
-                                    public ChangeListener,
-                                    public MidiKeyboardStateListener,
-                                    public Timer
+                                     public DragAndDropTarget,
+                                     public DragAndDropContainer,
+                                     public ChangeListener,
+                                     public MidiInputCallback,
+                                     public Timer
 {
     // Allow PlayerEditorComponent to access private members
     friend class PlayerEditorComponent;
@@ -145,9 +145,10 @@ public:
     // ChangeListener implementation
     void changeListenerCallback(ChangeBroadcaster*) override;
     
-    // MidiKeyboardStateListener implementation
-    void handleNoteOn(MidiKeyboardState* source, int midiChannel, int midiNoteNumber, float velocity) override;
-    void handleNoteOff(MidiKeyboardState* source, int midiChannel, int midiNoteNumber, float velocity) override;
+    // Note: MidiKeyboardStateListener implementation has been moved to the KeyboardStateListener class
+    
+    // MidiInputCallback implementation
+    void handleIncomingMidiMessage(MidiInput* source, const MidiMessage& message) override;
     
     // Timer implementation
     void timerCallback() override;
@@ -183,8 +184,61 @@ private:
     // Keyboard state for MIDI input
     MidiKeyboardState keyState;
     
+    // MIDI message collector for handling MIDI messages with proper timing
+    MidiMessageCollector midiCollector;
+    
+    // Custom MIDI keyboard state listener that forwards to both MidiMessageCollector and AudioEngine
+    class KeyboardStateListener : public MidiKeyboardStateListener
+    {
+    public:
+        KeyboardStateListener(MidiMessageCollector& collector, AudioEngine& engine) 
+            : midiCollector(collector), audioEngine(engine) {}
+        
+        void handleNoteOn(MidiKeyboardState* /*source*/, int midiChannel, int midiNoteNumber, float velocity) override
+        {
+            MidiMessage message = MidiMessage::noteOn(midiChannel, midiNoteNumber, velocity);
+            message.setTimeStamp(Time::getMillisecondCounterHiRes() * 0.001);
+            
+            // Add to collector for timing
+            midiCollector.addMessageToQueue(message);
+            
+            // Send directly to AudioEngine for immediate routing to all processors
+            audioEngine.sendMidiMessage(message);
+            
+            std::cout << "KeyboardStateListener: Sent note on to AudioEngine - Channel: " << midiChannel 
+                      << ", Note: " << midiNoteNumber 
+                      << ", Velocity: " << velocity << std::endl;
+        }
+        
+        void handleNoteOff(MidiKeyboardState* /*source*/, int midiChannel, int midiNoteNumber, float velocity) override
+        {
+            MidiMessage message = MidiMessage::noteOff(midiChannel, midiNoteNumber, velocity);
+            message.setTimeStamp(Time::getMillisecondCounterHiRes() * 0.001);
+            
+            // Add to collector for timing
+            midiCollector.addMessageToQueue(message);
+            
+            // Send directly to AudioEngine for immediate routing to all processors
+            audioEngine.sendMidiMessage(message);
+            
+            std::cout << "KeyboardStateListener: Sent note off to AudioEngine - Channel: " << midiChannel 
+                      << ", Note: " << midiNoteNumber 
+                      << ", Velocity: " << velocity << std::endl;
+        }
+        
+    private:
+        MidiMessageCollector& midiCollector;
+        AudioEngine& audioEngine;
+    };
+    
+    // The keyboard state listener instance
+    std::unique_ptr<KeyboardStateListener> keyboardStateListener;
+    
     // Access to keyboard state for MIDI routing
     MidiKeyboardState& getMidiKeyboardState() { return keyState; }
+    
+    // Access to MIDI message collector for processors
+    MidiMessageCollector& getMidiMessageCollector() { return midiCollector; }
     
     // Status bar
     struct TooltipBar;

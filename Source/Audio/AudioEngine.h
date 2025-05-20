@@ -14,6 +14,7 @@
 namespace covertracks {
     // Forward declarations
     class Player;
+    class GraphDocumentComponent;
 }
 
 namespace covertracks {
@@ -72,6 +73,9 @@ namespace covertracks {
      
      // MIDI input management
      void enableMidiInput(bool enabled);
+     bool isMidiInputEnabled() const { return midiEnabled; }
+     void sendMidiMessage(const MidiMessage& message);
+     void processMidiKeyboardState(MidiKeyboardState& keyboardState);
      
      // Audio output management
      void setMasterGain(float gain);
@@ -117,6 +121,7 @@ namespace covertracks {
      
      // Processing state
      bool doublePrecisionProcessing = false;
+     bool midiEnabled = false;
      
      // Resource management
      OwnedArray<AudioProcessorPlayer> audioProcessorPlayers;

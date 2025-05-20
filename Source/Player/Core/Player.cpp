@@ -105,23 +105,11 @@ void Player::prepareForEditing()
         {
             instrument->prepareForEditing();
             
-            // Check if we need to load the graph file
-            File graphFile = getGraphFilePath();
-            if (graphFile.existsAsFile())
+            // Load the graph state if not already loaded
+            if (!graphLoaded)
             {
-                // Parse the XML file
-                std::unique_ptr<XmlElement> graphState = parseXML(graphFile);
-                
-                if (graphState != nullptr && graphState->hasTagName("FILTERGRAPH"))
-                {
-                    // Load the graph state into the instrument
-                    instrument->loadPluginGraph(*graphState);
-                }
-                else
-                {
-                    std::cerr << "Failed to parse graph file or invalid format: " 
-                              << graphFile.getFullPathName() << std::endl;
-                }
+                std::cout << "Loading graph state for editing player: " << metadata.name << std::endl;
+                loadGraphStateIfNeeded();
             }
         }
         
@@ -134,9 +122,16 @@ void Player::prepareForPlayback()
     // Prepare for audio playback
     if (!readyForPlayback)
     {
-        // Make sure we're edit-ready
-        if (!readyForEditing)
-            prepareForEditing();
+        // Make sure minimal resources are loaded
+        if (!fullyLoaded)
+            loadMinimalResources();
+        
+        // Load the graph state if not already loaded
+        if (!graphLoaded)
+        {
+            std::cout << "Loading graph state for playback of player: " << metadata.name << std::endl;
+            loadGraphStateIfNeeded();
+        }
         
         // Connect to AudioEngine if available
         if (audioEngine && !isConnectedToAudioEngine())
@@ -167,6 +162,8 @@ void Player::releaseResources()
         readyForEditing = false;
         readyForPlayback = false;
         fullyLoaded = false;
+        graphLoaded = false; // Mark graph as unloaded so it will be reloaded when needed
+        
         std::cout << "Player " << metadata.name << " resources released" << std::endl;
     }
 }
@@ -181,6 +178,14 @@ bool Player::connectToAudioEngine(AudioEngine* engine)
     // Connect instrument to the engine
     if (instrument && !instrument->connectToAudioEngine(engine))
         return false;
+    
+    // Register the processor graph with the AudioEngine to ensure MIDI messages are routed properly
+    if (instrument && instrument->getProcessorGraph() != nullptr)
+    {
+        // Register the processor with the AudioEngine
+        engine->registerProcessor(instrument->getProcessorGraph());
+        std::cout << "Registered processor for player " << metadata.name << " in connectToAudioEngine" << std::endl;
+    }
     
     // Activate this player in the engine
     engine->activatePlayer(this);
@@ -223,6 +228,135 @@ bool Player::isReadyForEditing() const
     return readyForEditing;
 }
 
+bool Player::initializeMinimal()
+{
+    // Only create the instrument with minimal initialization
+    if (instrument == nullptr)
+    {
+        instrument = std::make_unique<Instrument>(metadata.name, formatManager, knownPluginList, audioEngine);
+        
+        // Set up pattern finished callback
+        instrument->setPatternFinishedCallback([this]() {
+            this->handlePatternFinished();
+        });
+    }
+    
+    std::cout << "Player initialized with minimal resources: " << metadata.name << " (ID: " << id << ")" << std::endl;
+    
+    // Mark as minimally loaded
+    fullyLoaded = true;
+    
+    return true;
+}
+
+bool Player::loadGraphStateIfNeeded()
+{
+    // If graph is already loaded, no need to load it again
+    if (graphLoaded)
+        return true;
+    
+    bool success = false;
+    
+    // Try to load from file first if we have a graph file name
+    if (graphFileName.isNotEmpty())
+    {
+        // Get the application data directory
+        File appDataDir = File::getSpecialLocation(File::userApplicationDataDirectory)
+                          .getChildFile("Covertracks")
+                          .getChildFile("Graphs");
+        
+        File graphFile = appDataDir.getChildFile(graphFileName);
+        std::cout << "Loading graph state from file: " << graphFile.getFullPathName() << std::endl;
+        
+        if (graphFile.existsAsFile())
+        {
+            // Parse the XML file
+            std::unique_ptr<XmlElement> graphState = parseXML(graphFile);
+            
+            if (graphState != nullptr && graphState->hasTagName("FILTERGRAPH"))
+            {
+                // Count nodes in the graph state
+                int nodeCount = 0;
+                for (auto* node : graphState->getChildWithTagNameIterator("FILTER"))
+                {
+                    nodeCount++;
+                    std::cout << "  Found node in file XML: " << node->getIntAttribute("uid") 
+                              << " - " << node->getStringAttribute("name") << std::endl;
+                }
+                std::cout << "Graph file contains " << nodeCount << " nodes" << std::endl;
+                
+                std::cout << "Successfully loaded graph state from file" << std::endl;
+                success = loadPluginGraph(*graphState);
+            }
+            else
+            {
+                std::cerr << "Failed to parse graph file: " << graphFile.getFullPathName() << std::endl;
+            }
+        }
+        else
+        {
+            std::cerr << "Graph file not found: " << graphFile.getFullPathName() << std::endl;
+        }
+    }
+    // Fall back to embedded graph state if file loading failed
+    else if (embeddedGraphState.isNotEmpty() && !success)
+    {
+        std::cout << "Loading embedded graph state" << std::endl;
+        
+        // Convert from base64 to XML
+        MemoryBlock mb;
+        mb.fromBase64Encoding(embeddedGraphState);
+        
+        std::unique_ptr<XmlElement> graphState = parseXML(mb.toString());
+        
+        if (graphState != nullptr && graphState->hasTagName("FILTERGRAPH"))
+        {
+            // Count nodes in the graph state
+            int nodeCount = 0;
+            for (auto* node : graphState->getChildWithTagNameIterator("FILTER"))
+            {
+                nodeCount++;
+                std::cout << "  Found node in embedded XML: " << node->getIntAttribute("uid") 
+                          << " - " << node->getStringAttribute("name") << std::endl;
+            }
+            std::cout << "Embedded graph contains " << nodeCount << " nodes" << std::endl;
+            
+            std::cout << "Successfully loaded embedded graph state" << std::endl;
+            success = loadPluginGraph(*graphState);
+        }
+        else
+        {
+            std::cerr << "Failed to parse embedded graph state" << std::endl;
+        }
+    }
+    // Try to load from the default graph file path as a last resort
+    else if (!success)
+    {
+        File graphFile = getGraphFilePath();
+        if (graphFile.existsAsFile())
+        {
+            std::cout << "Trying to load graph from default path: " << graphFile.getFullPathName() << std::endl;
+            
+            // Parse the XML file
+            std::unique_ptr<XmlElement> graphState = parseXML(graphFile);
+            
+            if (graphState != nullptr && graphState->hasTagName("FILTERGRAPH"))
+            {
+                std::cout << "Successfully loaded graph state from default path" << std::endl;
+                success = loadPluginGraph(*graphState);
+            }
+        }
+    }
+    
+    // Mark graph as loaded if successful
+    if (success)
+    {
+        graphLoaded = true;
+    }
+    
+    return success;
+}
+
 bool Player::initialize()
 {
     // Create instrument if needed
@@ -239,6 +373,9 @@ bool Player::initialize()
     // Prepare the instrument for editing
     instrument->prepareForEditing();
     bool instrumentInitialized = true; // Assume initialization succeeded
+    
+    // Load the graph state if needed
+    loadGraphStateIfNeeded();
     
     // Temporarily commented out Musician initialization for compilation
     /*
@@ -318,7 +455,7 @@ bool Player::initialize()
     }
     */
     
-    std::cout << "Player initialized: " << metadata.name << " (ID: " << id << ")" << std::endl;
+    std::cout << "Player fully initialized: " << metadata.name << " (ID: " << id << ")" << std::endl;
     
     return instrumentInitialized;
 }
@@ -765,85 +902,25 @@ std::unique_ptr<Player> Player::fromVar(const var& v, AudioPluginFormatManager& 
         if (obj->hasProperty("metadata"))
             player->metadata.fromVar(obj->getProperty("metadata"));
         
-        // Initialize the player
-        player->initialize();
+        // Only initialize the player with minimal resources at startup
+        player->initializeMinimal();
         
-        // Try to load plugin graph state from file first
+        // Store graph file information for later loading
         if (obj->hasProperty("graphFile"))
         {
             String graphFileName = obj->getProperty("graphFile").toString();
             std::cout << "Player has graphFile property: " << graphFileName << std::endl;
             
-            // Get the application data directory
-            File appDataDir = File::getSpecialLocation(File::userApplicationDataDirectory)
-                              .getChildFile("Covertracks")
-                              .getChildFile("Graphs");
-            
-            File graphFile = appDataDir.getChildFile(graphFileName);
-            std::cout << "Looking for graph file at: " << graphFile.getFullPathName() << std::endl;
-            
-            if (graphFile.existsAsFile())
-            {
-                std::cout << "Loading graph state from file: " << graphFile.getFullPathName() << std::endl;
-                
-                // Parse the XML file
-                std::unique_ptr<XmlElement> graphState = parseXML(graphFile);
-                
-                if (graphState != nullptr)
-                {
-                    // Count nodes in the graph state
-                    int nodeCount = 0;
-                    for (auto* node : graphState->getChildWithTagNameIterator("FILTER"))
-                    {
-                        nodeCount++;
-                        std::cout << "  Found node in file XML: " << node->getIntAttribute("uid") 
-                                  << " - " << node->getStringAttribute("name") << std::endl;
-                    }
-                    std::cout << "Graph file contains " << nodeCount << " nodes" << std::endl;
-                    
-                    std::cout << "Successfully loaded graph state from file" << std::endl;
-                    player->loadPluginGraph(*graphState);
-                }
-                else
-                {
-                    std::cerr << "Failed to parse graph file: " << graphFile.getFullPathName() << std::endl;
-                }
-            }
-            else
-            {
-                std::cerr << "Graph file not found: " << graphFile.getFullPathName() << std::endl;
-            }
+            // Store the graph file name for later loading
+            player->setGraphFileName(graphFileName);
         }
-        // Fall back to embedded graph state if file reference not found
+        // Store embedded graph state for later loading
         else if (obj->hasProperty("pluginGraph"))
         {
-            std::cout << "Player has pluginGraph property, loading embedded graph state" << std::endl;
+            std::cout << "Player has pluginGraph property, storing for later loading" << std::endl;
             
-            // Convert from base64 to XML
-            MemoryBlock mb;
-            mb.fromBase64Encoding(obj->getProperty("pluginGraph").toString());
-            
-            std::unique_ptr<XmlElement> graphState = parseXML(mb.toString());
-            
-            if (graphState != nullptr)
-            {
-                // Count nodes in the graph state
-                int nodeCount = 0;
-                for (auto* node : graphState->getChildWithTagNameIterator("FILTER"))
-                {
-                    nodeCount++;
-                    std::cout << "  Found node in embedded XML: " << node->getIntAttribute("uid") 
-                              << " - " << node->getStringAttribute("name") << std::endl;
-                }
-                std::cout << "Embedded graph contains " << nodeCount << " nodes" << std::endl;
-                
-                std::cout << "Successfully loaded embedded graph state" << std::endl;
-                player->loadPluginGraph(*graphState);
-            }
-            else
-            {
-                std::cerr << "Failed to parse embedded graph state" << std::endl;
-            }
+            // Store the embedded graph state for later loading
+            player->setEmbeddedGraphState(obj->getProperty("pluginGraph").toString());
         }
         else
         {

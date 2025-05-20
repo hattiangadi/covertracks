@@ -316,16 +316,25 @@ void PlayerEditorComponent::timerCallback()
         // Force another UI update after a short delay
         if (graphEditor != nullptr && graphEditor->graphPanel != nullptr && player != nullptr)
         {
-            auto graphState = player->getPluginGraphState();
-            if (graphState != nullptr)
+            // Load the graph state from the player
+            auto graphStateXml = player->getPluginGraphState();
+            if (graphStateXml != nullptr)
             {
-                // Force a complete refresh
-                graphEditor->graph->restoreFromXml(*graphState);
-                graphEditor->graph->fixAudioOutputNodes();
-                graphEditor->graphPanel->updateComponents();
-                graphEditor->graphPanel->repaint();
-                graphEditor->resized();
+                std::cout << "Loading graph state for editing player: " << player->getMetadata().name << std::endl;
+                graphEditor->graph->restoreFromXml(*graphStateXml);
+                
+                // Register the processor with the AudioEngine
+                if (audioEngine != nullptr && graphEditor->graph != nullptr)
+                {
+                    // Register the graph processor with the AudioEngine
+                    audioEngine->registerProcessor(&graphEditor->graph->graph);
+                    std::cout << "Registered processor for player: " << player->getMetadata().name << std::endl;
+                }
             }
+            graphEditor->graph->fixAudioOutputNodes();
+            graphEditor->graphPanel->updateComponents();
+            graphEditor->graphPanel->repaint();
+            graphEditor->resized();
         }
         
         updateCount++;
@@ -338,11 +347,25 @@ void PlayerEditorComponent::timerCallback()
 
 void PlayerEditorComponent::connectMidiKeyboardToGraph()
 {
-    // Since GraphDocumentComponent now handles MIDI keyboard state directly,
-    // we just need to ensure MIDI input is enabled in the AudioEngine
-    if (audioEngine != nullptr)
+    // Ensure MIDI input is enabled in the AudioEngine
+    if (audioEngine != nullptr && graphEditor != nullptr)
     {
+        // Enable MIDI input
         audioEngine->enableMidiInput(true);
+        
+        // The GraphDocumentComponent itself implements MidiInputCallback
+        // We need to use the raw pointer, not the unique_ptr
+        audioEngine->registerMidiInput("", graphEditor.get());
+        
+        // Register the processor with the AudioEngine to ensure MIDI messages are routed properly
+        if (graphEditor->graph != nullptr)
+        {
+            // Register the graph processor with the AudioEngine
+            audioEngine->registerProcessor(&graphEditor->graph->graph);
+            std::cout << "Registered processor for player in connectMidiKeyboardToGraph" << std::endl;
+        }
+        
+        std::cout << "Connected MIDI keyboard to graph for player" << std::endl;
     }
 }
 

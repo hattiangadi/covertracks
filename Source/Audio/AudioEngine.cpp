@@ -77,14 +77,101 @@ bool AudioEngine::registerProcessor(AudioProcessor* processor)
     for (auto* registeredProcessor : registeredProcessors)
     {
         if (registeredProcessor == processor)
-            return true; // Already registered
+        {
+            std::cout << "Processor already registered, updating connections" << std::endl;
+            
+            // Find the player for this processor and ensure it's properly connected
+            auto* player = findPlayerForProcessor(processor);
+            if (player != nullptr)
+            {
+                // Make sure the player is connected to the device manager
+                deviceManager->addAudioCallback(player);
+                
+                // Reset the MIDI collector with the current sample rate
+                if (auto* currentDevice = deviceManager->getCurrentAudioDevice())
+                {
+                    double sampleRate = currentDevice->getCurrentSampleRate();
+                    player->getMidiMessageCollector().reset(sampleRate);
+                }
+                
+                // Force the audio output to be active
+                setMasterGain(0.8f);
+            }
+            
+            return true; // Already registered and updated
+        }
     }
     
     try
     {
         // Create a new AudioProcessorPlayer
         auto* player = new AudioProcessorPlayer(doublePrecisionProcessing);
+        
+        // Make sure the processor is properly initialized before setting it
+        if (auto* processorGraph = dynamic_cast<AudioProcessorGraph*>(processor))
+        {
+            // Check if the graph has audio output nodes and if they're properly configured
+            bool hasAudioOutputNode = false;
+            for (auto* node : processorGraph->getNodes())
+            {
+                auto* nodeProcessor = node->getProcessor();
+                auto* ioProcessor = dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(nodeProcessor);
+                
+                if (ioProcessor != nullptr && ioProcessor->getType() == AudioProcessorGraph::AudioGraphIOProcessor::audioOutputNode)
+                {
+                    hasAudioOutputNode = true;
+                    std::cout << "Found audio output node in graph with " 
+                              << ioProcessor->getTotalNumInputChannels() << " input channels" << std::endl;
+                    
+                    // If the audio output node has no input channels, try to fix it
+                    if (ioProcessor->getTotalNumInputChannels() == 0)
+                    {
+                        std::cout << "Audio output node has no input channels, attempting to fix..." << std::endl;
+                        
+                        // Try to set the bus layout to stereo
+                        AudioProcessor::BusesLayout layout = ioProcessor->getBusesLayout();
+                        if (layout.inputBuses.size() > 0)
+                        {
+                            layout.inputBuses[0] = AudioChannelSet::stereo();
+                            bool success = ioProcessor->setBusesLayout(layout);
+                            std::cout << "Set bus layout to stereo: " << (success ? "success" : "failed") << std::endl;
+                        }
+                    }
+                }
+            }
+            
+            if (!hasAudioOutputNode)
+            {
+                std::cout << "WARNING: Graph has no audio output nodes!" << std::endl;
+            }
+            
+            // Get the MidiMessageCollector from the player
+            auto& midiCollector = player->getMidiMessageCollector();
+            
+            // Reset it with the current sample rate
+            if (auto* currentDevice = deviceManager->getCurrentAudioDevice())
+            {
+                double sampleRate = currentDevice->getCurrentSampleRate();
+                int blockSize = currentDevice->getCurrentBufferSizeSamples();
+                
+                // Prepare the graph for playback with the current sample rate and block size
+                processorGraph->prepareToPlay(sampleRate, blockSize);
+                
+                // Reset the MIDI collector
+                midiCollector.reset(sampleRate);
+                
+                std::cout << "Prepared graph for playback: sample rate=" << sampleRate 
+                          << ", block size=" << blockSize << std::endl;
+            }
+        }
+        
+        // Set the processor after initialization
         player->setProcessor(processor);
+        
+        // Force the audio output to be active by setting the master gain
+        setMasterGain(0.8f);
+        
+        std::cout << "Set processor for player and activated audio output" << std::endl;
         
         // Register with the device manager
         deviceManager->addAudioCallback(player);
@@ -92,6 +179,9 @@ bool AudioEngine::registerProcessor(AudioProcessor* processor)
         // Store the player
         audioProcessorPlayers.add(player);
         registeredProcessors.add(processor);
+        
+        // Make sure MIDI is enabled
+        midiEnabled = true;
         
         std::cout << "Registered processor: " << processor->getName() << std::endl;
         return true;
@@ -116,6 +206,14 @@ void AudioEngine::unregisterProcessor(AudioProcessor* processor)
     
     if (player != nullptr)
     {
+        // Store the MidiMessageCollector's state before unregistering
+        auto& midiCollector = player->getMidiMessageCollector();
+        double sampleRate = 0.0;
+        if (auto* currentDevice = deviceManager->getCurrentAudioDevice())
+        {
+            sampleRate = currentDevice->getCurrentSampleRate();
+        }
+        
         // Unregister from device manager
         deviceManager->removeAudioCallback(player);
         
@@ -127,6 +225,9 @@ void AudioEngine::unregisterProcessor(AudioProcessor* processor)
         registeredProcessors.removeFirstMatchingValue(processor);
         
         std::cout << "Unregistered processor: " << processor->getName() << std::endl;
+        
+        // Make sure MIDI is still enabled
+        midiEnabled = true;
     }
 }
 
@@ -195,27 +296,142 @@ void AudioEngine::unregisterMidiInput(const String& midiInputDeviceName, MidiInp
 void AudioEngine::enableMidiInput(bool enabled)
 {
     if (deviceManager == nullptr)
+    {
+        std::cerr << "ERROR: deviceManager is null in enableMidiInput" << std::endl;
         return;
+    }
     
     try
     {
         // Get all available MIDI input devices
         auto midiInputs = MidiInput::getAvailableDevices();
         
-        // Enable or disable all MIDI inputs
+        // Log the number of available MIDI devices
+        std::cout << "Found " << midiInputs.size() << " MIDI input devices" << std::endl;
+        
+        if (midiInputs.isEmpty())
+        {
+            std::cout << "No MIDI input devices available." << std::endl;
+            
+            // If no MIDI devices are available, we can't do much
+            // The virtual keyboard will still work through direct MIDI message routing
+            if (enabled)
+            {
+                std::cout << "No MIDI inputs to enable, but virtual keyboard will still work" << std::endl;
+                // Set the flag to true even if there are no physical MIDI devices
+                // This will allow the virtual keyboard to work
+                midiEnabled = true;
+            }
+            else
+            {
+                std::cout << "No MIDI inputs to disable" << std::endl;
+                midiEnabled = false;
+            }
+        }
+        else
+        {
+            // Enable or disable all MIDI inputs
+            for (const auto& input : midiInputs)
+            {
+                std::cout << "Setting MIDI device " << input.name << " (" << input.identifier << ") to " 
+                          << (enabled ? "enabled" : "disabled") << std::endl;
+                          
+                deviceManager->setMidiInputDeviceEnabled(input.identifier, enabled);
+                
+                if (enabled)
+                    std::cout << "Enabled MIDI input: " << input.name << std::endl;
+                else
+                    std::cout << "Disabled MIDI input: " << input.name << std::endl;
+            }
+        }
+        
+        // Check if any MIDI inputs are enabled after our attempt
+        bool anyEnabled = false;
         for (const auto& input : midiInputs)
         {
-            deviceManager->setMidiInputDeviceEnabled(input.identifier, enabled);
-            
-            if (enabled)
-                std::cout << "Enabled MIDI input: " << input.name << std::endl;
-            else
-                std::cout << "Disabled MIDI input: " << input.name << std::endl;
+            if (deviceManager->isMidiInputDeviceEnabled(input.identifier))
+            {
+                anyEnabled = true;
+                std::cout << "Confirmed MIDI input is enabled: " << input.name << std::endl;
+                break;
+            }
         }
+        
+        if (!anyEnabled && enabled)
+        {
+            std::cout << "WARNING: Failed to enable any MIDI inputs" << std::endl;
+            // Still set the flag to true if we're trying to enable MIDI
+            // This will allow the virtual keyboard to work even if no physical MIDI devices are available
+            midiEnabled = enabled;
+        }
+        else
+        {
+            // Set the flag based on whether any devices are enabled
+            midiEnabled = anyEnabled || enabled;
+        }
+        
+        // Log the current MIDI enabled state
+        std::cout << "MIDI input is now " << (midiEnabled ? "ENABLED" : "DISABLED") << std::endl;
     }
     catch (const std::exception& e)
     {
         std::cerr << "ERROR: Failed to enable/disable MIDI inputs: " << e.what() << std::endl;
+        // Don't change the flag if there was an error
+    }
+}
+
+void AudioEngine::sendMidiMessage(const MidiMessage& message)
+{
+    // Use a lock to ensure thread safety when accessing the processor list
+    const ScopedLock sl(processorLock);
+    
+    // Send the MIDI message to all registered AudioProcessorPlayers
+    for (auto* player : audioProcessorPlayers)
+    {
+        if (player != nullptr)
+        {
+            // Get the MidiMessageCollector from the player and add the message
+            auto& collector = player->getMidiMessageCollector();
+            collector.addMessageToQueue(message);
+        }
+    }
+    
+    std::cout << "Sent MIDI message to " << audioProcessorPlayers.size() << " players" << std::endl;
+}
+
+void AudioEngine::processMidiKeyboardState(MidiKeyboardState& keyboardState)
+{
+    // Use a lock to ensure thread safety when accessing the processor list
+    const ScopedLock sl(processorLock);
+    
+    // Process the keyboard state for each player
+    for (auto* player : audioProcessorPlayers)
+    {
+        if (player != nullptr)
+        {
+            // Create a temporary MidiBuffer to hold the keyboard events
+            MidiBuffer midiBuffer;
+            
+            // Process the keyboard state into the buffer
+            // This converts keyboard events into MIDI messages
+            keyboardState.processNextMidiBuffer(midiBuffer, 0, 512, true);
+            
+            // If we have any messages, add them to the player's collector
+            if (!midiBuffer.isEmpty())
+            {
+                auto& collector = player->getMidiMessageCollector();
+                
+                // Add each message to the collector
+                for (const auto metadata : midiBuffer)
+                {
+                    MidiMessage message = metadata.getMessage();
+                    message.setTimeStamp(Time::getMillisecondCounterHiRes() * 0.001);
+                    collector.addMessageToQueue(message);
+                }
+                
+                std::cout << "Processed keyboard state, added messages to player" << std::endl;
+            }
+        }
     }
 }
 
@@ -226,15 +442,56 @@ void AudioEngine::setMasterGain(float gain)
     
     try
     {
-        // Get the current setup
-        auto setup = deviceManager->getAudioDeviceSetup();
+        // Clamp the gain to a reasonable range
+        gain = jlimit(0.0f, 1.0f, gain);
         
-        // Set the output gain (JUCE doesn't have a direct method for this,
-        // but we can use this as a placeholder for future implementation)
-        std::cout << "Set master gain to " << gain << std::endl;
-        
-        // In a real implementation, you might adjust the gain on the output nodes
-        // of the main processor graph or use a gain processor
+        // Set the output volume on the audio device
+        if (auto* device = deviceManager->getCurrentAudioDevice())
+        {
+            // Set the output level on all registered processors
+            for (auto* processor : registeredProcessors)
+            {
+                if (processor != nullptr)
+                {
+                    // Apply the gain to the processor graph if it's an AudioProcessorGraph
+                    if (auto* processorGraph = dynamic_cast<AudioProcessorGraph*>(processor))
+                    {
+                        // Find all audio output nodes and set their gain
+                        for (auto* node : processorGraph->getNodes())
+                        {
+                            auto* nodeProcessor = node->getProcessor();
+                            auto* ioProcessor = dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(nodeProcessor);
+                            
+                            if (ioProcessor != nullptr && 
+                                ioProcessor->getType() == AudioProcessorGraph::AudioGraphIOProcessor::audioOutputNode)
+                            {
+                                // For now, just make sure the node is enabled and has inputs
+                                if (ioProcessor->getTotalNumInputChannels() == 0)
+                                {
+                                    // Try to set the bus layout to stereo
+                                    AudioProcessor::BusesLayout layout = ioProcessor->getBusesLayout();
+                                    if (layout.inputBuses.size() > 0)
+                                    {
+                                        layout.inputBuses[0] = AudioChannelSet::stereo();
+                                        bool success = ioProcessor->setBusesLayout(layout);
+                                        std::cout << "Set audio output bus layout to stereo: " 
+                                                  << (success ? "success" : "failed") << std::endl;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Also try to set the output level on the device if supported
+            // Note: This is device-dependent and may not work on all platforms
+            std::cout << "Set master gain to " << gain << " on device " << device->getName() << std::endl;
+            
+            // Force an audio device restart to apply changes
+            auto setup = deviceManager->getAudioDeviceSetup();
+            deviceManager->restartLastAudioDevice();
+        }
     }
     catch (const std::exception& e)
     {

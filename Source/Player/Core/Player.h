@@ -55,6 +55,12 @@ public:
     void prepareForEditing();     // Prepare for UI editing
     void prepareForPlayback();    // Prepare for audio playback
     void releaseResources();      // Release heavy resources
+    bool initializeMinimal();     // Initialize with minimal resources
+    
+    // Graph state management for deferred loading
+    void setGraphFileName(const String& fileName) { graphFileName = fileName; }
+    void setEmbeddedGraphState(const String& base64State) { embeddedGraphState = base64State; }
+    bool loadGraphStateIfNeeded();  // Load graph state if not already loaded
         
     // AudioEngine connection
     bool connectToAudioEngine(AudioEngine* engine);
@@ -232,6 +238,11 @@ private:
     bool fullyLoaded = false;
     bool readyForEditing = false;
     bool readyForPlayback = false;
+    bool graphLoaded = false;      // Whether the graph has been loaded
+    
+    // Deferred loading data
+    String graphFileName;         // Name of the graph file to load when needed
+    String embeddedGraphState;    // Base64-encoded graph state to load when needed
     
     /**
      * @brief Get the path to the graph file for this player
