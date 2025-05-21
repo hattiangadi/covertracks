@@ -33,6 +33,9 @@ PlayerModeComponent::PlayerModeComponent(PlayerManager& pm)
     playAllButton.setEnabled(false);
     addAndMakeVisible(playAllButton);
     
+    // Register as a listener for player manager changes
+    playerManager.addChangeListener(this);
+    
     // Update player selector with available players
     updatePlayerSelector();
     
@@ -42,10 +45,14 @@ PlayerModeComponent::PlayerModeComponent(PlayerManager& pm)
 
 PlayerModeComponent::~PlayerModeComponent()
 {
+    // Remove listeners
     playerSelector.removeListener(this);
     playButton.removeListener(this);
     stopButton.removeListener(this);
     playAllButton.removeListener(this);
+    
+    // Remove change listener from player manager
+    playerManager.removeChangeListener(this);
 }
 
 void PlayerModeComponent::paint(Graphics& g)
@@ -146,6 +153,32 @@ void PlayerModeComponent::comboBoxChanged(ComboBox* comboBoxThatHasChanged)
         {
             selectedPlayer = nullptr;
             playButton.setEnabled(false);
+        }
+    }
+}
+
+void PlayerModeComponent::changeListenerCallback(ChangeBroadcaster* source)
+{
+    // If the change came from the PlayerManager, update our player selector
+    if (source == &playerManager)
+    {
+        std::cout << "PlayerModeComponent received change notification from PlayerManager" << std::endl;
+        
+        // Remember the currently selected player ID
+        int currentSelectedId = playerSelector.getSelectedId();
+        
+        // Update the player selector
+        updatePlayerSelector();
+        
+        // Try to restore the previous selection if possible
+        if (currentSelectedId > 0 && currentSelectedId <= playerSelector.getNumItems())
+        {
+            playerSelector.setSelectedId(currentSelectedId, juce::dontSendNotification);
+        }
+        else if (playerSelector.getNumItems() > 0)
+        {
+            // Select the first player if the previous selection is no longer valid
+            playerSelector.setSelectedItemIndex(0, juce::sendNotification);
         }
     }
 }

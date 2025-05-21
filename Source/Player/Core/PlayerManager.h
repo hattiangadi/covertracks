@@ -10,7 +10,7 @@
 
 namespace covertracks {
 
-    class PlayerManager
+    class PlayerManager : public ChangeBroadcaster
     {
     public:
         /**

@@ -240,6 +240,9 @@ bool PlayerManager::savePlayer(Player* player)
     {
         std::cout << "Adding player to manager: " << metadata.name << std::endl;
         players.add(player);
+        
+        // Notify listeners that a player was added
+        sendChangeMessage();
     }
     
     // Explicitly save the graph state to a file
@@ -259,10 +262,15 @@ bool PlayerManager::savePlayer(Player* player)
     String jsonStr = JSON::toString(playerJson);
     bool success = playerFile.replaceWithText(jsonStr);
     
-    if (success)
+    if (success) {
         std::cout << "Saved player to file: " << playerFile.getFullPathName() << std::endl;
-    else
+        
+        // Notify listeners that a player was saved
+        sendChangeMessage();
+    }
+    else {
         std::cout << "Failed to save player to file: " << playerFile.getFullPathName() << std::endl;
+    }
         
     return success;
 }
@@ -340,6 +348,13 @@ std::unique_ptr<Player> PlayerManager::createPlayer()
     metadata.description = "A new player";
     metadata.created = Time::getCurrentTime();
     metadata.lastModified = metadata.created;
+    
+    // Ensure the player is fully prepared for playback
+    if (!player->isReadyForPlayback())
+    {
+        std::cout << "Preparing new player for playback" << std::endl;
+        player->prepareForPlayback();
+    }
     
     return player;
 }

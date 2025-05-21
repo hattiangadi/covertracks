@@ -11,8 +11,9 @@ namespace covertracks {
  * This component provides UI for playing patterns on one or more players
  */
 class PlayerModeComponent : public Component,
-                            public Button::Listener,
-                            public ComboBox::Listener
+                            private Button::Listener,
+                            private ComboBox::Listener,
+                            private ChangeListener
 {
 public:
     PlayerModeComponent(PlayerManager& playerManager);
@@ -27,6 +28,9 @@ public:
     
     // ComboBox::Listener implementation
     void comboBoxChanged(ComboBox* comboBoxThatHasChanged) override;
+    
+    // ChangeListener implementation
+    void changeListenerCallback(ChangeBroadcaster* source) override;
     
     // Load a pattern from a JSON file
     var loadPatternFromFile(const File& file);
