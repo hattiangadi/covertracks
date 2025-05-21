@@ -413,11 +413,30 @@ Instrument::~Instrument()
     // Stop any ongoing playback
     stopPlayback();
     
-    // Stop timer if running
-    stopTimer();
+    // Make sure the AudioProcessorPlayer is properly cleaned up
+    if (audioProcessorPlayer != nullptr)
+    {
+        // First, remove the processor from the player to prevent any further processing
+        audioProcessorPlayer->setProcessor(nullptr);
+        
+        // Unregister from the AudioEngine if we're connected
+        if (audioEngine != nullptr)
+        {
+            auto& deviceManager = audioEngine->getDeviceManager();
+            deviceManager.removeAudioCallback(audioProcessorPlayer.get());
+        }
+        
+        // Reset the AudioProcessorPlayer to ensure it's properly cleaned up
+        audioProcessorPlayer.reset();
+        
+        std::cout << "Cleaned up AudioProcessorPlayer in Instrument destructor" << std::endl;
+    }
     
     // Release all resources
     releaseResources();
+    
+    // Disconnect from AudioEngine
+    disconnectFromAudioEngine();
     
     std::cout << "[Instrument] Destroyed: " << instrumentName << std::endl;
 }
@@ -836,8 +855,8 @@ bool Instrument::playMIDIPattern(const var& pattern, double newTempo)
         std::cout << "Ensuring processor is registered with AudioEngine" << std::endl;
         audioEngine->registerProcessor(processorGraph.get());
         
-        // Set master gain to ensure audio output is active
-        audioEngine->setMasterGain(0.8f);
+        // Set master gain to ensure audio output is active but avoid distortion
+        audioEngine->setMasterGain(0.5f);
     }
     else
     {
@@ -890,8 +909,8 @@ bool Instrument::playMIDIPattern(const var& pattern, double newTempo)
     // Start a timer to process MIDI events from the pattern
     startTimer(10); // Check every 10ms for more responsive playback
     
-    // Send a test note to verify audio path
-    MidiMessage testNote = MidiMessage::noteOn(1, 60, 0.8f);
+    // Send a test note to verify audio path (with moderate velocity to avoid distortion)
+    MidiMessage testNote = MidiMessage::noteOn(1, 60, 0.5f);
     testNote.setTimeStamp(0.01); // 10ms in the future
     audioProcessorPlayer->getMidiMessageCollector().addMessageToQueue(testNote);
     
@@ -933,13 +952,23 @@ void Instrument::stopPlayback()
         if (audioEngine != nullptr)
         {
             auto& deviceManager = audioEngine->getDeviceManager();
+            
+            // First, remove the processor from the player to prevent any further processing
+            audioProcessorPlayer->setProcessor(nullptr);
+            
+            // Then, remove the audio callback
             deviceManager.removeAudioCallback(audioProcessorPlayer.get());
         }
+        else
+        {
+            // Still remove the processor even if we don't have an audio engine
+            audioProcessorPlayer->setProcessor(nullptr);
+        }
         
-        // Remove the processor from the player
-        audioProcessorPlayer->setProcessor(nullptr);
+        // Reset the AudioProcessorPlayer to ensure it's properly cleaned up
+        audioProcessorPlayer.reset();
         
-        std::cout << "Unregistered AudioProcessorPlayer" << std::endl;
+        std::cout << "Unregistered and released AudioProcessorPlayer" << std::endl;
     }
     
     // Notify that playback has stopped
@@ -1263,7 +1292,7 @@ std::unique_ptr<MidiMessageSequence> Instrument::convertJSONToMIDISequence(const
             String type = event.getProperty("type", "note_on").toString();
             int channel = static_cast<int>(static_cast<double>(event.getProperty("channel", 1)));
             int note = static_cast<int>(static_cast<double>(event.getProperty("note", 60)));
-            float velocity = static_cast<float>(static_cast<double>(event.getProperty("velocity", 0.8)));
+            float velocity = static_cast<float>(static_cast<double>(event.getProperty("velocity", 0.5)));
             double timestamp = static_cast<double>(event.getProperty("timestamp", 0.0));
             
             // Ensure channel is in valid range (1-16)
