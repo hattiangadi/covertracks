@@ -342,14 +342,23 @@ MainHostWindow::MainHostWindow()
     std::cout << "[MainHostWindow] PlayerManager created" << std::endl;
 
     
-    // Create PlayerLibraryComponent as the main content
+    // Create PlayerLibraryComponent and PlayerModeComponent
     std::cout << "[MainHostWindow] Creating PlayerLibraryComponent" << std::endl;
     playerLibraryWindow = std::make_unique<PlayerLibraryComponent>(playerManager);
     std::cout << "[MainHostWindow] PlayerLibraryComponent created" << std::endl;
     
+    std::cout << "[MainHostWindow] Creating PlayerModeComponent" << std::endl;
+    playerModeWindow = std::make_unique<PlayerModeComponent>(*playerManager);
+    std::cout << "[MainHostWindow] PlayerModeComponent created" << std::endl;
+    
+    // Create a tabbed component to hold both views
+    auto* tabbedComponent = new TabbedComponent(TabbedButtonBar::TabsAtTop);
+    tabbedComponent->addTab("Player Library", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), playerLibraryWindow.get(), false);
+    tabbedComponent->addTab("Player Mode", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), playerModeWindow.get(), false);
+    
     // Set it as the main content
     std::cout << "[MainHostWindow] Setting content" << std::endl;
-    setContentNonOwned (playerLibraryWindow.get(), true);
+    setContentOwned(tabbedComponent, true);
 
     setUsingNativeTitleBar (true);
 

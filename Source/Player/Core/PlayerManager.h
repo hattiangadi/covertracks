@@ -65,6 +65,11 @@ namespace covertracks {
         bool isPlayerActive(Player* player) const;
         Player* getActivePlayer() const { return activePlayer; }
         
+        // Pattern playback management
+        bool playPattern(Player* player, const var& pattern, double tempo = 120.0);
+        bool playPatternOnAllActivePlayers(const var& pattern, double tempo = 120.0);
+        void stopPlayback(Player* player = nullptr); // If nullptr, stops all players
+        
     private:
         // Get the directory where players are stored
         File getPlayersDirectory();

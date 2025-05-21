@@ -472,4 +472,127 @@ void PlayerManager::loadAllPlayers()
     std::cout << "Loaded " << players.size() << " players with minimal resources in total" << std::endl;
 }
 
+bool PlayerManager::playPattern(Player* player, const var& pattern, double tempo)
+{
+    if (player == nullptr)
+    {
+        std::cerr << "Cannot play pattern: player is null" << std::endl;
+        return false;
+    }
+    
+    std::cout << "===== PLAYING PATTERN ON PLAYER: " << player->getMetadata().name << " =====" << std::endl;
+    
+    // Make sure the player is prepared for playback
+    if (!player->isReadyForPlayback())
+    {
+        std::cout << "Preparing player " << player->getMetadata().name << " for playback" << std::endl;
+        player->prepareForPlayback();
+    }
+    
+    // Connect to AudioEngine if not already connected
+    if (!player->isConnectedToAudioEngine())
+    {
+        std::cout << "Connecting player " << player->getMetadata().name << " to AudioEngine" << std::endl;
+        if (!player->connectToAudioEngine(audioEngine.get()))
+        {
+            std::cerr << "Failed to connect player to AudioEngine" << std::endl;
+            return false;
+        }
+    }
+    
+    // Ensure the player is activated in the AudioEngine
+    if (player != activePlayer)
+    {
+        std::cout << "Activating player " << player->getMetadata().name << " in AudioEngine" << std::endl;
+        audioEngine->activatePlayer(player);
+    }
+    
+    // Make sure the player's processor is registered with the AudioEngine
+    if (auto* instrument = player->getInstrument())
+    {
+        if (auto* processorGraph = instrument->getProcessorGraph())
+        {
+            std::cout << "Registering processor for player " << player->getMetadata().name << std::endl;
+            audioEngine->registerProcessor(processorGraph);
+        }
+        else
+        {
+            std::cerr << "Player " << player->getMetadata().name << " has no processor graph!" << std::endl;
+            return false;
+        }
+    }
+    else
+    {
+        std::cerr << "Player " << player->getMetadata().name << " has no instrument!" << std::endl;
+        return false;
+    }
+    
+    // Play the pattern
+    std::cout << "Playing pattern on player: " << player->getMetadata().name << std::endl;
+    bool result = player->playPattern(pattern, tempo);
+    
+    if (result)
+    {
+        std::cout << "Successfully started pattern playback on player: " << player->getMetadata().name << std::endl;
+    }
+    else
+    {
+        std::cerr << "Failed to start pattern playback on player: " << player->getMetadata().name << std::endl;
+    }
+    
+    return result;
+}
+
+bool PlayerManager::playPatternOnAllActivePlayers(const var& pattern, double tempo)
+{
+    // Get all players that are active or ready for playback
+    Array<Player*> playersToUse;
+    
+    for (auto* player : players)
+    {
+        if (player->isReadyForPlayback() || player == activePlayer)
+        {
+            playersToUse.add(player);
+        }
+    }
+    
+    if (playersToUse.isEmpty())
+    {
+        std::cerr << "No active players to play pattern on" << std::endl;
+        return false;
+    }
+    
+    // Play the pattern on all selected players
+    bool anySuccess = false;
+    
+    for (auto* player : playersToUse)
+    {
+        if (playPattern(player, pattern, tempo))
+        {
+            anySuccess = true;
+        }
+    }
+    
+    return anySuccess;
+}
+
+void PlayerManager::stopPlayback(Player* player)
+{
+    if (player != nullptr)
+    {
+        // Stop playback for the specified player
+        std::cout << "Stopping playback for player: " << player->getMetadata().name << std::endl;
+        player->stopPlayback();
+    }
+    else
+    {
+        // Stop playback for all players
+        std::cout << "Stopping playback for all players" << std::endl;
+        for (auto* p : players)
+        {
+            p->stopPlayback();
+        }
+    }
+}
+
 } // namespace covertracks

@@ -26,54 +26,317 @@ Instrument::Instrument(const String& name,
 
 void Instrument::prepareForEditing()
 {
-    // Only load what's needed for editing
+    // Load all resources needed for editing
     if (resourceState == ResourceState::Unloaded)
     {
-        // Create processor graph if it doesn't exist
-        if (!processorGraph)
+        // Create the processor graph if it doesn't exist
+        if (processorGraph == nullptr)
         {
             processorGraph = std::make_unique<AudioProcessorGraph>();
+            std::cout << "Created processor graph for " << instrumentName << std::endl;
         }
         
-        // Set basic configuration so the graph can be edited
-        double sampleRateToUse = audioEngine ? audioEngine->getSampleRate() : 44100.0;
-        int bufferSizeToUse = audioEngine ? audioEngine->getBufferSize() : 512;
-        
-        processorGraph->setPlayConfigDetails(2, 2, sampleRateToUse, bufferSizeToUse);
+        // Create the plugin graph if it doesn't exist
+        if (pluginGraph == nullptr)
+        {
+            pluginGraph = std::make_unique<PluginGraph>(formatManager, knownPluginList);
+            std::cout << "Created plugin graph for " << instrumentName << std::endl;
+        }
         
         resourceState = ResourceState::EditReady;
         std::cout << "Instrument " << instrumentName << " prepared for editing" << std::endl;
     }
-}
-
-void Instrument::prepareForPlayback()
-{
-    // Load all resources needed for playback
-    if (resourceState != ResourceState::PlaybackReady)
+    
+    // Ensure the processor graph is properly configured
+    if (processorGraph != nullptr)
     {
-        // First make sure we're edit-ready
-        if (resourceState == ResourceState::Unloaded)
-            prepareForEditing();
-        
-        // Then prepare for playback
-        if (audioEngine)
+        // Check if we have audio output nodes in the graph
+        bool hasAudioOutputNode = false;
+        for (auto* node : processorGraph->getNodes())
         {
-            double sampleRateToUse = audioEngine->getSampleRate();
-            int bufferSizeToUse = audioEngine->getBufferSize();
-            
-            // Update the processor graph
-            processorGraph->setPlayConfigDetails(2, 2, sampleRateToUse, bufferSizeToUse);
-            processorGraph->prepareToPlay(sampleRateToUse, bufferSizeToUse);
-            
-            // Connect to the AudioEngine
-            connectToAudioEngine(audioEngine);
-            
-            sampleRate = sampleRateToUse;
+            auto* processor = node->getProcessor();
+            if (processor != nullptr && processor->getName().contains("Audio Output"))
+            {
+                hasAudioOutputNode = true;
+                std::cout << "Found audio output node in graph: " << processor->getName() << std::endl;
+                break;
+            }
         }
         
-        resourceState = ResourceState::PlaybackReady;
-        std::cout << "Instrument " << instrumentName << " prepared for playback" << std::endl;
+        if (!hasAudioOutputNode)
+        {
+            std::cout << "No audio output node found in edit mode, but will be added during playback" << std::endl;
+        }
     }
+}
+
+bool Instrument::prepareForPlayback()
+{
+    if (processorGraph == nullptr)
+    {
+        std::cerr << "Cannot prepare for playback: processor graph is null" << std::endl;
+        return false;
+    }
+    
+    // First, ensure we have the full graph state loaded from the PluginGraph
+    if (pluginGraph != nullptr)
+    {
+        // Get the current graph state
+        std::unique_ptr<XmlElement> state = pluginGraph->createXml();
+        if (state != nullptr)
+        {
+            // Count nodes and connections in the XML
+            int nodeCount = 0;
+            int connectionCount = 0;
+            
+            // Count the processor nodes
+            for (auto* child : state->getChildWithTagNameIterator("PROCESSOR"))
+            {
+                nodeCount++;
+                (void)child; // Prevent unused variable warning
+            }
+            
+            // Count the connections
+            auto* connectionsElement = state->getChildByName("CONNECTIONS");
+            if (connectionsElement != nullptr)
+            {
+                for (auto* conn : connectionsElement->getChildIterator())
+                {
+                    connectionCount++;
+                    (void)conn; // Prevent unused variable warning
+                }
+            }
+            
+            std::cout << "Loading full graph state from PluginGraph before playback" << std::endl;
+            std::cout << "Graph XML contains " << nodeCount << " nodes and " << connectionCount << " connections" << std::endl;
+            
+            // Print the current processor graph state before loading
+            if (processorGraph != nullptr)
+            {
+                std::cout << "Before loading, processor graph has " << processorGraph->getNumNodes() 
+                          << " nodes and " << processorGraph->getConnections().size() << " connections" << std::endl;
+            }
+            
+            // Load the state into the processor graph
+            loadPluginGraph(*state);
+            
+            // Print the processor graph state after loading
+            if (processorGraph != nullptr)
+            {
+                std::cout << "After loading, processor graph has " << processorGraph->getNumNodes() 
+                          << " nodes and " << processorGraph->getConnections().size() << " connections" << std::endl;
+                
+                // List all nodes in the graph
+                std::cout << "Nodes in processor graph:" << std::endl;
+                for (auto* node : processorGraph->getNodes())
+                {
+                    auto* processor = node->getProcessor();
+                    std::cout << "  - Node ID: " << node->nodeID.uid 
+                              << ", Name: " << processor->getName() 
+                              << ", Inputs: " << processor->getTotalNumInputChannels() 
+                              << ", Outputs: " << processor->getTotalNumOutputChannels() 
+                              << ", MIDI: " << (processor->acceptsMidi() ? "yes" : "no") 
+                              << std::endl;
+                }
+            }
+        }
+    }
+    
+    // Get the current audio device settings
+    if (audioEngine != nullptr)
+    {
+        auto& deviceManager = audioEngine->getDeviceManager();
+        auto* currentDevice = deviceManager.getCurrentAudioDevice();
+        
+        if (currentDevice != nullptr)
+        {
+            double currentSampleRate = currentDevice->getCurrentSampleRate();
+            int blockSize = currentDevice->getCurrentBufferSizeSamples();
+            
+            // Update the member variable
+            sampleRate = currentSampleRate;
+            
+            // First, check if we have audio output nodes in the graph
+            bool hasAudioOutputNode = false;
+            for (auto* node : processorGraph->getNodes())
+            {
+                auto* processor = node->getProcessor();
+                if (processor != nullptr && processor->getName().contains("Audio Output"))
+                {
+                    hasAudioOutputNode = true;
+                    std::cout << "Found audio output node in graph: " << processor->getName() << std::endl;
+                    break;
+                }
+            }
+            
+            // If no audio output node found, create one
+            if (!hasAudioOutputNode)
+            {
+                std::cout << "No audio output node found, creating one..." << std::endl;
+                
+                // Create an audio output node
+                auto audioOutputNode = processorGraph->addNode(std::make_unique<AudioProcessorGraph::AudioGraphIOProcessor>(
+                    AudioProcessorGraph::AudioGraphIOProcessor::audioOutputNode));
+                
+                if (audioOutputNode != nullptr)
+                {
+                    std::cout << "Created audio output node with ID: " << audioOutputNode->nodeID.uid << std::endl;
+                }
+                else
+                {
+                    std::cerr << "Failed to create audio output node" << std::endl;
+                }
+            }
+            
+            // Check if we have a MIDI input node in the graph
+            bool hasMidiInputNode = false;
+            for (auto* node : processorGraph->getNodes())
+            {
+                auto* processor = node->getProcessor();
+                if (processor != nullptr && processor->getName().contains("MIDI Input"))
+                {
+                    hasMidiInputNode = true;
+                    std::cout << "Found MIDI input node in graph: " << processor->getName() << std::endl;
+                    break;
+                }
+            }
+            
+            // If no MIDI input node found, create one
+            AudioProcessorGraph::Node::Ptr midiInputNode = nullptr;
+            if (!hasMidiInputNode)
+            {
+                std::cout << "No MIDI input node found, creating one..." << std::endl;
+                
+                // Create a MIDI input node
+                midiInputNode = processorGraph->addNode(std::make_unique<AudioProcessorGraph::AudioGraphIOProcessor>(
+                    AudioProcessorGraph::AudioGraphIOProcessor::midiInputNode));
+                
+                if (midiInputNode != nullptr)
+                {
+                    std::cout << "Created MIDI input node with ID: " << midiInputNode->nodeID.uid << std::endl;
+                }
+                else
+                {
+                    std::cerr << "Failed to create MIDI input node" << std::endl;
+                }
+            }
+            
+            // Now connect all nodes properly
+            std::cout << "Setting up graph connections for " << instrumentName << "..." << std::endl;
+            
+            // First, find the audio output node
+            AudioProcessorGraph::Node::Ptr audioOutputNode = nullptr;
+            for (auto* node : processorGraph->getNodes())
+            {
+                auto* processor = node->getProcessor();
+                if (processor != nullptr && 
+                    dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(processor) != nullptr &&
+                    processor->getName().contains("Audio Output"))
+                {
+                    audioOutputNode = node;
+                    break;
+                }
+            }
+            
+            // If we didn't find an existing MIDI input node, use the one we created
+            if (!hasMidiInputNode && midiInputNode == nullptr)
+            {
+                std::cerr << "No MIDI input node available!" << std::endl;
+            }
+            
+            // Find all instrument/synth nodes that can process MIDI
+            for (auto* node : processorGraph->getNodes())
+            {
+                auto* processor = node->getProcessor();
+                
+                // Skip IO nodes
+                if (dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(processor) != nullptr)
+                    continue;
+                    
+                std::cout << "Found processor node: " << processor->getName() 
+                          << ", accepts MIDI: " << (processor->acceptsMidi() ? "yes" : "no")
+                          << ", produces MIDI: " << (processor->producesMidi() ? "yes" : "no")
+                          << ", audio inputs: " << processor->getTotalNumInputChannels()
+                          << ", audio outputs: " << processor->getTotalNumOutputChannels() << std::endl;
+                
+                // Connect MIDI input to this node if it accepts MIDI
+                if (processor->acceptsMidi() && midiInputNode != nullptr)
+                {
+                    // Connect MIDI input to this processor
+                    if (processorGraph->addConnection({ { midiInputNode->nodeID, AudioProcessorGraph::midiChannelIndex }, 
+                                                       { node->nodeID, AudioProcessorGraph::midiChannelIndex } }))
+                    {
+                        std::cout << "Connected MIDI input to node " << node->nodeID.uid << std::endl;
+                    }
+                    else
+                    {
+                        std::cerr << "Failed to connect MIDI input to node " << node->nodeID.uid << std::endl;
+                    }
+                }
+                
+                // Connect this node to audio output if it produces audio
+                if (processor->getTotalNumOutputChannels() > 0 && audioOutputNode != nullptr)
+                {
+                    // Connect audio outputs to the audio output node
+                    int numChannels = std::min(2, processor->getTotalNumOutputChannels());
+                    for (int channel = 0; channel < numChannels; ++channel)
+                    {
+                        if (processorGraph->addConnection({ { node->nodeID, channel }, 
+                                                           { audioOutputNode->nodeID, channel } }))
+                        {
+                            std::cout << "Connected node " << node->nodeID.uid 
+                                      << " channel " << channel 
+                                      << " to audio output node" << std::endl;
+                        }
+                        else
+                        {
+                            std::cerr << "Failed to connect node " << node->nodeID.uid 
+                                      << " channel " << channel 
+                                      << " to audio output node" << std::endl;
+                        }
+                    }
+                }
+            }
+            
+            // Print the final graph structure
+            std::cout << "Final graph structure for " << instrumentName << ":" << std::endl;
+            std::cout << "Total nodes: " << processorGraph->getNumNodes() << std::endl;
+            
+            int connectionCount = 0;
+            for (auto& connection : processorGraph->getConnections())
+            {
+                std::cout << "Connection " << ++connectionCount << ": Node " 
+                          << connection.source.nodeID.uid << " channel " << connection.source.channelIndex
+                          << " -> Node " << connection.destination.nodeID.uid 
+                          << " channel " << connection.destination.channelIndex << std::endl;
+            }
+            
+            // Prepare the processor graph for playback
+            processorGraph->setPlayConfigDetails(2, 2, currentSampleRate, blockSize);
+            processorGraph->prepareToPlay(currentSampleRate, blockSize);
+            
+            std::cout << "Prepared graph for playback: sample rate=" << currentSampleRate 
+                      << ", block size=" << blockSize << std::endl;
+                      
+            // Ensure the processor is registered with the AudioEngine
+            audioEngine->registerProcessor(processorGraph.get());
+            
+            // Set the master gain to ensure audio output is active
+            audioEngine->setMasterGain(0.8f);
+        }
+        else
+        {
+            std::cerr << "No audio device available for playback" << std::endl;
+            return false;
+        }
+    }
+    else
+    {
+        std::cerr << "No audio engine available for playback" << std::endl;
+        return false;
+    }
+    
+    return true;
 }
 
 void Instrument::releaseResources()
@@ -175,20 +438,66 @@ bool Instrument::loadPluginGraph(const XmlElement& graphState)
         processorGraph = std::make_unique<AudioProcessorGraph>();
     }
     
+    // Clear the processor graph first
+    processorGraph->clear();
+    std::cout << "Cleared processor graph before loading new state" << std::endl;
+    
     // First attempt to restore the graph state
+    std::cout << "Restoring graph state from XML..." << std::endl;
+    
+    // Count nodes in the XML
+    int nodeCount = 0;
+    int connectionCount = 0;
+    
+    // Count the processor nodes
+    for (auto* child : graphState.getChildWithTagNameIterator("PROCESSOR"))
+    {
+        nodeCount++;
+        (void)child; // Prevent unused variable warning
+    }
+    
+    // Count the connections
+    auto* connectionsElement = graphState.getChildByName("CONNECTIONS");
+    if (connectionsElement != nullptr)
+    {
+        for (auto* conn : connectionsElement->getChildIterator())
+        {
+            connectionCount++;
+            (void)conn; // Prevent unused variable warning
+        }
+    }
+    
+    std::cout << "XML contains " << nodeCount << " nodes and " << connectionCount << " connections" << std::endl;
+    
+    // Restore from XML
     pluginGraph->restoreFromXml(graphState);
+    
+    // Print the graph state after restoration
+    auto& graphRef = pluginGraph->graph;
+    std::cout << "After restoration, graph has " << graphRef.getNumNodes() << " nodes and " 
+              << graphRef.getConnections().size() << " connections" << std::endl;
     
     // Check for audio output nodes with 0 input channels
     bool outputNodesFixed = false;
     
     // Get all nodes in the graph
     auto& graph = pluginGraph->graph;
+    
+    // Check if there are any non-IO processor nodes (actual instruments/effects)
+    bool hasInstrumentNode = false;
     for (auto* node : graph.getNodes())
     {
         auto* processor = node->getProcessor();
+        auto* ioProcessor = dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(processor);
+        
+        // If this is not an IO processor, it's an instrument or effect
+        if (ioProcessor == nullptr)
+        {
+            hasInstrumentNode = true;
+            std::cout << "Found instrument/effect node: " << processor->getName() << std::endl;
+        }
         
         // Check if this is an audio output node
-        auto* ioProcessor = dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(processor);
         if (ioProcessor != nullptr && ioProcessor->getType() == AudioProcessorGraph::AudioGraphIOProcessor::audioOutputNode)
         {
             std::cout << "Found audio output node (ID: " << node->nodeID.uid << "), current inputs: " 
@@ -197,26 +506,258 @@ bool Instrument::loadPluginGraph(const XmlElement& graphState)
             // If the audio output node has 0 input channels, we need to fix it
             if (processor->getTotalNumInputChannels() == 0)
             {
-                // Configure the node for stereo input
+                // Configure the node for stereo input - try multiple approaches
+                std::cout << "Fixing audio output node (ID: " << node->nodeID.uid << ") with 0 input channels" << std::endl;
+                bool fixed = false;
+                
+                // Approach 1: Set buses layout
                 AudioProcessor::BusesLayout layout = processor->getBusesLayout();
                 if (layout.inputBuses.size() > 0)
                 {
                     layout.inputBuses[0] = AudioChannelSet::stereo();
-                    processor->setBusesLayout(layout);
-                    outputNodesFixed = true;
+                    if (processor->setBusesLayout(layout))
+                    {
+                        std::cout << "Approach 1 (setBusesLayout): success" << std::endl;
+                        fixed = true;
+                    }
+                    else
+                    {
+                        std::cout << "Approach 1 (setBusesLayout): failed" << std::endl;
+                    }
+                }
+                
+                // Approach 2: Enable bus and set layout
+                if (!fixed || processor->getTotalNumInputChannels() == 0)
+                {
+                    if (processor->enableAllBuses())
+                    {
+                        std::cout << "Approach 2 (enable bus): success" << std::endl;
+                    }
+                    else
+                    {
+                        std::cout << "Approach 2 (enable bus): failed" << std::endl;
+                    }
                     
-                    std::cout << "Fixed audio output node to have stereo input" << std::endl;
+                    if (processor->setChannelLayoutOfBus(true, 0, AudioChannelSet::stereo()))
+                    {
+                        std::cout << "Approach 2 (setCurrentLayout): success" << std::endl;
+                        fixed = true;
+                    }
+                    else
+                    {
+                        std::cout << "Approach 2 (setCurrentLayout): failed" << std::endl;
+                    }
+                }
+                
+                if (fixed)
+                {
+                    outputNodesFixed = true;
+                    std::cout << "Successfully fixed audio output node to have " 
+                              << processor->getTotalNumInputChannels() << " input channels" << std::endl;
+                }
+                else
+                {
+                    std::cerr << "Failed to fix audio output node!" << std::endl;
                 }
             }
         }
     }
     
-    // If we fixed any output nodes, we need to restore connections again
+    // Check if there's an instrument node in the graph
+    if (!hasInstrumentNode)
+    {
+        std::cout << "WARNING: No instrument node found in graph. Audio output may not work!" << std::endl;
+        // We won't add a default synth, as the user may be testing with specific plugins
+    }
+    
+    // If we fixed any output nodes or added a synth, we need to restore connections again
     if (outputNodesFixed)
     {
         std::cout << "Re-restoring connections after fixing audio output nodes" << std::endl;
         pluginGraph->restoreFromXml(graphState);
     }
+    
+    // Now we need to transfer the nodes and connections from the PluginGraph to the processorGraph
+    std::cout << "Transferring nodes and connections from PluginGraph to processorGraph..." << std::endl;
+    
+    // Map of PluginGraph node IDs to processorGraph node IDs
+    std::map<AudioProcessorGraph::NodeID, AudioProcessorGraph::NodeID> nodeIdMap;
+    
+    // First, create all the nodes in the processorGraph
+    for (auto* node : pluginGraph->graph.getNodes())
+    {
+        auto* processor = node->getProcessor();
+        auto* ioProcessor = dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(processor);
+        
+        // Create a copy of the processor for the processorGraph
+        AudioProcessorGraph::Node::Ptr newNode;
+        
+        if (ioProcessor != nullptr)
+        {
+            // For IO processors, we need to create a new IO processor of the same type
+            if (ioProcessor->getType() == AudioProcessorGraph::AudioGraphIOProcessor::audioOutputNode)
+            {
+                newNode = processorGraph->addNode(std::make_unique<AudioProcessorGraph::AudioGraphIOProcessor>(
+                    AudioProcessorGraph::AudioGraphIOProcessor::audioOutputNode));
+                std::cout << "Created audio output node in processorGraph with ID: " << newNode->nodeID.uid << std::endl;
+            }
+            else if (ioProcessor->getType() == AudioProcessorGraph::AudioGraphIOProcessor::midiInputNode)
+            {
+                newNode = processorGraph->addNode(std::make_unique<AudioProcessorGraph::AudioGraphIOProcessor>(
+                    AudioProcessorGraph::AudioGraphIOProcessor::midiInputNode));
+                std::cout << "Created MIDI input node in processorGraph with ID: " << newNode->nodeID.uid << std::endl;
+            }
+        }
+        else
+        {
+            // For instrument/effect processors, we need to clone them
+            // Since we can't clone processors directly, we'll use the plugin state to recreate them
+            MemoryBlock stateData;
+            processor->getStateInformation(stateData);
+            
+            // Unfortunately, we can't directly get the plugin description from an AudioProcessor
+            // We'll need to use the plugin's name and try to find a matching plugin
+            String processorName = processor->getName();
+            
+            std::cout << "Recreating instrument node: " << processorName << " in processorGraph" << std::endl;
+            
+            // Create a new instance of the plugin
+            if (audioEngine != nullptr)
+            {
+                auto& engineFormatManager = audioEngine->getFormatManager();
+                auto& enginePluginList = audioEngine->getKnownPluginList();
+                String errorMessage;
+                bool pluginCreated = false;
+                
+                // First, try to find the plugin in the KnownPluginList by name
+                for (int i = 0; i < enginePluginList.getNumTypes(); ++i)
+                {
+                    // Get a copy of the plugin description
+                    PluginDescription pluginDesc = enginePluginList.getTypes()[i];
+                    if (pluginDesc.name == processorName)
+                    {
+                        std::cout << "Found matching plugin in KnownPluginList: " << pluginDesc.name << std::endl;
+                        
+                        double currentSampleRate = audioEngine->getSampleRate();
+                        int currentBlockSize = audioEngine->getBufferSize();
+                        
+                        // Create the plugin instance
+                        std::unique_ptr<AudioPluginInstance> newPlugin = 
+                            engineFormatManager.createPluginInstance(pluginDesc, currentSampleRate, 
+                                                                   currentBlockSize, errorMessage);
+                        
+                        if (newPlugin != nullptr)
+                        {
+                            // Set the plugin state
+                            newPlugin->setStateInformation(stateData.getData(), static_cast<int>(stateData.getSize()));
+                            
+                            // Add the plugin to the processorGraph
+                            newNode = processorGraph->addNode(std::move(newPlugin));
+                            std::cout << "Created external plugin node in processorGraph with ID: " << newNode->nodeID.uid << std::endl;
+                            pluginCreated = true;
+                            break;
+                        }
+                        else
+                        {
+                            std::cerr << "Failed to create external plugin instance: " << errorMessage << std::endl;
+                        }
+                    }
+                }
+                
+                // If we couldn't find the plugin in the KnownPluginList, try internal plugins
+                if (!pluginCreated)
+                {
+                    std::cout << "Plugin not found in KnownPluginList, trying internal plugins..." << std::endl;
+                    
+                    // Check if it's an internal plugin
+                    AudioPluginFormat* internalFormat = nullptr;
+                    for (int i = 0; i < engineFormatManager.getNumFormats(); ++i)
+                    {
+                        auto* f = engineFormatManager.getFormat(i);
+                        if (f->getName() == "Internal")
+                        {
+                            internalFormat = f;
+                            break;
+                        }
+                    }
+                    
+                    if (internalFormat != nullptr)
+                    {
+                        // Try to create an internal plugin with the same name
+                        PluginDescription internalDesc;
+                        internalDesc.name = processorName;
+                        internalDesc.pluginFormatName = "Internal";
+                        
+                        double currentSampleRate = audioEngine->getSampleRate();
+                        int currentBlockSize = audioEngine->getBufferSize();
+                        
+                        std::unique_ptr<AudioPluginInstance> newPlugin(
+                            internalFormat->createInstanceFromDescription(internalDesc, currentSampleRate, currentBlockSize, errorMessage));
+                        
+                        if (newPlugin != nullptr)
+                        {
+                            // Set the plugin state
+                            newPlugin->setStateInformation(stateData.getData(), static_cast<int>(stateData.getSize()));
+                            
+                            // Add the plugin to the processorGraph
+                            newNode = processorGraph->addNode(std::move(newPlugin));
+                            std::cout << "Created internal plugin node in processorGraph with ID: " << newNode->nodeID.uid << std::endl;
+                            pluginCreated = true;
+                        }
+                        else
+                        {
+                            std::cerr << "Failed to create internal plugin instance: " << errorMessage << std::endl;
+                        }
+                    }
+                    else
+                    {
+                        std::cerr << "Could not find Internal plugin format" << std::endl;
+                    }
+                }
+                
+                if (!pluginCreated)
+                {
+                    std::cerr << "CRITICAL ERROR: Could not recreate plugin: " << processorName << std::endl;
+                    std::cerr << "This will result in no audio output for this instrument." << std::endl;
+                }
+            }
+        }
+        
+        if (newNode != nullptr)
+        {
+            // Store the mapping between the original node ID and the new node ID
+            nodeIdMap[node->nodeID] = newNode->nodeID;
+        }
+    }
+    
+    // Now create all the connections in the processorGraph
+    for (auto& connection : pluginGraph->graph.getConnections())
+    {
+        // Map the source and destination node IDs
+        auto sourceIt = nodeIdMap.find(connection.source.nodeID);
+        auto destIt = nodeIdMap.find(connection.destination.nodeID);
+        
+        if (sourceIt != nodeIdMap.end() && destIt != nodeIdMap.end())
+        {
+            // Create the connection in the processorGraph
+            if (processorGraph->addConnection({ { sourceIt->second, connection.source.channelIndex },
+                                               { destIt->second, connection.destination.channelIndex } }))
+            {
+                std::cout << "Created connection in processorGraph: Node " << sourceIt->second.uid 
+                          << " channel " << connection.source.channelIndex
+                          << " -> Node " << destIt->second.uid 
+                          << " channel " << connection.destination.channelIndex << std::endl;
+            }
+            else
+            {
+                std::cerr << "Failed to create connection in processorGraph" << std::endl;
+            }
+        }
+    }
+    
+    // Print the final state of the processorGraph
+    std::cout << "Final processorGraph state: " << processorGraph->getNumNodes() << " nodes and "
+              << processorGraph->getConnections().size() << " connections" << std::endl;
     
     return true;
 }
@@ -246,6 +787,64 @@ bool Instrument::playMIDIPattern(const var& pattern, double newTempo)
         tempo = newTempo;
     }
     
+    // Make sure we're prepared for playback
+    if (resourceState != ResourceState::PlaybackReady)
+    {
+        std::cout << "Preparing instrument for playback before playing pattern" << std::endl;
+        if (!prepareForPlayback())
+        {
+            std::cerr << "Failed to prepare for playback" << std::endl;
+            return false;
+        }
+    }
+    
+    // Verify that we have a proper instrument node in the graph
+    bool hasInstrumentNode = false;
+    if (processorGraph != nullptr)
+    {
+        for (auto* node : processorGraph->getNodes())
+        {
+            auto* processor = node->getProcessor();
+            auto* ioProcessor = dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(processor);
+            
+            // If this is not an IO processor, it's an instrument or effect
+            if (ioProcessor == nullptr)
+            {
+                hasInstrumentNode = true;
+                std::cout << "Found instrument node in graph: " << processor->getName() << std::endl;
+                break;
+            }
+        }
+    }
+    
+    if (!hasInstrumentNode)
+    {
+        std::cerr << "WARNING: No instrument node found in graph. Audio output may not work!" << std::endl;
+        // Just warn the user, but don't try to add a default synth
+    }
+    
+    // Ensure we have a valid processor graph
+    if (processorGraph == nullptr)
+    {
+        std::cerr << "Cannot play pattern: processor graph is null" << std::endl;
+        return false;
+    }
+    
+    // Make sure the processor is registered with the AudioEngine
+    if (audioEngine != nullptr)
+    {
+        std::cout << "Ensuring processor is registered with AudioEngine" << std::endl;
+        audioEngine->registerProcessor(processorGraph.get());
+        
+        // Set master gain to ensure audio output is active
+        audioEngine->setMasterGain(0.8f);
+    }
+    else
+    {
+        std::cerr << "No audio engine available for playback" << std::endl;
+        return false;
+    }
+    
     // Convert the pattern to a MIDI sequence
     currentSequence = convertJSONToMIDISequence(pattern);
     
@@ -273,6 +872,36 @@ bool Instrument::playMIDIPattern(const var& pattern, double newTempo)
     playing = true;
     paused = false;
     
+    // Create AudioProcessorPlayer if it doesn't exist
+    if (audioProcessorPlayer == nullptr)
+    {
+        audioProcessorPlayer = std::make_unique<AudioProcessorPlayer>();
+    }
+    
+    // Set the processor for the player
+    audioProcessorPlayer->setProcessor(processorGraph.get());
+    
+    // Register the AudioProcessorPlayer with the AudioEngine
+    auto& deviceManager = audioEngine->getDeviceManager();
+    deviceManager.addAudioCallback(audioProcessorPlayer.get());
+    
+    std::cout << "Registered AudioProcessorPlayer for pattern playback" << std::endl;
+    
+    // Start a timer to process MIDI events from the pattern
+    startTimer(10); // Check every 10ms for more responsive playback
+    
+    // Send a test note to verify audio path
+    MidiMessage testNote = MidiMessage::noteOn(1, 60, 0.8f);
+    testNote.setTimeStamp(0.01); // 10ms in the future
+    audioProcessorPlayer->getMidiMessageCollector().addMessageToQueue(testNote);
+    
+    // Schedule a note off for the test note (500ms later)
+    MidiMessage noteOff = MidiMessage::noteOff(1, 60);
+    noteOff.setTimeStamp(0.5); // 500ms in the future
+    audioProcessorPlayer->getMidiMessageCollector().addMessageToQueue(noteOff);
+    
+    std::cout << "Added test MIDI note to verify audio path" << std::endl;
+    
     std::cout << "Started MIDI pattern playback on " << instrumentName 
               << " (tempo: " << tempo << " BPM, duration: " << totalDuration << " ticks)" << std::endl;
     
@@ -281,30 +910,43 @@ bool Instrument::playMIDIPattern(const var& pattern, double newTempo)
 
 void Instrument::stopPlayback()
 {
-    if (playing)
-    {
-        // Send all notes off
-        MidiBuffer allNotesOff;
-        
-        for (int channel = 1; channel <= 16; ++channel)
-        {
-            allNotesOff.addEvent(MidiMessage::allNotesOff(channel), 0);
-            allNotesOff.addEvent(MidiMessage::allControllersOff(channel), 0);
-        }
-        
-        // Process the all notes off messages
-        AudioBuffer<float> tempBuffer(2, 512);
-        MidiBuffer midiBuffer(allNotesOff);
-        if (processorGraph)
-            processorGraph->processBlock(tempBuffer, midiBuffer);
-    }
+    // Only stop if we're actually playing
+    if (!playing)
+        return;
     
-    // Reset state
+    std::cout << "Stopping playback for player: " << instrumentName << std::endl;
+    
+    // Stop the timer first to prevent any further callbacks
+    stopTimer();
+    
+    // Reset playback state
     playing = false;
     paused = false;
-    currentSequence = nullptr;
     nextEventIndex = 0;
     currentTime = 0.0;
+    currentSequence.reset();
+    
+    // Clean up the AudioProcessorPlayer if it exists
+    if (audioProcessorPlayer != nullptr)
+    {
+        // Unregister from the AudioEngine if we're connected
+        if (audioEngine != nullptr)
+        {
+            auto& deviceManager = audioEngine->getDeviceManager();
+            deviceManager.removeAudioCallback(audioProcessorPlayer.get());
+        }
+        
+        // Remove the processor from the player
+        audioProcessorPlayer->setProcessor(nullptr);
+        
+        std::cout << "Unregistered AudioProcessorPlayer" << std::endl;
+    }
+    
+    // Notify that playback has stopped
+    if (onPatternFinished)
+    {
+        onPatternFinished();
+    }
     
     std::cout << "Stopped MIDI pattern playback on " << instrumentName << std::endl;
 }
@@ -398,19 +1040,89 @@ void Instrument::removeMidiInputListener(MidiInputCallback* listener)
 
 void Instrument::timerCallback()
 {
-    // This is called at regular intervals to update the playback state
-    if (playing && !paused)
+    // Process MIDI events from the pattern during playback
+    if (playing && !paused && currentSequence != nullptr && audioProcessorPlayer != nullptr)
     {
-        // Check if we've reached the end of the pattern
-        if (currentTime >= totalDuration && totalDuration > 0)
+        // Calculate the current time in seconds
+        double currentTimeInSeconds = currentTime;
+        
+        // Calculate the time for the next block (10ms from now)
+        double blockEndTime = currentTimeInSeconds + 0.01; // 10ms in seconds
+        
+        // Feed MIDI events that fall within this time window to the AudioProcessorPlayer
+        bool addedEvents = false;
+        
+        while (nextEventIndex < currentSequence->getNumEvents())
         {
-            // Stop playback
-            stopPlayback();
+            auto event = currentSequence->getEventPointer(nextEventIndex);
+            double eventTime = event->message.getTimeStamp();
             
-            // Notify any registered callback
-            if (onPatternFinished)
+            if (eventTime >= blockEndTime)
             {
-                onPatternFinished();
+                break; // This event is for a future block
+            }
+            
+            if (eventTime >= currentTimeInSeconds)
+            {
+                // Create a copy of the message with a proper timestamp
+                MidiMessage messageCopy = event->message;
+                
+                // For JUCE's MidiMessageCollector, timestamps should be relative to the current time
+                // A timestamp of 0 means "now", and positive values mean "in the future"
+                double relativeTime = (eventTime - currentTimeInSeconds) * (60.0 / tempo);
+                
+                // Add a small offset (10ms) to ensure it's not exactly 0
+                messageCopy.setTimeStamp(relativeTime + 0.01);
+                
+                // Add the timestamped message to the MIDI message collector
+                audioProcessorPlayer->getMidiMessageCollector().addMessageToQueue(messageCopy);
+                
+                // Log the event (for debugging)
+                if (event->message.isNoteOn())
+                {
+                    std::cout << "Added note on event to queue: channel=" << event->message.getChannel() 
+                              << ", note=" << event->message.getNoteNumber() 
+                              << ", velocity=" << event->message.getVelocity() 
+                              << ", pattern time=" << eventTime 
+                              << ", timestamp=" << messageCopy.getTimeStamp() << std::endl;
+                }
+                else if (event->message.isNoteOff())
+                {
+                    std::cout << "Added note off event to queue: channel=" << event->message.getChannel() 
+                              << ", note=" << event->message.getNoteNumber() 
+                              << ", pattern time=" << eventTime 
+                              << ", timestamp=" << messageCopy.getTimeStamp() << std::endl;
+                }
+                
+                addedEvents = true;
+            }
+            
+            nextEventIndex++;
+        }
+        
+        // Update the current time
+        currentTime = blockEndTime;
+        
+        // If we've reached the end of the sequence, schedule stopping playback
+        if (nextEventIndex >= currentSequence->getNumEvents() && !addedEvents)
+        {
+            // Stop the timer to prevent further callbacks
+            stopTimer();
+            
+            // All events have been processed, stop playback after a short delay
+            // to allow the last notes to finish playing
+            static bool stopScheduled = false;
+            
+            if (!stopScheduled)
+            {
+                stopScheduled = true;
+                std::cout << "Scheduling playback to stop after delay..." << std::endl;
+                
+                Timer::callAfterDelay(500, [this]()
+                {
+                    this->stopPlayback();
+                    stopScheduled = false;
+                });
             }
         }
     }
@@ -430,9 +1142,12 @@ void Instrument::processMIDIEvents(MidiBuffer& midiBuffer, int numSamples)
     
     // Calculate the time range for this block
     double blockStartTime = currentTime;
-    double blockEndTime = blockStartTime + (numSamples / sampleRate) * (60.0 / tempo) * 480.0; // Assuming 480 ticks per quarter note
+    double blockEndTime = blockStartTime + (numSamples / sampleRate) * (60.0 / tempo); // Convert to seconds
     
     // Add all events that fall within this time range
+    bool addedEvents = false;
+    int eventsAdded = 0;
+    
     while (nextEventIndex < currentSequence->getNumEvents())
     {
         auto event = currentSequence->getEventPointer(nextEventIndex);
@@ -446,14 +1161,50 @@ void Instrument::processMIDIEvents(MidiBuffer& midiBuffer, int numSamples)
         if (eventTime >= blockStartTime)
         {
             // Calculate the sample position within this block
-            int samplePosition = static_cast<int>((eventTime - blockStartTime) / (blockEndTime - blockStartTime) * numSamples);
+            double normalizedPosition = (eventTime - blockStartTime) / (blockEndTime - blockStartTime);
+            int samplePosition = static_cast<int>(normalizedPosition * numSamples);
             samplePosition = jlimit(0, numSamples - 1, samplePosition);
             
             // Add the event to the buffer
             midiBuffer.addEvent(event->message, samplePosition);
+            
+            // Log the event (for debugging)
+            if (event->message.isNoteOn())
+            {
+                std::cout << "Added note on event: channel=" << event->message.getChannel() 
+                          << ", note=" << event->message.getNoteNumber() 
+                          << ", velocity=" << event->message.getVelocity() 
+                          << ", position=" << samplePosition 
+                          << ", time=" << eventTime << std::endl;
+            }
+            else if (event->message.isNoteOff())
+            {
+                std::cout << "Added note off event: channel=" << event->message.getChannel() 
+                          << ", note=" << event->message.getNoteNumber() 
+                          << ", position=" << samplePosition 
+                          << ", time=" << eventTime << std::endl;
+            }
+            
+            addedEvents = true;
+            eventsAdded++;
         }
         
         nextEventIndex++;
+    }
+    
+    // If we've reached the end of the sequence and didn't add any events,
+    // we should stop playback
+    if (nextEventIndex >= currentSequence->getNumEvents() && !addedEvents)
+    {
+        // Schedule a stop on the message thread to avoid thread issues
+        MessageManager::callAsync([this]()
+        {
+            this->stopPlayback();
+        });
+    }
+    else if (eventsAdded > 0)
+    {
+        std::cout << "Added " << eventsAdded << " MIDI events to buffer for " << instrumentName << std::endl;
     }
 }
 
@@ -462,21 +1213,41 @@ void Instrument::updateCurrentTime(int numSamples)
     if (playing && !paused)
     {
         // Update the current time based on the number of samples processed
-        double blockDuration = (numSamples / sampleRate) * (60.0 / tempo) * 480.0; // Assuming 480 ticks per quarter note
+        // Convert to seconds based on sample rate and tempo
+        double blockDuration = (numSamples / sampleRate) * (60.0 / tempo);
         currentTime += blockDuration;
+        
+        // Log the current time periodically
+        static int logCounter = 0;
+        if (++logCounter % 100 == 0) // Log every 100th update to avoid flooding the console
+        {
+            std::cout << "Current playback time for " << instrumentName << ": " 
+                      << currentTime << " seconds (" 
+                      << (currentTime / (60.0 / tempo)) << " beats)" << std::endl;
+        }
     }
 }
 
-std::unique_ptr<MidiMessageSequence> Instrument::convertJSONToMIDISequence(const var& events)
+std::unique_ptr<MidiMessageSequence> Instrument::convertJSONToMIDISequence(const var& pattern)
 {
     auto sequence = std::make_unique<MidiMessageSequence>();
     
     try
     {
-        if (!events.isArray())
+        // First, check if this is a pattern object with an events array
+        var events = pattern;
+        
+        if (pattern.hasProperty("events") && pattern["events"].isArray())
         {
-            throw std::runtime_error("Events must be an array");
+            events = pattern["events"];
+            std::cout << "Found events array in pattern object" << std::endl;
         }
+        else if (!events.isArray())
+        {
+            throw std::runtime_error("Pattern must contain an events array");
+        }
+        
+        std::cout << "Processing " << events.size() << " MIDI events for pattern" << std::endl;
         
         for (int i = 0; i < events.size(); ++i)
         {
@@ -484,32 +1255,120 @@ std::unique_ptr<MidiMessageSequence> Instrument::convertJSONToMIDISequence(const
             
             if (!event.isObject())
             {
+                std::cerr << "Event at index " << i << " is not an object, skipping" << std::endl;
                 continue;
             }
             
             // Extract event properties
-            int channel = event.getProperty("channel", 1);
-            int note = event.getProperty("note", 60);
-            int velocity = event.getProperty("velocity", 100);
-            double time = event.getProperty("time", 0.0);
-            double duration = event.getProperty("duration", 0.25);
+            String type = event.getProperty("type", "note_on").toString();
+            int channel = static_cast<int>(static_cast<double>(event.getProperty("channel", 1)));
+            int note = static_cast<int>(static_cast<double>(event.getProperty("note", 60)));
+            float velocity = static_cast<float>(static_cast<double>(event.getProperty("velocity", 0.8)));
+            double timestamp = static_cast<double>(event.getProperty("timestamp", 0.0));
             
-            // Create note on message
-            MidiMessage noteOn = MidiMessage::noteOn(channel, note, static_cast<float>(velocity) / 127.0f);
-            noteOn.setTimeStamp(time);
-            sequence->addEvent(noteOn);
+            // Ensure channel is in valid range (1-16)
+            channel = jlimit(1, 16, channel);
             
-            // Create note off message
-            MidiMessage noteOff = MidiMessage::noteOff(channel, note);
-            noteOff.setTimeStamp(time + duration);
-            sequence->addEvent(noteOff);
+            // Ensure note is in valid range (0-127)
+            note = jlimit(0, 127, note);
+            
+            // Ensure velocity is in valid range (0.0-1.0)
+            velocity = jlimit(0.0f, 1.0f, velocity);
+            
+            if (type == "note_on")
+            {
+                // Create note on message
+                MidiMessage noteOn = MidiMessage::noteOn(channel, note, velocity);
+                noteOn.setTimeStamp(timestamp);
+                sequence->addEvent(noteOn);
+                
+                std::cout << "Added note_on event: channel=" << channel 
+                          << ", note=" << note 
+                          << ", velocity=" << velocity 
+                          << ", timestamp=" << timestamp << std::endl;
+            }
+            else if (type == "note_off")
+            {
+                // Create note off message
+                MidiMessage noteOff = MidiMessage::noteOff(channel, note, velocity);
+                noteOff.setTimeStamp(timestamp);
+                sequence->addEvent(noteOff);
+                
+                std::cout << "Added note_off event: channel=" << channel 
+                          << ", note=" << note 
+                          << ", timestamp=" << timestamp << std::endl;
+            }
+            else if (type == "controller")
+            {
+                // Handle controller messages
+                int controllerNumber = static_cast<int>(static_cast<double>(event.getProperty("controller", 0)));
+                int value = static_cast<int>(static_cast<double>(event.getProperty("value", 0)));
+                
+                // Ensure controller number is in valid range (0-127)
+                controllerNumber = jlimit(0, 127, controllerNumber);
+                
+                // Ensure value is in valid range (0-127)
+                value = jlimit(0, 127, value);
+                
+                MidiMessage cc = MidiMessage::controllerEvent(channel, controllerNumber, value);
+                cc.setTimeStamp(timestamp);
+                sequence->addEvent(cc);
+                
+                std::cout << "Added controller event: channel=" << channel 
+                          << ", controller=" << controllerNumber 
+                          << ", value=" << value 
+                          << ", timestamp=" << timestamp << std::endl;
+            }
+            else if (type == "program_change")
+            {
+                // Handle program change messages
+                int programNumber = static_cast<int>(static_cast<double>(event.getProperty("program", 0)));
+                
+                // Ensure program number is in valid range (0-127)
+                programNumber = jlimit(0, 127, programNumber);
+                
+                MidiMessage pc = MidiMessage::programChange(channel, programNumber);
+                pc.setTimeStamp(timestamp);
+                sequence->addEvent(pc);
+                
+                std::cout << "Added program_change event: channel=" << channel 
+                          << ", program=" << programNumber 
+                          << ", timestamp=" << timestamp << std::endl;
+            }
+            else
+            {
+                std::cerr << "Unknown event type: " << type << ", skipping" << std::endl;
+            }
         }
         
         // Sort the sequence by timestamp
         sequence->sort();
         
+        // Add an all notes off message at the end to ensure clean playback
+        double endTime = 0.0;
+        
+        if (sequence->getNumEvents() > 0)
+        {
+            endTime = sequence->getEndTime() + 0.5; // Add a half-second buffer
+        }
+        else
+        {
+            endTime = 1.0; // Default to 1 second if no events
+        }
+        
+        for (int channel = 1; channel <= 16; ++channel)
+        {
+            MidiMessage allNotesOff = MidiMessage::allNotesOff(channel);
+            allNotesOff.setTimeStamp(endTime);
+            sequence->addEvent(allNotesOff);
+        }
+        
+        // Re-sort after adding all notes off messages
+        sequence->sort();
+        
         std::cout << "Converted JSON to MIDI sequence with " 
-                 << sequence->getNumEvents() << " events" << std::endl;
+                 << sequence->getNumEvents() << " events, duration: " 
+                 << sequence->getEndTime() << " seconds" << std::endl;
     }
     catch (const std::exception& e)
     {
@@ -518,5 +1377,9 @@ std::unique_ptr<MidiMessageSequence> Instrument::convertJSONToMIDISequence(const
     
     return sequence;
 }
+
+// This method has been removed since we're now using AudioProcessorPlayer
+
+// These methods have been removed since we're now using AudioProcessorPlayer
 
 } // namespace covertracks

@@ -34,9 +34,10 @@
 
 #pragma once
 
-#include "../Plugins/PluginGraph.h"
-#include "GraphEditorPanel.h"
-#include "../Player/Core/PlayerManager.h"
+#include <JuceHeader.h>
+#include "../Plugins/InternalPlugins.h"
+#include "../Player/UI/PlayerLibraryComponent.h"
+#include "../Player/UI/PlayerModeComponent.h"
 #include "../Audio/AudioEngine.h"
 
 namespace covertracks {
@@ -136,6 +137,7 @@ public:
     
     // Main components
     std::unique_ptr<PlayerLibraryComponent> playerLibraryWindow;
+    std::unique_ptr<PlayerModeComponent> playerModeWindow;
     
 
 

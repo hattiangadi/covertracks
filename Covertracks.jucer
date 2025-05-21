@@ -99,6 +99,10 @@
                 resource="0" file="Source/Player/UI/PlayerListComponent.cpp"/>
           <FILE id="NEW_FILE_ID_8" name="PlayerListComponent.h" compile="0" resource="0"
                 file="Source/Player/UI/PlayerListComponent.h"/>
+          <FILE id="zI2fxH" name="PlayerModeComponent.cpp" compile="1" resource="0"
+                file="Source/Player/UI/PlayerModeComponent.cpp"/>
+          <FILE id="bAt8iK" name="PlayerModeComponent.h" compile="0" resource="0"
+                file="Source/Player/UI/PlayerModeComponent.h"/>
         </GROUP>
       </GROUP>
       <FILE id="OmIhwQ" name="HostStartup.cpp" compile="1" resource="0" file="Source/HostStartup.cpp"/>

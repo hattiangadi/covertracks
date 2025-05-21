@@ -206,12 +206,10 @@ void AudioEngine::unregisterProcessor(AudioProcessor* processor)
     
     if (player != nullptr)
     {
-        // Store the MidiMessageCollector's state before unregistering
-        auto& midiCollector = player->getMidiMessageCollector();
-        double sampleRate = 0.0;
+        // Unregister the player
         if (auto* currentDevice = deviceManager->getCurrentAudioDevice())
         {
-            sampleRate = currentDevice->getCurrentSampleRate();
+            // Just get the current device to ensure it's valid
         }
         
         // Unregister from device manager

@@ -1,0 +1,62 @@
+{
+  "command": "play_pattern",
+  "tempo": 120,
+  "events": [
+    {
+      "type": "note_on",
+      "channel": 1,
+      "note": 60,
+      "velocity": 0.8,
+      "timestamp": 0.0
+    },
+    {
+      "type": "note_off",
+      "channel": 1,
+      "note": 60,
+      "velocity": 0.0,
+      "timestamp": 0.5
+    },
+    {
+      "type": "note_on",
+      "channel": 1,
+      "note": 64,
+      "velocity": 0.8,
+      "timestamp": 0.5
+    },
+    {
+      "type": "note_off",
+      "channel": 1,
+      "note": 64,
+      "velocity": 0.0,
+      "timestamp": 1.0
+    },
+    {
+      "type": "note_on",
+      "channel": 1,
+      "note": 67,
+      "velocity": 0.8,
+      "timestamp": 1.0
+    },
+    {
+      "type": "note_off",
+      "channel": 1,
+      "note": 67,
+      "velocity": 0.0,
+      "timestamp": 1.5
+    },
+    {
+      "type": "note_on",
+      "channel": 1,
+      "note": 72,
+      "velocity": 0.8,
+      "timestamp": 1.5
+    },
+    {
+      "type": "note_off",
+      "channel": 1,
+      "note": 72,
+      "velocity": 0.0,
+      "timestamp": 2.0
+    }
+  ]
+}

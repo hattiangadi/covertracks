@@ -35,7 +35,7 @@ ResourceState getResourceState() const { return resourceState; }
 
 // Resource lifecycle methods
 void prepareForEditing();   // Load resources needed for editing
-void prepareForPlayback();  // Load resources needed for playback
+bool prepareForPlayback();  // Load resources needed for playback, returns success
 void releaseResources();    // Release all heavy resources
 
 // AudioEngine connection methods
@@ -61,7 +61,7 @@ void resumePlayback();
 // MidiInputCallback implementation
 void handleIncomingMidiMessage(MidiInput* source, const MidiMessage& message) override;
 
-// Timer implementation
+// Timer implementation for pattern playback
 void timerCallback() override;
 
 // MIDI callback management
@@ -88,6 +88,9 @@ KnownPluginList& knownPluginList;
 // Plugin and processor graphs
 std::unique_ptr<PluginGraph> pluginGraph;
 std::unique_ptr<AudioProcessorGraph> processorGraph;
+
+// Audio processor player for handling audio callbacks
+std::unique_ptr<AudioProcessorPlayer> audioProcessorPlayer;
 
 // MIDI playback state
 bool playing = false;
