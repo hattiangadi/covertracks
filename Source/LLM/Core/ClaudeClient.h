@@ -17,9 +17,16 @@ public:
      * @brief Construct a new Claude Client
      * 
      * @param apiKey The API key for Claude
-     * @param model The model to use (defaults to claude-3-7-sonnet-20250219)
+     * @param model The model to use (default: claude-3-opus-20240229)
      */
-    ClaudeClient(const String& apiKey, const String& model = "claude-3-7-sonnet-20250219");
+    ClaudeClient(const juce::String& apiKey, const juce::String& model = "claude-3-opus-20240229");
+    
+    /**
+     * @brief Create a clone of this client
+     * 
+     * @return LLMClient* A new instance of the same client type
+     */
+    LLMClient* clone() const override;
     
     /**
      * @brief Destroy the Claude Client

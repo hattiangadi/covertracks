@@ -18,6 +18,13 @@ public:
     virtual ~LLMClient() = default;
     
     /**
+     * @brief Create a clone of this client
+     * 
+     * @return LLMClient* A new instance of the same client type
+     */
+    virtual LLMClient* clone() const = 0;
+    
+    /**
      * @brief Callback for LLM responses
      * 
      * @param success Whether the request was successful

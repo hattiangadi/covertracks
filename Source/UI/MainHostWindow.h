@@ -42,6 +42,7 @@
 #include "../LLM/UI/LLMConversationComponent.h"
 #include "../Musician/UI/PatternEditorComponent.h"
 #include "../LLM/Core/LLMManager.h"
+#include "../Musician/UI/EnsembleMainPanel.h"
 
 namespace covertracks {
 //==============================================================================
@@ -143,7 +144,12 @@ public:
     std::unique_ptr<PlayerModeComponent> playerModeWindow;
     std::unique_ptr<LLMConversationComponent> llmConversationWindow;
     std::unique_ptr<PatternEditorComponent> patternEditorWindow;
+    std::unique_ptr<EnsembleMainPanel> ensembleMainWindow;
     std::shared_ptr<Musician> musician; // Needed for LLM and Pattern components
+    
+    // LLM client
+    LLMClient* llmClient; // Raw pointer for compatibility with older code
+    std::shared_ptr<LLMClient> llmClientShared; // Shared pointer for LLMConversationComponent
     
 
 

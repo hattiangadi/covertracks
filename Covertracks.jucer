@@ -35,6 +35,10 @@
     <GROUP id="{CFED5B3D-D1D8-0F3F-4D67-B2A810D057EF}" name="Source">
       <GROUP id="{C05A6CB8-92D3-46E6-AD2E-B13D7347AC80}" name="Musician">
         <GROUP id="{34D9D57E-F198-9FB2-4C66-8742C66AFBE3}" name="Core">
+          <FILE id="mfdozh" name="EnsembleManager.cpp" compile="1" resource="0"
+                file="Source/Musician/Core/EnsembleManager.cpp"/>
+          <FILE id="AYHlDq" name="EnsembleManager.h" compile="0" resource="0"
+                file="Source/Musician/Core/EnsembleManager.h"/>
           <FILE id="vK48kB" name="Musician.cpp" compile="1" resource="0" file="Source/Musician/Core/Musician.cpp"/>
           <FILE id="WtblFt" name="Musician.h" compile="0" resource="0" file="Source/Musician/Core/Musician.h"/>
           <FILE id="UyjLXC" name="MusicPatternComponents.cpp" compile="1" resource="0"
@@ -54,6 +58,18 @@
           <FILE id="EYYrZH" name="PatternParser.h" compile="0" resource="0" file="Source/Musician/Core/PatternParser.h"/>
         </GROUP>
         <GROUP id="{CC170D46-B578-C879-6E1F-FDC0D2EB6DC0}" name="UI">
+          <FILE id="byke4i" name="EnsembleEditPanel.cpp" compile="1" resource="0"
+                file="Source/Musician/UI/EnsembleEditPanel.cpp"/>
+          <FILE id="pPA7lP" name="EnsembleEditPanel.h" compile="0" resource="0"
+                file="Source/Musician/UI/EnsembleEditPanel.h"/>
+          <FILE id="Vt8M8v" name="EnsembleListPanel.cpp" compile="1" resource="0"
+                file="Source/Musician/UI/EnsembleListPanel.cpp"/>
+          <FILE id="pocsEO" name="EnsembleListPanel.h" compile="0" resource="0"
+                file="Source/Musician/UI/EnsembleListPanel.h"/>
+          <FILE id="q37NYo" name="EnsembleMainPanel.cpp" compile="1" resource="0"
+                file="Source/Musician/UI/EnsembleMainPanel.cpp"/>
+          <FILE id="e7Fet7" name="EnsembleMainPanel.h" compile="0" resource="0"
+                file="Source/Musician/UI/EnsembleMainPanel.h"/>
           <FILE id="tiAeKe" name="MusicianEditorComponent.cpp" compile="1" resource="0"
                 file="Source/Musician/UI/MusicianEditorComponent.cpp"/>
           <FILE id="vzIbEd" name="MusicianEditorComponent.h" compile="0" resource="0"
@@ -115,6 +131,9 @@
         <FILE id="cbvjhb" name="PluginGraph.h" compile="0" resource="0" file="Source/Plugins/PluginGraph.h"/>
       </GROUP>
       <GROUP id="{D892BFB2-FE85-B70F-10D3-450F407E2B3D}" name="UI">
+        <GROUP id="{91CDEAAE-102B-E754-E304-9469691FE86C}" name="Styling">
+          <FILE id="ABq6rb" name="AppFonts.h" compile="0" resource="0" file="Source/UI/Styling/AppFonts.h"/>
+        </GROUP>
         <FILE id="wPgLS9" name="GraphEditorPanel.cpp" compile="1" resource="0"
               file="Source/UI/GraphEditorPanel.cpp"/>
         <FILE id="BDMvfT" name="GraphEditorPanel.h" compile="0" resource="0"

@@ -18,6 +18,11 @@ ClaudeClient::ClaudeClient(const String& apiKeyParam, const String& modelParam)
     std::cout << "Claude Client initialized with model: " << model << std::endl;
 }
 
+LLMClient* ClaudeClient::clone() const
+{
+    return new ClaudeClient(apiKey, model);
+}
+
 ClaudeClient::~ClaudeClient()
 {
     // No need to cancel downloads with the direct approach
