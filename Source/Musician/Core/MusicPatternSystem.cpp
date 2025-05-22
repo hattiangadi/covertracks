@@ -93,43 +93,8 @@ var Bar::toVar() const
     return var(obj);
 }
 
-std::shared_ptr<Bar> Bar::fromVar(const var& v)
-{
-    auto result = std::make_shared<Bar>();
-    
-    if (auto* obj = v.getDynamicObject())
-    {
-        // Get time signature
-        result->timeSignatureNumerator = obj->hasProperty("timeSignatureNumerator") ? static_cast<int>(obj->getProperty("timeSignatureNumerator")) : 4;
-        result->timeSignatureDenominator = obj->hasProperty("timeSignatureDenominator") ? static_cast<int>(obj->getProperty("timeSignatureDenominator")) : 4;
-        
-        // Get events
-        var eventsVar = obj->getProperty("events");
-        if (eventsVar.isArray())
-        {
-            for (const auto& eventVar : *eventsVar.getArray())
-            {
-                if (auto* eventObj = eventVar.getDynamicObject())
-                {
-                    Event::Type type = (Event::Type)(eventObj->hasProperty("type") ? static_cast<int>(eventObj->getProperty("type")) : 0);
-                    float beat = eventObj->hasProperty("beat") ? static_cast<float>(eventObj->getProperty("beat")) : 0.0f;
-                    int channel = eventObj->hasProperty("channel") ? static_cast<int>(eventObj->getProperty("channel")) : 0;
-                    
-                    Event event(type, beat, channel);
-                    event.noteNumber = eventObj->hasProperty("noteNumber") ? static_cast<int>(eventObj->getProperty("noteNumber")) : 0;
-                    event.velocity = eventObj->hasProperty("velocity") ? static_cast<float>(eventObj->getProperty("velocity")) : 0.0f;
-                    event.duration = eventObj->hasProperty("duration") ? static_cast<float>(eventObj->getProperty("duration")) : 0.0f;
-                    event.controllerNumber = eventObj->hasProperty("controllerNumber") ? static_cast<int>(eventObj->getProperty("controllerNumber")) : 0;
-                    event.value = eventObj->hasProperty("value") ? static_cast<int>(eventObj->getProperty("value")) : 0;
-                    
-                    result->events.add(event);
-                }
-            }
-        }
-    }
-    
-    return result;
-}
+// Forward declaration of the cleanBarCache function from MusicPatternComponents.cpp
+extern void cleanBarCache();
 
 //==============================================================================
 // Phrase implementation
@@ -336,6 +301,39 @@ std::unique_ptr<MidiMessageSequence> Song::toMidiSequence() const
 InstrumentDefinition::InstrumentDefinition(const String& instrumentName)
     : name(instrumentName)
 {
+    DBG("[InstrumentDefinition] Created: " + name + ", Bar instances: " + String(Bar::getInstanceCount()));
+}
+
+void InstrumentDefinition::addPrimitive(const String& name, const Primitive& primitive)
+{
+    primitives[name] = primitive;
+    DBG("[InstrumentDefinition] Added primitive: " + name);
+}
+
+void InstrumentDefinition::removePrimitive(const String& name)
+{
+    auto it = primitives.find(name);
+    if (it != primitives.end())
+    {
+        primitives.erase(it);
+        DBG("[InstrumentDefinition] Removed primitive: " + name);
+    }
+}
+
+void InstrumentDefinition::addPattern(const String& name, std::shared_ptr<Bar> pattern)
+{
+    patterns[name] = pattern;
+    DBG("[InstrumentDefinition] Added pattern: " + name + ", Bar instances: " + String(Bar::getInstanceCount()));
+}
+
+void InstrumentDefinition::removePattern(const String& name)
+{
+    auto it = patterns.find(name);
+    if (it != patterns.end())
+    {
+        patterns.erase(it);
+        DBG("[InstrumentDefinition] Removed pattern: " + name + ", Bar instances: " + String(Bar::getInstanceCount()));
+    }
 }
 
 Primitive InstrumentDefinition::getPrimitive(const String& primitiveName) const
@@ -344,7 +342,7 @@ Primitive InstrumentDefinition::getPrimitive(const String& primitiveName) const
     if (it != primitives.end())
         return it->second;
     
-    // Return a default primitive if not found
+    // Return an empty primitive if not found
     return Primitive();
 }
 
@@ -424,12 +422,96 @@ InstrumentDefinition InstrumentDefinition::fromVar(const var& v)
 
 MusicPatternSystem::MusicPatternSystem()
 {
-    // Initialize with default instrument definitions
+    DBG("[MusicPatternSystem] Created, Bar instances: " + String(Bar::getInstanceCount()));
+    
+    // Register any static Bar instances that might be created during initialization
+    Bar::printInstanceCount();
+    
+    initializeDefaultInstruments();
+    
+    // Check for any new Bar instances after initialization
+    Bar::printInstanceCount();
 }
 
 MusicPatternSystem::~MusicPatternSystem()
 {
-    // Clean up any resources
+    // Log instances before cleanup
+    DBG("[MusicPatternSystem] Destroying, instances before cleanup:");
+    DBG("  - Bar: " + String(Bar::getInstanceCount()));
+    DBG("  - Phrase: " + String(Phrase::getInstanceCount()));
+    DBG("  - Section: " + String(Section::getInstanceCount()));
+    DBG("  - Song: " + String(Song::getInstanceCount()));
+    
+    // Clear all pattern maps to ensure proper cleanup
+    patterns.clear();
+    phrases.clear();
+    sections.clear();
+    songs.clear();
+    instrumentDefinitions.clear();
+    
+    // Log instances after cleanup
+    DBG("[MusicPatternSystem] Destroyed, instances after cleanup:");
+    DBG("  - Bar: " + String(Bar::getInstanceCount()));
+    DBG("  - Phrase: " + String(Phrase::getInstanceCount()));
+    DBG("  - Section: " + String(Section::getInstanceCount()));
+    DBG("  - Song: " + String(Song::getInstanceCount()));
+}
+
+void MusicPatternSystem::initializeDefaultInstruments()
+{
+    DBG("[MusicPatternSystem] Initializing default instruments (without pre-creating patterns)");
+    
+    // Create a basic drum kit with just primitive definitions
+    InstrumentDefinition drums("drums");
+    
+    // Add drum primitives
+    Primitive kick;
+    kick.name = "kick";
+    kick.midiNote = 36;
+    kick.description = "Bass drum";
+    drums.addPrimitive("kick", kick);
+    
+    Primitive snare;
+    snare.name = "snare";
+    snare.midiNote = 38;
+    snare.description = "Snare drum";
+    drums.addPrimitive("snare", snare);
+    
+    Primitive hihat;
+    hihat.name = "hihat";
+    hihat.midiNote = 42;
+    hihat.description = "Hi-hat";
+    drums.addPrimitive("hihat", hihat);
+    
+    // Add the drum kit
+    addInstrumentDefinition("drums", drums);
+    
+    // Create a basic piano
+    InstrumentDefinition piano("piano");
+    
+    // Add piano primitives
+    Primitive c3;
+    c3.name = "C3";
+    c3.midiNote = 48;
+    c3.description = "C3 note";
+    piano.addPrimitive("C3", c3);
+    
+    Primitive e3;
+    e3.name = "E3";
+    e3.midiNote = 52;
+    e3.description = "E3 note";
+    piano.addPrimitive("E3", e3);
+    
+    Primitive g3;
+    g3.name = "G3";
+    g3.midiNote = 55;
+    g3.description = "G3 note";
+    piano.addPrimitive("G3", g3);
+    
+    // Add the piano
+    addInstrumentDefinition("piano", piano);
+    
+    DBG("[MusicPatternSystem] Default instruments initialized");
 }
 
 void MusicPatternSystem::addInstrumentDefinition(const String& name, const InstrumentDefinition& definition)

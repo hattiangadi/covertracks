@@ -45,7 +45,12 @@ void EnsembleEditPanel::RolesTableModel::paintCell(juce::Graphics& g, int rowNum
             text = role.instrument;
             break;
         case 3: // Player
-            text = role.player ? role.player->getMetadata().name : "None";
+            // Ensure we properly display the player name
+            if (role.player && role.player->getMetadata().name.isNotEmpty()) {
+                text = role.player->getMetadata().name;
+            } else {
+                text = "None";
+            }
             break;
         case 4: // Pattern status
             text = role.pattern.isEmpty() ? "Not generated" : "Generated";
@@ -331,10 +336,22 @@ void EnsembleEditPanel::removeMusicianRole()
     const auto& roles = ensembleManager->getMusicianRoles();
     if (selectedRow >= roles.size()) return;
     
+    // Store the role name before removal
+    juce::String roleName = roles[selectedRow].name;
+    
     // Remove the role
-    if (ensembleManager->removeMusicianRole(roles[selectedRow].name)) {
+    if (ensembleManager->removeMusicianRole(roleName)) {
         // Update the UI
         updateUI();
+        
+        // If there are still roles, select an appropriate row
+        if (ensembleManager->getMusicianRoles().size() > 0) {
+            int newSelectedRow = juce::jmin(selectedRow, ensembleManager->getMusicianRoles().size() - 1);
+            rolesTable.selectRow(newSelectedRow);
+        } else {
+            // No roles left, ensure remove button is disabled
+            removeRoleButton.setEnabled(false);
+        }
     }
 }
 
@@ -342,9 +359,16 @@ void EnsembleEditPanel::saveEnsembleData()
 {
     if (!ensembleManager) return;
     
-    // Save the ensemble data
+    // Save the ensemble data in memory
     ensembleManager->setName(nameEditor.getText());
     ensembleManager->setDescription(descriptionEditor.getText());
+    
+    // Create the file to save to
+    juce::File ensemblesDir = EnsembleManager::getEnsemblesDirectory();
+    juce::File ensembleFile = ensemblesDir.getChildFile(ensembleManager->getName() + ".ensemble");
+    
+    // Save to disk
+    bool saveSuccess = ensembleManager->saveToFile(ensembleFile);
     
     // Call the save callback if provided
     if (saveCallback) {
@@ -352,9 +376,15 @@ void EnsembleEditPanel::saveEnsembleData()
     }
     
     // Show a confirmation message
-    juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon,
-                                         "Ensemble Saved",
-                                         "Ensemble data has been saved.");
+    if (saveSuccess) {
+        juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon,
+                                             "Ensemble Saved",
+                                             "Ensemble data has been saved to:\n" + ensembleFile.getFullPathName());
+    } else {
+        juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
+                                             "Save Failed",
+                                             "Failed to save ensemble data to:\n" + ensembleFile.getFullPathName());
+    }
 }
 
 } // namespace covertracks

@@ -80,11 +80,13 @@ private:
     
     // State
     String currentPatternNotation;
-    std::shared_ptr<Song> currentSong;
     
     // Helper methods
     void updateVisualization();
     void parseCurrentPattern();
+    
+    // Inner classes
+    class PatternVisualizer;
     
     // Listeners
     ListenerList<Listener> listeners;

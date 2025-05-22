@@ -352,7 +352,13 @@ var Musician::convertNotationToMidiEvents(const String& notation, double tempo)
             song->setTempo(tempo);
         
         // Convert the song to MIDI events
-        return midiMessageSequenceToVar(*song->toMidiSequence(), song->getTempo());
+        var result = midiMessageSequenceToVar(*song->toMidiSequence(), song->getTempo());
+        
+        // Explicitly break any reference cycles
+        song->clearReferences();
+        
+        // Return the MIDI events
+        return result;
     }
     
     // Return an empty array if parsing failed

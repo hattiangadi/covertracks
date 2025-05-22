@@ -227,6 +227,17 @@ public:
         mainWindow = nullptr;
         appProperties = nullptr;
         LookAndFeel::setDefaultLookAndFeel (nullptr);
+        
+        // Clean up MouseCursor to prevent leak
+        // Force all mouse sources to reset their cursors
+        for (int i = 0; i < Desktop::getInstance().getNumMouseSources(); ++i)
+        {
+            Desktop::getInstance().getMouseSource(i)->forceMouseCursorUpdate();
+        }
+        
+        // Set a null cursor to release any custom cursors
+        MouseCursor nullCursor;
+        Desktop::getInstance().setMousePosition(Point<int>(-1000, -1000));
     }
 
     void suspended() override

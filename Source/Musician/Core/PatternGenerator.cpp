@@ -136,6 +136,10 @@ void PatternGenerator::run()
                     MessageManager::callAsync([callback, success, song, response]() {
                         if (callback)
                             callback(success, song, response);
+                        
+                        // Note: We don't clear the song references here because the callback
+                        // might still be using the song object. The callback is responsible for
+                        // proper cleanup when it's done with the song.
                     });
                     
                     // Reset state

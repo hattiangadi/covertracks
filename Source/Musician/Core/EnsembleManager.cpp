@@ -4,10 +4,11 @@
 
 namespace covertracks {
 
-EnsembleManager::EnsembleManager(PlayerManager* playerManagerPtr)
+EnsembleManager::EnsembleManager(PlayerManager* playerManagerPtr, const juce::String& id)
     : playerManager(playerManagerPtr),
       playing(false),
-      pendingPatternRequests(0)
+      pendingPatternRequests(0),
+      ensembleId(id.isNotEmpty() ? id : juce::Uuid().toString())
 {
     // Create the log directory
     logDirectory = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
@@ -17,11 +18,22 @@ EnsembleManager::EnsembleManager(PlayerManager* playerManagerPtr)
     if (!logDirectory.exists()) {
         logDirectory.createDirectory();
     }
+    
+    // Create the ensembles directory if it doesn't exist
+    juce::File ensemblesDir = getEnsemblesDirectory();
+    if (!ensemblesDir.exists()) {
+        ensemblesDir.createDirectory();
+    }
 }
 
 EnsembleManager::~EnsembleManager()
 {
     stopPlaying();
+    
+    // Clear all musician roles to release any references to patterns
+    musicianRoles.clear();
+    
+    std::cout << "[EnsembleManager] Destroyed" << std::endl;
 }
 
 bool EnsembleManager::addMusicianRole(const juce::String& roleName, const juce::String& instrumentType, Player* player)
@@ -325,6 +337,161 @@ void EnsembleManager::timerCallback()
 {
     // This method is called periodically to synchronize playback
     // For now, it's just a placeholder
+}
+
+juce::var EnsembleManager::toVar() const
+{
+    juce::DynamicObject* obj = new juce::DynamicObject();
+    
+    // Add metadata
+    obj->setProperty("id", ensembleId);
+    obj->setProperty("name", ensembleName);
+    obj->setProperty("description", ensembleDescription);
+    obj->setProperty("currentSongDescription", currentSongDescription);
+    
+    // Add roles
+    juce::Array<juce::var> rolesArray;
+    for (const auto& role : musicianRoles)
+    {
+        juce::DynamicObject* roleObj = new juce::DynamicObject();
+        roleObj->setProperty("name", role.name);
+        roleObj->setProperty("instrument", role.instrument);
+        roleObj->setProperty("pattern", role.pattern);
+        
+        // Store player ID if available
+        if (role.player)
+        {
+            roleObj->setProperty("playerId", role.player->getId());
+        }
+        
+        rolesArray.add(roleObj);
+    }
+    
+    obj->setProperty("roles", rolesArray);
+    
+    return juce::var(obj);
+}
+
+std::unique_ptr<EnsembleManager> EnsembleManager::fromVar(const juce::var& v, PlayerManager* playerManager)
+{
+    if (!v.isObject())
+        return nullptr;
+    
+    juce::DynamicObject* obj = v.getDynamicObject();
+    if (!obj)
+        return nullptr;
+    
+    // Get the ID
+    juce::String id = obj->getProperty("id").toString();
+    
+    // Create the ensemble
+    std::unique_ptr<EnsembleManager> ensemble = std::make_unique<EnsembleManager>(playerManager, id);
+    
+    // Set metadata
+    ensemble->setName(obj->getProperty("name").toString());
+    ensemble->setDescription(obj->getProperty("description").toString());
+    ensemble->setCurrentSongDescription(obj->getProperty("currentSongDescription").toString());
+    
+    // Add roles
+    juce::var rolesVar = obj->getProperty("roles");
+    if (rolesVar.isArray())
+    {
+        juce::Array<juce::var>* rolesArray = rolesVar.getArray();
+        
+        for (const auto& roleVar : *rolesArray)
+        {
+            if (roleVar.isObject())
+            {
+                juce::DynamicObject* roleObj = roleVar.getDynamicObject();
+                
+                juce::String roleName = roleObj->getProperty("name").toString();
+                juce::String instrument = roleObj->getProperty("instrument").toString();
+                juce::String pattern = roleObj->getProperty("pattern").toString();
+                
+                // Find the player if available
+                Player* player = nullptr;
+                if (roleObj->hasProperty("playerId") && playerManager)
+                {
+                    juce::String playerId = roleObj->getProperty("playerId").toString();
+                    for (auto* p : playerManager->getPlayers())
+                    {
+                        if (p->getId() == playerId)
+                        {
+                            player = p;
+                            break;
+                        }
+                    }
+                }
+                
+                // Add the role
+                if (ensemble->addMusicianRole(roleName, instrument, player))
+                {
+                    // Set the pattern
+                    for (auto& role : ensemble->musicianRoles)
+                    {
+                        if (role.name == roleName)
+                        {
+                            role.pattern = pattern;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    return ensemble;
+}
+
+bool EnsembleManager::saveToFile(const juce::File& file) const
+{
+    // Convert to var
+    juce::var data = toVar();
+    
+    // Convert to JSON
+    juce::String jsonString = juce::JSON::toString(data);
+    
+    // Save to file
+    return file.replaceWithText(jsonString);
+}
+
+std::unique_ptr<EnsembleManager> EnsembleManager::loadFromFile(const juce::File& file, PlayerManager* playerManager)
+{
+    if (!file.exists())
+        return nullptr;
+    
+    // Read the file
+    juce::String jsonString = file.loadFileAsString();
+    
+    // Parse the JSON
+    juce::var data;
+    juce::Result result = juce::JSON::parse(jsonString, data);
+    
+    if (result.failed())
+        return nullptr;
+    
+    // Create the ensemble
+    return fromVar(data, playerManager);
+}
+
+juce::File EnsembleManager::getEnsemblesDirectory()
+{
+    return juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+            .getChildFile("Covertracks")
+            .getChildFile("Ensembles");
+}
+
+juce::Array<juce::File> EnsembleManager::getEnsembleFiles()
+{
+    juce::Array<juce::File> result;
+    
+    juce::File dir = getEnsemblesDirectory();
+    if (dir.exists())
+    {
+        dir.findChildFiles(result, juce::File::findFiles, false, "*.ensemble");
+    }
+    
+    return result;
 }
 
 } // namespace covertracks

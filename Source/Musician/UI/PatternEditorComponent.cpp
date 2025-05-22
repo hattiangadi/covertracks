@@ -24,7 +24,7 @@ PatternEditorComponent::PatternEditorComponent(Musician* musicianPtr)
     patternEditor.setScrollbarsShown(true);
     patternEditor.setCaretVisible(true);
     patternEditor.setPopupMenuEnabled(true);
-    patternEditor.setText("[SONG:\n  <VERSE: {NEW: [4/4: C3 E3 G3 C4]}>\n  <CHORUS: {NEW: [4/4: F3 A3 C4 F4]}>\n]");
+    patternEditor.setText(""); // Start with an empty editor instead of a hardcoded pattern
     addAndMakeVisible(patternEditor);
     
     // Set up buttons
@@ -61,6 +61,9 @@ PatternEditorComponent::~PatternEditorComponent()
     
     if (musician)
         musician->removeChangeListener(this);
+    
+    // Explicitly clear all child components to prevent leaks
+    visualizationPanel.removeAllChildren();
 }
 
 void PatternEditorComponent::paint(Graphics& g)
@@ -112,10 +115,14 @@ void PatternEditorComponent::buttonClicked(Button* button)
         listeners.call(&Listener::patternPlayRequested, this);
         
         // Try to play the pattern via the musician
-        if (musician && currentSong)
+        if (musician && !currentPatternNotation.isEmpty())
         {
-            var events = musician->convertNotationToMidiEvents(currentPatternNotation, currentSong->getTempo());
-            musician->playPattern(events, currentSong->getTempo());
+            // Use a default tempo of 120 BPM if not specified in the pattern
+            double tempo = 120.0;
+            
+            // Let the musician handle the pattern parsing and playback
+            var events = musician->convertNotationToMidiEvents(currentPatternNotation, tempo);
+            musician->playPattern(events, tempo);
         }
     }
     else if (button == &editButton)
@@ -168,106 +175,51 @@ void PatternEditorComponent::parseCurrentPattern()
 {
     currentPatternNotation = patternEditor.getText();
     
-    if (musician)
-    {
-        // Parse the pattern
-        PatternParser parser(musician->getPatternSystem());
-        currentSong = parser.parseLLMResponse(currentPatternNotation);
-        
-        // Update the visualization
-        updateVisualization();
-    }
+    // We don't need to parse the pattern here anymore
+    // Just update the visualization with the current notation
+    updateVisualization();
 }
+
+// Define PatternVisualizer as a member class instead of a local class
+class PatternEditorComponent::PatternVisualizer : public Component 
+{
+public:
+    PatternVisualizer(const String& patternText) : patternNotation(patternText) {}
+    
+    void paint(Graphics& g) override 
+    {
+        g.fillAll(Colours::white);
+        
+        // Draw pattern notation directly
+        Font font(14.0f);
+        g.setFont(font);
+        g.setColour(Colours::black);
+        
+        g.drawText("Pattern Notation:", 10, 10, getWidth() - 20, 20, Justification::centredLeft);
+        
+        // Draw the pattern notation with line breaks
+        StringArray lines;
+        lines.addLines(patternNotation);
+        
+        int y = 40;
+        for (int i = 0; i < lines.size(); ++i)
+        {
+            g.drawText(lines[i], 10, y, getWidth() - 20, 20, Justification::centredLeft);
+            y += 20;
+        }
+    }
+    
+private:
+    String patternNotation;
+};
 
 void PatternEditorComponent::updateVisualization()
 {
     // Clear any existing content
     visualizationPanel.removeAllChildren();
     
-    // Create a visualizer component to render the song structure
-    class PatternVisualizer : public Component 
-    {
-    public:
-        PatternVisualizer(std::shared_ptr<Song> songPtr) : song(songPtr) {}
-        
-        void paint(Graphics& g) override 
-        {
-            g.fillAll(Colours::white);
-            
-            if (!song)
-                return;
-            
-            // Draw song structure
-            Font font(14.0f);
-            g.setFont(font);
-            g.setColour(Colours::black);
-            
-            String songName = song->getTitle().isEmpty() ? "Untitled Song" : song->getTitle();
-            String tempoText = "Tempo: " + String(song->getTempo()) + " BPM";
-            
-            g.drawText(songName, 10, 10, getWidth() - 20, 20, Justification::centredLeft);
-            g.drawText(tempoText, 10, 30, getWidth() - 20, 20, Justification::centredLeft);
-            
-            // Draw sections
-            int y = 60;
-            for (int i = 0; i < song->getNumSections(); ++i)
-            {
-                auto section = song->getSection(i);
-                String sectionName = section->getName().isEmpty() ? "Section " + String(i + 1) : section->getName();
-                
-                g.setColour(Colours::darkblue);
-                g.drawText(sectionName, 10, y, getWidth() - 20, 20, Justification::centredLeft);
-                y += 25;
-                
-                // Draw phrases
-                g.setColour(Colours::blue);
-                for (int j = 0; j < section->getNumPhrases(); ++j)
-                {
-                    auto phrase = section->getPhrase(j);
-                    String phraseName = phrase->getName().isEmpty() ? "Phrase " + String(j + 1) : phrase->getName();
-                    
-                    g.drawText(phraseName, 30, y, getWidth() - 40, 20, Justification::centredLeft);
-                    y += 20;
-                    
-                    // Draw bars
-                    g.setColour(Colours::black);
-                    for (int k = 0; k < phrase->getNumBars(); ++k)
-                    {
-                        auto bar = phrase->getBar(k);
-                        String barText = "Bar " + String(k + 1) + " (" + String(bar->getTimeSignatureNumerator()) + "/" + String(bar->getTimeSignatureDenominator()) + ")";
-                        
-                        g.drawText(barText, 50, y, getWidth() - 60, 20, Justification::centredLeft);
-                        y += 20;
-                        
-                        // Draw events (limit to first 5 for brevity)
-                        g.setColour(Colours::grey);
-                        // Since we can't access the private events array directly,
-                        // just display a generic message about the bar
-                        String eventText = "Time Signature: " + String(bar->getTimeSignatureNumerator()) + "/" + String(bar->getTimeSignatureDenominator());
-                        g.drawText(eventText, 70, y, getWidth() - 80, 20, Justification::centredLeft);
-                        y += 15;
-                        
-                        // Add a placeholder message about events
-                        g.drawText("Contains MIDI events (not shown)", 
-                                      70, y, getWidth() - 80, 20, Justification::centredLeft);
-                        y += 15;
-                    }
-                    
-                    y += 5; // Extra spacing between bars
-                }
-                
-                y += 5; // Extra spacing between phrases
-            }
-            
-            y += 10; // Extra spacing between sections
-        }
-        
-    private:
-        std::shared_ptr<Song> song;
-    };
-    
-    // Create the visualizer
-    auto visualizer = new PatternVisualizer(currentSong);
+    // Create the visualizer - will be owned by visualizationPanel
+    auto visualizer = new PatternVisualizer(currentPatternNotation);
     visualizer->setBounds(visualizationPanel.getLocalBounds());
     visualizationPanel.addAndMakeVisible(visualizer);
     

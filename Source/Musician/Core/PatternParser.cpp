@@ -41,66 +41,63 @@ std::shared_ptr<Song> PatternParser::parseLLMResponse(const String& response)
     // Extract song notation from the LLM response
     String songNotation = extractSongNotation(response);
     
-    if (songNotation.isEmpty())
+    if (!songNotation.isEmpty())
     {
-        // If no song notation found, try to extract a section
-        String sectionNotation = extractSectionNotation(response);
-        
-        if (!sectionNotation.isEmpty())
-        {
-            // Create a song with just this section
-            auto section = parseSection(sectionNotation);
-            auto song = std::make_shared<Song>();
-            song->setTitle("Generated Song");
-            song->addSection(section);
-            return song;
-        }
-        
-        // If no section found, try to extract a phrase
-        String phraseNotation = extractPhraseNotation(response);
-        
-        if (!phraseNotation.isEmpty())
-        {
-            // Create a song with a section containing just this phrase
-            auto phrase = parsePhrase(phraseNotation);
-            auto section = std::make_shared<Section>();
-            section->setName("Generated Section");
-            section->addPhrase(phrase);
-            
-            auto song = std::make_shared<Song>();
-            song->setTitle("Generated Song");
-            song->addSection(section);
-            return song;
-        }
-        
-        // If no phrase found, try to extract a bar
-        String barNotation = extractBarNotation(response);
-        
-        if (!barNotation.isEmpty())
-        {
-            // Create a song with a section containing a phrase with just this bar
-            auto bar = parseBar(barNotation);
-            auto phrase = std::make_shared<Phrase>();
-            phrase->setName("Generated Phrase");
-            phrase->addBar(bar);
-            
-            auto section = std::make_shared<Section>();
-            section->setName("Generated Section");
-            section->addPhrase(phrase);
-            
-            auto song = std::make_shared<Song>();
-            song->setTitle("Generated Song");
-            song->addSection(section);
-            return song;
-        }
-        
-        // If nothing found, return an empty song
-        std::cout << "No pattern notation found in LLM response" << std::endl;
-        return std::make_shared<Song>();
+        // If we have song notation, parse it and return
+        return parseSong(songNotation);
     }
     
-    // Parse the song notation
-    return parseSong(songNotation);
+    // If no song notation found, try to extract a section
+    String sectionNotation = extractSectionNotation(response);
+    if (!sectionNotation.isEmpty())
+    {
+        // Create a song with just this section
+        auto section = parseSection(sectionNotation);
+        auto song = std::make_shared<Song>();
+        song->setTitle("Generated Song");
+        song->addSection(section);
+        return song;
+    }
+    
+    // If no section found, try to extract a phrase
+    String phraseNotation = extractPhraseNotation(response);
+    if (!phraseNotation.isEmpty())
+    {
+        // Create a song with a section containing just this phrase
+        auto phrase = parsePhrase(phraseNotation);
+        auto section = std::make_shared<Section>();
+        section->setName("Generated Section");
+        section->addPhrase(phrase);
+        
+        auto song = std::make_shared<Song>();
+        song->setTitle("Generated Song");
+        song->addSection(section);
+        return song;
+    }
+    
+    // If no phrase found, try to extract a bar
+    String barNotation = extractBarNotation(response);
+    if (!barNotation.isEmpty())
+    {
+        // Create a song with a section containing a phrase with just this bar
+        auto bar = parseBar(barNotation);
+        auto phrase = std::make_shared<Phrase>();
+        phrase->setName("Generated Phrase");
+        phrase->addBar(bar);
+        
+        auto section = std::make_shared<Section>();
+        section->setName("Generated Section");
+        section->addPhrase(phrase);
+        
+        auto song = std::make_shared<Song>();
+        song->setTitle("Generated Song");
+        song->addSection(section);
+        return song;
+    }
+    
+    // If nothing found, return an empty song
+    std::cout << "No pattern notation found in LLM response" << std::endl;
+    return std::make_shared<Song>();
 }
 
 String PatternParser::extractSongNotation(const String& text)

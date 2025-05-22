@@ -6,14 +6,31 @@ namespace covertracks {
 // Bar implementation
 //==============================================================================
 
+// Initialize static members
+int Bar::instanceCount = 0;
+static std::vector<Bar*> staticBarInstances;
+
 Bar::Bar(int timeSignatureNumerator, int timeSignatureDenominator)
     : timeSignatureNumerator(timeSignatureNumerator),
       timeSignatureDenominator(timeSignatureDenominator)
 {
+    // Increment instance counter
+    ++instanceCount;
+    
+    // Debug output
+    DBG("Bar created: " + String::toHexString((intptr_t)this) + ", total instances: " + String(instanceCount));
 }
 
 Bar::~Bar()
 {
+    // Clear the events array to ensure proper cleanup
+    events.clear();
+    
+    // Decrement instance counter
+    --instanceCount;
+    
+    // Debug output to track Bar destruction
+    DBG("Bar destroyed: " + String::toHexString((intptr_t)this) + ", remaining instances: " + String(instanceCount));
 }
 
 void Bar::addNote(int beat, int channel, int noteNumber, float velocity, float duration)
@@ -113,13 +130,29 @@ void Bar::setTimeSignature(int numerator, int denominator)
 // Phrase implementation
 //==============================================================================
 
+// Initialize static member
+int Phrase::instanceCount = 0;
+
 Phrase::Phrase(const String& name)
     : name(name)
 {
+    // Increment instance counter
+    ++instanceCount;
+    
+    // Debug output
+    DBG("Phrase created: " + String::toHexString((intptr_t)this) + ", total instances: " + String(instanceCount));
 }
 
 Phrase::~Phrase()
 {
+    // Clear all references to Bar objects
+    bars.clear();
+    
+    // Decrement instance counter
+    --instanceCount;
+    
+    // Debug output to track Phrase destruction
+    DBG("Phrase destroyed: " + String::toHexString((intptr_t)this) + ", remaining instances: " + String(instanceCount));
 }
 
 void Phrase::addBar(std::shared_ptr<Bar> bar)
@@ -191,13 +224,29 @@ std::unique_ptr<MidiMessageSequence> Phrase::toMidiSequence() const
 // Section implementation
 //==============================================================================
 
+// Initialize static member
+int Section::instanceCount = 0;
+
 Section::Section(const String& name)
     : name(name)
 {
+    // Increment instance counter
+    ++instanceCount;
+    
+    // Debug output
+    DBG("Section created: " + String::toHexString((intptr_t)this) + ", total instances: " + String(instanceCount));
 }
 
 Section::~Section()
 {
+    // Clear all references to Phrase objects
+    phrases.clear();
+    
+    // Decrement instance counter
+    --instanceCount;
+    
+    // Debug output to track Section destruction
+    DBG("Section destroyed: " + String::toHexString((intptr_t)this) + ", remaining instances: " + String(instanceCount));
 }
 
 void Section::addPhrase(std::shared_ptr<Phrase> phrase)
@@ -268,13 +317,48 @@ std::unique_ptr<MidiMessageSequence> Section::toMidiSequence() const
 // Song implementation
 //==============================================================================
 
+// Initialize static member
+int Song::instanceCount = 0;
+
+
+
 Song::Song(const String& title, double tempo)
     : title(title), tempo(tempo)
 {
+    // Increment instance counter
+    ++instanceCount;
+    
+    // Enhanced debug output to help identify where the Song is being created
+    String creationInfo;
+    
+    if (title == "Default Song") {
+        creationInfo = "from default initialization";
+    } else if (title.isEmpty()) {
+        creationInfo = "from unknown location (empty title)";
+    } else {
+        creationInfo = "with title: " + title;
+    }
+    
+    // Add a breakpoint here to see the call stack when a Song is created
+    DBG("[Song] Created " + creationInfo + ", address: " + String::toHexString((intptr_t)this) + ", total instances: " + String(instanceCount));
+    
+    // You can set a breakpoint on the next line to inspect the call stack
+    int breakpointHere = 0; // <-- Set your breakpoint here
 }
 
 Song::~Song()
 {
+    // Clear all references to Section objects
+    sections.clear();
+    
+    // Decrement instance counter
+    --instanceCount;
+    
+    // Enhanced debug output
+    DBG("[Song] Destroyed: " + title + ", address: " + String::toHexString((intptr_t)this) + ", remaining instances: " + String(instanceCount));
+    
+    // You can set a breakpoint here to see where Songs are being destroyed
+    int breakpointHere = 0; // <-- Set your breakpoint here
 }
 
 void Song::addSection(std::shared_ptr<Section> section)
@@ -294,5 +378,129 @@ std::shared_ptr<Section> Song::getSection(int index) const
         return sections[index];
     return nullptr;
 }
+
+void Bar::printInstanceCount()
+{
+    DBG("Current Bar instance count: " + String(instanceCount));
+}
+
+void Bar::forceCleanupLeakedInstances()
+{
+    DBG("[Bar] Checking for leaked instances");
+    
+    // If there are still Bar instances, log a warning
+    if (instanceCount > 0)
+    {
+        DBG("[Bar] WARNING: " + String(instanceCount) + " Bar instances still exist");
+    }
+}
+
+void Bar::registerStaticInstance(Bar* instance)
+{
+    if (instance)
+    {
+        DBG("[Bar] Registered Bar instance: " + String::toHexString((intptr_t)instance));
+    }
+}
+
+// Static cache for tracking Bar instances
+static std::vector<std::weak_ptr<Bar>> barCache;
+
+// Static method to clean up the cache and report any leaks
+void cleanBarCache()
+{
+    // Remove expired weak pointers
+    barCache.erase(
+        std::remove_if(barCache.begin(), barCache.end(),
+                      [](const std::weak_ptr<Bar>& wp) { return wp.expired(); }),
+        barCache.end());
+    
+    // Report any remaining instances
+    if (!barCache.empty())
+    {
+        DBG("[Bar] WARNING: " + String(barCache.size()) + " Bar instances still in cache after cleanup");
+        
+        // Force cleanup of remaining instances
+        for (auto& weakPtr : barCache)
+        {
+            if (auto bar = weakPtr.lock())
+            {
+                DBG("[Bar] Forcing cleanup of Bar: " + String::toHexString((intptr_t)bar.get()));
+                // The shared_ptr will be reset when it goes out of scope
+            }
+        }
+        
+        // Clear the cache
+        barCache.clear();
+    }
+    
+    // Also call the static instance cleanup
+    Bar::forceCleanupLeakedInstances();
+}
+
+std::shared_ptr<Bar> Bar::fromVar(const var& v)
+{
+    // Clean up expired weak pointers from the cache
+    barCache.erase(
+        std::remove_if(barCache.begin(), barCache.end(),
+                      [](const std::weak_ptr<Bar>& wp) { return wp.expired(); }),
+        barCache.end());
+    
+    auto result = std::make_shared<Bar>();
+    
+    // Add to cache for tracking
+    barCache.push_back(result);
+    
+    if (auto* obj = v.getDynamicObject())
+    {
+        // Get time signature
+        result->timeSignatureNumerator = obj->hasProperty("timeSignatureNumerator") ? static_cast<int>(obj->getProperty("timeSignatureNumerator")) : 4;
+        result->timeSignatureDenominator = obj->hasProperty("timeSignatureDenominator") ? static_cast<int>(obj->getProperty("timeSignatureDenominator")) : 4;
+        
+        // Get events
+        var eventsVar = obj->getProperty("events");
+        if (eventsVar.isArray())
+        {
+            for (const auto& eventVar : *eventsVar.getArray())
+            {
+                if (auto* eventObj = eventVar.getDynamicObject())
+                {
+                    Event event(static_cast<Event::Type>(static_cast<int>(eventObj->getProperty("type"))),
+                               static_cast<float>(eventObj->getProperty("beat")),
+                               static_cast<int>(eventObj->getProperty("channel")));
+                    
+                    // Set properties based on event type
+                    event.noteNumber = eventObj->hasProperty("noteNumber") ? static_cast<int>(eventObj->getProperty("noteNumber")) : 0;
+                    event.velocity = eventObj->hasProperty("velocity") ? static_cast<float>(eventObj->getProperty("velocity")) : 0.0f;
+                    event.duration = eventObj->hasProperty("duration") ? static_cast<float>(eventObj->getProperty("duration")) : 0.0f;
+                    event.controllerNumber = eventObj->hasProperty("controllerNumber") ? static_cast<int>(eventObj->getProperty("controllerNumber")) : 0;
+                    event.value = eventObj->hasProperty("value") ? static_cast<int>(eventObj->getProperty("value")) : 0;
+                    
+                    result->events.add(event);
+                }
+            }
+        }
+    }
+    
+    DBG("[Bar::fromVar] Created Bar: " + String::toHexString((intptr_t)result.get()) + ", total instances: " + String(instanceCount) + ", cache size: " + String(barCache.size()));
+    return result;
+}
+
+void Phrase::printInstanceCount()
+{
+    DBG("Current Phrase instance count: " + String(instanceCount));
+}
+
+void Section::printInstanceCount()
+{
+    DBG("Current Section instance count: " + String(instanceCount));
+}
+
+void Song::printInstanceCount()
+{
+    DBG("Current Song instance count: " + String(instanceCount));
+}
+
+
 
 } // namespace covertracks

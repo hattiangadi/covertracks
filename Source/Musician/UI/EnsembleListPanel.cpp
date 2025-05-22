@@ -31,16 +31,11 @@ EnsembleListPanel::EnsembleListPanel(PlayerManager* playerManagerPtr)
     editButton.addListener(this);
     addAndMakeVisible(editButton);
     
-    // Create some example ensembles
-    auto rockBand = new EnsembleManager(playerManager);
-    rockBand->setName("Rock Band");
-    rockBand->setDescription("A classic rock band setup with lead guitar, rhythm guitar, bass, and drums");
-    ensembles.add(rockBand);
+    // Load saved ensembles from disk
+    loadEnsemblesFromDisk();
     
-    auto jazzTrio = new EnsembleManager(playerManager);
-    jazzTrio->setName("Jazz Trio");
-    jazzTrio->setDescription("A jazz trio with piano, bass, and drums");
-    ensembles.add(jazzTrio);
+    // Log the number of ensembles loaded
+    std::cout << "[EnsembleListPanel] Loaded " << ensembles.size() << " ensemble(s) from disk" << std::endl;
     
     // Update the UI
     refreshEnsembleList();
@@ -162,6 +157,17 @@ void EnsembleListPanel::removeEnsemble()
 {
     int selectedRow = ensembleListBox.getSelectedRow();
     if (selectedRow >= 0 && selectedRow < ensembles.size()) {
+        // Get the ensemble to remove
+        EnsembleManager* ensemble = ensembles[selectedRow];
+        
+        // Delete the file if it exists
+        juce::File ensembleFile = EnsembleManager::getEnsemblesDirectory()
+                                .getChildFile(ensemble->getName() + ".ensemble");
+        if (ensembleFile.exists()) {
+            ensembleFile.deleteFile();
+        }
+        
+        // Remove from the list
         ensembles.remove(selectedRow);
         refreshEnsembleList();
     }
@@ -171,6 +177,39 @@ void EnsembleListPanel::refreshEnsembleList()
 {
     ensembleListBox.updateContent();
     ensembleListBox.repaint();
+}
+
+void EnsembleListPanel::loadEnsemblesFromDisk()
+{
+    // Clear existing ensembles
+    ensembles.clear();
+    
+    // Get the ensembles directory
+    juce::File ensemblesDir = EnsembleManager::getEnsemblesDirectory();
+    if (!ensemblesDir.exists()) {
+        ensemblesDir.createDirectory();
+        return;
+    }
+    
+    // Get all ensemble files
+    juce::Array<juce::File> ensembleFiles = EnsembleManager::getEnsembleFiles();
+    
+    // Load each ensemble
+    for (const auto& file : ensembleFiles)
+    {
+        std::cout << "[EnsembleListPanel] Loading ensemble from: " << file.getFullPathName() << std::endl;
+        
+        auto ensemble = EnsembleManager::loadFromFile(file, playerManager);
+        if (ensemble)
+        {
+            ensembles.add(ensemble.release()); // Transfer ownership to the OwnedArray
+            std::cout << "[EnsembleListPanel] Loaded ensemble: " << ensembles.getLast()->getName() << std::endl;
+        }
+        else
+        {
+            std::cout << "[EnsembleListPanel] Failed to load ensemble from: " << file.getFullPathName() << std::endl;
+        }
+    }
 }
 
 } // namespace covertracks

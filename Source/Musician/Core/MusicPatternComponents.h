@@ -4,6 +4,9 @@
 
 namespace covertracks {
 
+// Forward declaration of the cache cleanup function
+void cleanBarCache();
+
 // Forward declarations
 class MusicPatternSystem;
 class PatternParser;
@@ -18,6 +21,12 @@ class Bar {
 public:
     Bar(int timeSignatureNumerator = 4, int timeSignatureDenominator = 4);
     ~Bar();
+    
+    // Static methods for instance tracking and cleanup
+    static void printInstanceCount();
+    static int getInstanceCount() { return instanceCount; }
+    static void forceCleanupLeakedInstances();
+    static void registerStaticInstance(Bar* instance);
     
     void addNote(int beat, int channel, int noteNumber, float velocity, float duration);
     void addController(int beat, int channel, int controllerNumber, int value);
@@ -54,6 +63,9 @@ private:
     int timeSignatureDenominator;
     Array<Event> events;
     
+    // Static counter for tracking instances
+    static int instanceCount;
+    
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Bar)
 };
 
@@ -66,6 +78,10 @@ class Phrase {
 public:
     Phrase(const String& name = "");
     ~Phrase();
+    
+    // Static methods for instance tracking
+    static void printInstanceCount();
+    static int getInstanceCount() { return instanceCount; }
     
     void addBar(std::shared_ptr<Bar> bar);
     int getNumBars() const;
@@ -83,6 +99,9 @@ private:
     String name;
     Array<std::shared_ptr<Bar>> bars;
     
+    // Static counter for tracking instances
+    static int instanceCount;
+    
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Phrase)
 };
 
@@ -96,6 +115,10 @@ class Section {
 public:
     Section(const String& name = "");
     ~Section();
+    
+    // Static methods for instance tracking
+    static void printInstanceCount();
+    static int getInstanceCount() { return instanceCount; }
     
     void addPhrase(std::shared_ptr<Phrase> phrase);
     int getNumPhrases() const;
@@ -113,6 +136,9 @@ private:
     String name;
     Array<std::shared_ptr<Phrase>> phrases;
     
+    // Static counter for tracking instances
+    static int instanceCount;
+    
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Section)
 };
 
@@ -121,14 +147,26 @@ private:
  * 
  * A song is a collection of sections arranged in a specific order
  */
+
+
 class Song {
 public:
     Song(const String& title = "", double tempo = 120.0);
     ~Song();
     
+    // Static methods for instance tracking
+    static void printInstanceCount();
+    static int getInstanceCount() { return instanceCount; }
+    
     void addSection(std::shared_ptr<Section> section);
     int getNumSections() const;
     std::shared_ptr<Section> getSection(int index) const;
+    
+    // Method to break reference cycles
+    void clearReferences() {
+        // Clear all sections to break potential reference cycles
+        sections.clear();
+    }
     
     String getTitle() const { return title; }
     void setTitle(const String& newTitle) { title = newTitle; }
@@ -145,6 +183,9 @@ private:
     String title;
     double tempo;
     Array<std::shared_ptr<Section>> sections;
+    
+    // Static counter for tracking instances
+    static int instanceCount;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Song)
 };

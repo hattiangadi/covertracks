@@ -79,6 +79,11 @@ public:
      */
     void refreshEnsembleList();
     
+    /**
+     * @brief Load ensembles from disk
+     */
+    void loadEnsemblesFromDisk();
+    
 private:
     // UI Components
     juce::Label titleLabel;

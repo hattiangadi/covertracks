@@ -31,14 +31,14 @@ struct MusicianRole {
  * This class coordinates multiple players with different roles,
  * handles LLM requests for each musician, and synchronizes playback.
  */
-class EnsembleManager : public juce::Timer {
+class EnsembleManager : public juce::Timer, public juce::ReferenceCountedObject {
 public:
     /**
      * @brief Construct a new Ensemble Manager
      * 
      * @param playerManager The player manager to use
      */
-    EnsembleManager(PlayerManager* playerManager);
+    EnsembleManager(PlayerManager* playerManager, const juce::String& id = juce::String());
     
     /**
      * @brief Destroy the Ensemble Manager
@@ -163,6 +163,61 @@ public:
     void logEnsembleConversation(const juce::String& songDescription, 
                                const juce::StringArray& ensembleResponses);
     
+    /**
+     * @brief Get the unique ID of this ensemble
+     * 
+     * @return juce::String The ensemble ID
+     */
+    juce::String getId() const { return ensembleId; }
+    
+    /**
+     * @brief Convert the ensemble to a var for serialization
+     * 
+     * @return var The serialized ensemble
+     */
+    juce::var toVar() const;
+    
+    /**
+     * @brief Create an ensemble from a var
+     * 
+     * @param v The serialized ensemble
+     * @param playerManager The player manager to use
+     * @return std::unique_ptr<EnsembleManager> The created ensemble
+     */
+    static std::unique_ptr<EnsembleManager> fromVar(const juce::var& v, PlayerManager* playerManager);
+    
+    /**
+     * @brief Save the ensemble to a file
+     * 
+     * @param file The file to save to
+     * @return true If the save was successful
+     * @return false If the save failed
+     */
+    bool saveToFile(const juce::File& file) const;
+    
+    /**
+     * @brief Load an ensemble from a file
+     * 
+     * @param file The file to load from
+     * @param playerManager The player manager to use
+     * @return std::unique_ptr<EnsembleManager> The loaded ensemble, or nullptr if loading failed
+     */
+    static std::unique_ptr<EnsembleManager> loadFromFile(const juce::File& file, PlayerManager* playerManager);
+    
+    /**
+     * @brief Get the default directory for ensemble files
+     * 
+     * @return juce::File The directory
+     */
+    static juce::File getEnsemblesDirectory();
+    
+    /**
+     * @brief Get all ensemble files in the default directory
+     * 
+     * @return juce::Array<juce::File> The ensemble files
+     */
+    static juce::Array<juce::File> getEnsembleFiles();
+    
 private:
     /**
      * @brief Generate a pattern for a specific musician role
@@ -226,6 +281,9 @@ private:
     
     // Logging directory
     juce::File logDirectory;
+    
+    // Unique ID for this ensemble
+    juce::String ensembleId;
 };
 
 } // namespace covertracks
