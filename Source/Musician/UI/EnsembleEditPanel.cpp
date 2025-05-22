@@ -45,7 +45,7 @@ void EnsembleEditPanel::RolesTableModel::paintCell(juce::Graphics& g, int rowNum
             text = role.instrument;
             break;
         case 3: // Player
-            text = role.player ? role.player->getId() : "None";
+            text = role.player ? role.player->getMetadata().name : "None";
             break;
         case 4: // Pattern status
             text = role.pattern.isEmpty() ? "Not generated" : "Generated";
@@ -58,10 +58,7 @@ void EnsembleEditPanel::RolesTableModel::paintCell(juce::Graphics& g, int rowNum
 // EnsembleEditPanel implementation
 EnsembleEditPanel::EnsembleEditPanel(PlayerManager* playerManagerPtr, EnsembleManager* ensembleManagerPtr)
     : playerManager(playerManagerPtr),
-      ensembleManager(nullptr),
-      isGenerating(false),
-      progressValue(0.0),
-      progressBar(progressValue)
+      ensembleManager(nullptr)
 {
     // If no ensemble manager was provided, create a new one
     if (ensembleManagerPtr == nullptr) {
@@ -72,24 +69,38 @@ EnsembleEditPanel::EnsembleEditPanel(PlayerManager* playerManagerPtr, EnsembleMa
     }
     
     // Set up the title label
-    titleLabel.setText("Ensemble Generator", juce::dontSendNotification);
+    titleLabel.setText("Ensemble Editor", juce::dontSendNotification);
     titleLabel.setFont(AppFonts::getTitleFont());
     titleLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(titleLabel);
     
-    // Set up the song description editor
-    songDescriptionLabel.setText("Song Description:", juce::dontSendNotification);
-    songDescriptionLabel.setFont(AppFonts::getHeaderFont());
-    addAndMakeVisible(songDescriptionLabel);
+    // Set up the name editor
+    nameLabel.setText("Ensemble Name:", juce::dontSendNotification);
+    nameLabel.setFont(AppFonts::getHeaderFont());
+    addAndMakeVisible(nameLabel);
     
-    songDescriptionEditor.setMultiLine(true);
-    songDescriptionEditor.setReturnKeyStartsNewLine(true);
-    songDescriptionEditor.setReadOnly(false);
-    songDescriptionEditor.setScrollbarsShown(true);
-    songDescriptionEditor.setCaretVisible(true);
-    songDescriptionEditor.setPopupMenuEnabled(true);
-    songDescriptionEditor.setText("Create a blues rock song with a driving rhythm and soulful lead guitar.");
-    addAndMakeVisible(songDescriptionEditor);
+    nameEditor.setMultiLine(false);
+    nameEditor.setReturnKeyStartsNewLine(false);
+    nameEditor.setReadOnly(false);
+    nameEditor.setScrollbarsShown(false);
+    nameEditor.setCaretVisible(true);
+    nameEditor.setPopupMenuEnabled(true);
+    nameEditor.setText(ensembleManager->getName());
+    addAndMakeVisible(nameEditor);
+    
+    // Set up the description editor
+    descriptionLabel.setText("Ensemble Description:", juce::dontSendNotification);
+    descriptionLabel.setFont(AppFonts::getHeaderFont());
+    addAndMakeVisible(descriptionLabel);
+    
+    descriptionEditor.setMultiLine(true);
+    descriptionEditor.setReturnKeyStartsNewLine(true);
+    descriptionEditor.setReadOnly(false);
+    descriptionEditor.setScrollbarsShown(true);
+    descriptionEditor.setCaretVisible(true);
+    descriptionEditor.setPopupMenuEnabled(true);
+    descriptionEditor.setText(ensembleManager->getDescription());
+    addAndMakeVisible(descriptionEditor);
     
     // Set up the roles section
     rolesLabel.setText("Musician Roles:", juce::dontSendNotification);
@@ -119,47 +130,35 @@ EnsembleEditPanel::EnsembleEditPanel(PlayerManager* playerManagerPtr, EnsembleMa
     removeRoleButton.addListener(this);
     addAndMakeVisible(removeRoleButton);
     
-    // Set up the combo boxes
+    // Set up the role selection controls
     roleNameComboBox.addItem("Lead Guitar", 1);
-    roleNameComboBox.addItem("Rhythm Guitar 1", 2);
-    roleNameComboBox.addItem("Rhythm Guitar 2", 3);
-    roleNameComboBox.addItem("Bass Guitar", 4);
+    roleNameComboBox.addItem("Rhythm Guitar", 2);
+    roleNameComboBox.addItem("Solo Guitar", 3);
+    roleNameComboBox.addItem("Bass", 4);
     roleNameComboBox.addItem("Drums", 5);
     roleNameComboBox.addItem("Keyboard", 6);
+    roleNameComboBox.setEditableText(true);
+    roleNameComboBox.setText("Lead Guitar");
     roleNameComboBox.addListener(this);
-    roleNameComboBox.setSelectedId(1);
     addAndMakeVisible(roleNameComboBox);
     
     instrumentComboBox.addItem("Guitar", 1);
     instrumentComboBox.addItem("Bass", 2);
     instrumentComboBox.addItem("Drums", 3);
     instrumentComboBox.addItem("Keyboard", 4);
-    instrumentComboBox.addListener(this);
-    instrumentComboBox.setSelectedId(1);
+    instrumentComboBox.setEditableText(true);
+    instrumentComboBox.setText("Guitar");
     addAndMakeVisible(instrumentComboBox);
     
-    // Populate the player combo box
+    // Set up the player selection
     updatePlayerComboBox();
     playerComboBox.addListener(this);
     addAndMakeVisible(playerComboBox);
     
-    // Set up the action buttons
-    generateButton.setButtonText("Generate Patterns");
-    generateButton.addListener(this);
-    addAndMakeVisible(generateButton);
-    
-    playButton.setButtonText("Play Ensemble");
-    playButton.addListener(this);
-    addAndMakeVisible(playButton);
-    
-    stopButton.setButtonText("Stop");
-    stopButton.addListener(this);
-    addAndMakeVisible(stopButton);
-    
-    // Set up the progress bar
-    progressBar.setPercentageDisplay(false);
-    progressBar.setTextToDisplay("Ready");
-    addAndMakeVisible(progressBar);
+    // Set up the save button
+    saveButton.setButtonText("Save Ensemble");
+    saveButton.addListener(this);
+    addAndMakeVisible(saveButton);
     
     // Update the UI
     updateUI();
@@ -184,7 +183,6 @@ void EnsembleEditPanel::setEnsemble(EnsembleManager* ensembleManagerPtr)
     if (ensembleManager) {
         nameEditor.setText(ensembleManager->getName(), false);
         descriptionEditor.setText(ensembleManager->getDescription(), false);
-        songDescriptionEditor.setText(ensembleManager->getCurrentSongDescription(), false);
     }
     
     // Update the roles table model
@@ -204,52 +202,48 @@ void EnsembleEditPanel::resized()
 {
     auto area = getLocalBounds().reduced(10);
     
-    // Title
-    titleLabel.setBounds(area.removeFromTop(30));
+    // Title at the top
+    titleLabel.setBounds(area.removeFromTop(40));
+    
+    // Name editor
+    auto nameArea = area.removeFromTop(50);
+    nameLabel.setBounds(nameArea.removeFromTop(20));
+    nameEditor.setBounds(nameArea);
+    
+    // Description editor
+    auto descriptionArea = area.removeFromTop(100);
+    descriptionLabel.setBounds(descriptionArea.removeFromTop(20));
+    descriptionEditor.setBounds(descriptionArea);
+    
+    // Add a gap
     area.removeFromTop(10);
     
-    // Song description
-    auto descriptionArea = area.removeFromTop(120);
-    songDescriptionLabel.setBounds(descriptionArea.removeFromTop(20));
-    songDescriptionEditor.setBounds(descriptionArea);
-    area.removeFromTop(10);
-    
-    // Roles table and controls
-    auto rolesArea = area.removeFromTop(200);
+    // Roles section
+    auto rolesArea = area.removeFromTop(300);
     rolesLabel.setBounds(rolesArea.removeFromTop(20));
     
-    auto roleControlsArea = rolesArea.removeFromBottom(30);
-    removeRoleButton.setBounds(roleControlsArea.removeFromRight(120));
-    roleControlsArea.removeFromRight(10);
-    addRoleButton.setBounds(roleControlsArea.removeFromRight(120));
+    // Roles table
+    auto tableArea = rolesArea.removeFromTop(150);
+    rolesTable.setBounds(tableArea);
     
-    rolesTable.setBounds(rolesArea);
+    // Role controls
+    auto roleControlsArea = rolesArea.removeFromTop(30);
+    auto buttonWidth = roleControlsArea.getWidth() / 2;
+    addRoleButton.setBounds(roleControlsArea.removeFromLeft(buttonWidth).reduced(5, 0));
+    removeRoleButton.setBounds(roleControlsArea.reduced(5, 0));
+    
+    // Role editor
+    auto roleEditorArea = rolesArea.removeFromTop(30);
+    auto editorWidth = roleEditorArea.getWidth() / 3;
+    roleNameComboBox.setBounds(roleEditorArea.removeFromLeft(editorWidth).reduced(5, 0));
+    instrumentComboBox.setBounds(roleEditorArea.removeFromLeft(editorWidth).reduced(5, 0));
+    playerComboBox.setBounds(roleEditorArea.reduced(5, 0));
+    
+    // Add a gap
     area.removeFromTop(10);
     
-    // Role selection controls
-    auto selectionArea = area.removeFromTop(30);
-    auto thirdWidth = selectionArea.getWidth() / 3;
-    
-    roleNameComboBox.setBounds(selectionArea.removeFromLeft(thirdWidth));
-    selectionArea.removeFromLeft(10);
-    instrumentComboBox.setBounds(selectionArea.removeFromLeft(thirdWidth));
-    selectionArea.removeFromLeft(10);
-    playerComboBox.setBounds(selectionArea);
-    area.removeFromTop(10);
-    
-    // Action buttons
-    auto actionArea = area.removeFromTop(30);
-    auto actionWidth = actionArea.getWidth() / 3;
-    
-    generateButton.setBounds(actionArea.removeFromLeft(actionWidth));
-    actionArea.removeFromLeft(10);
-    playButton.setBounds(actionArea.removeFromLeft(actionWidth));
-    actionArea.removeFromLeft(10);
-    stopButton.setBounds(actionArea);
-    area.removeFromTop(10);
-    
-    // Progress bar
-    progressBar.setBounds(area.removeFromTop(30));
+    // Save button
+    saveButton.setBounds(area.removeFromTop(30).reduced(5, 0));
 }
 
 void EnsembleEditPanel::buttonClicked(juce::Button* button)
@@ -258,12 +252,8 @@ void EnsembleEditPanel::buttonClicked(juce::Button* button)
         addMusicianRole();
     } else if (button == &removeRoleButton) {
         removeMusicianRole();
-    } else if (button == &generateButton) {
-        generatePatterns();
-    } else if (button == &playButton) {
-        startPlaying();
-    } else if (button == &stopButton) {
-        stopPlaying();
+    } else if (button == &saveButton) {
+        saveEnsembleData();
     }
 }
 
@@ -284,30 +274,14 @@ void EnsembleEditPanel::comboBoxChanged(juce::ComboBox* comboBox)
         }
     }
 }
-
 void EnsembleEditPanel::updateUI()
 {
     // Update the roles table
     rolesTable.updateContent();
     rolesTable.repaint();
     
-    // Update button states
-    bool hasRoles = rolesTable.getNumRows() > 0;
-    bool isPlaying = ensembleManager->isPlaying();
-    
-    generateButton.setEnabled(hasRoles && !isGenerating && !isPlaying);
-    playButton.setEnabled(hasRoles && !isGenerating && !isPlaying);
-    stopButton.setEnabled(isPlaying);
-    removeRoleButton.setEnabled(hasRoles && rolesTable.getSelectedRow() >= 0);
-    
-    // Update the progress bar
-    if (isGenerating) {
-        progressBar.setTextToDisplay("Generating patterns...");
-    } else if (isPlaying) {
-        progressBar.setTextToDisplay("Playing ensemble");
-    } else {
-        progressBar.setTextToDisplay("Ready");
-    }
+    // Update the button states
+    removeRoleButton.setEnabled(rolesTable.getSelectedRow() >= 0);
 }
 
 void EnsembleEditPanel::updatePlayerComboBox()
@@ -321,8 +295,7 @@ void EnsembleEditPanel::updatePlayerComboBox()
     if (playerManager) {
         int id = 2;
         for (auto* player : playerManager->getPlayers()) {
-            // Use getId() instead of getName() since Player doesn't have getName()
-            playerComboBox.addItem(player->getId(), id++);
+            playerComboBox.addItem(player->getMetadata().name, id++);
         }
     }
     
@@ -365,61 +338,23 @@ void EnsembleEditPanel::removeMusicianRole()
     }
 }
 
-void EnsembleEditPanel::generatePatterns()
+void EnsembleEditPanel::saveEnsembleData()
 {
-    // Get the song description
-    juce::String songDescription = songDescriptionEditor.getText();
-    if (songDescription.isEmpty()) {
-        // Show an error message
-        juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
-                                             "Error",
-                                             "Please enter a song description.");
-        return;
+    if (!ensembleManager) return;
+    
+    // Save the ensemble data
+    ensembleManager->setName(nameEditor.getText());
+    ensembleManager->setDescription(descriptionEditor.getText());
+    
+    // Call the save callback if provided
+    if (saveCallback) {
+        saveCallback();
     }
     
-    // Update the UI
-    isGenerating = true;
-    updateUI();
-    
-    // Generate the patterns
-    ensembleManager->generateEnsemblePatterns(songDescription, [this](bool success) {
-        // Update the UI
-        juce::MessageManager::callAsync([this, success]() {
-            isGenerating = false;
-            
-            if (success) {
-                // Show a success message
-                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon,
-                                                     "Success",
-                                                     "Patterns generated successfully.");
-            } else {
-                // Show an error message
-                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
-                                                     "Error",
-                                                     "Failed to generate patterns.");
-            }
-            
-            updateUI();
-        });
-    });
-}
-
-void EnsembleEditPanel::startPlaying()
-{
-    if (ensembleManager->startPlaying()) {
-        updateUI();
-    } else {
-        // Show an error message
-        juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
-                                             "Error",
-                                             "Failed to start playing.");
-    }
-}
-
-void EnsembleEditPanel::stopPlaying()
-{
-    ensembleManager->stopPlaying();
-    updateUI();
+    // Show a confirmation message
+    juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon,
+                                         "Ensemble Saved",
+                                         "Ensemble data has been saved.");
 }
 
 } // namespace covertracks

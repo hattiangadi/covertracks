@@ -82,19 +82,9 @@ private:
     void removeMusicianRole();
     
     /**
-     * @brief Generate patterns for the ensemble
+     * @brief Save the current ensemble data
      */
-    void generatePatterns();
-    
-    /**
-     * @brief Start playing the ensemble
-     */
-    void startPlaying();
-    
-    /**
-     * @brief Stop playing the ensemble
-     */
-    void stopPlaying();
+    void saveEnsembleData();
     
     // UI Components
     juce::Label titleLabel;
@@ -102,8 +92,6 @@ private:
     juce::Label nameLabel;
     juce::TextEditor descriptionEditor;
     juce::Label descriptionLabel;
-    juce::TextEditor songDescriptionEditor;
-    juce::Label songDescriptionLabel;
     
     juce::Label rolesLabel;
     juce::TableListBox rolesTable;
@@ -114,12 +102,7 @@ private:
     juce::ComboBox instrumentComboBox;
     juce::ComboBox playerComboBox;
     
-    juce::TextButton generateButton;
-    juce::TextButton playButton;
-    juce::TextButton stopButton;
     juce::TextButton saveButton;
-    
-    juce::ProgressBar progressBar;
     
     // Data model
     class RolesTableModel : public juce::TableListBoxModel
@@ -143,8 +126,6 @@ private:
     std::unique_ptr<EnsembleManager> ownedEnsembleManager; // Owned ensemble if we created it
     
     // State
-    bool isGenerating;
-    double progressValue; // Value for the progress bar
     std::function<void()> saveCallback; // Called when the ensemble is saved
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(EnsembleEditPanel)
