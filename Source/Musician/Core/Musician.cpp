@@ -1,0 +1,446 @@
+// Source/Musician/Core/Musician.cpp
+#include "Musician.h"
+#include "MusicPatternSystem.h"
+#include "PatternGenerator.h"
+#include "PatternParser.h"
+#include <iostream>
+
+namespace covertracks {
+
+Musician::Musician(const String& idValue, const String& styleValue)
+    : id(idValue), style(styleValue), patternSystem(std::make_unique<MusicPatternSystem>()), promptManager()
+{
+    // Initialize pattern generator when LLM client is set
+}
+
+Musician::~Musician()
+{
+    // PatternGenerator will be destroyed automatically
+}
+
+void Musician::setLLMClient(std::shared_ptr<LLMClient> client)
+{
+    llmClient = client;
+    
+    // Create the pattern generator now that we have an LLM client
+    if (llmClient)
+    {
+        patternGenerator = std::make_unique<PatternGenerator>(*patternSystem, llmClient, promptManager);
+        
+        // Set the system prompt
+        String systemPrompt = 
+            "You are a music pattern generator. Your role is to create music patterns based on the user's requests. "
+            "You'll be given specific instructions about the style, instruments, and structure of the music to create. "
+            "Always respond in the specified pattern notation format. Do not include any explanations or comments "
+            "outside the requested pattern format.";
+        
+        patternGenerator->setSystemPrompt(systemPrompt);
+    }
+    else
+    {
+        patternGenerator.reset();
+    }
+    
+    // Notify listeners of the change
+    sendChangeMessage();
+}
+
+void Musician::generatePattern(const var& parameters, 
+                             std::function<void(bool success, const var& pattern)> callback)
+{
+    if (!patternGenerator || !llmClient)
+    {
+        if (callback)
+            callback(false, "No LLM client connected");
+        return;
+    }
+    
+    // Extract parameters
+    String styleToUse = parameters.hasProperty("style") ? parameters["style"].toString() : this->style;
+    
+    StringArray instruments;
+    if (parameters.hasProperty("instruments"))
+    {
+        if (parameters["instruments"].isArray())
+        {
+            for (const auto& instrument : *parameters["instruments"].getArray())
+                instruments.add(instrument.toString());
+        }
+        else
+        {
+            instruments.add(parameters["instruments"].toString());
+        }
+    }
+    else
+    {
+        // Default to keys if no instruments specified
+        instruments.add("keys");
+    }
+    
+    int tempo = 120;
+    if (parameters.hasProperty("tempo") && parameters["tempo"].isInt())
+        tempo = parameters["tempo"];
+    
+    String description = parameters.hasProperty("description") ? parameters["description"].toString() : "";
+    
+    // Generate the pattern
+    patternGenerator->generateSong(styleToUse, instruments, tempo, description, 
+        [this, callback, tempo](bool success, std::shared_ptr<Song> song, const String& response) {
+            // Store the response
+            lastResponseText = response;
+            lastGeneratedSong = song;
+            
+            if (success && song)
+            {
+                // Set the tempo if not already set
+                if (song->getTempo() <= 0)
+                    song->setTempo(tempo);
+                
+                // Convert the song to MIDI events
+                var midiEvents = midiMessageSequenceToVar(*song->toMidiSequence(), song->getTempo());
+                
+                // Create the response object
+                DynamicObject* responseObj = new DynamicObject();
+                responseObj->setProperty("success", true);
+                responseObj->setProperty("command", "play_pattern");
+                responseObj->setProperty("tempo", song->getTempo());
+                responseObj->setProperty("events", midiEvents);
+                
+                // Call the callback
+                if (callback)
+                    callback(true, var(responseObj));
+            }
+            else
+            {
+                // Create an error response
+                DynamicObject* responseObj = new DynamicObject();
+                responseObj->setProperty("success", false);
+                responseObj->setProperty("error", "Failed to generate pattern");
+                responseObj->setProperty("response", response);
+                
+                // Call the callback
+                if (callback)
+                    callback(false, var(responseObj));
+            }
+            
+            // Notify listeners of the change
+            sendChangeMessage();
+        });
+}
+
+void Musician::generateSection(const String& section, const var& parameters,
+                             std::function<void(bool success, const var& pattern)> callback)
+{
+    if (!patternGenerator || !llmClient)
+    {
+        if (callback)
+            callback(false, "No LLM client connected");
+        return;
+    }
+    
+    // Extract parameters
+    String styleToUse = parameters.hasProperty("style") ? parameters["style"].toString() : this->style;
+    
+    StringArray instruments;
+    if (parameters.hasProperty("instruments"))
+    {
+        if (parameters["instruments"].isArray())
+        {
+            for (const auto& instrument : *parameters["instruments"].getArray())
+                instruments.add(instrument.toString());
+        }
+        else
+        {
+            instruments.add(parameters["instruments"].toString());
+        }
+    }
+    else
+    {
+        // Default to keys if no instruments specified
+        instruments.add("keys");
+    }
+    
+    String description = parameters.hasProperty("description") ? parameters["description"].toString() : "";
+    
+    // Generate the section
+    patternGenerator->generateSection(section, styleToUse, instruments, description, 
+        [this, callback](bool success, std::shared_ptr<Song> song, const String& response) {
+            // Store the response
+            lastResponseText = response;
+            lastGeneratedSong = song;
+            
+            if (success && song)
+            {
+                // Convert the song to MIDI events
+                var midiEvents = midiMessageSequenceToVar(*song->toMidiSequence(), song->getTempo());
+                
+                // Create the response object
+                DynamicObject* responseObj = new DynamicObject();
+                responseObj->setProperty("success", true);
+                responseObj->setProperty("command", "play_pattern");
+                responseObj->setProperty("tempo", song->getTempo());
+                responseObj->setProperty("events", midiEvents);
+                
+                // Call the callback
+                if (callback)
+                    callback(true, var(responseObj));
+            }
+            else
+            {
+                // Create an error response
+                DynamicObject* responseObj = new DynamicObject();
+                responseObj->setProperty("success", false);
+                responseObj->setProperty("error", "Failed to generate section");
+                responseObj->setProperty("response", response);
+                
+                // Call the callback
+                if (callback)
+                    callback(false, var(responseObj));
+            }
+            
+            // Notify listeners of the change
+            sendChangeMessage();
+        });
+}
+
+void Musician::modifyPattern(const var& currentPattern, const String& modification,
+                           std::function<void(bool success, const var& pattern)> callback)
+{
+    if (!patternGenerator || !llmClient)
+    {
+        if (callback)
+            callback(false, "No LLM client connected");
+        return;
+    }
+    
+    // Convert the current pattern to notation format
+    String currentNotation;
+    
+    if (currentPattern.isObject() && currentPattern.hasProperty("notation"))
+    {
+        // Pattern already has notation
+        currentNotation = currentPattern["notation"].toString();
+    }
+    else if (lastGeneratedSong)
+    {
+        // Use the last generated song's notation (from last response)
+        currentNotation = lastResponseText;
+    }
+    else
+    {
+        // Create a simple pattern based on the current pattern
+        currentNotation = "[4/4: C3 E3 G3 C4]";
+    }
+    
+    // Modify the pattern
+    patternGenerator->modifyPattern(currentNotation, modification, 
+        [this, callback](bool success, std::shared_ptr<Song> song, const String& response) {
+            // Store the response
+            lastResponseText = response;
+            lastGeneratedSong = song;
+            
+            if (success && song)
+            {
+                // Convert the song to MIDI events
+                var midiEvents = midiMessageSequenceToVar(*song->toMidiSequence(), song->getTempo());
+                
+                // Create the response object
+                DynamicObject* responseObj = new DynamicObject();
+                responseObj->setProperty("success", true);
+                responseObj->setProperty("command", "play_pattern");
+                responseObj->setProperty("tempo", song->getTempo());
+                responseObj->setProperty("events", midiEvents);
+                responseObj->setProperty("notation", response);
+                
+                // Call the callback
+                if (callback)
+                    callback(true, var(responseObj));
+            }
+            else
+            {
+                // Create an error response
+                DynamicObject* responseObj = new DynamicObject();
+                responseObj->setProperty("success", false);
+                responseObj->setProperty("error", "Failed to modify pattern");
+                responseObj->setProperty("response", response);
+                
+                // Call the callback
+                if (callback)
+                    callback(false, var(responseObj));
+            }
+            
+            // Notify listeners of the change
+            sendChangeMessage();
+        });
+}
+
+void Musician::setPlayerInterface(std::function<String(const String&)> commandInterface)
+{
+    playerCommandInterface = std::move(commandInterface);
+}
+
+bool Musician::playPattern(const var& pattern, double tempo)
+{
+    if (playerCommandInterface)
+    {
+        // Create a play command
+        DynamicObject* command = new DynamicObject();
+        command->setProperty("command", "play_pattern");
+        
+        // Include the tempo if provided
+        if (tempo > 0)
+            command->setProperty("tempo", tempo);
+        else if (pattern.hasProperty("tempo") && pattern["tempo"].isDouble())
+            command->setProperty("tempo", static_cast<double>(pattern["tempo"]));
+        else
+            command->setProperty("tempo", 120.0);
+        
+        // Include the events if provided
+        if (pattern.hasProperty("events"))
+            command->setProperty("events", pattern["events"]);
+        else
+            command->setProperty("events", pattern);
+        
+        // Send the command
+        String jsonCommand = JSON::toString(var(command));
+        String response = playerCommandInterface(jsonCommand);
+        
+        // Parse the response
+        var responseJson;
+        Result parseResult = JSON::parse(response, responseJson);
+        
+        if (parseResult.wasOk() && responseJson.hasProperty("status") && 
+            responseJson["status"].toString() == "success")
+        {
+            return true;
+        }
+        
+        // Log the error
+        std::cerr << "Failed to play pattern: " << response << std::endl;
+        return false;
+    }
+    
+    // No player interface
+    std::cerr << "No player interface set" << std::endl;
+    return false;
+}
+
+void Musician::stopPlayback()
+{
+    if (playerCommandInterface)
+    {
+        // Create a stop command
+        DynamicObject* command = new DynamicObject();
+        command->setProperty("command", "stop_player");
+        
+        // Send the command
+        String jsonCommand = JSON::toString(var(command));
+        playerCommandInterface(jsonCommand);
+    }
+}
+
+var Musician::convertNotationToMidiEvents(const String& notation, double tempo)
+{
+    // Parse the notation to create a song
+    auto parser = PatternParser(*patternSystem);
+    auto song = parser.parseLLMResponse(notation);
+    
+    if (song)
+    {
+        // Set the tempo if not already set
+        if (song->getTempo() <= 0)
+            song->setTempo(tempo);
+        
+        // Convert the song to MIDI events
+        return midiMessageSequenceToVar(*song->toMidiSequence(), song->getTempo());
+    }
+    
+    // Return an empty array if parsing failed
+    return var(Array<var>());
+}
+
+var Musician::midiMessageSequenceToVar(const MidiMessageSequence& sequence, double /*tempo*/) const
+{
+    Array<var> events;
+    
+    for (int i = 0; i < sequence.getNumEvents(); ++i)
+    {
+        auto event = sequence.getEventPointer(i);
+        DynamicObject* eventObj = new DynamicObject();
+        
+        if (event->message.isNoteOn())
+        {
+            eventObj->setProperty("type", "note_on");
+            eventObj->setProperty("channel", event->message.getChannel());
+            eventObj->setProperty("note", event->message.getNoteNumber());
+            eventObj->setProperty("velocity", event->message.getFloatVelocity());
+            eventObj->setProperty("timestamp", event->message.getTimeStamp());
+            
+            events.add(var(eventObj));
+        }
+        else if (event->message.isNoteOff())
+        {
+            eventObj->setProperty("type", "note_off");
+            eventObj->setProperty("channel", event->message.getChannel());
+            eventObj->setProperty("note", event->message.getNoteNumber());
+            eventObj->setProperty("velocity", 0.0f);
+            eventObj->setProperty("timestamp", event->message.getTimeStamp());
+            
+            events.add(var(eventObj));
+        }
+        else if (event->message.isController())
+        {
+            eventObj->setProperty("type", "controller");
+            eventObj->setProperty("channel", event->message.getChannel());
+            eventObj->setProperty("controller", event->message.getControllerNumber());
+            eventObj->setProperty("value", event->message.getControllerValue());
+            eventObj->setProperty("timestamp", event->message.getTimeStamp());
+            
+            events.add(var(eventObj));
+        }
+        else if (event->message.isProgramChange())
+        {
+            eventObj->setProperty("type", "program_change");
+            eventObj->setProperty("channel", event->message.getChannel());
+            eventObj->setProperty("program", event->message.getProgramChangeNumber());
+            eventObj->setProperty("timestamp", event->message.getTimeStamp());
+            
+            events.add(var(eventObj));
+        }
+    }
+    
+    return events;
+}
+
+var Musician::toVar() const
+{
+    DynamicObject* obj = new DynamicObject();
+    
+    obj->setProperty("id", id);
+    obj->setProperty("style", style);
+    
+    // We don't save the LLM client, pattern generator, etc.
+    // Those will be recreated when loaded
+    
+    return var(obj);
+}
+
+std::unique_ptr<Musician> Musician::fromVar(const var& v)
+{
+    if (v.isObject())
+    {
+        auto* obj = v.getDynamicObject();
+        
+        if (obj == nullptr)
+            return nullptr;
+        
+        String id = obj->getProperty("id").toString();
+        String style = obj->getProperty("style").toString();
+        
+        return std::make_unique<Musician>(id, style);
+    }
+    
+    return nullptr;
+}
+
+} // namespace covertracks

@@ -3,10 +3,12 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "../Core/Player.h" // Include the new Player class
+#include "../Core/Player.h"
 #include "../../Plugins/PluginGraph.h"
 #include "../../Plugins/InternalPlugins.h"
 #include "../../Audio/AudioEngine.h"
+#include "../../LLM/Core/LLMClient.h"
+#include "../../LLM/Core/ClaudeClient.h"
 
 namespace covertracks {
 
@@ -69,7 +71,42 @@ namespace covertracks {
         bool playPattern(Player* player, const var& pattern, double tempo = 120.0);
         bool playPatternOnAllActivePlayers(const var& pattern, double tempo = 120.0);
         void stopPlayback(Player* player = nullptr); // If nullptr, stops all players
-        
+
+        /**
+     * @brief Create or get shared LLM client
+     * 
+     * @param apiKey API key for the LLM service (if creating)
+     * @return std::shared_ptr<LLMClient> The LLM client
+     */
+    std::shared_ptr<LLMClient> getLLMClient(const String& apiKey = String());
+    
+    /**
+     * @brief Set the API key for the LLM client
+     * 
+     * @param apiKey API key for the LLM service
+     */
+    void setLLMApiKey(const String& apiKey);
+    
+    /**
+     * @brief Generate a pattern for a player using the LLM
+     * 
+     * @param player The player to generate a pattern for
+     * @param parameters Parameters for the pattern generation
+     * @param callback Callback to be invoked when generation completes
+     */
+    void generatePatternForPlayer(Player* player, 
+                                const var& parameters,
+                                std::function<void(bool success, const var& pattern)> callback);
+    
+    /**
+     * @brief Generate a pattern for all active players using the LLM
+     * 
+     * @param parameters Parameters for the pattern generation
+     * @param callback Callback to be invoked when generation completes
+     */
+    void generatePatternForAllPlayers(const var& parameters,
+                                    std::function<void(bool success, const var& pattern)> callback);
+
     private:
         // Get the directory where players are stored
         File getPlayersDirectory();
@@ -98,6 +135,9 @@ namespace covertracks {
         
         // List of managed players
         OwnedArray<Player> players;
+
+        std::shared_ptr<LLMClient> llmClient;
+        String llmApiKey;
         
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PlayerManager)
     };

@@ -1,0 +1,938 @@
+#include "MusicPatternSystem.h"
+#include <iostream>
+#include <sstream>
+#include <regex>
+
+namespace covertracks {
+
+//==============================================================================
+// Primitive implementation
+//==============================================================================
+
+var Primitive::toVar() const
+{
+    DynamicObject* obj = new DynamicObject();
+    obj->setProperty("name", name);
+    obj->setProperty("midiNote", midiNote);
+    obj->setProperty("description", description);
+    return var(obj);
+}
+
+Primitive Primitive::fromVar(const var& v)
+{
+    Primitive result;
+    
+    if (auto* obj = v.getDynamicObject())
+    {
+        result.name = obj->getProperty("name").toString();
+        result.midiNote = obj->getProperty("midiNote");
+        result.description = obj->getProperty("description").toString();
+    }
+    
+    return result;
+}
+
+//==============================================================================
+// PatternEvent implementation
+//==============================================================================
+
+var PatternEvent::toVar() const
+{
+    DynamicObject* obj = new DynamicObject();
+    obj->setProperty("primitive", primitive);
+    obj->setProperty("position", position);
+    obj->setProperty("duration", duration);
+    obj->setProperty("velocity", velocity);
+    return var(obj);
+}
+
+PatternEvent PatternEvent::fromVar(const var& v)
+{
+    PatternEvent result;
+    
+    if (auto* obj = v.getDynamicObject())
+    {
+        result.primitive = obj->getProperty("primitive").toString();
+        result.position = obj->getProperty("position");
+        result.duration = obj->getProperty("duration");
+        result.velocity = obj->getProperty("velocity");
+    }
+    
+    return result;
+}
+
+//==============================================================================
+// Bar implementation
+//==============================================================================
+
+var Bar::toVar() const
+{
+    DynamicObject* obj = new DynamicObject();
+    
+    // Store time signature
+    obj->setProperty("timeSignatureNumerator", timeSignatureNumerator);
+    obj->setProperty("timeSignatureDenominator", timeSignatureDenominator);
+    
+    // Serialize events
+    Array<var> eventsArray;
+    for (const auto& event : events)
+    {
+        DynamicObject* eventObj = new DynamicObject();
+        eventObj->setProperty("type", (int)event.type);
+        eventObj->setProperty("beat", event.beat);
+        eventObj->setProperty("channel", event.channel);
+        eventObj->setProperty("noteNumber", event.noteNumber);
+        eventObj->setProperty("velocity", event.velocity);
+        eventObj->setProperty("duration", event.duration);
+        eventObj->setProperty("controllerNumber", event.controllerNumber);
+        eventObj->setProperty("value", event.value);
+        eventsArray.add(var(eventObj));
+    }
+    obj->setProperty("events", eventsArray);
+    
+    return var(obj);
+}
+
+std::shared_ptr<Bar> Bar::fromVar(const var& v)
+{
+    auto result = std::make_shared<Bar>();
+    
+    if (auto* obj = v.getDynamicObject())
+    {
+        // Get time signature
+        result->timeSignatureNumerator = obj->hasProperty("timeSignatureNumerator") ? static_cast<int>(obj->getProperty("timeSignatureNumerator")) : 4;
+        result->timeSignatureDenominator = obj->hasProperty("timeSignatureDenominator") ? static_cast<int>(obj->getProperty("timeSignatureDenominator")) : 4;
+        
+        // Get events
+        var eventsVar = obj->getProperty("events");
+        if (eventsVar.isArray())
+        {
+            for (const auto& eventVar : *eventsVar.getArray())
+            {
+                if (auto* eventObj = eventVar.getDynamicObject())
+                {
+                    Event::Type type = (Event::Type)(eventObj->hasProperty("type") ? static_cast<int>(eventObj->getProperty("type")) : 0);
+                    float beat = eventObj->hasProperty("beat") ? static_cast<float>(eventObj->getProperty("beat")) : 0.0f;
+                    int channel = eventObj->hasProperty("channel") ? static_cast<int>(eventObj->getProperty("channel")) : 0;
+                    
+                    Event event(type, beat, channel);
+                    event.noteNumber = eventObj->hasProperty("noteNumber") ? static_cast<int>(eventObj->getProperty("noteNumber")) : 0;
+                    event.velocity = eventObj->hasProperty("velocity") ? static_cast<float>(eventObj->getProperty("velocity")) : 0.0f;
+                    event.duration = eventObj->hasProperty("duration") ? static_cast<float>(eventObj->getProperty("duration")) : 0.0f;
+                    event.controllerNumber = eventObj->hasProperty("controllerNumber") ? static_cast<int>(eventObj->getProperty("controllerNumber")) : 0;
+                    event.value = eventObj->hasProperty("value") ? static_cast<int>(eventObj->getProperty("value")) : 0;
+                    
+                    result->events.add(event);
+                }
+            }
+        }
+    }
+    
+    return result;
+}
+
+//==============================================================================
+// Phrase implementation
+//==============================================================================
+
+var Phrase::toVar() const
+{
+    DynamicObject* obj = new DynamicObject();
+    obj->setProperty("name", name);
+    
+    // Serialize bars
+    Array<var> barsArray;
+    for (const auto& bar : bars)
+    {
+        if (bar)
+            barsArray.add(bar->toVar());
+    }
+    obj->setProperty("bars", barsArray);
+    
+    return var(obj);
+}
+
+std::shared_ptr<Phrase> Phrase::fromVar(const var& v)
+{
+    auto result = std::make_shared<Phrase>();
+    
+    if (auto* obj = v.getDynamicObject())
+    {
+        result->setName(obj->getProperty("name").toString());
+        
+        var barsVar = obj->getProperty("bars");
+        if (barsVar.isArray())
+        {
+            for (const auto& barVar : *barsVar.getArray())
+            {
+                auto bar = Bar::fromVar(barVar);
+                if (bar)
+                    result->bars.add(bar);
+            }
+        }
+    }
+    
+    return result;
+}
+
+//==============================================================================
+// Section implementation
+//==============================================================================
+
+var Section::toVar() const
+{
+    DynamicObject* obj = new DynamicObject();
+    obj->setProperty("name", name);
+    
+    Array<var> phrasesArray;
+    for (const auto& phrase : phrases)
+    {
+        if (phrase)
+            phrasesArray.add(phrase->toVar());
+    }
+    obj->setProperty("phrases", phrasesArray);
+    
+    return var(obj);
+}
+
+std::shared_ptr<Section> Section::fromVar(const var& v)
+{
+    auto result = std::make_shared<Section>();
+    
+    if (auto* obj = v.getDynamicObject())
+    {
+        result->setName(obj->getProperty("name").toString());
+        
+        var phrasesVar = obj->getProperty("phrases");
+        if (phrasesVar.isArray())
+        {
+            for (const auto& phraseVar : *phrasesVar.getArray())
+            {
+                auto phrase = Phrase::fromVar(phraseVar);
+                if (phrase)
+                    result->phrases.add(phrase);
+            }
+        }
+    }
+    
+    return result;
+}
+
+//==============================================================================
+// Song implementation
+//==============================================================================
+
+var Song::toVar() const
+{
+    DynamicObject* obj = new DynamicObject();
+    obj->setProperty("name", title);
+    obj->setProperty("tempo", tempo);
+    
+    Array<var> sectionsArray;
+    for (const auto& section : sections)
+    {
+        if (section)
+            sectionsArray.add(section->toVar());
+    }
+    obj->setProperty("sections", sectionsArray);
+    
+    return var(obj);
+}
+
+std::shared_ptr<Song> Song::fromVar(const var& v)
+{
+    auto result = std::make_shared<Song>();
+    
+    if (auto* obj = v.getDynamicObject())
+    {
+        result->setTitle(obj->getProperty("name").toString());
+        result->setTempo(obj->hasProperty("tempo") ? static_cast<double>(obj->getProperty("tempo")) : 120.0);
+        
+        if (result->getTempo() <= 0)
+            result->setTempo(120.0);
+        
+        var sectionsVar = obj->getProperty("sections");
+        if (sectionsVar.isArray())
+        {
+            for (const auto& sectionVar : *sectionsVar.getArray())
+            {
+                auto section = Section::fromVar(sectionVar);
+                if (section)
+                    result->sections.add(section);
+            }
+        }
+    }
+    
+    return result;
+}
+
+std::unique_ptr<MidiMessageSequence> Song::toMidiSequence() const
+{
+    auto sequence = std::make_unique<MidiMessageSequence>();
+    
+    // Calculate the total number of ticks per quarter note
+    const int ticksPerQuarterNote = 960;
+    
+    // Calculate the current position in ticks
+    double currentTick = 0.0;
+    
+    // Process each section
+    for (const auto& section : sections)
+    {
+        if (!section)
+            continue;
+        
+        // Process each phrase in the section
+        for (int i = 0; i < section->getNumPhrases(); ++i)
+        {
+            auto phrase = section->getPhrase(i);
+            if (!phrase)
+                continue;
+            
+            // Process each bar in the phrase
+            for (int j = 0; j < phrase->getNumBars(); ++j)
+            {
+                auto bar = phrase->getBar(j);
+                if (!bar)
+                    continue;
+                
+                // Get the MIDI sequence for this bar
+                auto barSequence = bar->toMidiSequence();
+                if (!barSequence)
+                    continue;
+                
+                // Add the bar's events to the song sequence with the current offset
+                for (int k = 0; k < barSequence->getNumEvents(); ++k)
+                {
+                    auto event = barSequence->getEventPointer(k);
+                    if (event)
+                    {
+                        // Clone the event and adjust its timestamp
+                        auto newEvent = event->message;
+                        newEvent.setTimeStamp(newEvent.getTimeStamp() + currentTick);
+                        sequence->addEvent(newEvent);
+                    }
+                }
+                
+                // Update the current position
+                // For simplicity, assume each bar is 4 quarter notes (1 bar in 4/4 time)
+                // In a more complete implementation, this would depend on the time signature
+                double beatsInBar = 4.0 * (bar->getTimeSignatureNumerator() / static_cast<double>(bar->getTimeSignatureDenominator())) * 4.0;
+                currentTick += beatsInBar * ticksPerQuarterNote;
+            }
+        }
+    }
+    
+    // Sort the sequence by timestamp
+    sequence->sort();
+    
+    return sequence;
+}
+
+//==============================================================================
+// InstrumentDefinition implementation
+//==============================================================================
+
+InstrumentDefinition::InstrumentDefinition(const String& instrumentName)
+    : name(instrumentName)
+{
+}
+
+Primitive InstrumentDefinition::getPrimitive(const String& primitiveName) const
+{
+    auto it = primitives.find(primitiveName);
+    if (it != primitives.end())
+        return it->second;
+    
+    // Return a default primitive if not found
+    return Primitive();
+}
+
+std::shared_ptr<Bar> InstrumentDefinition::getPattern(const String& patternName) const
+{
+    auto it = patterns.find(patternName);
+    if (it != patterns.end())
+        return it->second;
+    
+    // Return nullptr if not found
+    return nullptr;
+}
+
+var InstrumentDefinition::toVar() const
+{
+    DynamicObject* obj = new DynamicObject();
+    obj->setProperty("name", name);
+    
+    // Serialize primitives
+    Array<var> primitivesArray;
+    for (const auto& primitive : primitives)
+    {
+        primitivesArray.add(primitive.second.toVar());
+    }
+    obj->setProperty("primitives", primitivesArray);
+    
+    // Serialize patterns
+    DynamicObject* patternsObj = new DynamicObject();
+    for (const auto& pattern : patterns)
+    {
+        if (pattern.second)
+            patternsObj->setProperty(pattern.first, pattern.second->toVar());
+    }
+    obj->setProperty("patterns", var(patternsObj));
+    
+    return var(obj);
+}
+
+InstrumentDefinition InstrumentDefinition::fromVar(const var& v)
+{
+    InstrumentDefinition result;
+    
+    if (auto* obj = v.getDynamicObject())
+    {
+        result.name = obj->getProperty("name").toString();
+        
+        // Get primitives
+        var primitivesVar = obj->getProperty("primitives");
+        if (primitivesVar.isArray())
+        {
+            for (const auto& primitiveVar : *primitivesVar.getArray())
+            {
+                Primitive prim = Primitive::fromVar(primitiveVar);
+                result.primitives[prim.name] = prim;
+            }
+        }
+        
+        // Get patterns
+        var patternsVar = obj->getProperty("patterns");
+        if (auto* patternsObj = patternsVar.getDynamicObject())
+        {
+            for (const auto& prop : patternsObj->getProperties())
+            {
+                auto pattern = Bar::fromVar(prop.value);
+                if (pattern)
+                    result.patterns[prop.name.toString()] = pattern;
+            }
+        }
+    }
+    
+    return result;
+}
+
+//==============================================================================
+// MusicPatternSystem implementation
+//==============================================================================
+
+MusicPatternSystem::MusicPatternSystem()
+{
+    // Initialize with default instrument definitions
+}
+
+MusicPatternSystem::~MusicPatternSystem()
+{
+    // Clean up any resources
+}
+
+void MusicPatternSystem::addInstrumentDefinition(const String& name, const InstrumentDefinition& definition)
+{
+    instrumentDefinitions[name] = definition;
+}
+
+bool MusicPatternSystem::hasInstrumentDefinition(const String& name) const
+{
+    return instrumentDefinitions.find(name) != instrumentDefinitions.end();
+}
+
+const InstrumentDefinition& MusicPatternSystem::getInstrumentDefinition(const String& name) const
+{
+    static InstrumentDefinition emptyDef;
+    auto it = instrumentDefinitions.find(name);
+    if (it != instrumentDefinitions.end())
+        return it->second;
+    return emptyDef;
+}
+
+std::shared_ptr<Bar> MusicPatternSystem::resolvePatternReference(const String& reference, const String& instrumentName)
+{
+    // Check if the reference is a direct pattern definition
+    if (reference.startsWith("[") && reference.endsWith("]"))
+    {
+        // This is a direct pattern definition, parse it
+        return createBarFromNotation(reference);
+    }
+    
+    // Check if the reference is a named pattern in the specified instrument
+    if (hasInstrumentDefinition(instrumentName))
+    {
+        auto pattern = getInstrumentDefinition(instrumentName).getPattern(reference);
+        if (pattern)
+            return pattern;
+    }
+    
+    // Check if the reference is a named pattern in any instrument
+    for (const auto& instrument : instrumentDefinitions)
+    {
+        auto pattern = instrument.second.getPattern(reference);
+        if (pattern)
+            return pattern;
+    }
+    
+    // If we couldn't resolve the reference, return a default empty bar
+    return std::make_shared<Bar>();
+}
+
+std::shared_ptr<Bar> MusicPatternSystem::createBarFromNotation(const String& notation)
+{
+    // Parse the notation and create a bar
+    auto bar = std::make_shared<Bar>();
+    
+    // Extract time signature if present
+    String timeSignature = "4/4"; // Default time signature
+    String eventsText = notation;
+    
+    // Remove the outer brackets if present
+    if (eventsText.startsWith("[") && eventsText.endsWith("]"))
+    {
+        eventsText = eventsText.substring(1, eventsText.length() - 1).trim();
+    }
+    
+    // Check for time signature at the beginning (e.g., "3/4: [events]")
+    if (eventsText.contains(":"))
+    {
+        int colonPos = eventsText.indexOf(":");
+        String possibleTimeSignature = eventsText.substring(0, colonPos).trim();
+        
+        // Simple validation for time signature format
+        if (possibleTimeSignature.contains("/") && 
+            possibleTimeSignature.upToFirstOccurrenceOf("/", false, true).containsOnly("0123456789") &&
+            possibleTimeSignature.fromFirstOccurrenceOf("/", false, true).containsOnly("0123456789"))
+        {
+            timeSignature = possibleTimeSignature;
+            eventsText = eventsText.substring(colonPos + 1).trim();
+            
+            // Parse the time signature and set it on the bar
+            StringArray parts;
+            parts.addTokens(timeSignature, "/", "");
+            if (parts.size() == 2)
+            {
+                int numerator = parts[0].getIntValue();
+                int denominator = parts[1].getIntValue();
+                if (numerator > 0 && denominator > 0)
+                {
+                    bar->setTimeSignature(numerator, denominator);
+                }
+            }
+        }
+    }
+    
+    // Parse the events
+    Array<PatternEvent> events = parseEvents(eventsText, timeSignature);
+    
+    // Add the events to the bar
+    for (const auto& event : events)
+    {
+        // In a real implementation, you would map the primitive to a MIDI note
+        // and add it to the bar with the appropriate position, duration, etc.
+        // For simplicity, we'll just use a default mapping here
+        int midiNote = 60; // Middle C
+        float velocity = event.velocity > 0 ? event.velocity / 127.0f : 0.8f;
+        float duration = event.duration > 0 ? static_cast<float>(event.duration) : 0.25f;
+        
+        bar->addNote(static_cast<int>(event.position), 0, midiNote, velocity, duration);
+    }
+    
+    return bar;
+}
+
+std::shared_ptr<Phrase> MusicPatternSystem::createPhraseFromNotation(const String& notation)
+{
+    auto phrase = std::make_shared<Phrase>();
+    
+    // Remove outer brackets if present
+    String content = notation;
+    if (content.startsWith("[") && content.endsWith("]"))
+    {
+        content = content.substring(1, content.length() - 1).trim();
+    }
+    
+    // Check for phrase name
+    if (content.contains(":"))
+    {
+        int colonPos = content.indexOf(":");
+        String phraseName = content.substring(0, colonPos).trim();
+        
+        // Set the phrase name if it's not a time signature
+        if (!phraseName.contains("/"))
+        {
+            phrase->setName(phraseName);
+            content = content.substring(colonPos + 1).trim();
+        }
+    }
+    
+    // Split the content into bar definitions
+    StringArray barDefs;
+    
+    // Strategy 1: Look for bar definitions enclosed in brackets
+    if (content.contains("[") && content.contains("]"))
+    {
+        int startPos = 0;
+        int endPos = 0;
+        int nestingLevel = 0;
+        
+        for (int i = 0; i < content.length(); ++i)
+        {
+            if (content[i] == '[')
+            {
+                if (nestingLevel == 0)
+                    startPos = i;
+                nestingLevel++;
+            }
+            else if (content[i] == ']')
+            {
+                nestingLevel--;
+                if (nestingLevel == 0)
+                {
+                    endPos = i;
+                    barDefs.add(content.substring(startPos, endPos + 1).trim());
+                }
+            }
+        }
+    }
+    // Strategy 2: Split by commas or semicolons if no brackets are found
+    else
+    {
+        barDefs.addTokens(content, ",;", "\"[]");
+    }
+    
+    // Create bars from the definitions
+    for (const auto& barDef : barDefs)
+    {
+        if (barDef.trim().isNotEmpty())
+        {
+            auto bar = createBarFromNotation(barDef.trim());
+            if (bar)
+                phrase->addBar(bar);
+        }
+    }
+    
+    return phrase;
+}
+
+std::shared_ptr<Section> MusicPatternSystem::createSectionFromNotation(const String& notation)
+{
+    auto section = std::make_shared<Section>();
+    
+    // Remove outer brackets if present
+    String content = notation;
+    if (content.startsWith("[") && content.endsWith("]"))
+    {
+        content = content.substring(1, content.length() - 1).trim();
+    }
+    
+    // Check for section name
+    if (content.contains(":"))
+    {
+        int colonPos = content.indexOf(":");
+        String sectionName = content.substring(0, colonPos).trim();
+        
+        // Set the section name if it's not a time signature
+        if (!sectionName.contains("/"))
+        {
+            section->setName(sectionName);
+            content = content.substring(colonPos + 1).trim();
+        }
+    }
+    
+    // Split the content into phrase definitions
+    StringArray phraseDefs;
+    
+    // Strategy 1: Look for phrase definitions enclosed in brackets
+    if (content.contains("[") && content.contains("]"))
+    {
+        int startPos = 0;
+        int endPos = 0;
+        int nestingLevel = 0;
+        
+        for (int i = 0; i < content.length(); ++i)
+        {
+            if (content[i] == '[')
+            {
+                if (nestingLevel == 0)
+                    startPos = i;
+                nestingLevel++;
+            }
+            else if (content[i] == ']')
+            {
+                nestingLevel--;
+                if (nestingLevel == 0)
+                {
+                    endPos = i;
+                    phraseDefs.add(content.substring(startPos, endPos + 1).trim());
+                }
+            }
+        }
+    }
+    // Strategy 2: Split by commas or semicolons if no brackets are found
+    else
+    {
+        phraseDefs.addTokens(content, ",;", "\"[]");
+    }
+    
+    // Create phrases from the definitions
+    for (const auto& phraseDef : phraseDefs)
+    {
+        if (phraseDef.trim().isNotEmpty())
+        {
+            auto phrase = createPhraseFromNotation(phraseDef.trim());
+            if (phrase)
+                section->addPhrase(phrase);
+        }
+    }
+    
+    return section;
+}
+
+std::shared_ptr<Song> MusicPatternSystem::createSongFromNotation(const String& notation)
+{
+    auto song = std::make_shared<Song>();
+    
+    // Remove outer brackets if present
+    String content = notation;
+    if (content.startsWith("[") && content.endsWith("]"))
+    {
+        content = content.substring(1, content.length() - 1).trim();
+    }
+    
+    // Check for song name and tempo
+    if (content.contains(":"))
+    {
+        int colonPos = content.indexOf(":");
+        String songInfo = content.substring(0, colonPos).trim();
+        
+        // Parse song info (name and tempo)
+        if (songInfo.contains("@"))
+        {
+            // Format: "Song Name @ 120"
+            int atPos = songInfo.indexOf("@");
+            String songName = songInfo.substring(0, atPos).trim();
+            String tempoStr = songInfo.substring(atPos + 1).trim();
+            
+            song->setTitle(songName);
+            
+            // Parse tempo
+            if (tempoStr.containsOnly("0123456789."))
+            {
+                double tempo = tempoStr.getDoubleValue();
+                if (tempo > 0)
+                    song->setTempo(tempo);
+            }
+        }
+        else
+        {
+            // Just a name, no tempo
+            song->setTitle(songInfo);
+        }
+        
+        content = content.substring(colonPos + 1).trim();
+    }
+    
+    // Split the content into section definitions
+    StringArray sectionDefs;
+    
+    // Strategy 1: Look for section definitions enclosed in brackets
+    if (content.contains("[") && content.contains("]"))
+    {
+        int startPos = 0;
+        int endPos = 0;
+        int nestingLevel = 0;
+        
+        for (int i = 0; i < content.length(); ++i)
+        {
+            if (content[i] == '[')
+            {
+                if (nestingLevel == 0)
+                    startPos = i;
+                nestingLevel++;
+            }
+            else if (content[i] == ']')
+            {
+                nestingLevel--;
+                if (nestingLevel == 0)
+                {
+                    endPos = i;
+                    sectionDefs.add(content.substring(startPos, endPos + 1).trim());
+                }
+            }
+        }
+    }
+    // Strategy 2: Split by commas or semicolons if no brackets are found
+    else
+    {
+        sectionDefs.addTokens(content, ",;", "\"[]");
+    }
+    
+    // Create sections from the definitions
+    for (const auto& sectionDef : sectionDefs)
+    {
+        if (sectionDef.trim().isNotEmpty())
+        {
+            auto section = createSectionFromNotation(sectionDef.trim());
+            if (section)
+                song->addSection(section);
+        }
+    }
+    
+    return song;
+}
+
+Array<PatternEvent> MusicPatternSystem::parseEvents(const String& eventsText, const String& timeSignature)
+{
+    Array<PatternEvent> events;
+    
+    // Strategy 1: Parse events in the format [position: primitive]
+    if (eventsText.contains("[") && eventsText.contains("]"))
+    {
+        // Split the events text into individual event definitions
+        StringArray parts;
+        
+        int startPos = 0;
+        int endPos = 0;
+        int nestingLevel = 0;
+        
+        for (int i = 0; i < eventsText.length(); ++i)
+        {
+            if (eventsText[i] == '[')
+            {
+                if (nestingLevel == 0)
+                    startPos = i;
+                nestingLevel++;
+            }
+            else if (eventsText[i] == ']')
+            {
+                nestingLevel--;
+                if (nestingLevel == 0)
+                {
+                    endPos = i;
+                    parts.add(eventsText.substring(startPos, endPos + 1).trim());
+                }
+            }
+        }
+        
+        // Parse each event
+        for (String part : parts)
+        {
+            part = part.trim();
+            if (part.isEmpty())
+                continue;
+                
+            // Add back the bracket if it was removed
+            if (!part.startsWith("["))
+                part = "[" + part;
+                
+            // Add back the closing bracket if it was removed
+            if (!part.endsWith("]"))
+                part = part + "]";
+                
+            // Now we should have a properly formatted event like [1: kick]
+            if (part.startsWith("[") && part.contains(":") && part.endsWith("]"))
+            {
+                int colonPos = part.indexOf(":");
+                String posText = part.substring(1, colonPos).trim();
+                String noteText = part.substring(colonPos + 1, part.length() - 1).trim();
+                
+                double position = getPositionInBeats(posText, timeSignature);
+                
+                // Split noteText if it contains multiple primitives (e.g., "kick+closed_hat")
+                StringArray primitives;
+                primitives.addTokens(noteText, "+", "\"");
+                
+                for (const auto& primitive : primitives)
+                {
+                    PatternEvent event;
+                    event.primitive = primitive.trim();
+                    event.position = position;
+                    
+                    // Check if velocity is specified (e.g., "kick:v80")
+                    if (event.primitive.contains(":v"))
+                    {
+                        int vPos = event.primitive.indexOf(":v");
+                        String velText = event.primitive.substring(vPos + 2);
+                        event.velocity = velText.getIntValue();
+                        event.primitive = event.primitive.substring(0, vPos).trim();
+                    }
+                    
+                    events.add(event);
+                }
+            }
+        }
+    }
+    // Strategy 2: Simple space-separated list of primitives (evenly distributed)
+    else
+    {
+        StringArray primitives;
+        primitives.addTokens(eventsText, " ", "\"");
+        
+        int beatsPerBar = getBeatsPerBar(timeSignature);
+        double beatSpacing = beatsPerBar / static_cast<double>(primitives.size());
+        
+        for (int i = 0; i < primitives.size(); ++i)
+        {
+            String primitive = primitives[i].trim();
+            if (!primitive.isEmpty())
+            {
+                PatternEvent event;
+                event.primitive = primitive;
+                event.position = 1.0 + (i * beatSpacing); // 1-based position
+                
+                // Check if velocity is specified (e.g., "kick:v80")
+                if (event.primitive.contains(":v"))
+                {
+                    int vPos = event.primitive.indexOf(":v");
+                    String velText = event.primitive.substring(vPos + 2);
+                    event.velocity = velText.getIntValue();
+                    event.primitive = event.primitive.substring(0, vPos).trim();
+                }
+                
+                events.add(event);
+            }
+        }
+    }
+    
+    return events;
+}
+
+int MusicPatternSystem::getBeatsPerBar(const String& timeSignature)
+{
+    // Parse the time signature (e.g., "4/4", "3/4", etc.)
+    if (timeSignature.contains("/"))
+    {
+        StringArray parts;
+        parts.addTokens(timeSignature, "/", "");
+        if (parts.size() == 2)
+        {
+            return parts[0].getIntValue();
+        }
+    }
+    
+    // Default to 4 beats per bar (4/4 time)
+    return 4;
+}
+
+double MusicPatternSystem::getPositionInBeats(const String& positionText, const String&)
+{
+    // Handle simple beat positions (e.g., "1", "2", "3", "4")
+    if (positionText.containsOnly("0123456789"))
+    {
+        return positionText.getDoubleValue();
+    }
+    
+    // Handle fractional beat positions (e.g., "1.5", "2.5", "3.75")
+    if (positionText.containsOnly("0123456789."))
+    {
+        return positionText.getDoubleValue();
+    }
+    
+    // Default to position 1 (first beat)
+    return 1.0;
+}
+
+} // namespace covertracks

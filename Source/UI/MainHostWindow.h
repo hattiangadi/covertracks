@@ -39,6 +39,9 @@
 #include "../Player/UI/PlayerLibraryComponent.h"
 #include "../Player/UI/PlayerModeComponent.h"
 #include "../Audio/AudioEngine.h"
+#include "../LLM/UI/LLMConversationComponent.h"
+#include "../Musician/UI/PatternEditorComponent.h"
+#include "../LLM/Core/LLMManager.h"
 
 namespace covertracks {
 //==============================================================================
@@ -138,6 +141,9 @@ public:
     // Main components
     std::unique_ptr<PlayerLibraryComponent> playerLibraryWindow;
     std::unique_ptr<PlayerModeComponent> playerModeWindow;
+    std::unique_ptr<LLMConversationComponent> llmConversationWindow;
+    std::unique_ptr<PatternEditorComponent> patternEditorWindow;
+    std::shared_ptr<Musician> musician; // Needed for LLM and Pattern components
     
 
 

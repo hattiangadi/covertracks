@@ -376,84 +376,14 @@ bool Player::initialize()
     
     // Load the graph state if needed
     loadGraphStateIfNeeded();
-    
-    // Temporarily commented out Musician initialization for compilation
-    /*
+
     // Create musician if needed
     if (musician == nullptr)
     {
         musician = std::make_unique<Musician>(id, metadata.category);
+        
+        // Set up the musician to use the instrument for playback (done in setMusician)
     }
-    
-    // Set up the musician to use the instrument for playback
-    if (musician != nullptr && instrument != nullptr)
-    {
-        // Create a function that forwards play commands to the instrument
-        musician->setPlayerInterface([this](const std::string& jsonCommand) -> std::string {
-            try {
-                // Parse the JSON command
-                json command = json::parse(jsonCommand);
-                
-                // Check the command type
-                if (command.contains("command"))
-                {
-                    std::string commandType = command["command"];
-                    
-                    if (commandType == "play_pattern")
-                    {
-                        // Extract parameters
-                        json events = command["events"];
-                        double tempo = 120.0;
-                        
-                        if (command.contains("tempo") && command["tempo"].is_number())
-                        {
-                            tempo = command["tempo"];
-                        }
-                        
-                        // Play the pattern on the instrument
-                        bool success = instrument->playMIDIPattern(events, tempo);
-                        
-                        if (success)
-                        {
-                            return "{\"status\": \"success\", \"message\": \"Pattern playback started\"}";
-                        }
-                        else
-                        {
-                            return "{\"status\": \"error\", \"message\": \"Failed to start pattern playback\"}";
-                        }
-                    }
-                    else if (commandType == "stop_player")
-                    {
-                        // Stop playback
-                        instrument->stopPlayback();
-                        return "{\"status\": \"success\", \"message\": \"Playback stopped\"}";
-                    }
-                    else if (commandType == "create_player")
-                    {
-                        // Player is already created, just acknowledge
-                        return "{\"status\": \"success\", \"message\": \"Player already exists\"}";
-                    }
-                    else
-                    {
-                        return "{\"status\": \"error\", \"message\": \"Unknown command\"}";
-                    }
-                }
-                else
-                {
-                    return "{\"status\": \"error\", \"message\": \"Missing command field\"}";
-                }
-            }
-            catch (const json::exception& e)
-            {
-                return "{\"status\": \"error\", \"message\": \"Invalid JSON format: " + std::string(e.what()) + "\"}";
-            }
-            catch (const std::exception& e)
-            {
-                return "{\"status\": \"error\", \"message\": \"" + std::string(e.what()) + "\"}";
-            }
-        });
-    }
-    */
     
     std::cout << "Player fully initialized: " << metadata.name << " (ID: " << id << ")" << std::endl;
     
@@ -701,17 +631,44 @@ void Player::setLLMClient(std::shared_ptr<LLMClient> client)
 */
 
 // Updated to use var instead of json and stubbed implementation
-var Player::generatePattern(const var& /*parameters*/)
+var Player::generatePattern(const var& parameters)
 {
-    // Create a simple empty pattern for testing
+    if (musician != nullptr)
+    {
+        // Use the musician to generate the pattern
+        // This is asynchronous, so we'll need to return a placeholder
+        // The actual pattern will be played when ready
+        
+        // Need to add wait functionality if we want to return the result synchronously
+        // For now, just return a placeholder
+        
+        musician->generatePattern(parameters, [this](bool success, const var& pattern) {
+            if (success)
+            {
+                // Store the generated pattern
+                lastGeneratedPattern = pattern;
+                
+                // We don't automatically play it - that would be handled by the UI
+            }
+        });
+        
+        // Return a placeholder indicating that generation is in progress
+        DynamicObject* placeholder = new DynamicObject();
+        placeholder->setProperty("status", "generating");
+        placeholder->setProperty("message", "Pattern generation in progress");
+        return var(placeholder);
+    }
+    
+    // Create a simple placeholder pattern if no musician
     DynamicObject* errorObj = new DynamicObject();
-    errorObj->setProperty("error", "Musician functionality is stubbed out");
+    errorObj->setProperty("error", "Musician not available");
     
     // Store the last generated pattern
     lastGeneratedPattern = var(errorObj);
     
     return lastGeneratedPattern;
 }
+
 
 bool Player::playPattern(const var& pattern, double tempo)
 {
@@ -785,6 +742,103 @@ void Player::handlePatternFinished()
     }
 }
 
+void Player::setMusician(std::unique_ptr<Musician> newMusician)
+{
+    musician = std::move(newMusician);
+    
+    // Set up the player interface
+    if (musician)
+    {
+        musician->setPlayerInterface([this](const String& jsonCommand) -> String {
+            var command;
+            Result result = JSON::parse(jsonCommand, command);
+            
+            if (result.failed())
+            {
+                DynamicObject* responseObj = new DynamicObject();
+                responseObj->setProperty("status", "error");
+                responseObj->setProperty("message", "Invalid JSON: " + result.getErrorMessage());
+                return JSON::toString(var(responseObj));
+            }
+            
+            if (command.hasProperty("command"))
+            {
+                String commandType = command["command"].toString();
+                
+                if (commandType == "play_pattern")
+                {
+                    // Extract parameters
+                    var events = command.hasProperty("events") ? command["events"] : var();
+                    double tempo = 120.0;
+                    
+                    if (command.hasProperty("tempo") && command["tempo"].isDouble())
+                    {
+                        tempo = static_cast<double>(command["tempo"]);
+                    }
+                    
+                    // Play the pattern on the instrument
+                    bool success = playPattern(events, tempo);
+                    
+                    if (success)
+                    {
+                        DynamicObject* responseObj = new DynamicObject();
+                        responseObj->setProperty("status", "success");
+                        responseObj->setProperty("message", "Pattern playback started");
+                        return JSON::toString(var(responseObj));
+                    }
+                    else
+                    {
+                        DynamicObject* responseObj = new DynamicObject();
+                        responseObj->setProperty("status", "error");
+                        responseObj->setProperty("message", "Failed to start pattern playback");
+                        return JSON::toString(var(responseObj));
+                    }
+                }
+                else if (commandType == "stop_player")
+                {
+                    // Stop playback
+                    stopPlayback();
+                    
+                    DynamicObject* responseObj = new DynamicObject();
+                    responseObj->setProperty("status", "success");
+                    responseObj->setProperty("message", "Playback stopped");
+                    return JSON::toString(var(responseObj));
+                }
+                else if (commandType == "create_player")
+                {
+                    // Player is already created, just acknowledge
+                    DynamicObject* responseObj = new DynamicObject();
+                    responseObj->setProperty("status", "success");
+                    responseObj->setProperty("message", "Player already exists");
+                    return JSON::toString(var(responseObj));
+                }
+                else
+                {
+                    DynamicObject* responseObj = new DynamicObject();
+                    responseObj->setProperty("status", "error");
+                    responseObj->setProperty("message", "Unknown command: " + commandType);
+                    return JSON::toString(var(responseObj));
+                }
+            }
+            else
+            {
+                DynamicObject* responseObj = new DynamicObject();
+                responseObj->setProperty("status", "error");
+                responseObj->setProperty("message", "Missing command field");
+                return JSON::toString(var(responseObj));
+            }
+        });
+    }
+}
+
+void Player::setLLMClient(std::shared_ptr<LLMClient> client)
+{
+    if (musician)
+    {
+        musician->setLLMClient(client);
+    }
+}
+
 var Player::toVar() const
 {
     DynamicObject* obj = new DynamicObject();
@@ -802,53 +856,55 @@ var Player::toVar() const
         if (graphState != nullptr)
         {
             try
-{
-            // Save the graph state to a separate file in the same directory as player files
-            File graphFile = getGraphFilePath();
-            graphFile.deleteFile();
-            
-            // Make sure the directory exists
-            graphFile.getParentDirectory().createDirectory();
-            
-            // Write the XML to the file
-            FileOutputStream fos(graphFile);
-            if (fos.openedOk())
             {
-                graphState->writeTo(fos);
-                fos.flush();
+                // Save the graph state to a separate file in the same directory as player files
+                File graphFile = getGraphFilePath();
+                graphFile.deleteFile();
                 
-                // Store the filename in the player data
-                obj->setProperty("graphFile", graphFile.getFileName());
+                // Make sure the directory exists
+                graphFile.getParentDirectory().createDirectory();
                 
-                // ALSO embed the graph state in the player data as a backup
-                // This ensures we always have a graph state even if the file reference is lost
-                MemoryOutputStream mo;
-                graphState->writeTo(mo, {});
-                obj->setProperty("pluginGraph", mo.getMemoryBlock().toBase64Encoding());
-                
-                std::cout << "Saved graph state to file AND embedded in player data: " << graphFile.getFullPathName() << std::endl;
+                // Write the XML to the file
+                FileOutputStream fos(graphFile);
+                if (fos.openedOk())
+                {
+                    graphState->writeTo(fos);
+                    fos.flush();
+                    
+                    // Store the filename in the player data
+                    obj->setProperty("graphFile", graphFile.getFileName());
+                    
+                    // ALSO embed the graph state in the player data as a backup
+                    // This ensures we always have a graph state even if the file reference is lost
+                    MemoryOutputStream mo;
+                    graphState->writeTo(mo, {});
+                    obj->setProperty("pluginGraph", mo.getMemoryBlock().toBase64Encoding());
+                    
+                    std::cout << "Saved graph state to file AND embedded in player data: " << graphFile.getFullPathName() << std::endl;
+                }
+                else
+                {
+                    std::cerr << "Failed to open graph file for writing: " << graphFile.getFullPathName() << std::endl;
+                    
+                    // Fall back to embedding the graph state in the player data
+                    MemoryOutputStream mo;
+                    graphState->writeTo(mo, {});
+                    obj->setProperty("pluginGraph", mo.getMemoryBlock().toBase64Encoding());
+                    std::cout << "Embedded graph state in player data as fallback" << std::endl;
+                }
             }
-            else
-            {
-                std::cerr << "Failed to open graph file for writing: " << graphFile.getFullPathName() << std::endl;
-                
-                // Fall back to embedding the graph state in the player data
-                MemoryOutputStream mo;
-                graphState->writeTo(mo, {});
-                obj->setProperty("pluginGraph", mo.getMemoryBlock().toBase64Encoding());
-                std::cout << "Embedded graph state in player data as fallback" << std::endl;
-            }
-        }
         catch (const std::exception& e)
         {
-            std::cerr << "Exception when serializing graph state: " << e.what() << std::endl;
+                std::cerr << "Exception when serializing graph state: " << e.what() << std::endl;
             
-            // Create an empty graph state to avoid crashes
-            auto emptyGraph = std::make_unique<XmlElement>("FILTERGRAPH");
-            MemoryOutputStream mo;
-            emptyGraph->writeTo(mo, {});
-            obj->setProperty("pluginGraph", mo.getMemoryBlock().toBase64Encoding());
+                // Create an empty graph state to avoid crashes
+                auto emptyGraph = std::make_unique<XmlElement>("FILTERGRAPH");
+                MemoryOutputStream mo;
+                emptyGraph->writeTo(mo, {});
+                obj->setProperty("pluginGraph", mo.getMemoryBlock().toBase64Encoding());
         }
+    }
+    
     }
     else
     {
@@ -858,16 +914,17 @@ var Player::toVar() const
         emptyGraph->writeTo(mo, {});
         obj->setProperty("pluginGraph", mo.getMemoryBlock().toBase64Encoding());
     }
-}
     
     // Add musician state if available
-    // This is a placeholder for future implementation
-    // obj->setProperty("musicianState", ...);
+    if (musician != nullptr)
+    {
+        obj->setProperty("musician", musician->toVar());
+    }
     
     return var(obj);
 }
 
-std::unique_ptr<Player> Player::fromVar(const var& v, AudioPluginFormatManager& fm, KnownPluginList& kpl, AudioEngine* engine)
+std::unique_ptr<covertracks::Player> covertracks::Player::fromVar(const var& v, AudioPluginFormatManager& fm, KnownPluginList& kpl, AudioEngine* engine)
 {
     if (v.isObject())
     {
@@ -926,6 +983,24 @@ std::unique_ptr<Player> Player::fromVar(const var& v, AudioPluginFormatManager& 
         {
             std::cout << "Player has no graph state (neither graphFile nor pluginGraph property)" << std::endl;
         }
+
+        if (obj->hasProperty("musician"))
+        {
+            auto musicianVar = obj->getProperty("musician");
+            if (musicianVar.isObject())
+            {
+                auto newMusician = Musician::fromVar(musicianVar);
+                if (newMusician)
+                {
+                    player->setMusician(std::move(newMusician));
+                }
+            }
+        }
+        else
+        {
+            // Create a default musician if none exists
+            player->setMusician(std::make_unique<Musician>(player->getId(), player->getMetadata().category));
+        }
         
         return player;
     }
@@ -934,5 +1009,4 @@ std::unique_ptr<Player> Player::fromVar(const var& v, AudioPluginFormatManager& 
     return std::make_unique<Player>(String::toHexString(Random::getSystemRandom().nextInt()), 
                                    "Default Player", fm, kpl, engine);
 }
-
 } // namespace covertracks

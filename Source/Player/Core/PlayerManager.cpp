@@ -50,6 +50,8 @@ PlayerManager::PlayerManager()
     
     std::cout << "[PlayerManager] Loading all players" << std::endl;
     loadAllPlayers();
+    llmApiKey = String();
+
     std::cout << "[PlayerManager] Constructor complete" << std::endl;
 }
 
@@ -609,5 +611,178 @@ void PlayerManager::stopPlayback(Player* player)
         }
     }
 }
+
+std::shared_ptr<LLMClient> PlayerManager::getLLMClient(const String& apiKey)
+{
+    // Create the LLM client if it doesn't exist or if a new API key is provided
+    if (llmClient == nullptr || (apiKey.isNotEmpty() && apiKey != llmApiKey))
+    {
+        String keyToUse = apiKey.isNotEmpty() ? apiKey : llmApiKey;
+        
+        if (keyToUse.isNotEmpty())
+        {
+            llmClient = std::make_shared<ClaudeClient>(keyToUse);
+            llmApiKey = keyToUse;
+        }
+    }
+    
+    return llmClient;
+}
+
+void PlayerManager::setLLMApiKey(const String& apiKey)
+{
+    if (apiKey != llmApiKey)
+    {
+        llmApiKey = apiKey;
+        
+        // Create a new client with the updated API key
+        if (!llmApiKey.isEmpty())
+        {
+            llmClient = std::make_shared<ClaudeClient>(llmApiKey);
+        }
+        else
+        {
+            llmClient.reset();
+        }
+        
+        // Update all players with the new LLM client
+        for (auto* player : players)
+        {
+            player->setLLMClient(llmClient);
+        }
+        
+        // Notify listeners of the change
+        sendChangeMessage();
+    }
+}
+
+void PlayerManager::generatePatternForPlayer(Player* player, 
+                                          const var& parameters,
+                                          std::function<void(bool success, const var& pattern)> callback)
+{
+    if (player == nullptr)
+    {
+        if (callback)
+            callback(false, "No player specified");
+        return;
+    }
+    
+    // Ensure the player has a musician
+    Musician* musician = player->getMusician();
+    
+    if (musician == nullptr)
+    {
+        // Create a musician for the player if it doesn't have one
+        player->setMusician(std::make_unique<Musician>(player->getId(), player->getMetadata().category));
+        musician = player->getMusician();
+    }
+    
+    // Ensure the musician has an LLM client
+    if (llmClient && musician)
+    {
+        musician->setLLMClient(llmClient);
+        
+        // Generate the pattern
+        musician->generatePattern(parameters, [player, callback](bool success, const var& pattern) {
+            // Store the pattern
+            if (success)
+            {
+                // The pattern is already stored in the musician
+                
+                // Play the pattern on the player
+                if (pattern.hasProperty("command") && pattern["command"] == "play_pattern")
+                {
+                    player->playPattern(pattern.getProperty("events", var()), 
+                                      pattern.getProperty("tempo", 120.0));
+                }
+            }
+            
+            // Call the callback
+            if (callback)
+                callback(success, pattern);
+        });
+    }
+    else
+    {
+        // No LLM client or musician
+        if (callback)
+            callback(false, "No LLM client available");
+    }
+}
+
+void PlayerManager::generatePatternForAllPlayers(const var& parameters,
+                                              std::function<void(bool success, const var& pattern)> callback)
+{
+    // Get all active players
+    Array<Player*> activePlayers;
+    
+    for (auto* player : players)
+    {
+        if (player->isReadyForPlayback() || player == activePlayer)
+        {
+            activePlayers.add(player);
+        }
+    }
+    
+    if (activePlayers.isEmpty())
+    {
+        if (callback)
+            callback(false, "No active players");
+        return;
+    }
+    
+    // Generate patterns for each player
+    int playersRemaining = activePlayers.size();
+    bool anySuccess = false;
+    var combinedPattern;
+    
+    // Create an empty array to store all events
+    Array<var> allEvents;
+    
+    for (auto* player : activePlayers)
+    {
+        generatePatternForPlayer(player, parameters, [&](bool success, const var& pattern) {
+            if (success)
+            {
+                anySuccess = true;
+                
+                // Extract events from the pattern
+                if (pattern.hasProperty("events") && pattern["events"].isArray())
+                {
+                    auto* events = pattern["events"].getArray();
+                    for (auto& event : *events)
+                    {
+                        allEvents.add(event);
+                    }
+                }
+            }
+            
+            // Decrement the counter
+            playersRemaining--;
+            
+            // If all players have been processed, call the callback
+            if (playersRemaining == 0)
+            {
+                if (anySuccess)
+                {
+                    // Create a combined pattern
+                    DynamicObject* combinedObj = new DynamicObject();
+                    combinedObj->setProperty("command", "play_pattern");
+                    combinedObj->setProperty("tempo", parameters.getProperty("tempo", 120.0));
+                    combinedObj->setProperty("events", var(allEvents));
+                    
+                    if (callback)
+                        callback(true, var(combinedObj));
+                }
+                else
+                {
+                    if (callback)
+                        callback(false, "Failed to generate patterns for any player");
+                }
+            }
+        });
+    }
+}
+
 
 } // namespace covertracks

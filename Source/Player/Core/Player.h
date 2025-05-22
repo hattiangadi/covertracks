@@ -3,8 +3,7 @@
 #include <JuceHeader.h>
 #include "Instrument.h"
 #include "../../Audio/AudioEngine.h"
-// Temporarily commenting out Musician for compilation
-// #include "../../Musician/Musician.h"
+#include "../../Musician/Core/Musician.h"
 
 namespace covertracks {
 
@@ -210,13 +209,27 @@ public:
      */
     Instrument* getInstrument() { return instrument.get(); }
     
-    /**
-     * @brief Get the musician component (stubbed)
+       /**
+     * @brief Set the musician component
      * 
-     * @return Musician* Pointer to the musician (not owned)
+     * @param musician The musician to set
      */
-    // Musician* getMusician() { return musician.get(); }
-    void* getMusician() { return nullptr; } // Stubbed implementation
+     void setMusician(std::unique_ptr<Musician> musician);
+    
+     /**
+      * @brief Get the musician component
+      * 
+      * @return Musician* Pointer to the musician (not owned)
+      */
+     Musician* getMusician() { return musician.get(); }
+     
+     /**
+      * @brief Set the LLM client for the musician
+      * 
+      * @param client Shared pointer to an LLM client
+      */
+     void setLLMClient(std::shared_ptr<LLMClient> client);
+ 
     
 private:
     // Core properties
@@ -232,7 +245,7 @@ private:
     
     // Core components
     std::unique_ptr<Instrument> instrument;
-    // std::unique_ptr<Musician> musician; // Temporarily commented out
+    std::unique_ptr<Musician> musician;
     
     // Resource state
     bool fullyLoaded = false;
