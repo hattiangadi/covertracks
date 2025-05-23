@@ -190,6 +190,7 @@ std::shared_ptr<Section> Section::fromVar(const var& v)
 var Song::toVar() const
 {
     DynamicObject* obj = new DynamicObject();
+    obj->setProperty("id", uniqueID);
     obj->setProperty("name", title);
     obj->setProperty("tempo", tempo);
     
@@ -201,6 +202,12 @@ var Song::toVar() const
     }
     obj->setProperty("sections", sectionsArray);
     
+    // Add source structure JSON if available
+    if (sourceStructureJson.isNotEmpty())
+    {
+        obj->setProperty("sourceStructure", sourceStructureJson);
+    }
+    
     return var(obj);
 }
 
@@ -210,6 +217,12 @@ std::shared_ptr<Song> Song::fromVar(const var& v)
     
     if (auto* obj = v.getDynamicObject())
     {
+        // If the JSON has an ID, use it instead of the auto-generated one
+        if (obj->hasProperty("id"))
+        {
+            result->uniqueID = obj->getProperty("id").toString();
+        }
+        
         result->setTitle(obj->getProperty("name").toString());
         result->setTempo(obj->hasProperty("tempo") ? static_cast<double>(obj->getProperty("tempo")) : 120.0);
         
@@ -225,6 +238,12 @@ std::shared_ptr<Song> Song::fromVar(const var& v)
                 if (section)
                     result->sections.add(section);
             }
+        }
+        
+        // Check for source structure JSON
+        if (obj->hasProperty("sourceStructure"))
+        {
+            result->sourceStructureJson = obj->getProperty("sourceStructure").toString();
         }
     }
     
@@ -304,35 +323,35 @@ InstrumentDefinition::InstrumentDefinition(const String& instrumentName)
     DBG("[InstrumentDefinition] Created: " + name + ", Bar instances: " + String(Bar::getInstanceCount()));
 }
 
-void InstrumentDefinition::addPrimitive(const String& name, const Primitive& primitive)
+void InstrumentDefinition::addPrimitive(const String& primitiveName, const Primitive& primitive)
 {
-    primitives[name] = primitive;
-    DBG("[InstrumentDefinition] Added primitive: " + name);
+    primitives[primitiveName] = primitive;
+    DBG("[InstrumentDefinition] Added primitive: " + primitiveName);
 }
 
-void InstrumentDefinition::removePrimitive(const String& name)
+void InstrumentDefinition::removePrimitive(const String& primitiveName)
 {
-    auto it = primitives.find(name);
+    auto it = primitives.find(primitiveName);
     if (it != primitives.end())
     {
         primitives.erase(it);
-        DBG("[InstrumentDefinition] Removed primitive: " + name);
+        DBG("[InstrumentDefinition] Removed primitive: " + primitiveName);
     }
 }
 
-void InstrumentDefinition::addPattern(const String& name, std::shared_ptr<Bar> pattern)
+void InstrumentDefinition::addPattern(const String& patternName, std::shared_ptr<Bar> pattern)
 {
-    patterns[name] = pattern;
-    DBG("[InstrumentDefinition] Added pattern: " + name + ", Bar instances: " + String(Bar::getInstanceCount()));
+    patterns[patternName] = pattern;
+    DBG("[InstrumentDefinition] Added pattern: " + patternName + ", Bar instances: " + String(Bar::getInstanceCount()));
 }
 
-void InstrumentDefinition::removePattern(const String& name)
+void InstrumentDefinition::removePattern(const String& patternName)
 {
-    auto it = patterns.find(name);
+    auto it = patterns.find(patternName);
     if (it != patterns.end())
     {
         patterns.erase(it);
-        DBG("[InstrumentDefinition] Removed pattern: " + name + ", Bar instances: " + String(Bar::getInstanceCount()));
+        DBG("[InstrumentDefinition] Removed pattern: " + patternName + ", Bar instances: " + String(Bar::getInstanceCount()));
     }
 }
 

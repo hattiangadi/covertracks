@@ -154,6 +154,9 @@ public:
     Song(const String& title = "", double tempo = 120.0);
     ~Song();
     
+    // Get the unique ID for this song
+    juce::String getUniqueID() const { return uniqueID; }
+    
     // Static methods for instance tracking
     static void printInstanceCount();
     static int getInstanceCount() { return instanceCount; }
@@ -179,10 +182,18 @@ public:
     var toVar() const;
     static std::shared_ptr<Song> fromVar(const var& v);
     
+    // Methods to get/set the source structure JSON string (from Claude/sheet music analysis)
+    void setSourceStructureJson(const juce::String& json) { sourceStructureJson = json; }
+    juce::String getSourceStructureJson() const { return sourceStructureJson; }
+    
 private:
     String title;
     double tempo;
     Array<std::shared_ptr<Section>> sections;
+    juce::String uniqueID;
+    
+    // Store the source structure JSON string (from Claude/sheet music analysis)
+    juce::String sourceStructureJson;
     
     // Static counter for tracking instances
     static int instanceCount;

@@ -52,6 +52,19 @@ public:
                                       ResponseCallback callback) = 0;
     
     /**
+     * @brief Send a message with an image to the LLM
+     * 
+     * @param message The text message to send
+     * @param imageBase64 The base64-encoded image data
+     * @param imageType The MIME type of the image (e.g., "image/jpeg", "image/png")
+     * @param callback Callback to be invoked when a response is received
+     */
+    virtual void sendMessageWithImage(const String& message,
+                                     const String& imageBase64,
+                                     const String& imageType,
+                                     ResponseCallback callback) = 0;
+    
+    /**
      * @brief Check if the client is connected to the LLM service
      * 
      * @return true if connected

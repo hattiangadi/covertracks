@@ -58,6 +58,29 @@
           <FILE id="EYYrZH" name="PatternParser.h" compile="0" resource="0" file="Source/Musician/Core/PatternParser.h"/>
         </GROUP>
         <GROUP id="{CC170D46-B578-C879-6E1F-FDC0D2EB6DC0}" name="UI">
+          <GROUP id="{8A17FE2D-2E3E-6D8B-BD15-D0DAD03795B9}" name="New Group"/>
+          <GROUP id="{F9C0E233-BAD8-8B30-AA5A-55ECFA83800B}" name="Song">
+            <FILE id="vaX1Hp" name="SectionEditorDialog.cpp" compile="1" resource="0"
+                  file="Source/Musician/UI/Song/SectionEditorDialog.cpp"/>
+            <FILE id="tm40qB" name="SectionEditorDialog.h" compile="0" resource="0"
+                  file="Source/Musician/UI/Song/SectionEditorDialog.h"/>
+            <FILE id="t4HLdE" name="SongEditorComponent.cpp" compile="1" resource="0"
+                  file="Source/Musician/UI/Song/SongEditorComponent.cpp"/>
+            <FILE id="BjfxbG" name="SongEditorComponent.h" compile="0" resource="0"
+                  file="Source/Musician/UI/Song/SongEditorComponent.h"/>
+            <FILE id="n3tzOO" name="SongImageImportComponent.cpp" compile="1" resource="0"
+                  file="Source/Musician/UI/Song/SongImageImportComponent.cpp"/>
+            <FILE id="zEbWKL" name="SongImageImportComponent.h" compile="0" resource="0"
+                  file="Source/Musician/UI/Song/SongImageImportComponent.h"/>
+            <FILE id="e1oYaz" name="SongListComponent.cpp" compile="1" resource="0"
+                  file="Source/Musician/UI/Song/SongListComponent.cpp"/>
+            <FILE id="QJ0YBO" name="SongListComponent.h" compile="0" resource="0"
+                  file="Source/Musician/UI/Song/SongListComponent.h"/>
+            <FILE id="y4jmxh" name="SongManagerComponent.cpp" compile="1" resource="0"
+                  file="Source/Musician/UI/Song/SongManagerComponent.cpp"/>
+            <FILE id="yXN55Q" name="SongManagerComponent.h" compile="0" resource="0"
+                  file="Source/Musician/UI/Song/SongManagerComponent.h"/>
+          </GROUP>
           <FILE id="byke4i" name="EnsembleEditPanel.cpp" compile="1" resource="0"
                 file="Source/Musician/UI/EnsembleEditPanel.cpp"/>
           <FILE id="pPA7lP" name="EnsembleEditPanel.h" compile="0" resource="0"
@@ -66,6 +89,10 @@
                 file="Source/Musician/UI/EnsembleListPanel.cpp"/>
           <FILE id="pocsEO" name="EnsembleListPanel.h" compile="0" resource="0"
                 file="Source/Musician/UI/EnsembleListPanel.h"/>
+          <FILE id="nbQO94" name="EnsembleLLMConversationComponent.cpp" compile="1"
+                resource="0" file="Source/Musician/UI/EnsembleLLMConversationComponent.cpp"/>
+          <FILE id="ee51rA" name="EnsembleLLMConversationComponent.h" compile="0"
+                resource="0" file="Source/Musician/UI/EnsembleLLMConversationComponent.h"/>
           <FILE id="q37NYo" name="EnsembleMainPanel.cpp" compile="1" resource="0"
                 file="Source/Musician/UI/EnsembleMainPanel.cpp"/>
           <FILE id="e7Fet7" name="EnsembleMainPanel.h" compile="0" resource="0"

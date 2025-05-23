@@ -2,6 +2,9 @@
 
 namespace covertracks {
 
+// Define a constant for ticks per quarter note used throughout the MIDI sequence generation
+const int TICKS_PER_QUARTER_NOTE = 960;
+
 //==============================================================================
 // Bar implementation
 //==============================================================================
@@ -10,9 +13,9 @@ namespace covertracks {
 int Bar::instanceCount = 0;
 static std::vector<Bar*> staticBarInstances;
 
-Bar::Bar(int timeSignatureNumerator, int timeSignatureDenominator)
-    : timeSignatureNumerator(timeSignatureNumerator),
-      timeSignatureDenominator(timeSignatureDenominator)
+Bar::Bar(int numerator, int denominator)
+    : timeSignatureNumerator(numerator),
+      timeSignatureDenominator(denominator)
 {
     // Increment instance counter
     ++instanceCount;
@@ -61,8 +64,7 @@ std::unique_ptr<MidiMessageSequence> Bar::toMidiSequence() const
 {
     auto sequence = std::make_unique<MidiMessageSequence>();
     
-    // Calculate the total number of ticks per quarter note
-    const int ticksPerQuarterNote = 960;
+    // Note: We use 960 ticks per quarter note in the MIDI sequence
     
     // Process each event
     for (const auto& event : events)
@@ -71,7 +73,7 @@ std::unique_ptr<MidiMessageSequence> Bar::toMidiSequence() const
         // In a 4/4 time signature, 1 beat = 1 quarter note
         // In other time signatures, we need to adjust accordingly
         double beatsPerQuarterNote = 4.0 / timeSignatureDenominator;
-        double tickPosition = event.beat * beatsPerQuarterNote * ticksPerQuarterNote;
+        double tickPosition = event.beat * beatsPerQuarterNote * TICKS_PER_QUARTER_NOTE;
         
         switch (event.type)
         {
@@ -85,7 +87,7 @@ std::unique_ptr<MidiMessageSequence> Bar::toMidiSequence() const
                 sequence->addEvent(noteOn);
                 
                 // Note off
-                double noteOffPosition = tickPosition + (event.duration * beatsPerQuarterNote * ticksPerQuarterNote);
+                double noteOffPosition = tickPosition + (event.duration * beatsPerQuarterNote * TICKS_PER_QUARTER_NOTE);
                 MidiMessage noteOff = MidiMessage::noteOff(event.channel + 1, 
                                                          event.noteNumber);
                 noteOff.setTimeStamp(noteOffPosition);
@@ -133,8 +135,8 @@ void Bar::setTimeSignature(int numerator, int denominator)
 // Initialize static member
 int Phrase::instanceCount = 0;
 
-Phrase::Phrase(const String& name)
-    : name(name)
+Phrase::Phrase(const String& phraseName)
+    : name(phraseName)
 {
     // Increment instance counter
     ++instanceCount;
@@ -177,8 +179,7 @@ std::unique_ptr<MidiMessageSequence> Phrase::toMidiSequence() const
 {
     auto sequence = std::make_unique<MidiMessageSequence>();
     
-    // Calculate the total number of ticks per quarter note
-    const int ticksPerQuarterNote = 960;
+    // Note: We use 960 ticks per quarter note in the MIDI sequence
     
     // Calculate the current position in ticks
     double currentTick = 0.0;
@@ -211,7 +212,7 @@ std::unique_ptr<MidiMessageSequence> Phrase::toMidiSequence() const
         // For simplicity, assume each bar is 4 quarter notes (1 bar in 4/4 time)
         // In a more complete implementation, this would depend on the time signature
         double beatsInBar = 4.0 * (bar->getTimeSignatureNumerator() / static_cast<double>(bar->getTimeSignatureDenominator())) * 4.0;
-        currentTick += beatsInBar * ticksPerQuarterNote;
+        currentTick += beatsInBar * TICKS_PER_QUARTER_NOTE;
     }
     
     // Sort the sequence by timestamp
@@ -227,8 +228,8 @@ std::unique_ptr<MidiMessageSequence> Phrase::toMidiSequence() const
 // Initialize static member
 int Section::instanceCount = 0;
 
-Section::Section(const String& name)
-    : name(name)
+Section::Section(const String& sectionName)
+    : name(sectionName)
 {
     // Increment instance counter
     ++instanceCount;
@@ -271,8 +272,7 @@ std::unique_ptr<MidiMessageSequence> Section::toMidiSequence() const
 {
     auto sequence = std::make_unique<MidiMessageSequence>();
     
-    // Calculate the total number of ticks per quarter note
-    const int ticksPerQuarterNote = 960;
+    // Note: We use 960 ticks per quarter note in the MIDI sequence
     
     // Calculate the current position in ticks
     double currentTick = 0.0;
@@ -322,9 +322,13 @@ int Song::instanceCount = 0;
 
 
 
-Song::Song(const String& title, double tempo)
-    : title(title), tempo(tempo)
+Song::Song(const String& songTitle, double songTempo)
+    : title(songTitle), tempo(songTempo)
 {
+    // Generate a unique ID for this song (using JUCE's UUID generator)
+    juce::Uuid uuid;
+    uniqueID = uuid.toString();
+    
     // Increment instance counter
     ++instanceCount;
     
@@ -340,10 +344,10 @@ Song::Song(const String& title, double tempo)
     }
     
     // Add a breakpoint here to see the call stack when a Song is created
-    DBG("[Song] Created " + creationInfo + ", address: " + String::toHexString((intptr_t)this) + ", total instances: " + String(instanceCount));
+    DBG("[Song] Created " + creationInfo + ", ID: " + uniqueID + ", address: " + String::toHexString((intptr_t)this) + ", total instances: " + String(instanceCount));
     
-    // You can set a breakpoint on the next line to inspect the call stack
-    int breakpointHere = 0; // <-- Set your breakpoint here
+    // You can set a breakpoint here to inspect the call stack
+    // Intentionally left empty for breakpoint placement
 }
 
 Song::~Song()
@@ -358,7 +362,7 @@ Song::~Song()
     DBG("[Song] Destroyed: " + title + ", address: " + String::toHexString((intptr_t)this) + ", remaining instances: " + String(instanceCount));
     
     // You can set a breakpoint here to see where Songs are being destroyed
-    int breakpointHere = 0; // <-- Set your breakpoint here
+    // Intentionally left empty for breakpoint placement
 }
 
 void Song::addSection(std::shared_ptr<Section> section)

@@ -134,6 +134,13 @@ public:
                                 std::function<void(bool)> callback);
     
     /**
+     * @brief Get the player manager used by this ensemble
+     * 
+     * @return PlayerManager* The player manager
+     */
+    PlayerManager* getPlayerManager() const { return playerManager; }
+    
+    /**
      * @brief Start playing the ensemble
      * 
      * @return true If playback started successfully
@@ -260,6 +267,8 @@ private:
     
     // Helper method to use playerManager
     void ensurePlayerManagerIsUsed() { if (playerManager) { /* This ensures playerManager is used */ } }
+    
+
     
     // The musician roles in the ensemble
     juce::Array<MusicianRole> musicianRoles;

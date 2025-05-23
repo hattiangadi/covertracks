@@ -39,10 +39,11 @@
 #include "../Player/UI/PlayerLibraryComponent.h"
 #include "../Player/UI/PlayerModeComponent.h"
 #include "../Audio/AudioEngine.h"
-#include "../LLM/UI/LLMConversationComponent.h"
+#include "../Musician/UI/EnsembleLLMConversationComponent.h"
 #include "../Musician/UI/PatternEditorComponent.h"
 #include "../LLM/Core/LLMManager.h"
 #include "../Musician/UI/EnsembleMainPanel.h"
+#include "../Musician/UI/Song/SongManagerComponent.h"
 
 namespace covertracks {
 //==============================================================================
@@ -60,6 +61,7 @@ namespace CommandIDs
     static const int allWindowsForward      = 0x30400;
     static const int toggleDoublePrecision  = 0x30500;
     static const int autoScalePluginWindows = 0x30600;
+    static const int showSongTab            = 0x30700;
 }
 
 //==============================================================================
@@ -96,7 +98,8 @@ class MainHostWindow final : public DocumentWindow,
                              public MenuBarModel,
                              public ApplicationCommandTarget,
                              public ChangeListener,
-                             public FileDragAndDropTarget
+                             public FileDragAndDropTarget,
+                             public SongManagerComponent::Listener
 {
 public:
     //==============================================================================
@@ -106,12 +109,16 @@ public:
     //==============================================================================
     void closeButtonPressed() override;
     void changeListenerCallback (ChangeBroadcaster*) override;
-
+    
+    // FileDragAndDropTarget
     bool isInterestedInFileDrag (const StringArray& files) override;
-    void fileDragEnter (const StringArray& files, int, int) override;
-    void fileDragMove (const StringArray& files, int, int) override;
+    void fileDragEnter (const StringArray& files, int x, int y) override;
+    void fileDragMove (const StringArray& files, int x, int y) override;
     void fileDragExit (const StringArray& files) override;
-    void filesDropped (const StringArray& files, int, int) override;
+    void filesDropped (const StringArray& files, int x, int y) override;
+    
+    // SongManagerComponent::Listener
+    void songSelected(SongManagerComponent* source, std::shared_ptr<Song> song) override;
 
     void menuBarActivated (bool isActive) override;
 
@@ -142,7 +149,8 @@ public:
     // Main components
     std::unique_ptr<PlayerLibraryComponent> playerLibraryWindow;
     std::unique_ptr<PlayerModeComponent> playerModeWindow;
-    std::unique_ptr<LLMConversationComponent> llmConversationWindow;
+    std::unique_ptr<EnsembleLLMConversationComponent> ensembleLLMConversationWindow;
+    std::unique_ptr<SongManagerComponent> songManagerWindow;
     std::unique_ptr<PatternEditorComponent> patternEditorWindow;
     std::unique_ptr<EnsembleMainPanel> ensembleMainWindow;
     std::shared_ptr<Musician> musician; // Needed for LLM and Pattern components
@@ -150,6 +158,9 @@ public:
     // LLM client
     LLMClient* llmClient; // Raw pointer for compatibility with older code
     std::shared_ptr<LLMClient> llmClientShared; // Shared pointer for LLMConversationComponent
+    
+    // Ensemble manager for LLM conversation
+    std::unique_ptr<EnsembleManager> llmConversationEnsembleManager;
     
 
 

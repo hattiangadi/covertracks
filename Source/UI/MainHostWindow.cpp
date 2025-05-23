@@ -40,6 +40,7 @@
 #include "../Musician/Core/Musician.h"
 #include "../LLM/Core/ClaudeClient.h"
 #include "../Musician/UI/EnsembleEditPanel.h"
+#include "../Musician/UI/Song/SongManagerComponent.h"
 
 namespace covertracks {
 constexpr const char* scanModeKey = "pluginScanMode";
@@ -359,17 +360,17 @@ MainHostWindow::MainHostWindow()
     musician = std::make_shared<Musician>("main_musician", "default");
     std::cout << "[MainHostWindow] Musician created" << std::endl;
     
-    // Create LLM components
-    std::cout << "[MainHostWindow] Creating LLM components" << std::endl;
-    
-    // Get the LLM manager instance
-    LLMManager::getInstance();
-    
-    // Get the default LLM client from the manager
-    auto llmClient = LLMManager::getInstance().getDefaultClient();
-    
-    if (!llmClient) {
-        std::cout << "[MainHostWindow] ERROR: No LLM client available" << std::endl;
+    // Create LLM client
+    std::cout << "[MainHostWindow] Creating LLM client" << std::endl;
+    llmClient = LLMManager::getInstance().getDefaultClient();
+    if (llmClient)
+    {
+        // Create a shared_ptr that wraps the raw pointer but doesn't own it
+        llmClientShared = std::shared_ptr<LLMClient>(llmClient, [](LLMClient*){});
+    }
+    else
+    {
+        std::cout << "[MainHostWindow] No LLM client available, creating dummy client" << std::endl;
         // Create a dummy client that returns error messages
         // Create a dummy LLM client for testing
         class DummyLLMClient : public LLMClient {
@@ -384,6 +385,38 @@ MainHostWindow::MainHostWindow()
                 // Use the parameters to avoid unused parameter warnings
                 String response = "This is a dummy response to: " + message;
                 response += "\nWith " + String(history.size()) + " history items.";
+                callback(true, response);
+            }
+            
+            void sendMessageWithImage(const String& message, const String& imageBase64, const String& imageType, ResponseCallback callback) override {
+                // Use the parameters to avoid unused parameter warnings
+                String response = "This is a dummy response to image analysis request: " + message;
+                response += "\nImage type: " + imageType;
+                response += "\nImage size: " + String(imageBase64.length() / 1024) + " KB";
+                
+                // Return a dummy JSON response that matches the expected format for song structure
+                response += "\n\n{\n";
+                response += "  \"title\": \"Dummy Song\",\n";
+                response += "  \"composer\": \"Dummy Composer\",\n";
+                response += "  \"tempo\": 120,\n";
+                response += "  \"timeSignature\": \"4/4\",\n";
+                response += "  \"key\": \"C\",\n";
+                response += "  \"sections\": [\n";
+                response += "    {\n";
+                response += "      \"name\": \"Verse\",\n";
+                response += "      \"chords\": \"C | Am | F | G\",\n";
+                response += "      \"repeats\": 2\n";
+                response += "    },\n";
+                response += "    {\n";
+                response += "      \"name\": \"Chorus\",\n";
+                response += "      \"chords\": \"F | G | C | C\",\n";
+                response += "      \"repeats\": 1\n";
+                response += "    }\n";
+                response += "  ],\n";
+                response += "  \"form\": \"Verse Chorus Verse Chorus\",\n";
+                response += "  \"style\": \"Pop\"\n";
+                response += "}";
+                
                 callback(true, response);
             }
             
@@ -404,9 +437,23 @@ MainHostWindow::MainHostWindow()
         // Store the shared_ptr for use with LLMConversationComponent
         llmClientShared = dummyClient;
     }
-    std::cout << "[MainHostWindow] Creating LLMConversationComponent" << std::endl;
-    llmConversationWindow = std::make_unique<LLMConversationComponent>(llmClientShared, musician.get());
-    std::cout << "[MainHostWindow] LLMConversationComponent created" << std::endl;
+    // Create Song Manager component
+    std::cout << "[MainHostWindow] Creating SongManagerComponent" << std::endl;
+    songManagerWindow = std::make_unique<SongManagerComponent>();
+    // Initialize SongEditorComponent with the LLM client
+    songManagerWindow->initializeWithLLMClient(llmClientShared);
+    // Register this window as a listener for song selection events
+    songManagerWindow->addListener(this);
+    std::cout << "[MainHostWindow] SongManagerComponent created" << std::endl;
+    
+    // Create Ensemble LLM Conversation component
+    std::cout << "[MainHostWindow] Creating EnsembleLLMConversationComponent" << std::endl;
+    // Create a new EnsembleManager instance for the EnsembleLLMConversationComponent
+    // Store it in the member variable for proper lifetime management
+    llmConversationEnsembleManager = std::make_unique<EnsembleManager>(playerManager.get());
+    llmConversationEnsembleManager->setName("LLM Conversation Ensemble");
+    ensembleLLMConversationWindow = std::make_unique<EnsembleLLMConversationComponent>(llmConversationEnsembleManager.get(), llmClientShared);
+    std::cout << "[MainHostWindow] EnsembleLLMConversationComponent created" << std::endl;
     
     // Create Pattern Editor component
     std::cout << "[MainHostWindow] Creating PatternEditorComponent" << std::endl;
@@ -422,7 +469,8 @@ MainHostWindow::MainHostWindow()
     auto* tabbedComponent = new TabbedComponent(TabbedButtonBar::TabsAtTop);
     tabbedComponent->addTab("Player Library", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), playerLibraryWindow.get(), false);
     tabbedComponent->addTab("Player Mode", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), playerModeWindow.get(), false);
-    tabbedComponent->addTab("LLM Conversation", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), llmConversationWindow.get(), false);
+    tabbedComponent->addTab("Songs", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), songManagerWindow.get(), false);
+    tabbedComponent->addTab("Ensemble LLM", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), ensembleLLMConversationWindow.get(), false);
     tabbedComponent->addTab("Pattern Editor", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), patternEditorWindow.get(), false);
     tabbedComponent->addTab("Ensembles", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), ensembleMainWindow.get(), false);
     
@@ -491,6 +539,10 @@ MainHostWindow::~MainHostWindow()
     // Remove ourselves as a change listener from the plugin list
     if (playerManager)
         getPluginList().removeChangeListener(this);
+    
+    // Remove ourselves as a listener from the SongManagerComponent
+    if (songManagerWindow)
+        songManagerWindow->removeListener(this);
     
     // Clear the content component
     clearContentComponent();
@@ -844,7 +896,8 @@ void covertracks::MainHostWindow::getAllCommands (Array<CommandID>& commands)
                               CommandIDs::toggleDoublePrecision,
                               CommandIDs::aboutBox,
                               CommandIDs::allWindowsForward,
-                              CommandIDs::autoScalePluginWindows
+                              CommandIDs::autoScalePluginWindows,
+                              CommandIDs::showSongTab
                             };
 
     commands.addArray (ids, numElementsInArray (ids));
@@ -905,6 +958,10 @@ void covertracks::MainHostWindow::getCommandInfo (const CommandID commandID, App
 
     case CommandIDs::autoScalePluginWindows:
         updateAutoScaleMenuItem (result);
+        break;
+        
+    case CommandIDs::showSongTab:
+        result.setInfo ("Show Songs", "Shows the Songs tab", category, 0);
         break;
 
     default:
@@ -972,6 +1029,24 @@ bool covertracks::MainHostWindow::perform (const InvocationInfo& info)
 
         break;
     }
+    
+    case CommandIDs::showSongTab:
+    {
+        // Switch to the Songs tab
+        if (auto* tabbedComponent = dynamic_cast<TabbedComponent*>(getContentComponent()))
+        {
+            // Find the Songs tab index
+            for (int i = 0; i < tabbedComponent->getNumTabs(); ++i)
+            {
+                if (tabbedComponent->getTabNames()[i] == "Songs")
+                {
+                    tabbedComponent->setCurrentTabIndex(i);
+                    break;
+                }
+            }
+        }
+        break;
+    }
 
     // Player Library command removed - now integrated into main window
 
@@ -1021,6 +1096,15 @@ void covertracks::MainHostWindow::filesDropped (const StringArray& files, int /*
             String message = String(typesFound.size()) + " plugin(s) added to the list.";
             AlertWindow::showMessageBoxAsync(AlertWindow::InfoIcon, "Plugins Added", message);
         }
+    }
+}
+
+void covertracks::MainHostWindow::songSelected(SongManagerComponent* /*source*/, std::shared_ptr<Song> song)
+{
+    // When a song is selected in the SongManagerComponent, update the EnsembleLLMConversationComponent
+    if (ensembleLLMConversationWindow && song)
+    {
+        ensembleLLMConversationWindow->setCurrentSong(song);
     }
 }
 

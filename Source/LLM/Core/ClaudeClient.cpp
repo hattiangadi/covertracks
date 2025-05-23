@@ -58,6 +58,45 @@ void ClaudeClient::sendMessageWithHistory(const String& message,
     waitEvent.signal();
 }
 
+void ClaudeClient::sendMessageWithImage(const String& message,
+                                      const String& imageBase64,
+                                      const String& imageType,
+                                      ResponseCallback callback)
+{
+    // Check image size - Claude has a 5MB limit for images
+    const size_t maxSizeBytes = 5 * 1024 * 1024; // 5MB in bytes
+    const size_t imageSize = imageBase64.length() * 3 / 4; // Approximate size after base64 decoding
+    
+    if (imageSize > maxSizeBytes)
+    {
+        // Image is too large, return an error
+        std::cout << "[ClaudeClient] Image is too large: " << (imageSize / 1024) << " KB (max: 5120 KB)" << std::endl;
+        
+        // Call the callback with an error message
+        MessageManager::callAsync([callback]() {
+            callback(false, "Error: Image exceeds Claude's 5MB size limit. Please use a smaller image or further reduce the image size.");
+        });
+        
+        return;
+    }
+    
+    // Add message to the queue
+    MessageRequest request;
+    request.message = message;
+    request.imageBase64 = imageBase64;
+    request.imageType = imageType;
+    request.hasImage = true;
+    request.callback = std::move(callback);
+    
+    {
+        const ScopedLock sl(queueLock);
+        messageQueue.add(std::move(request));
+    }
+    
+    // Notify the thread
+    waitEvent.signal();
+}
+
 bool ClaudeClient::isConnected() const
 {
     return connected;
@@ -93,7 +132,17 @@ void ClaudeClient::run()
             }
             
             // Process the message
-            var requestBody = createRequestBody(request.message, request.history);
+            var requestBody;
+            if (request.hasImage)
+            {
+                // Create request body with image
+                requestBody = createRequestBodyWithImage(request.message, request.imageBase64, request.imageType);
+            }
+            else
+            {
+                // Create regular request body
+                requestBody = createRequestBody(request.message, request.history);
+            }
             
             // Convert to JSON
             String requestJson = JSON::toString(requestBody);
@@ -133,7 +182,8 @@ void ClaudeClient::run()
             // Set up the stream options and store the result
             URL::InputStreamOptions options(URL::ParameterHandling::inPostData);
             auto optionsWithHeaders = options.withExtraHeaders(headersString);
-            auto optionsWithTimeout = optionsWithHeaders.withConnectionTimeoutMs(30000);
+            // Use a longer timeout (120 seconds) for complex tasks like image analysis
+            auto optionsWithTimeout = optionsWithHeaders.withConnectionTimeoutMs(120000);
             auto optionsWithStatusCode = optionsWithTimeout.withStatusCode(&statusCode);
             auto finalOptions = optionsWithStatusCode.withResponseHeaders(&responseHeaders);
                   
@@ -310,6 +360,72 @@ var ClaudeClient::createRequestBody(const String& message,
                                     "Help the user generate musical patterns, understand music theory concepts, "
                                     "and create interesting musical ideas. When asked to generate patterns, "
                                     "provide them in a clear, structured format that can be parsed by a music system.");
+    
+    // Set temperature
+    requestObj->setProperty("temperature", 0.7);
+    
+    return var(requestObj);
+}
+
+var ClaudeClient::createRequestBodyWithImage(const String& message,
+                                           const String& imageBase64,
+                                           const String& imageType)
+{
+    DynamicObject* requestObj = new DynamicObject();
+    
+    // Set the model
+    requestObj->setProperty("model", model);
+    
+    // Set max tokens
+    requestObj->setProperty("max_tokens", 4000);
+    
+    // Create messages array
+    Array<var> messagesArray;
+    
+    // Create the user message with image
+    DynamicObject* userMsgObj = new DynamicObject();
+    userMsgObj->setProperty("role", "user");
+    
+    // Create content array for the user message
+    Array<var> contentArray;
+    
+    // Add text content if provided
+    if (message.isNotEmpty())
+    {
+        DynamicObject* textContent = new DynamicObject();
+        textContent->setProperty("type", "text");
+        textContent->setProperty("text", message);
+        contentArray.add(var(textContent));
+    }
+    
+    // Add image content
+    DynamicObject* imageContent = new DynamicObject();
+    imageContent->setProperty("type", "image");
+    
+    // Create image source object
+    DynamicObject* imageSource = new DynamicObject();
+    imageSource->setProperty("type", "base64");
+    imageSource->setProperty("media_type", imageType);
+    imageSource->setProperty("data", imageBase64);
+    
+    imageContent->setProperty("source", var(imageSource));
+    contentArray.add(var(imageContent));
+    
+    // Set the content array for the user message
+    userMsgObj->setProperty("content", contentArray);
+    messagesArray.add(var(userMsgObj));
+    
+    // Set the messages array
+    requestObj->setProperty("messages", messagesArray);
+    
+    // Add system prompt for music analysis
+    requestObj->setProperty("system", "You are an AI assistant specialized in music theory, composition, and transcription. "
+                                    "You excel at analyzing sheet music images and converting them to detailed lead sheets. "
+                                    "You can accurately identify musical elements including notes, durations, chords, time signatures, "
+                                    "key signatures, and song structure. You understand music notation conventions and can "
+                                    "translate visual sheet music into precise JSON representations that capture melody, harmony, "
+                                    "rhythm, and form. Your output is always well-structured, consistent, and follows the exact "
+                                    "format requested by the user.");
     
     // Set temperature
     requestObj->setProperty("temperature", 0.7);
