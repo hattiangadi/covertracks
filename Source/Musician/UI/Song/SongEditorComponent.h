@@ -1,7 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "../../Core/MusicPatternComponents.h"
+#include "../../Core/Song.h"
 #include "../../../LLM/Core/LLMClient.h"
 #include "SongImageImportComponent.h"
 

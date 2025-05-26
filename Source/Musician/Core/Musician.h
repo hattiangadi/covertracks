@@ -3,6 +3,7 @@
 
 #include <JuceHeader.h>
 #include "MusicPatternComponents.h"
+#include "Song.h"
 #include "../../LLM/Core/LLMClient.h"
 #include "../../LLM/Core/PromptManager.h"
 
@@ -188,9 +189,9 @@ private:
     // Player interface
     std::function<String(const String&)> playerCommandInterface;
     
-    // Most recently generated song/pattern
-    std::shared_ptr<Song> lastGeneratedSong;
+    // Pattern storage
     String lastResponseText;
+    std::shared_ptr<Chart> lastGeneratedChart;
     
     // Convert MIDI message sequence to JSON/var
     var midiMessageSequenceToVar(const MidiMessageSequence& sequence, double tempo = 120.0) const;

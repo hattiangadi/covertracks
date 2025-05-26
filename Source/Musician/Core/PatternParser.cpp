@@ -12,10 +12,10 @@ PatternParser::PatternParser(MusicPatternSystem& system)
 {
 }
 
-std::shared_ptr<Song> PatternParser::parseSong(const String& notation)
+std::shared_ptr<Chart> PatternParser::parseChart(const String& notation)
 {
-    // Use the notation parameter to create a song
-    return patternSystem.createSongFromNotation(notation);
+    // Use the notation parameter to create a chart
+    return patternSystem.createChartFromNotation(notation);
 }
 
 std::shared_ptr<Section> PatternParser::parseSection(const String& notation)
@@ -36,50 +36,50 @@ std::shared_ptr<Bar> PatternParser::parseBar(const String& notation)
     return patternSystem.createBarFromNotation(notation);
 }
 
-std::shared_ptr<Song> PatternParser::parseLLMResponse(const String& response)
+std::shared_ptr<Chart> PatternParser::parseLLMResponse(const String& response)
 {
-    // Extract song notation from the LLM response
-    String songNotation = extractSongNotation(response);
+    // Extract chart notation from the LLM response
+    String chartNotation = extractSongNotation(response);
     
-    if (!songNotation.isEmpty())
+    if (!chartNotation.isEmpty())
     {
-        // If we have song notation, parse it and return
-        return parseSong(songNotation);
+        // If we have chart notation, parse it and return
+        return parseChart(chartNotation);
     }
     
-    // If no song notation found, try to extract a section
+    // If no chart notation found, try to extract a section
     String sectionNotation = extractSectionNotation(response);
     if (!sectionNotation.isEmpty())
     {
-        // Create a song with just this section
+        // Create a chart with just this section
         auto section = parseSection(sectionNotation);
-        auto song = std::make_shared<Song>();
-        song->setTitle("Generated Song");
-        song->addSection(section);
-        return song;
+        auto chart = std::make_shared<Chart>();
+        chart->setTitle("Generated Chart");
+        chart->addSection(section);
+        return chart;
     }
     
     // If no section found, try to extract a phrase
     String phraseNotation = extractPhraseNotation(response);
     if (!phraseNotation.isEmpty())
     {
-        // Create a song with a section containing just this phrase
+        // Create a chart with a section containing just this phrase
         auto phrase = parsePhrase(phraseNotation);
         auto section = std::make_shared<Section>();
         section->setName("Generated Section");
         section->addPhrase(phrase);
         
-        auto song = std::make_shared<Song>();
-        song->setTitle("Generated Song");
-        song->addSection(section);
-        return song;
+        auto chart = std::make_shared<Chart>();
+        chart->setTitle("Generated Chart");
+        chart->addSection(section);
+        return chart;
     }
     
     // If no phrase found, try to extract a bar
     String barNotation = extractBarNotation(response);
     if (!barNotation.isEmpty())
     {
-        // Create a song with a section containing a phrase with just this bar
+        // Create a chart with a section containing a phrase with just this bar
         auto bar = parseBar(barNotation);
         auto phrase = std::make_shared<Phrase>();
         phrase->setName("Generated Phrase");
@@ -89,15 +89,15 @@ std::shared_ptr<Song> PatternParser::parseLLMResponse(const String& response)
         section->setName("Generated Section");
         section->addPhrase(phrase);
         
-        auto song = std::make_shared<Song>();
-        song->setTitle("Generated Song");
-        song->addSection(section);
-        return song;
+        auto chart = std::make_shared<Chart>();
+        chart->setTitle("Generated Chart");
+        chart->addSection(section);
+        return chart;
     }
     
-    // If nothing found, return an empty song
+    // If nothing found, return an empty chart
     std::cout << "No pattern notation found in LLM response" << std::endl;
-    return std::make_shared<Song>();
+    return std::make_shared<Chart>();
 }
 
 String PatternParser::extractSongNotation(const String& text)

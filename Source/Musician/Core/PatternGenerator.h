@@ -40,11 +40,11 @@ public:
      * @brief Callback for pattern generation completion
      * 
      * @param success Whether the generation was successful
-     * @param song The generated song (nullptr if generation failed)
+     * @param chart The generated chart (nullptr if generation failed)
      * @param response The raw response from the LLM
      */
     using PatternGenerationCallback = std::function<void(bool success, 
-                                                       std::shared_ptr<Song> song, 
+                                                       std::shared_ptr<Chart> chart, 
                                                        const String& response)>;
     
     /**

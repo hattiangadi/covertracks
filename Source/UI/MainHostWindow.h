@@ -39,7 +39,7 @@
 #include "../Player/UI/PlayerLibraryComponent.h"
 #include "../Player/UI/PlayerModeComponent.h"
 #include "../Audio/AudioEngine.h"
-#include "../Musician/UI/EnsembleLLMConversationComponent.h"
+#include "../Musician/UI/PerformanceComponent.h"
 #include "../Musician/UI/PatternEditorComponent.h"
 #include "../LLM/Core/LLMManager.h"
 #include "../Musician/UI/EnsembleMainPanel.h"
@@ -149,7 +149,7 @@ public:
     // Main components
     std::unique_ptr<PlayerLibraryComponent> playerLibraryWindow;
     std::unique_ptr<PlayerModeComponent> playerModeWindow;
-    std::unique_ptr<EnsembleLLMConversationComponent> ensembleLLMConversationWindow;
+    std::unique_ptr<PerformanceComponent> performanceWindow;
     std::unique_ptr<SongManagerComponent> songManagerWindow;
     std::unique_ptr<PatternEditorComponent> patternEditorWindow;
     std::unique_ptr<EnsembleMainPanel> ensembleMainWindow;

@@ -82,6 +82,23 @@ public:
      */
     void initializeWithLLMClient(std::shared_ptr<LLMClient> llmClient);
     
+    /**
+     * @brief Register a listener with the internal SongListComponent
+     * 
+     * This allows external components to receive updates when songs are added, removed, or changed
+     * without having to poll periodically.
+     * 
+     * @param listener The listener to register
+     */
+    void registerSongListListener(SongListComponent::Listener* listener);
+    
+    /**
+     * @brief Unregister a listener from the internal SongListComponent
+     * 
+     * @param listener The listener to unregister
+     */
+    void unregisterSongListListener(SongListComponent::Listener* listener);
+    
 private:
     // UI components
     SongListComponent songListComponent;

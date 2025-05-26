@@ -127,12 +127,50 @@ public:
     // void setLLMClient(std::shared_ptr<LLMClient> client);
     
     /**
-     * @brief Generate a musical pattern (stubbed)
+     * @brief Generate a musical pattern
      * 
      * @param parameters Parameters for pattern generation (key, tempo, etc.)
      * @return var The generated pattern as JUCE var/JSON
      */
     var generatePattern(const var& parameters);
+    
+    /**
+     * @brief Set a MIDI pattern for playback
+     * 
+     * @param pattern The MIDI pattern as a MidiMessageSequence
+     * @return true If the pattern was set successfully
+     * @return false If there was an error setting the pattern
+     */
+    bool setPattern(std::shared_ptr<juce::MidiMessageSequence> pattern);
+    
+    /**
+     * @brief Set a MIDI pattern from a var/JSON representation
+     * 
+     * @param patternVar The MIDI pattern as a var/JSON object
+     * @return true If the pattern was set successfully
+     * @return false If there was an error setting the pattern
+     */
+    bool setPatternFromVar(const var& patternVar);
+    
+    /**
+     * @brief Get the current MIDI pattern
+     * 
+     * @return std::shared_ptr<juce::MidiMessageSequence> The current pattern
+     */
+    std::shared_ptr<juce::MidiMessageSequence> getPattern() const;
+    
+    /**
+     * @brief Start playing the current pattern
+     * 
+     * @return true If playback started successfully
+     * @return false If there was an error starting playback
+     */
+    bool play();
+    
+    /**
+     * @brief Stop playing the current pattern
+     */
+    void stop();
     
     /**
      * @brief Play a MIDI pattern
@@ -273,8 +311,9 @@ private:
         return appDataDir.getChildFile(id + ".filtergraph");
     }
     
-    // Most recently generated pattern
+    // Pattern storage and playback
     var lastGeneratedPattern;
+    std::shared_ptr<juce::MidiMessageSequence> currentPattern;
     
     // Pattern finished callback
     std::function<void(const String&)> onPatternFinished;

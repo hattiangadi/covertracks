@@ -5,15 +5,15 @@
 
 namespace covertracks {
 
-MusicianEditorComponent::MusicianEditorComponent(Musician* musician, std::shared_ptr<LLMClient> llmClient)
+MusicianEditorComponent::MusicianEditorComponent(Musician* musicianPtr, std::shared_ptr<LLMClient> llmClientPtr)
     : styleLabel("StyleLabel", "Style:"),
       apiKeyLabel("APIKeyLabel", "API Key:"),
       connectButton("Connect"),
       disconnectButton("Disconnect"),
       saveButton("Save Settings"),
       statusLabel("StatusLabel", "Not connected to LLM"),
-      musician(musician),
-      llmClient(llmClient),
+      musician(musicianPtr),
+      llmClient(llmClientPtr),
       connected(false)
 {
     // Set up style label and combo box
@@ -73,13 +73,9 @@ MusicianEditorComponent::MusicianEditorComponent(Musician* musician, std::shared
     statusLabel.setColour(Label::textColourId, Colours::grey);
     addAndMakeVisible(statusLabel);
     
-    // Create the conversation component if we have a musician and LLM client
-    if (musician && llmClient)
+    // Update the connection status if we have a musician
+    if (musician)
     {
-        conversationComponent = std::make_unique<LLMConversationComponent>(llmClient, musician);
-        addAndMakeVisible(conversationComponent.get());
-        
-        // Update the connection status
         connected = musician->isConnectedToLLM();
         updateConnectionStatus();
     }
@@ -141,11 +137,7 @@ void MusicianEditorComponent::resized()
     // Status label
     statusLabel.setBounds(topArea.reduced(5));
     
-    // Conversation component
-    if (conversationComponent)
-    {
-        conversationComponent->setBounds(area.reduced(5));
-    }
+    // Main area is now available for other components
 }
 
 void MusicianEditorComponent::buttonClicked(Button* button)
@@ -227,10 +219,7 @@ void MusicianEditorComponent::handleConnect()
     {
         musician->setLLMClient(llmClient);
         
-        // Update the conversation component
-        conversationComponent.reset();
-        conversationComponent = std::make_unique<LLMConversationComponent>(llmClient, musician);
-        addAndMakeVisible(conversationComponent.get());
+        // Update the UI
         resized();
     }
     
@@ -251,7 +240,7 @@ void MusicianEditorComponent::handleDisconnect()
     llmClient.reset();
     
     // Update the conversation component
-    conversationComponent.reset();
+    // No longer using conversation component
     
     // Update the connection status
     connected = false;

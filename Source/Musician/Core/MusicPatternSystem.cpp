@@ -184,134 +184,29 @@ std::shared_ptr<Section> Section::fromVar(const var& v)
 }
 
 //==============================================================================
-// Song implementation
-//==============================================================================
-
-var Song::toVar() const
-{
-    DynamicObject* obj = new DynamicObject();
-    obj->setProperty("id", uniqueID);
-    obj->setProperty("name", title);
-    obj->setProperty("tempo", tempo);
-    
-    Array<var> sectionsArray;
-    for (const auto& section : sections)
-    {
-        if (section)
-            sectionsArray.add(section->toVar());
-    }
-    obj->setProperty("sections", sectionsArray);
-    
-    // Add source structure JSON if available
-    if (sourceStructureJson.isNotEmpty())
-    {
-        obj->setProperty("sourceStructure", sourceStructureJson);
-    }
-    
-    return var(obj);
-}
-
-std::shared_ptr<Song> Song::fromVar(const var& v)
-{
-    auto result = std::make_shared<Song>();
-    
-    if (auto* obj = v.getDynamicObject())
-    {
-        // If the JSON has an ID, use it instead of the auto-generated one
-        if (obj->hasProperty("id"))
-        {
-            result->uniqueID = obj->getProperty("id").toString();
-        }
-        
-        result->setTitle(obj->getProperty("name").toString());
-        result->setTempo(obj->hasProperty("tempo") ? static_cast<double>(obj->getProperty("tempo")) : 120.0);
-        
-        if (result->getTempo() <= 0)
-            result->setTempo(120.0);
-        
-        var sectionsVar = obj->getProperty("sections");
-        if (sectionsVar.isArray())
-        {
-            for (const auto& sectionVar : *sectionsVar.getArray())
-            {
-                auto section = Section::fromVar(sectionVar);
-                if (section)
-                    result->sections.add(section);
-            }
-        }
-        
-        // Check for source structure JSON
-        if (obj->hasProperty("sourceStructure"))
-        {
-            result->sourceStructureJson = obj->getProperty("sourceStructure").toString();
-        }
-    }
-    
-    return result;
-}
-
-std::unique_ptr<MidiMessageSequence> Song::toMidiSequence() const
-{
-    auto sequence = std::make_unique<MidiMessageSequence>();
-    
-    // Calculate the total number of ticks per quarter note
-    const int ticksPerQuarterNote = 960;
-    
-    // Calculate the current position in ticks
-    double currentTick = 0.0;
-    
-    // Process each section
-    for (const auto& section : sections)
-    {
-        if (!section)
-            continue;
-        
-        // Process each phrase in the section
-        for (int i = 0; i < section->getNumPhrases(); ++i)
-        {
-            auto phrase = section->getPhrase(i);
-            if (!phrase)
-                continue;
-            
-            // Process each bar in the phrase
-            for (int j = 0; j < phrase->getNumBars(); ++j)
-            {
-                auto bar = phrase->getBar(j);
-                if (!bar)
-                    continue;
-                
-                // Get the MIDI sequence for this bar
-                auto barSequence = bar->toMidiSequence();
-                if (!barSequence)
-                    continue;
-                
-                // Add the bar's events to the song sequence with the current offset
-                for (int k = 0; k < barSequence->getNumEvents(); ++k)
-                {
-                    auto event = barSequence->getEventPointer(k);
-                    if (event)
-                    {
-                        // Clone the event and adjust its timestamp
-                        auto newEvent = event->message;
-                        newEvent.setTimeStamp(newEvent.getTimeStamp() + currentTick);
-                        sequence->addEvent(newEvent);
-                    }
-                }
-                
-                // Update the current position
-                // For simplicity, assume each bar is 4 quarter notes (1 bar in 4/4 time)
-                // In a more complete implementation, this would depend on the time signature
-                double beatsInBar = 4.0 * (bar->getTimeSignatureNumerator() / static_cast<double>(bar->getTimeSignatureDenominator())) * 4.0;
-                currentTick += beatsInBar * ticksPerQuarterNote;
-            }
-        }
-    }
-    
-    // Sort the sequence by timestamp
-    sequence->sort();
-    
-    return sequence;
-}
+//                    if (event)
+//                    {
+//                        // Clone the event and adjust its timestamp
+//                        auto newEvent = event->message;
+//                        newEvent.setTimeStamp(newEvent.getTimeStamp() + currentTick);
+//                        sequence->addEvent(newEvent);
+//                    }
+//                }
+//                
+//                // Update the current position
+//                // For simplicity, assume each bar is 4 quarter notes (1 bar in 4/4 time)
+//                // In a more complete implementation, this would depend on the time signature
+//                double beatsInBar = 4.0 * (bar->getTimeSignatureNumerator() / static_cast<double>(bar->getTimeSignatureDenominator())) * 4.0;
+//                currentTick += beatsInBar * ticksPerQuarterNote;
+//            }
+//        }
+//    }
+//    
+//    // Sort the sequence by timestamp
+//    sequence->sort();
+//    
+//    return sequence;
+//}
 
 //==============================================================================
 // InstrumentDefinition implementation
@@ -459,13 +354,13 @@ MusicPatternSystem::~MusicPatternSystem()
     DBG("  - Bar: " + String(Bar::getInstanceCount()));
     DBG("  - Phrase: " + String(Phrase::getInstanceCount()));
     DBG("  - Section: " + String(Section::getInstanceCount()));
-    DBG("  - Song: " + String(Song::getInstanceCount()));
+    DBG("  - Chart: " + String(Chart::getInstanceCount()));
     
     // Clear all pattern maps to ensure proper cleanup
     patterns.clear();
     phrases.clear();
     sections.clear();
-    songs.clear();
+    charts.clear();
     instrumentDefinitions.clear();
     
     // Log instances after cleanup
@@ -473,7 +368,7 @@ MusicPatternSystem::~MusicPatternSystem()
     DBG("  - Bar: " + String(Bar::getInstanceCount()));
     DBG("  - Phrase: " + String(Phrase::getInstanceCount()));
     DBG("  - Section: " + String(Section::getInstanceCount()));
-    DBG("  - Song: " + String(Song::getInstanceCount()));
+    DBG("  - Chart: " + String(Chart::getInstanceCount()));
 }
 
 void MusicPatternSystem::initializeDefaultInstruments()
@@ -792,9 +687,9 @@ std::shared_ptr<Section> MusicPatternSystem::createSectionFromNotation(const Str
     return section;
 }
 
-std::shared_ptr<Song> MusicPatternSystem::createSongFromNotation(const String& notation)
+std::shared_ptr<Chart> MusicPatternSystem::createChartFromNotation(const String& notation)
 {
-    auto song = std::make_shared<Song>();
+    auto chart = std::make_shared<Chart>();
     
     // Remove outer brackets if present
     String content = notation;
@@ -803,72 +698,71 @@ std::shared_ptr<Song> MusicPatternSystem::createSongFromNotation(const String& n
         content = content.substring(1, content.length() - 1).trim();
     }
     
-    // Check for song name and tempo
+    // Check for chart name and tempo
     if (content.contains(":"))
     {
         int colonPos = content.indexOf(":");
-        String songInfo = content.substring(0, colonPos).trim();
+        String chartName = content.substring(0, colonPos).trim();
+        chart->setTitle(chartName);
         
-        // Parse song info (name and tempo)
-        if (songInfo.contains("@"))
-        {
-            // Format: "Song Name @ 120"
-            int atPos = songInfo.indexOf("@");
-            String songName = songInfo.substring(0, atPos).trim();
-            String tempoStr = songInfo.substring(atPos + 1).trim();
-            
-            song->setTitle(songName);
-            
-            // Parse tempo
-            if (tempoStr.containsOnly("0123456789."))
-            {
-                double tempo = tempoStr.getDoubleValue();
-                if (tempo > 0)
-                    song->setTempo(tempo);
-            }
-        }
-        else
-        {
-            // Just a name, no tempo
-            song->setTitle(songInfo);
-        }
-        
+        // Extract the rest of the content
         content = content.substring(colonPos + 1).trim();
     }
     
-    // Split the content into section definitions
+    // Look for tempo
+    if (content.contains("BPM:"))
+    {
+        int bpmPos = content.indexOf("BPM:");
+        int endBpmPos = content.indexOf("\n");
+        if (endBpmPos < bpmPos) endBpmPos = -1;
+        if (endBpmPos == -1) endBpmPos = content.length();
+        
+        String bpmStr = content.substring(bpmPos + 4, endBpmPos).trim();
+        int tempo = bpmStr.getIntValue();
+        if (tempo > 0)
+        {
+            chart->setTempo(tempo);
+        }
+        
+        // Remove the BPM line from content
+        content = content.substring(0, bpmPos) + content.substring(endBpmPos);
+    }
+    
+    // Split into sections
     StringArray sectionDefs;
     
-    // Strategy 1: Look for section definitions enclosed in brackets
-    if (content.contains("[") && content.contains("]"))
+    // Strategy 1: Look for sections enclosed in brackets
+    if (content.contains("{") && content.contains("}"))
     {
         int startPos = 0;
-        int endPos = 0;
-        int nestingLevel = 0;
-        
-        for (int i = 0; i < content.length(); ++i)
+        while (startPos < content.length())
         {
-            if (content[i] == '[')
-            {
-                if (nestingLevel == 0)
-                    startPos = i;
-                nestingLevel++;
-            }
-            else if (content[i] == ']')
-            {
-                nestingLevel--;
-                if (nestingLevel == 0)
-                {
-                    endPos = i;
-                    sectionDefs.add(content.substring(startPos, endPos + 1).trim());
-                }
-            }
+            int openBracket = content.indexOf("{");
+            if (openBracket < startPos) openBracket = -1;
+            if (openBracket == -1) break;
+            
+            int closeBracket = content.indexOf("}");
+            if (closeBracket < openBracket) closeBracket = -1;
+            if (closeBracket == -1) break;
+            
+            // Get the section name
+            String sectionName = content.substring(startPos, openBracket).trim();
+            if (sectionName.endsWith(":")) sectionName = sectionName.dropLastCharacters(1).trim();
+            
+            // Get the section content including brackets
+            String sectionContent = content.substring(openBracket, closeBracket + 1);
+            
+            // Add the section definition
+            sectionDefs.add(sectionName + ": " + sectionContent);
+            
+            // Move to next section
+            startPos = closeBracket + 1;
         }
     }
     // Strategy 2: Split by commas or semicolons if no brackets are found
     else
     {
-        sectionDefs.addTokens(content, ",;", "\"[]");
+        sectionDefs.addTokens(content, ",;", "\"{}");
     }
     
     // Create sections from the definitions
@@ -878,11 +772,11 @@ std::shared_ptr<Song> MusicPatternSystem::createSongFromNotation(const String& n
         {
             auto section = createSectionFromNotation(sectionDef.trim());
             if (section)
-                song->addSection(section);
+                chart->addSection(section);
         }
     }
     
-    return song;
+    return chart;
 }
 
 Array<PatternEvent> MusicPatternSystem::parseEvents(const String& eventsText, const String& timeSignature)

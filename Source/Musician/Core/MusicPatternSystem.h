@@ -95,23 +95,23 @@ public:
     std::shared_ptr<Bar> createBarFromNotation(const String& notation);
     std::shared_ptr<Phrase> createPhraseFromNotation(const String& notation);
     std::shared_ptr<Section> createSectionFromNotation(const String& notation);
-    std::shared_ptr<Song> createSongFromNotation(const String& notation);
+    std::shared_ptr<Chart> createChartFromNotation(const String& notation);
     
     // Pattern management
     void addPattern(const String& id, std::shared_ptr<Bar> pattern) { patterns[id] = pattern; }
     void addPhrase(const String& id, std::shared_ptr<Phrase> phrase) { phrases[id] = phrase; }
     void addSection(const String& id, std::shared_ptr<Section> section) { sections[id] = section; }
-    void addSong(const String& id, std::shared_ptr<Song> song) { songs[id] = song; }
+    void addChart(const String& id, std::shared_ptr<Chart> chart) { charts[id] = chart; }
     
     bool hasPattern(const String& id) const { return patterns.find(id) != patterns.end(); }
     bool hasPhrase(const String& id) const { return phrases.find(id) != phrases.end(); }
     bool hasSection(const String& id) const { return sections.find(id) != sections.end(); }
-    bool hasSong(const String& id) const { return songs.find(id) != songs.end(); }
+    bool hasChart(const String& id) const { return charts.find(id) != charts.end(); }
     
     std::shared_ptr<Bar> getPattern(const String& id) const;
     std::shared_ptr<Phrase> getPhrase(const String& id) const;
     std::shared_ptr<Section> getSection(const String& id) const;
-    std::shared_ptr<Song> getSong(const String& id) const;
+    std::shared_ptr<Chart> getChart(const String& id) const;
     
     // Factory methods for creating MIDI sequences from patterns
     std::unique_ptr<MidiMessageSequence> createMidiSequence(const String& patternId, double tempo = 120.0);
@@ -135,7 +135,7 @@ private:
     std::map<String, std::shared_ptr<Bar>> patterns;
     std::map<String, std::shared_ptr<Phrase>> phrases;
     std::map<String, std::shared_ptr<Section>> sections;
-    std::map<String, std::shared_ptr<Song>> songs;
+    std::map<String, std::shared_ptr<Chart>> charts;
     
     // Parser helper methods
     String extractTimeSignature(const String& barText, String& remainingText);

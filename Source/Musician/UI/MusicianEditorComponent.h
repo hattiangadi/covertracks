@@ -3,7 +3,6 @@
 
 #include <JuceHeader.h>
 #include "../Core/Musician.h"
-#include "../../LLM/UI/LLMConversationComponent.h"
 #include "../../LLM/Core/LLMClient.h"
 
 namespace covertracks {
@@ -64,8 +63,7 @@ private:
     // Status indicators
     Label statusLabel;
     
-    // LLM conversation component
-    std::unique_ptr<LLMConversationComponent> conversationComponent;
+    // LLM connection state
     
     // References
     Musician* musician;

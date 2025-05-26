@@ -669,13 +669,266 @@ var Player::generatePattern(const var& parameters)
     return lastGeneratedPattern;
 }
 
+bool Player::setPattern(std::shared_ptr<juce::MidiMessageSequence> pattern)
+{
+    if (!pattern)
+    {
+        std::cerr << "Player::setPattern - Received null pattern" << std::endl;
+        return false;
+    }
+    
+    // Store the pattern
+    currentPattern = pattern;
+    
+    std::cout << "Player::setPattern - Pattern set with " << pattern->getNumEvents() 
+              << " events, duration: " << pattern->getEndTime() << " seconds" << std::endl;
+    
+    return true;
+}
+
+std::shared_ptr<juce::MidiMessageSequence> Player::getPattern() const
+{
+    return currentPattern;
+}
+
+bool Player::setPatternFromVar(const var& patternVar)
+{
+    if (!patternVar.isObject())
+    {
+        std::cerr << "Player::setPatternFromVar - Invalid pattern format (not an object)" << std::endl;
+        return false;
+    }
+    
+    // Create a new MIDI message sequence
+    auto sequence = std::make_shared<juce::MidiMessageSequence>();
+    
+    try
+    {
+        // Extract events array
+        var eventsVar = patternVar;
+        
+        // If the pattern is a full command with an events property, extract it
+        if (patternVar.hasProperty("events"))
+        {
+            eventsVar = patternVar["events"];
+        }
+        
+        if (!eventsVar.isArray())
+        {
+            std::cerr << "Player::setPatternFromVar - Invalid pattern format (events not an array)" << std::endl;
+            return false;
+        }
+        
+        // Process each event in the array
+        for (int i = 0; i < eventsVar.size(); ++i)
+        {
+            var event = eventsVar[i];
+            
+            if (!event.isObject())
+                continue;
+            
+            // Extract common properties
+            juce::String type = event.hasProperty("type") ? event["type"].toString() : "";
+            int channel = event.hasProperty("channel") ? static_cast<int>(static_cast<double>(event["channel"])) : 1;
+            double timestamp = event.hasProperty("time") ? static_cast<double>(event["time"]) : 0.0;
+            
+            // Ensure channel is in valid range (1-16)
+            channel = juce::jlimit(1, 16, channel);
+            
+            if (type == "note_on")
+            {
+                // Extract note-specific properties
+                int note = event.hasProperty("note") ? static_cast<int>(static_cast<double>(event["note"])) : 60;
+                int velocity = event.hasProperty("velocity") ? static_cast<int>(static_cast<double>(event["velocity"])) : 100;
+                
+                // Ensure note and velocity are in valid ranges
+                note = juce::jlimit(0, 127, note);
+                velocity = juce::jlimit(0, 127, velocity);
+                
+                // Create note on message
+                juce::MidiMessage noteOn = juce::MidiMessage::noteOn(channel, note, static_cast<float>(velocity) / 127.0f);
+                noteOn.setTimeStamp(timestamp);
+                sequence->addEvent(noteOn);
+            }
+            else if (type == "note_off")
+            {
+                // Extract note-specific properties
+                int note = event.hasProperty("note") ? static_cast<int>(static_cast<double>(event["note"])) : 60;
+                
+                // Ensure note is in valid range
+                note = juce::jlimit(0, 127, note);
+                
+                // Create note off message
+                juce::MidiMessage noteOff = juce::MidiMessage::noteOff(channel, note);
+                noteOff.setTimeStamp(timestamp);
+                sequence->addEvent(noteOff);
+            }
+            else if (type == "controller")
+            {
+                // Extract controller-specific properties
+                int controllerNumber = event.hasProperty("controller") ? static_cast<int>(static_cast<double>(event["controller"])) : 0;
+                int value = event.hasProperty("value") ? static_cast<int>(static_cast<double>(event["value"])) : 0;
+                
+                // Ensure controller number and value are in valid ranges
+                controllerNumber = juce::jlimit(0, 127, controllerNumber);
+                value = juce::jlimit(0, 127, value);
+                
+                // Create controller message
+                juce::MidiMessage cc = juce::MidiMessage::controllerEvent(channel, controllerNumber, value);
+                cc.setTimeStamp(timestamp);
+                sequence->addEvent(cc);
+            }
+            else if (type == "program_change")
+            {
+                // Extract program change-specific properties
+                int programNumber = event.hasProperty("program") ? static_cast<int>(static_cast<double>(event["program"])) : 0;
+                
+                // Ensure program number is in valid range
+                programNumber = juce::jlimit(0, 127, programNumber);
+                
+                // Create program change message
+                juce::MidiMessage pc = juce::MidiMessage::programChange(channel, programNumber);
+                pc.setTimeStamp(timestamp);
+                sequence->addEvent(pc);
+            }
+        }
+        
+        // Sort the sequence by timestamp
+        sequence->sort();
+        
+        // Add an all notes off message at the end to ensure clean playback
+        double endTime = 0.0;
+        
+        if (sequence->getNumEvents() > 0)
+        {
+            endTime = sequence->getEndTime() + 0.5; // Add a half-second buffer
+        }
+        else
+        {
+            endTime = 1.0; // Default to 1 second if no events
+        }
+        
+        for (int channel = 1; channel <= 16; ++channel)
+        {
+            juce::MidiMessage allNotesOff = juce::MidiMessage::allNotesOff(channel);
+            allNotesOff.setTimeStamp(endTime);
+            sequence->addEvent(allNotesOff);
+        }
+        
+        // Re-sort after adding all notes off messages
+        sequence->sort();
+        
+        // Set the pattern
+        return setPattern(sequence);
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Player::setPatternFromVar - Error parsing pattern: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool Player::play()
+{
+    if (!currentPattern)
+    {
+        std::cerr << "Player::play - No pattern set" << std::endl;
+        return false;
+    }
+    
+    if (!instrument)
+    {
+        std::cerr << "Player::play - Instrument not initialized" << std::endl;
+        return false;
+    }
+    
+    // Ensure the instrument is ready for playback
+    if (instrument->getResourceState() != Instrument::ResourceState::PlaybackReady)
+    {
+        std::cerr << "Player::play - Instrument not ready for playback, preparing now" << std::endl;
+        prepareForPlayback();
+    }
+    
+    // Convert the MIDI message sequence to a var for the instrument
+    DynamicObject* patternObj = new DynamicObject();
+    Array<var> events;
+    
+    for (int i = 0; i < currentPattern->getNumEvents(); ++i)
+    {
+        auto event = currentPattern->getEventPointer(i);
+        if (event->message.isNoteOn())
+        {
+            DynamicObject* noteOn = new DynamicObject();
+            noteOn->setProperty("type", "note_on");
+            noteOn->setProperty("channel", event->message.getChannel());
+            noteOn->setProperty("note", event->message.getNoteNumber());
+            noteOn->setProperty("velocity", (int)(event->message.getVelocity() * 127));
+            noteOn->setProperty("time", event->message.getTimeStamp());
+            events.add(var(noteOn));
+        }
+        else if (event->message.isNoteOff())
+        {
+            DynamicObject* noteOff = new DynamicObject();
+            noteOff->setProperty("type", "note_off");
+            noteOff->setProperty("channel", event->message.getChannel());
+            noteOff->setProperty("note", event->message.getNoteNumber());
+            noteOff->setProperty("velocity", 0);
+            noteOff->setProperty("time", event->message.getTimeStamp());
+            events.add(var(noteOff));
+        }
+        else if (event->message.isController())
+        {
+            DynamicObject* cc = new DynamicObject();
+            cc->setProperty("type", "controller");
+            cc->setProperty("channel", event->message.getChannel());
+            cc->setProperty("controller", event->message.getControllerNumber());
+            cc->setProperty("value", event->message.getControllerValue());
+            cc->setProperty("time", event->message.getTimeStamp());
+            events.add(var(cc));
+        }
+        else if (event->message.isProgramChange())
+        {
+            DynamicObject* pc = new DynamicObject();
+            pc->setProperty("type", "program_change");
+            pc->setProperty("channel", event->message.getChannel());
+            pc->setProperty("program", event->message.getProgramChangeNumber());
+            pc->setProperty("time", event->message.getTimeStamp());
+            events.add(var(pc));
+        }
+    }
+    
+    patternObj->setProperty("events", events);
+    var patternVar(patternObj);
+    
+    // Play the pattern using the instrument
+    bool result = instrument->playMIDIPattern(patternVar);
+    
+    if (result)
+    {
+        std::cout << "Player::play - Started playback of pattern with " 
+                  << currentPattern->getNumEvents() << " events" << std::endl;
+    }
+    else
+    {
+        std::cerr << "Player::play - Failed to start playback" << std::endl;
+    }
+    
+    return result;
+}
 
 bool Player::playPattern(const var& pattern, double tempo)
 {
     if (instrument == nullptr)
     {
-        std::cerr << "Cannot play pattern: instrument not initialized" << std::endl;
+        std::cerr << "Player::playPattern - Instrument not initialized" << std::endl;
         return false;
+    }
+    
+    // Make sure the instrument is ready for playback
+    if (instrument->getResourceState() != Instrument::ResourceState::PlaybackReady)
+    {
+        std::cerr << "Player::playPattern - Instrument not ready for playback, preparing now" << std::endl;
+        prepareForPlayback();
     }
     
     // Extract the events array if the pattern is a full command
@@ -695,7 +948,18 @@ bool Player::playPattern(const var& pattern, double tempo)
     }
     
     // Play the pattern using the instrument
-    return instrument->playMIDIPattern(eventsToPlay, tempoToUse);
+    bool result = instrument->playMIDIPattern(eventsToPlay, tempoToUse);
+    
+    if (result)
+    {
+        std::cout << "Player::playPattern - Started playback of pattern" << std::endl;
+    }
+    else
+    {
+        std::cerr << "Player::playPattern - Failed to start playback" << std::endl;
+    }
+    
+    return result;
 }
 
 bool Player::generateAndPlay(const var& parameters)
@@ -725,6 +989,15 @@ void Player::stopPlayback()
     if (instrument != nullptr)
     {
         instrument->stopPlayback();
+    }
+}
+
+void Player::stop()
+{
+    if (instrument)
+    {
+        instrument->stopPlayback();
+        std::cout << "Player::stop - Stopped playback" << std::endl;
     }
 }
 
@@ -810,6 +1083,68 @@ void Player::setMusician(std::unique_ptr<Musician> newMusician)
                     DynamicObject* responseObj = new DynamicObject();
                     responseObj->setProperty("status", "success");
                     responseObj->setProperty("message", "Player already exists");
+                    return JSON::toString(var(responseObj));
+                }
+                else if (commandType == "generate_pattern")
+                {
+                    // Generate a pattern
+                    var parameters = command.hasProperty("parameters") ? command["parameters"] : var();
+                    var pattern = generatePattern(parameters);
+                    
+                    DynamicObject* responseObj = new DynamicObject();
+                    responseObj->setProperty("status", "success");
+                    responseObj->setProperty("pattern", pattern);
+                    return JSON::toString(var(responseObj));
+                }
+                else if (commandType == "set_pattern")
+                {
+                    // Set a pattern
+                    var pattern = command.hasProperty("pattern") ? command["pattern"] : var();
+                    bool success = setPatternFromVar(pattern);
+                    
+                    if (success)
+                    {
+                        DynamicObject* responseObj = new DynamicObject();
+                        responseObj->setProperty("status", "success");
+                        responseObj->setProperty("message", "Pattern set");
+                        return JSON::toString(var(responseObj));
+                    }
+                    else
+                    {
+                        DynamicObject* responseObj = new DynamicObject();
+                        responseObj->setProperty("status", "error");
+                        responseObj->setProperty("message", "Failed to set pattern");
+                        return JSON::toString(var(responseObj));
+                    }
+                }
+                else if (commandType == "play")
+                {
+                    // Play the current pattern
+                    bool success = play();
+                    
+                    if (success)
+                    {
+                        DynamicObject* responseObj = new DynamicObject();
+                        responseObj->setProperty("status", "success");
+                        responseObj->setProperty("message", "Playback started");
+                        return JSON::toString(var(responseObj));
+                    }
+                    else
+                    {
+                        DynamicObject* responseObj = new DynamicObject();
+                        responseObj->setProperty("status", "error");
+                        responseObj->setProperty("message", "Failed to start playback");
+                        return JSON::toString(var(responseObj));
+                    }
+                }
+                else if (commandType == "stop")
+                {
+                    // Stop playback
+                    stop();
+                    
+                    DynamicObject* responseObj = new DynamicObject();
+                    responseObj->setProperty("status", "success");
+                    responseObj->setProperty("message", "Playback stopped");
                     return JSON::toString(var(responseObj));
                 }
                 else

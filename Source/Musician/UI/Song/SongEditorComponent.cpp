@@ -1,4 +1,5 @@
 #include "SongEditorComponent.h"
+#include "../../Core/Song.h"
 #include "../../../UI/Styling/AppFonts.h"
 
 namespace covertracks {
@@ -141,10 +142,11 @@ void SongEditorComponent::setupStructureTab()
     structureEditor.setMultiLine(true);
     structureEditor.setReturnKeyStartsNewLine(true);
     // Use a monospaced font for the JSON editor
-    juce::Font monoFont(juce::Font::getDefaultMonospacedFontName(), 14.0f, juce::Font::plain);
+    juce::Font monoFont = juce::Font(juce::FontOptions(juce::Font::getDefaultMonospacedFontName(), "", 14.0f));
     structureEditor.setFont(monoFont);
     structureEditor.setTabKeyUsedAsCharacter(true);
     structureEditor.setColour(juce::TextEditor::backgroundColourId, juce::Colours::white);
+    structureEditor.setColour(juce::TextEditor::textColourId, juce::Colours::black);
     structureEditor.setColour(juce::TextEditor::outlineColourId, juce::Colours::lightgrey);
     structureEditor.setColour(juce::TextEditor::focusedOutlineColourId, juce::Colours::lightblue);
     structureEditor.addListener(this);
@@ -384,11 +386,8 @@ std::shared_ptr<Song> SongEditorComponent::cloneSong(std::shared_ptr<Song> sourc
     // Create a new song with the same title and tempo
     auto clonedSong = std::make_shared<Song>(sourceSong->getTitle(), sourceSong->getTempo());
     
-    // Copy all sections
-    for (int i = 0; i < sourceSong->getNumSections(); ++i)
-    {
-        clonedSong->addSection(sourceSong->getSection(i));
-    }
+    // Copy the structure JSON
+    clonedSong->setSourceStructureJson(sourceSong->getSourceStructureJson());
     
     return clonedSong;
 }
@@ -501,8 +500,17 @@ void SongEditorComponent::updateEditorFields()
         titleEditor.setText(currentSong->getTitle());
         tempoEditor.setText(juce::String(currentSong->getTempo()));
         
-        // If we have stored JSON structure, use it
-        if (structureJson.isNotEmpty())
+        // First check if the Song object has a saved structure JSON
+        juce::String savedStructureJson = currentSong->getSourceStructureJson();
+        
+        // If the Song has saved structure JSON, use it
+        if (savedStructureJson.isNotEmpty())
+        {
+            structureEditor.setText(savedStructureJson);
+            structureJson = savedStructureJson; // Update our local copy too
+        }
+        // Otherwise, if we have stored JSON structure in the component, use it
+        else if (structureJson.isNotEmpty())
         {
             structureEditor.setText(structureJson);
         }
@@ -598,8 +606,11 @@ void SongEditorComponent::applySongChanges()
     // Store the JSON text in our component
     structureJson = jsonText;
     
+    // Save the JSON structure to the Song object
+    currentSong->setSourceStructureJson(jsonText);
+    
     // Log what we're saving
-    DBG("Saving song with source structure JSON");
+    DBG("Saving song with source structure JSON: " + jsonText.substring(0, 100) + "...");
 }
 
 } // namespace covertracks

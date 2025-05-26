@@ -146,4 +146,20 @@ void SongManagerComponent::notifyListenersSongSelected(std::shared_ptr<Song> son
     listeners.call(&Listener::songSelected, this, song);
 }
 
+void SongManagerComponent::registerSongListListener(SongListComponent::Listener* listener)
+{
+    if (listener)
+    {
+        songListComponent.addListener(listener);
+    }
+}
+
+void SongManagerComponent::unregisterSongListListener(SongListComponent::Listener* listener)
+{
+    if (listener)
+    {
+        songListComponent.removeListener(listener);
+    }
+}
+
 } // namespace covertracks

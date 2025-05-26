@@ -120,7 +120,7 @@ void PatternGenerator::run()
             llmClient->sendMessageWithHistory(prompt, conversationHistory, 
                 [this](bool success, const String& response) {
                     // Parse the response
-                    std::shared_ptr<Song> song;
+                    std::shared_ptr<Chart> chart;
                     
                     if (success)
                     {
@@ -128,14 +128,14 @@ void PatternGenerator::run()
                         conversationHistory.add({currentPrompt, response});
                         
                         // Parse the response
-                        song = parser->parseLLMResponse(response);
+                        chart = parser->parseLLMResponse(response);
                     }
                     
                     // Call the callback on the message thread
                     auto callback = currentCallback;
-                    MessageManager::callAsync([callback, success, song, response]() {
+                    MessageManager::callAsync([callback, success, chart, response]() {
                         if (callback)
-                            callback(success, song, response);
+                            callback(success, chart, response);
                         
                         // Note: We don't clear the song references here because the callback
                         // might still be using the song object. The callback is responsible for

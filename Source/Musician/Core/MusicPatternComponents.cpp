@@ -314,15 +314,15 @@ std::unique_ptr<MidiMessageSequence> Section::toMidiSequence() const
 }
 
 //==============================================================================
-// Song implementation
+// Chart implementation
 //==============================================================================
 
 // Initialize static member
-int Song::instanceCount = 0;
+int Chart::instanceCount = 0;
 
 
 
-Song::Song(const String& songTitle, double songTempo)
+Chart::Chart(const String& songTitle, double songTempo)
     : title(songTitle), tempo(songTempo)
 {
     // Generate a unique ID for this song (using JUCE's UUID generator)
@@ -332,10 +332,10 @@ Song::Song(const String& songTitle, double songTempo)
     // Increment instance counter
     ++instanceCount;
     
-    // Enhanced debug output to help identify where the Song is being created
+    // Enhanced debug output to help identify where the Chart is being created
     String creationInfo;
     
-    if (title == "Default Song") {
+    if (title == "Default Chart") {
         creationInfo = "from default initialization";
     } else if (title.isEmpty()) {
         creationInfo = "from unknown location (empty title)";
@@ -343,14 +343,14 @@ Song::Song(const String& songTitle, double songTempo)
         creationInfo = "with title: " + title;
     }
     
-    // Add a breakpoint here to see the call stack when a Song is created
-    DBG("[Song] Created " + creationInfo + ", ID: " + uniqueID + ", address: " + String::toHexString((intptr_t)this) + ", total instances: " + String(instanceCount));
+    // Add a breakpoint here to see the call stack when a Chart is created
+    DBG("[Chart] Created " + creationInfo + ", ID: " + uniqueID + ", address: " + String::toHexString((intptr_t)this) + ", total instances: " + String(instanceCount));
     
     // You can set a breakpoint here to inspect the call stack
     // Intentionally left empty for breakpoint placement
 }
 
-Song::~Song()
+Chart::~Chart()
 {
     // Clear all references to Section objects
     sections.clear();
@@ -359,24 +359,24 @@ Song::~Song()
     --instanceCount;
     
     // Enhanced debug output
-    DBG("[Song] Destroyed: " + title + ", address: " + String::toHexString((intptr_t)this) + ", remaining instances: " + String(instanceCount));
+    DBG("[Chart] Destroyed: " + title + ", address: " + String::toHexString((intptr_t)this) + ", remaining instances: " + String(instanceCount));
     
-    // You can set a breakpoint here to see where Songs are being destroyed
+    // You can set a breakpoint here to see where Charts are being destroyed
     // Intentionally left empty for breakpoint placement
 }
 
-void Song::addSection(std::shared_ptr<Section> section)
+void Chart::addSection(std::shared_ptr<Section> section)
 {
     if (section)
         sections.add(section);
 }
 
-int Song::getNumSections() const
+int Chart::getNumSections() const
 {
     return sections.size();
 }
 
-std::shared_ptr<Section> Song::getSection(int index) const
+std::shared_ptr<Section> Chart::getSection(int index) const
 {
     if (index >= 0 && index < sections.size())
         return sections[index];
@@ -500,11 +500,144 @@ void Section::printInstanceCount()
     DBG("Current Section instance count: " + String(instanceCount));
 }
 
-void Song::printInstanceCount()
+void Chart::printInstanceCount()
 {
-    DBG("Current Song instance count: " + String(instanceCount));
+    DBG("Current Chart instance count: " + String(instanceCount));
 }
 
+std::unique_ptr<MidiMessageSequence> Chart::toMidiSequence() const
+{
+    auto sequence = std::make_unique<MidiMessageSequence>();
+    
+    // Note: We use 960 ticks per quarter note in the MIDI sequence
+    
+    // Calculate the current position in ticks
+    double currentTick = 0.0;
+    
+    // Process each section
+    for (const auto& section : sections)
+    {
+        if (!section)
+            continue;
+        
+        // Get the MIDI sequence for this section
+        auto sectionSequence = section->toMidiSequence();
+        
+        // Add all events from the section sequence to the song sequence
+        // adjusting their timestamps to account for the current position
+        for (int i = 0; i < sectionSequence->getNumEvents(); ++i)
+        {
+            auto* event = sectionSequence->getEventPointer(i);
+            
+            // Create a copy of the event with an adjusted timestamp
+            MidiMessage newEvent(event->message);
+            newEvent.setTimeStamp(event->message.getTimeStamp() + currentTick);
+            
+            // Add the event to the sequence
+            sequence->addEvent(newEvent);
+        }
+        
+        // Update the current position based on the section's length
+        currentTick += sectionSequence->getEndTime();
+    }
+    
+    // Sort the sequence by timestamp
+    sequence->sort();
+    
+    // Set tempo information at the start of the sequence
+    MidiMessage tempoMessage = MidiMessage::tempoMetaEvent(60000000.0 / tempo);
+    tempoMessage.setTimeStamp(0.0);
+    sequence->addEvent(tempoMessage);
+    
+    // Re-sort after adding tempo message
+    sequence->sort();
+    
+    return sequence;
+}
 
+var Chart::toVar() const
+{
+    DynamicObject* obj = new DynamicObject();
+    
+    // Store basic properties
+    obj->setProperty("title", title);
+    obj->setProperty("tempo", tempo);
+    obj->setProperty("id", uniqueID);
+    
+    // Store source structure JSON if available
+    if (sourceStructureJson.isNotEmpty())
+    {
+        obj->setProperty("sourceStructureJson", sourceStructureJson);
+    }
+    
+    // Store sections
+    Array<var> sectionsArray;
+    for (auto& section : sections)
+    {
+        if (section)
+        {
+            sectionsArray.add(section->toVar());
+        }
+    }
+    obj->setProperty("sections", sectionsArray);
+    
+    return var(obj);
+}
+
+std::shared_ptr<Chart> Chart::fromVar(const var& v)
+{
+    if (auto* obj = v.getDynamicObject())
+    {
+        // Create a new chart
+        auto chart = std::make_shared<Chart>();
+        
+        // Load basic properties
+        if (obj->hasProperty("title"))
+        {
+            chart->title = obj->getProperty("title").toString();
+        }
+        
+        if (obj->hasProperty("tempo"))
+        {
+            chart->tempo = obj->getProperty("tempo");
+        }
+        
+        if (obj->hasProperty("id"))
+        {
+            chart->uniqueID = obj->getProperty("id").toString();
+        }
+        else
+        {
+            // Generate a new ID if none exists
+            juce::Uuid uuid;
+            chart->uniqueID = uuid.toString();
+        }
+        
+        // Load source structure JSON if available
+        if (obj->hasProperty("sourceStructureJson"))
+        {
+            chart->sourceStructureJson = obj->getProperty("sourceStructureJson").toString();
+        }
+        
+        // Load sections
+        if (obj->hasProperty("sections") && obj->getProperty("sections").isArray())
+        {
+            Array<var>* sectionsArray = obj->getProperty("sections").getArray();
+            
+            for (auto& sectionVar : *sectionsArray)
+            {
+                auto section = Section::fromVar(sectionVar);
+                if (section)
+                {
+                    chart->sections.add(section);
+                }
+            }
+        }
+        
+        return chart;
+    }
+    
+    return nullptr;
+}
 
 } // namespace covertracks

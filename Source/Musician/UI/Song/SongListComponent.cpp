@@ -10,7 +10,7 @@ SongListComponent::SongListComponent()
     songTable.setHeaderHeight(24);
     songTable.getHeader().addColumn("Title", 1, 200, 100, -1, juce::TableHeaderComponent::defaultFlags);
     songTable.getHeader().addColumn("Tempo", 2, 100, 50, -1, juce::TableHeaderComponent::defaultFlags);
-    songTable.getHeader().addColumn("Sections", 3, 100, 50, -1, juce::TableHeaderComponent::defaultFlags);
+    songTable.getHeader().addColumn("Structure", 3, 100, 50, -1, juce::TableHeaderComponent::defaultFlags);
     addAndMakeVisible(songTable);
     
     // Set up buttons
@@ -140,8 +140,9 @@ void SongListComponent::paintCell(juce::Graphics& g, int rowNumber, int columnId
                 text = juce::String(song->getTempo()) + " BPM";
                 break;
                 
-            case 3: // Sections
-                text = juce::String(song->getNumSections());
+            case 3: // Structure
+                // Just indicate if the song has structure data
+                text = song->getSourceStructureJson().isNotEmpty() ? "Yes" : "No";
                 break;
         }
         
@@ -161,7 +162,7 @@ void SongListComponent::cellDoubleClicked(int rowNumber, int /*columnId*/, const
     if (rowNumber >= 0 && rowNumber < songs.size())
     {
         auto song = songs[rowNumber];
-        setSelectedSong(song);
+        selectedRow = rowNumber;
         listeners.call(&Listener::songSelectionChanged, this, song);
     }
 }
@@ -172,12 +173,12 @@ std::shared_ptr<Song> SongListComponent::getSelectedSong() const
     {
         return songs[selectedRow];
     }
-    
     return nullptr;
 }
 
 void SongListComponent::setSelectedSong(std::shared_ptr<Song> song)
 {
+    // Find the song in the list and select it
     for (int i = 0; i < songs.size(); ++i)
     {
         if (songs[i] == song)

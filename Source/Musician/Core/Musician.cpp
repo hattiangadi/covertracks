@@ -85,25 +85,25 @@ void Musician::generatePattern(const var& parameters,
     
     // Generate the pattern
     patternGenerator->generateSong(styleToUse, instruments, tempo, description, 
-        [this, callback, tempo](bool success, std::shared_ptr<Song> song, const String& response) {
+        [this, callback, tempo](bool success, std::shared_ptr<Chart> chart, const String& response) {
             // Store the response
             lastResponseText = response;
-            lastGeneratedSong = song;
+            lastGeneratedChart = chart;
             
-            if (success && song)
+            if (success && chart)
             {
                 // Set the tempo if not already set
-                if (song->getTempo() <= 0)
-                    song->setTempo(tempo);
+                if (chart->getTempo() <= 0)
+                    chart->setTempo(tempo);
                 
-                // Convert the song to MIDI events
-                var midiEvents = midiMessageSequenceToVar(*song->toMidiSequence(), song->getTempo());
+                // Convert the chart to MIDI events
+                var midiEvents = midiMessageSequenceToVar(*chart->toMidiSequence(), chart->getTempo());
                 
                 // Create the response object
                 DynamicObject* responseObj = new DynamicObject();
                 responseObj->setProperty("success", true);
                 responseObj->setProperty("command", "play_pattern");
-                responseObj->setProperty("tempo", song->getTempo());
+                responseObj->setProperty("tempo", chart->getTempo());
                 responseObj->setProperty("events", midiEvents);
                 
                 // Call the callback
@@ -164,21 +164,21 @@ void Musician::generateSection(const String& section, const var& parameters,
     
     // Generate the section
     patternGenerator->generateSection(section, styleToUse, instruments, description, 
-        [this, callback](bool success, std::shared_ptr<Song> song, const String& response) {
+        [this, callback](bool success, std::shared_ptr<Chart> chart, const String& response) {
             // Store the response
             lastResponseText = response;
-            lastGeneratedSong = song;
+            lastGeneratedChart = chart;
             
-            if (success && song)
+            if (success && chart)
             {
-                // Convert the song to MIDI events
-                var midiEvents = midiMessageSequenceToVar(*song->toMidiSequence(), song->getTempo());
+                // Convert the chart to MIDI events
+                var midiEvents = midiMessageSequenceToVar(*chart->toMidiSequence(), chart->getTempo());
                 
                 // Create the response object
                 DynamicObject* responseObj = new DynamicObject();
                 responseObj->setProperty("success", true);
                 responseObj->setProperty("command", "play_pattern");
-                responseObj->setProperty("tempo", song->getTempo());
+                responseObj->setProperty("tempo", chart->getTempo());
                 responseObj->setProperty("events", midiEvents);
                 
                 // Call the callback
@@ -221,9 +221,9 @@ void Musician::modifyPattern(const var& currentPattern, const String& modificati
         // Pattern already has notation
         currentNotation = currentPattern["notation"].toString();
     }
-    else if (lastGeneratedSong)
+    else if (lastGeneratedChart)
     {
-        // Use the last generated song's notation (from last response)
+        // Use the last generated chart's notation (from last response)
         currentNotation = lastResponseText;
     }
     else
@@ -234,21 +234,21 @@ void Musician::modifyPattern(const var& currentPattern, const String& modificati
     
     // Modify the pattern
     patternGenerator->modifyPattern(currentNotation, modification, 
-        [this, callback](bool success, std::shared_ptr<Song> song, const String& response) {
+        [this, callback](bool success, std::shared_ptr<Chart> chart, const String& response) {
             // Store the response
             lastResponseText = response;
-            lastGeneratedSong = song;
+            lastGeneratedChart = chart;
             
-            if (success && song)
+            if (success && chart)
             {
-                // Convert the song to MIDI events
-                var midiEvents = midiMessageSequenceToVar(*song->toMidiSequence(), song->getTempo());
+                // Convert the chart to MIDI events
+                var midiEvents = midiMessageSequenceToVar(*chart->toMidiSequence(), chart->getTempo());
                 
                 // Create the response object
                 DynamicObject* responseObj = new DynamicObject();
                 responseObj->setProperty("success", true);
                 responseObj->setProperty("command", "play_pattern");
-                responseObj->setProperty("tempo", song->getTempo());
+                responseObj->setProperty("tempo", chart->getTempo());
                 responseObj->setProperty("events", midiEvents);
                 responseObj->setProperty("notation", response);
                 
@@ -341,21 +341,21 @@ void Musician::stopPlayback()
 
 var Musician::convertNotationToMidiEvents(const String& notation, double tempo)
 {
-    // Parse the notation to create a song
+    // Parse the notation to create a chart
     auto parser = PatternParser(*patternSystem);
-    auto song = parser.parseLLMResponse(notation);
+    auto chart = parser.parseLLMResponse(notation);
     
-    if (song)
+    if (chart)
     {
         // Set the tempo if not already set
-        if (song->getTempo() <= 0)
-            song->setTempo(tempo);
+        if (chart->getTempo() <= 0)
+            chart->setTempo(tempo);
         
-        // Convert the song to MIDI events
-        var result = midiMessageSequenceToVar(*song->toMidiSequence(), song->getTempo());
+        // Convert the chart to MIDI events
+        var result = midiMessageSequenceToVar(*chart->toMidiSequence(), chart->getTempo());
         
         // Explicitly break any reference cycles
-        song->clearReferences();
+        chart->clearReferences();
         
         // Return the MIDI events
         return result;

@@ -47,6 +47,8 @@
                 file="Source/Musician/Core/MusicPatternComponents.h"/>
           <FILE id="b7T5P1" name="MusicPatternSystem.cpp" compile="1" resource="0"
                 file="Source/Musician/Core/MusicPatternSystem.cpp"/>
+          <FILE id="Im2uUk" name="MusicPatternSystem.cpp.new" compile="0" resource="1"
+                file="Source/Musician/Core/MusicPatternSystem.cpp.new"/>
           <FILE id="teMuI0" name="MusicPatternSystem.h" compile="0" resource="0"
                 file="Source/Musician/Core/MusicPatternSystem.h"/>
           <FILE id="wa6Iwx" name="PatternGenerator.cpp" compile="1" resource="0"
@@ -56,6 +58,14 @@
           <FILE id="f1uotD" name="PatternParser.cpp" compile="1" resource="0"
                 file="Source/Musician/Core/PatternParser.cpp"/>
           <FILE id="EYYrZH" name="PatternParser.h" compile="0" resource="0" file="Source/Musician/Core/PatternParser.h"/>
+          <FILE id="DUGABx" name="Performance.cpp" compile="1" resource="0" file="Source/Musician/Core/Performance.cpp"/>
+          <FILE id="HkHuYI" name="Performance.h" compile="0" resource="0" file="Source/Musician/Core/Performance.h"/>
+          <FILE id="Imy8ok" name="PerformanceManager.cpp" compile="1" resource="0"
+                file="Source/Musician/Core/PerformanceManager.cpp"/>
+          <FILE id="e4zKWY" name="PerformanceManager.h" compile="0" resource="0"
+                file="Source/Musician/Core/PerformanceManager.h"/>
+          <FILE id="zdzoJA" name="Song.cpp" compile="1" resource="0" file="Source/Musician/Core/Song.cpp"/>
+          <FILE id="yVQC67" name="Song.h" compile="0" resource="0" file="Source/Musician/Core/Song.h"/>
         </GROUP>
         <GROUP id="{CC170D46-B578-C879-6E1F-FDC0D2EB6DC0}" name="UI">
           <GROUP id="{8A17FE2D-2E3E-6D8B-BD15-D0DAD03795B9}" name="New Group"/>
@@ -89,10 +99,6 @@
                 file="Source/Musician/UI/EnsembleListPanel.cpp"/>
           <FILE id="pocsEO" name="EnsembleListPanel.h" compile="0" resource="0"
                 file="Source/Musician/UI/EnsembleListPanel.h"/>
-          <FILE id="nbQO94" name="EnsembleLLMConversationComponent.cpp" compile="1"
-                resource="0" file="Source/Musician/UI/EnsembleLLMConversationComponent.cpp"/>
-          <FILE id="ee51rA" name="EnsembleLLMConversationComponent.h" compile="0"
-                resource="0" file="Source/Musician/UI/EnsembleLLMConversationComponent.h"/>
           <FILE id="q37NYo" name="EnsembleMainPanel.cpp" compile="1" resource="0"
                 file="Source/Musician/UI/EnsembleMainPanel.cpp"/>
           <FILE id="e7Fet7" name="EnsembleMainPanel.h" compile="0" resource="0"
@@ -105,6 +111,10 @@
                 file="Source/Musician/UI/PatternEditorComponent.cpp"/>
           <FILE id="SERDET" name="PatternEditorComponent.h" compile="0" resource="0"
                 file="Source/Musician/UI/PatternEditorComponent.h"/>
+          <FILE id="U14a7y" name="PerformanceComponent.cpp" compile="1" resource="0"
+                file="Source/Musician/UI/PerformanceComponent.cpp"/>
+          <FILE id="TD8JIZ" name="PerformanceComponent.h" compile="0" resource="0"
+                file="Source/Musician/UI/PerformanceComponent.h"/>
         </GROUP>
       </GROUP>
       <GROUP id="{CE2ADCC9-E18C-3DDD-3381-B0826D1E92A1}" name="LLM">
@@ -120,12 +130,7 @@
                 file="Source/LLM/Core/PromptManager.cpp"/>
           <FILE id="RNry2Z" name="PromptManager.h" compile="0" resource="0" file="Source/LLM/Core/PromptManager.h"/>
         </GROUP>
-        <GROUP id="{CC93008E-34A2-F0FB-0868-5A4E4E58B664}" name="UI">
-          <FILE id="vxkR5R" name="LLMConversationComponent.cpp" compile="1" resource="0"
-                file="Source/LLM/UI/LLMConversationComponent.cpp"/>
-          <FILE id="l8G9Z6" name="LLMConversationComponent.h" compile="0" resource="0"
-                file="Source/LLM/UI/LLMConversationComponent.h"/>
-        </GROUP>
+        <GROUP id="{CC93008E-34A2-F0FB-0868-5A4E4E58B664}" name="UI"/>
       </GROUP>
       <GROUP id="{7ECD7D00-FEA6-F942-0B50-69DFADAB75E1}" name="Audio">
         <FILE id="ylQuZ8" name="AudioEngine.cpp" compile="1" resource="0" file="Source/Audio/AudioEngine.cpp"/>

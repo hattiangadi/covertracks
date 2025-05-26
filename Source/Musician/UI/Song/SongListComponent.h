@@ -1,7 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "../../Core/MusicPatternComponents.h"
+#include "../../Core/Song.h"
 
 namespace covertracks {
 
@@ -74,7 +74,7 @@ public:
     }
     
     /**
-     * @brief Add a new song
+     * @brief Add a song
      * 
      * @param song The song to add
      */
@@ -95,14 +95,27 @@ public:
     std::shared_ptr<Song> createNewSong();
     
     /**
-     * @brief Listener interface for song selection changes
+     * @brief Listener interface for song list changes
      */
     class Listener
     {
     public:
         virtual ~Listener() = default;
-        virtual void songSelectionChanged(SongListComponent* source, std::shared_ptr<Song> song) = 0;
-        virtual void songListChanged(SongListComponent* source) = 0;
+        
+        /**
+         * @brief Called when a song is selected
+         * 
+         * @param source The SongListComponent that triggered the event
+         * @param song The selected song
+         */
+        virtual void songSelectionChanged(SongListComponent* /*source*/, std::shared_ptr<Song> /*song*/) {}
+        
+        /**
+         * @brief Called when the song list changes
+         * 
+         * @param source The SongListComponent that triggered the event
+         */
+        virtual void songListChanged(SongListComponent* /*source*/) {}
     };
     
     /**

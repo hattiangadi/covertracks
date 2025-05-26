@@ -143,16 +143,17 @@ private:
 };
 
 /**
- * @brief Represents a complete song
+ * @brief Represents a musical chart for performance
  * 
- * A song is a collection of sections arranged in a specific order
+ * A chart is a collection of sections arranged in a specific order,
+ * representing the musical structure for a specific instrument performance
  */
 
 
-class Song {
+class Chart {
 public:
-    Song(const String& title = "", double tempo = 120.0);
-    ~Song();
+    Chart(const String& title = "", double tempo = 120.0);
+    ~Chart();
     
     // Get the unique ID for this song
     juce::String getUniqueID() const { return uniqueID; }
@@ -180,7 +181,7 @@ public:
     std::unique_ptr<MidiMessageSequence> toMidiSequence() const;
     
     var toVar() const;
-    static std::shared_ptr<Song> fromVar(const var& v);
+    static std::shared_ptr<Chart> fromVar(const var& v);
     
     // Methods to get/set the source structure JSON string (from Claude/sheet music analysis)
     void setSourceStructureJson(const juce::String& json) { sourceStructureJson = json; }
@@ -198,7 +199,7 @@ private:
     // Static counter for tracking instances
     static int instanceCount;
     
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Song)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Chart)
 };
 
 } // namespace covertracks

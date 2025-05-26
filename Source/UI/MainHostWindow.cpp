@@ -40,6 +40,7 @@
 #include "../Musician/Core/Musician.h"
 #include "../LLM/Core/ClaudeClient.h"
 #include "../Musician/UI/EnsembleEditPanel.h"
+#include "../Musician/UI/PerformanceComponent.h"
 #include "../Musician/UI/Song/SongManagerComponent.h"
 
 namespace covertracks {
@@ -446,14 +447,17 @@ MainHostWindow::MainHostWindow()
     songManagerWindow->addListener(this);
     std::cout << "[MainHostWindow] SongManagerComponent created" << std::endl;
     
-    // Create Ensemble LLM Conversation component
-    std::cout << "[MainHostWindow] Creating EnsembleLLMConversationComponent" << std::endl;
-    // Create a new EnsembleManager instance for the EnsembleLLMConversationComponent
-    // Store it in the member variable for proper lifetime management
+    // Create Performance component
+    std::cout << "[MainHostWindow] Creating PerformanceComponent" << std::endl;
+    // Create a new EnsembleManager instance for the PerformanceComponent
     llmConversationEnsembleManager = std::make_unique<EnsembleManager>(playerManager.get());
-    llmConversationEnsembleManager->setName("LLM Conversation Ensemble");
-    ensembleLLMConversationWindow = std::make_unique<EnsembleLLMConversationComponent>(llmConversationEnsembleManager.get(), llmClientShared);
-    std::cout << "[MainHostWindow] EnsembleLLMConversationComponent created" << std::endl;
+    
+    performanceWindow = std::make_unique<PerformanceComponent>(llmConversationEnsembleManager.get(), llmClientShared);
+    
+    // Register the PerformanceComponent with the SongListComponent
+    songManagerWindow->registerSongListListener(performanceWindow.get());
+    
+    std::cout << "[MainHostWindow] PerformanceComponent created" << std::endl;
     
     // Create Pattern Editor component
     std::cout << "[MainHostWindow] Creating PatternEditorComponent" << std::endl;
@@ -470,7 +474,7 @@ MainHostWindow::MainHostWindow()
     tabbedComponent->addTab("Player Library", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), playerLibraryWindow.get(), false);
     tabbedComponent->addTab("Player Mode", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), playerModeWindow.get(), false);
     tabbedComponent->addTab("Songs", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), songManagerWindow.get(), false);
-    tabbedComponent->addTab("Ensemble LLM", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), ensembleLLMConversationWindow.get(), false);
+    tabbedComponent->addTab("Performances", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), performanceWindow.get(), false);
     tabbedComponent->addTab("Pattern Editor", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), patternEditorWindow.get(), false);
     tabbedComponent->addTab("Ensembles", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), ensembleMainWindow.get(), false);
     
@@ -542,7 +546,13 @@ MainHostWindow::~MainHostWindow()
     
     // Remove ourselves as a listener from the SongManagerComponent
     if (songManagerWindow)
+    {
         songManagerWindow->removeListener(this);
+        
+        // Unregister the PerformanceComponent from the SongListComponent
+        if (performanceWindow)
+            songManagerWindow->unregisterSongListListener(performanceWindow.get());
+    }
     
     // Clear the content component
     clearContentComponent();
@@ -1101,10 +1111,10 @@ void covertracks::MainHostWindow::filesDropped (const StringArray& files, int /*
 
 void covertracks::MainHostWindow::songSelected(SongManagerComponent* /*source*/, std::shared_ptr<Song> song)
 {
-    // When a song is selected in the SongManagerComponent, update the EnsembleLLMConversationComponent
-    if (ensembleLLMConversationWindow && song)
+    // When a song is selected in the SongManagerComponent, update the PerformanceComponent
+    if (performanceWindow && song)
     {
-        ensembleLLMConversationWindow->setCurrentSong(song);
+        performanceWindow->setCurrentSong(song);
     }
 }
 

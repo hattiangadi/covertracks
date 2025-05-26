@@ -25,12 +25,12 @@ public:
     PatternParser(MusicPatternSystem& patternSystem);
     
     /**
-     * @brief Parse a complete song from notation
+     * @brief Parse a complete chart from notation
      * 
-     * @param notation The song notation
-     * @return std::shared_ptr<Song> The parsed song
+     * @param notation The chart notation
+     * @return std::shared_ptr<Chart> The parsed chart
      */
-    std::shared_ptr<Song> parseSong(const String& notation);
+    std::shared_ptr<Chart> parseChart(const String& notation);
     
     /**
      * @brief Parse a section from notation
@@ -57,12 +57,12 @@ public:
     std::shared_ptr<Bar> parseBar(const String& notation);
     
     /**
-     * @brief Parse an LLM-generated response into a song
+     * @brief Parse an LLM-generated response into a chart
      * 
      * @param response The full text response from an LLM
-     * @return std::shared_ptr<Song> The parsed song
+     * @return std::shared_ptr<Chart> The parsed chart
      */
-    std::shared_ptr<Song> parseLLMResponse(const String& response);
+    std::shared_ptr<Chart> parseLLMResponse(const String& response);
     
 private:
     MusicPatternSystem& patternSystem;

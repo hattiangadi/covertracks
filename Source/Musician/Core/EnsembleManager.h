@@ -23,6 +23,10 @@ struct MusicianRole {
     
     MusicianRole(const juce::String& roleName, const juce::String& instrumentType, Player* playerPtr)
         : name(roleName), instrument(instrumentType), player(playerPtr), pattern("") {}
+        
+    // Temporary methods to support PerformanceComponent
+    juce::String getName() const { return name; }
+    juce::String getInstrumentName() const { return instrument; }
 };
 
 /**
@@ -293,6 +297,214 @@ private:
     
     // Unique ID for this ensemble
     juce::String ensembleId;
+    
+public:
+    /**
+     * @brief Play all patterns in the ensemble
+     * 
+     * @return true If at least one player started playing successfully
+     * @return false If no players could start playing
+     */
+    bool playPatterns()
+    {
+        bool anySuccess = false;
+        
+        // Start playback for all players with patterns
+        for (auto& role : musicianRoles)
+        {
+            if (role.player)
+            {
+                // Use the player's play method to start playback
+                bool success = role.player->play();
+                if (success)
+                {
+                    anySuccess = true;
+                    std::cout << "EnsembleManager::playPatterns - Started playback for role: " 
+                              << role.name << std::endl;
+                }
+            }
+        }
+        
+        playing = anySuccess;
+        return anySuccess;
+    }
+    
+    /**
+     * @brief Stop playback of all patterns
+     */
+    void stopPlayback()
+    {
+        // Stop playback for all players
+        for (auto& role : musicianRoles)
+        {
+            if (role.player)
+            {
+                // Use the player's stop method to stop playback
+                role.player->stop();
+                std::cout << "EnsembleManager::stopPlayback - Stopped playback for role: " 
+                          << role.name << std::endl;
+            }
+        }
+        
+        playing = false;
+    }
+    
+    /**
+     * @brief Temporary method to parse MIDI pattern from LLM response
+     * 
+     * @param response The LLM response containing a MIDI pattern
+     * @return std::shared_ptr<juce::MidiMessageSequence> The parsed MIDI pattern
+     */
+    std::shared_ptr<juce::MidiMessageSequence> parseMIDIPattern(const juce::String& response)
+    {
+        // Create a new MIDI message sequence
+        auto sequence = std::make_shared<juce::MidiMessageSequence>();
+        
+        // Look for MIDI pattern between ```midi and ``` markers
+        int startIndex = response.indexOf(juce::StringRef("```midi"));
+        if (startIndex == -1)
+        {
+            startIndex = response.indexOf(juce::StringRef("```MIDI"));
+        }
+        
+        if (startIndex != -1)
+        {
+            // Find the next newline character after the ```midi marker
+            for (int i = startIndex; i < response.length(); ++i)
+            {
+                if (response[i] == '\n')
+                {
+                    startIndex = i + 1;
+                    break;
+                }
+            }
+            
+            // Find the closing ``` marker
+            int endIndex = -1;
+            juce::String closingMarker = "```";
+            for (int i = startIndex; i < response.length() - closingMarker.length() + 1; ++i)
+            {
+                if (response.substring(i, i + closingMarker.length()) == closingMarker)
+                {
+                    endIndex = i;
+                    break;
+                }
+            }
+            
+            if (endIndex != -1)
+            {
+                // Extract the MIDI pattern
+                juce::String midiPattern = response.substring(startIndex, endIndex).trim();
+                
+                // Parse each line of the MIDI pattern
+                juce::StringArray lines;
+                lines.addLines(midiPattern);
+                
+                for (const auto& line : lines)
+                {
+                    if (line.trim().isEmpty())
+                        continue;
+                    
+                    // Parse the line in format: channel:note:velocity:start_time:duration
+                    juce::StringArray parts;
+                    parts.addTokens(line, ":", "");
+                    
+                    if (parts.size() >= 5)
+                    {
+                        int channel = parts[0].getIntValue();
+                        juce::String noteName = parts[1].trim();
+                        int velocity = parts[2].getIntValue();
+                        double startTime = parts[3].getDoubleValue();
+                        double duration = parts[4].getDoubleValue();
+                        
+                        // Convert note name to MIDI note number
+                        int noteNumber = getMidiNoteFromName(noteName);
+                        
+                        // Create note on message
+                        juce::MidiMessage noteOn = juce::MidiMessage::noteOn(channel, noteNumber, (float)velocity / 127.0f);
+                        noteOn.setTimeStamp(startTime);
+                        sequence->addEvent(noteOn);
+                        
+                        // Create note off message
+                        juce::MidiMessage noteOff = juce::MidiMessage::noteOff(channel, noteNumber);
+                        noteOff.setTimeStamp(startTime + duration);
+                        sequence->addEvent(noteOff);
+                    }
+                }
+                
+                // Sort the sequence by timestamp
+                sequence->sort();
+                return sequence;
+            }
+        }
+        
+        return nullptr;
+    }
+    
+    /**
+     * @brief Temporary method to convert a note name to a MIDI note number
+     * 
+     * @param name The note name in scientific pitch notation (e.g., C4, A#3)
+     * @return int The MIDI note number
+     */
+    int getMidiNoteFromName(const juce::String& name)
+    {
+        // Parse note name in scientific pitch notation (e.g., C4, A#3, Db5)
+        juce::String noteName = name.trim().toUpperCase();
+        
+        if (noteName.isEmpty())
+            return 60; // Middle C as default
+        
+        // Extract the octave number (last character)
+        int octave = noteName.getLastCharacter() - '0';
+        juce::String note = noteName.dropLastCharacters(1);
+        
+        // Base values for each note in octave 0
+        int baseNote;
+        if (note == "C") baseNote = 0;
+        else if (note == "C#" || note == "DB") baseNote = 1;
+        else if (note == "D") baseNote = 2;
+        else if (note == "D#" || note == "EB") baseNote = 3;
+        else if (note == "E") baseNote = 4;
+        else if (note == "F") baseNote = 5;
+        else if (note == "F#" || note == "GB") baseNote = 6;
+        else if (note == "G") baseNote = 7;
+        else if (note == "G#" || note == "AB") baseNote = 8;
+        else if (note == "A") baseNote = 9;
+        else if (note == "A#" || note == "BB") baseNote = 10;
+        else if (note == "B") baseNote = 11;
+        else return 60; // Default to middle C if invalid note name
+        
+        // Calculate MIDI note number: 12 * octave + baseNote + 12 (to start from C0 = 12)
+        return 12 * octave + baseNote + 12;
+    }
+    
+    /**
+     * @brief Temporary method to set a MIDI pattern for a musician role
+     * 
+     * @param roleName The name of the musician role
+     * @param pattern The MIDI pattern to set
+     */
+    void setMIDIPatternForRole(const juce::String& roleName, std::shared_ptr<juce::MidiMessageSequence> pattern)
+    {
+        // Suppress unused parameter warning
+        juce::ignoreUnused(pattern);
+        
+        // Find the musician role with the given name
+        for (auto& role : musicianRoles)
+        {
+            if (role.name == roleName && role.player)
+            {
+                // We need to implement a way to set patterns on players
+                // For now, we'll just store the pattern in the role
+                // This will be used by the PerformanceComponent
+                role.pattern = "MIDI pattern stored";
+                break;
+            }
+        }
+    }
+    
+private:
 };
 
 } // namespace covertracks

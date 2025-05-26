@@ -77,6 +77,24 @@ public:
      * @return String The name of the LLM service
      */
     virtual String getServiceName() const = 0;
+    
+    /**
+     * @brief Temporary method to support PerformanceComponent
+     * 
+     * @param prompt The prompt to send
+     * @param callback Callback to be invoked when a response is received
+     */
+    void sendPrompt(const String& prompt, std::function<void(const String&)> callback)
+    {
+        // Wrap the callback to match the expected signature
+        sendMessage(prompt, [callback](bool success, const String& response) {
+            if (success) {
+                callback(response);
+            } else {
+                callback("Error: " + response);
+            }
+        });
+    }
 };
 
 } // namespace covertracks
