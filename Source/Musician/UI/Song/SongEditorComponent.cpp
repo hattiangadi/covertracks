@@ -111,7 +111,7 @@ void SongEditorComponent::setupBasicInfoTab()
     titleEditor.setScrollbarsShown(false);
     titleEditor.setCaretVisible(true);
     titleEditor.setPopupMenuEnabled(true);
-    titleEditor.setText("New Song");
+    titleEditor.setText("");
     titleEditor.addListener(this);
     
     // Set up tempo components
@@ -124,7 +124,7 @@ void SongEditorComponent::setupBasicInfoTab()
     tempoEditor.setScrollbarsShown(false);
     tempoEditor.setCaretVisible(true);
     tempoEditor.setPopupMenuEnabled(true);
-    tempoEditor.setText("120.0");
+    tempoEditor.setText("");
     tempoEditor.addListener(this);
 }
 
@@ -514,46 +514,7 @@ void SongEditorComponent::updateEditorFields()
         {
             structureEditor.setText(structureJson);
         }
-        else
-        {
-            // Create a simple default JSON representation of the song structure
-            juce::DynamicObject* songObj = new juce::DynamicObject();
-            songObj->setProperty("title", currentSong->getTitle());
-            songObj->setProperty("tempo", currentSong->getTempo());
-            songObj->setProperty("timeSignature", "4/4");
-            songObj->setProperty("key", "C");
-            
-            // Example JSON structure similar to what we get from Claude
-            juce::Array<juce::var> measuresArray;
-            
-            // Add a few example measures
-            for (int i = 1; i <= 4; ++i)
-            {
-                juce::DynamicObject* measureObj = new juce::DynamicObject();
-                measureObj->setProperty("meas", i);
-                measureObj->setProperty("ch", i == 1 ? "C" : (i == 2 ? "Am" : (i == 3 ? "F" : "G")));
-                
-                juce::DynamicObject* melodyObj = new juce::DynamicObject();
-                juce::Array<juce::var> notesArray;
-                juce::Array<juce::var> durationsArray;
-                
-                // Add example notes and durations
-                notesArray.add("C4");
-                durationsArray.add("1:4");
-                
-                melodyObj->setProperty("nts", notesArray);
-                melodyObj->setProperty("dur", durationsArray);
-                measureObj->setProperty("mel", melodyObj);
-                
-                measuresArray.add(measureObj);
-            }
-            
-            songObj->setProperty("measures", measuresArray);
-            
-            // Convert to formatted JSON string
-            juce::String jsonString = juce::JSON::toString(songObj, true);
-            structureEditor.setText(jsonString);
-        }
+
         
         // Enable UI elements
         titleEditor.setEnabled(true);

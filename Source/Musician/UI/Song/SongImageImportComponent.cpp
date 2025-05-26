@@ -29,16 +29,15 @@ SongImageImportComponent::SongImageImportComponent(std::shared_ptr<LLMClient> cl
     addAndMakeVisible(cameraButton);
     #endif
     
-    // Set up cancel button (initially hidden)
+    // Set up cancel button
     cancelButton.setButtonText("Cancel");
     cancelButton.addListener(this);
-    cancelButton.setVisible(false);
     addAndMakeVisible(cancelButton);
     
-    // Set up process button (initially hidden)
+    // Set up process button (initially disabled)
     processButton.setButtonText("Extract Song Structure");
     processButton.addListener(this);
-    processButton.setVisible(false);
+    processButton.setEnabled(false); // Disabled until an image is loaded
     addAndMakeVisible(processButton);
     
     // Set size constraints
@@ -119,26 +118,21 @@ void SongImageImportComponent::resized()
     auto buttonArea = bounds.removeFromBottom(40);
     
     // Position buttons
-    int buttonWidth = 150;
+    int buttonWidth = 120;
     int buttonSpacing = 10;
+    int totalWidth = 3 * buttonWidth + 2 * buttonSpacing;
+    int startX = buttonArea.getCentreX() - totalWidth / 2;
+    
+    // Position all three buttons in a row
+    importButton.setBounds(startX, buttonArea.getY(), buttonWidth, buttonArea.getHeight());
+    cancelButton.setBounds(startX + buttonWidth + buttonSpacing, buttonArea.getY(), buttonWidth, buttonArea.getHeight());
+    processButton.setBounds(startX + 2 * (buttonWidth + buttonSpacing), buttonArea.getY(), buttonWidth, buttonArea.getHeight());
     
     #if JUCE_IOS || JUCE_ANDROID
-    // With camera button
-    importButton.setBounds(buttonArea.getCentreX() - buttonWidth - buttonSpacing / 2, buttonArea.getY(),
-                          buttonWidth, buttonArea.getHeight());
-    cameraButton.setBounds(buttonArea.getCentreX() + buttonSpacing / 2, buttonArea.getY(),
-                          buttonWidth, buttonArea.getHeight());
-    #else
-    // Without camera button
-    importButton.setBounds(buttonArea.getCentreX() - buttonWidth / 2, buttonArea.getY(),
+    // Adjust for camera button if needed
+    cameraButton.setBounds(buttonArea.getCentreX() - buttonWidth / 2, buttonArea.getY() + buttonArea.getHeight() + 10,
                           buttonWidth, buttonArea.getHeight());
     #endif
-    
-    // Position cancel and process buttons
-    cancelButton.setBounds(buttonArea.getCentreX() - buttonWidth - buttonSpacing / 2, buttonArea.getY(),
-                          buttonWidth, buttonArea.getHeight());
-    processButton.setBounds(buttonArea.getCentreX() + buttonSpacing / 2, buttonArea.getY(),
-                           buttonWidth, buttonArea.getHeight());
     
     // Position instructions label
     instructionsLabel.setBounds(bounds.removeFromTop(30));
@@ -241,13 +235,8 @@ bool SongImageImportComponent::loadImageFromFile(const juce::File& file)
     imagePath = file.getFullPathName();
     hasImage = true;
     
-    // Update UI
-    importButton.setVisible(false);
-    #if JUCE_IOS || JUCE_ANDROID
-    cameraButton.setVisible(false);
-    #endif
-    cancelButton.setVisible(true);
-    processButton.setVisible(true);
+    // Enable the process button now that we have an image
+    processButton.setEnabled(true);
     
     instructionsLabel.setText("Image loaded. Click Extract Song Structure to process.",
                              juce::dontSendNotification);
@@ -552,14 +541,12 @@ void SongImageImportComponent::reset()
     isProcessing = false;
     
     // Reset UI
-    importButton.setVisible(true);
     importButton.setEnabled(true);
     #if JUCE_IOS || JUCE_ANDROID
-    cameraButton.setVisible(true);
     cameraButton.setEnabled(true);
     #endif
-    cancelButton.setVisible(false);
-    processButton.setVisible(false);
+    // Disable the process button since we no longer have an image
+    processButton.setEnabled(false);
     
     instructionsLabel.setText("Drag and drop a sheet music image or click Import to select a file",
                              juce::dontSendNotification);
