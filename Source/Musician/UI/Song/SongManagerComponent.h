@@ -99,6 +99,13 @@ public:
      */
     void unregisterSongListListener(SongListComponent::Listener* listener);
     
+    /**
+     * @brief Get the internal SongListComponent
+     * 
+     * @return SongListComponent* Pointer to the internal SongListComponent
+     */
+    SongListComponent* getSongListComponent() { return &songListComponent; }
+    
 private:
     // UI components
     SongListComponent songListComponent;

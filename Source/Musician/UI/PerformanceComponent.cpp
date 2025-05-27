@@ -318,7 +318,7 @@ PerformanceComponent::PerformanceComponent(EnsembleManager* manager, std::shared
     addAndMakeVisible(statusLabel);
     
     // Load performances
-    loadedPerformances = performanceManager.loadPerformancesFromDefaultLocation();
+    loadedPerformances = performanceManager->loadPerformancesFromDefaultLocation();
     
     // Update UI
     updatePerformanceSelector();
@@ -625,6 +625,9 @@ void covertracks::PerformanceComponent::registerWithSongList(SongListComponent* 
 {
     if (songList)
     {
+        // Store the reference to the song list
+        registeredSongList = songList;
+        
         // Register as a listener
         songList->addListener(this);
         
@@ -696,11 +699,48 @@ void covertracks::PerformanceComponent::updateEnsembleSelector()
     }
 }
 
-void PerformanceComponent::updateSongSelector()
+void covertracks::PerformanceComponent::updateSongSelector()
 {
     songSelector.clear();
     
-    // Get the default songs directory
+    // Check if we have a registered SongListComponent
+    if (registeredSongList != nullptr)
+    {
+        // Get songs from the SongListComponent
+        const juce::Array<std::shared_ptr<Song>>& songs = registeredSongList->getSongs();
+        
+        // Add each song to the selector
+        int id = 1;
+        for (const auto& song : songs)
+        {
+            if (song != nullptr)
+            {
+                // Add to the selector
+                songSelector.addItem(song->getTitle(), id++);
+            }
+        }
+        
+        if (songSelector.getNumItems() > 0)
+        {
+            songSelector.setSelectedId(1);
+            
+            // Set the current song
+            if (songs.size() > 0)
+            {
+                setCurrentSong(songs[0]);
+            }
+        }
+        else
+        {
+            // If no songs are found, add a placeholder message
+            songSelector.addItem("No songs found", -1);
+            songSelector.setSelectedId(-1);
+        }
+        
+        return;
+    }
+    
+    // Fallback to scanning the filesystem if no SongListComponent is registered
     juce::File songsDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
         .getChildFile("Covertracks")
         .getChildFile("Songs");
@@ -722,9 +762,9 @@ void PerformanceComponent::updateSongSelector()
             juce::var jsonVar = juce::JSON::parse(jsonContent);
             
             // Get the song title
-            if (jsonVar.hasProperty("name"))
+            if (jsonVar.hasProperty("title"))
             {
-                juce::String title = jsonVar["name"].toString();
+                juce::String title = jsonVar["title"].toString();
                 songSelector.addItem(title, id++);
             }
         }
@@ -1077,10 +1117,10 @@ void PerformanceComponent::saveCurrentPerformance()
     currentPerformance->setInstructions(instructionsEditor.getText());
     
     // Save the performance
-    performanceManager.savePerformance(currentPerformance);
+    performanceManager->savePerformance(currentPerformance);
     
     // Reload performances and update the selector
-    loadedPerformances = performanceManager.loadPerformancesFromDefaultLocation();
+    loadedPerformances = performanceManager->loadPerformancesFromDefaultLocation();
     updatePerformanceSelector();
     
     // Select the current performance in the selector
@@ -1133,10 +1173,10 @@ void PerformanceComponent::createNewPerformance()
     currentPerformance->setMood(moodSelector.getText());
     
     // Save the performance
-    performanceManager.savePerformance(currentPerformance);
+    performanceManager->savePerformance(currentPerformance);
     
     // Reload performances and update the selector
-    loadedPerformances = performanceManager.loadPerformancesFromDefaultLocation();
+    loadedPerformances = performanceManager->loadPerformancesFromDefaultLocation();
     updatePerformanceSelector();
     
     // Select the current performance in the selector

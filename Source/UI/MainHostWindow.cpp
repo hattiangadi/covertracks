@@ -457,6 +457,13 @@ MainHostWindow::MainHostWindow()
     // Register the PerformanceComponent with the SongListComponent
     songManagerWindow->registerSongListListener(performanceWindow.get());
     
+    // Get the SongListComponent from the SongManagerComponent and register it with the PerformanceComponent
+    SongListComponent* songList = songManagerWindow->getSongListComponent();
+    if (songList != nullptr)
+    {
+        performanceWindow->registerWithSongList(songList);
+    }
+    
     std::cout << "[MainHostWindow] PerformanceComponent created" << std::endl;
     
     // Create Pattern Editor component

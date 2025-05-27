@@ -45,6 +45,13 @@ public:
     std::shared_ptr<Song> getSelectedSong() const;
     
     /**
+     * @brief Get all songs in the list
+     * 
+     * @return const juce::Array<std::shared_ptr<Song>>& All songs in the list
+     */
+    const juce::Array<std::shared_ptr<Song>>& getSongs() const { return songs; }
+    
+    /**
      * @brief Set the selected song
      * 
      * @param song The song to select

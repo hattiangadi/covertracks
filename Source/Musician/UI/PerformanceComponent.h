@@ -212,6 +212,8 @@ private:
     // References
     EnsembleManager* ensembleManager;
     std::shared_ptr<LLMClient> llmClient;
+    std::shared_ptr<PerformanceManager> performanceManager;
+    SongListComponent* registeredSongList = nullptr;
     
     // State
     std::shared_ptr<Song> currentSong;
@@ -220,7 +222,6 @@ private:
     bool isGenerating = false;
     
     // Performance manager for saving/loading performances
-    PerformanceManager performanceManager;
     juce::Array<std::shared_ptr<Performance>> loadedPerformances;
     
     // Listeners
