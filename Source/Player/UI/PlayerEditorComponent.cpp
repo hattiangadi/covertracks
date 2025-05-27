@@ -33,12 +33,13 @@ PlayerEditorComponent::PlayerEditorComponent(Player* playerToEdit, AudioEngine* 
     nameEditor.setPopupMenuEnabled(true);
     addAndMakeVisible(nameEditor);
 
-    categoryEditor.setMultiLine(false);
-    categoryEditor.setReturnKeyStartsNewLine(false);
-    categoryEditor.setReadOnly(false);
-    categoryEditor.setScrollbarsShown(true);
-    categoryEditor.setCaretVisible(true);
-    categoryEditor.setPopupMenuEnabled(true);
+    // Set up category combo box with instrument types
+    categoryEditor.addItem("Keyboard", 1);
+    categoryEditor.addItem("Drums", 2);
+    categoryEditor.addItem("Bass", 3);
+    categoryEditor.addItem("Guitar", 4);
+    categoryEditor.addItem("Other", 5);
+    categoryEditor.setTextWhenNothingSelected("Select category");
     addAndMakeVisible(categoryEditor);
 
     descriptionEditor.setMultiLine(true);
@@ -82,7 +83,17 @@ PlayerEditorComponent::PlayerEditorComponent(Player* playerToEdit, AudioEngine* 
         // Update the UI from the player data
         auto& metadata = player->getMetadata();
         nameEditor.setText(metadata.name);
-        categoryEditor.setText(metadata.category);
+        // Set the category combo box based on the metadata
+        if (metadata.category == "Keyboard")
+            categoryEditor.setSelectedId(1, dontSendNotification);
+        else if (metadata.category == "Drums")
+            categoryEditor.setSelectedId(2, dontSendNotification);
+        else if (metadata.category == "Bass")
+            categoryEditor.setSelectedId(3, dontSendNotification);
+        else if (metadata.category == "Guitar")
+            categoryEditor.setSelectedId(4, dontSendNotification);
+        else
+            categoryEditor.setSelectedId(5, dontSendNotification); // Other
         descriptionEditor.setText(metadata.description);
     }
 }
@@ -262,7 +273,16 @@ void PlayerEditorComponent::updatePlayerFromUI()
         // Update metadata
         auto& metadata = player->getMetadata();
         metadata.name = nameEditor.getText();
-        metadata.category = categoryEditor.getText();
+        // Get the category from the combo box
+        int categoryId = categoryEditor.getSelectedId();
+        switch (categoryId) {
+            case 1: metadata.category = "Keyboard"; break;
+            case 2: metadata.category = "Drums"; break;
+            case 3: metadata.category = "Bass"; break;
+            case 4: metadata.category = "Guitar"; break;
+            case 5: metadata.category = "Other"; break;
+            default: metadata.category = "Other"; break;
+        }
         metadata.description = descriptionEditor.getText();
         metadata.lastModified = Time::getCurrentTime();
         
@@ -289,7 +309,19 @@ void PlayerEditorComponent::updateUIFromPlayer()
     // Update the UI components
     auto& metadata = player->getMetadata();
     nameEditor.setText(metadata.name);
-    categoryEditor.setText(metadata.category);
+    
+    // Set the category combo box based on the metadata
+    if (metadata.category == "Keyboard")
+        categoryEditor.setSelectedId(1, dontSendNotification);
+    else if (metadata.category == "Drums")
+        categoryEditor.setSelectedId(2, dontSendNotification);
+    else if (metadata.category == "Bass")
+        categoryEditor.setSelectedId(3, dontSendNotification);
+    else if (metadata.category == "Guitar")
+        categoryEditor.setSelectedId(4, dontSendNotification);
+    else
+        categoryEditor.setSelectedId(5, dontSendNotification); // Other
+        
     descriptionEditor.setText(metadata.description);
     
     // Start timer to load the graph state after a short delay

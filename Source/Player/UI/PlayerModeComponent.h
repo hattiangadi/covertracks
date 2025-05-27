@@ -61,10 +61,10 @@ private:
     
     // Helper methods
     void createDefaultPatterns();
-    std::shared_ptr<Chart> createDrumPattern();
-    std::shared_ptr<Chart> createBassPattern();
-    std::shared_ptr<Chart> createPianoPattern();
-    std::shared_ptr<Chart> createGuitarPattern();
+    std::shared_ptr<Chart> createDrumPattern(const juce::String& style);
+    std::shared_ptr<Chart> createBassPattern(const juce::String& style);
+    std::shared_ptr<Chart> createPianoPattern(const juce::String& style);
+    std::shared_ptr<Chart> createGuitarPattern(const juce::String& style);
     
     void updatePatternViewer();
     void playCurrentPattern();

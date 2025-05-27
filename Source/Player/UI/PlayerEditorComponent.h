@@ -61,7 +61,7 @@ std::unique_ptr<Player> ownedPlayer;
 
 // UI components
 TextEditor nameEditor;
-TextEditor categoryEditor;
+ComboBox categoryEditor;
 TextEditor descriptionEditor;
 Label nameLabel;
 Label categoryLabel;

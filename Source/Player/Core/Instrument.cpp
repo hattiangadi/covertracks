@@ -817,31 +817,6 @@ bool Instrument::playMIDIPattern(const var& pattern, double newTempo)
         }
     }
     
-    // Verify that we have a proper instrument node in the graph
-    bool hasInstrumentNode = false;
-    if (processorGraph != nullptr)
-    {
-        for (auto* node : processorGraph->getNodes())
-        {
-            auto* processor = node->getProcessor();
-            auto* ioProcessor = dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(processor);
-            
-            // If this is not an IO processor, it's an instrument or effect
-            if (ioProcessor == nullptr)
-            {
-                hasInstrumentNode = true;
-                std::cout << "Found instrument node in graph: " << processor->getName() << std::endl;
-                break;
-            }
-        }
-    }
-    
-    if (!hasInstrumentNode)
-    {
-        std::cerr << "WARNING: No instrument node found in graph. Audio output may not work!" << std::endl;
-        // Just warn the user, but don't try to add a default synth
-    }
-    
     // Ensure we have a valid processor graph
     if (processorGraph == nullptr)
     {
@@ -850,19 +825,14 @@ bool Instrument::playMIDIPattern(const var& pattern, double newTempo)
     }
     
     // Make sure the processor is registered with the AudioEngine
-    if (audioEngine != nullptr)
-    {
-        std::cout << "Ensuring processor is registered with AudioEngine" << std::endl;
-        audioEngine->registerProcessor(processorGraph.get());
-        
-        // Set master gain to ensure audio output is active but avoid distortion
-        audioEngine->setMasterGain(0.5f);
-    }
-    else
+    if (audioEngine == nullptr)
     {
         std::cerr << "No audio engine available for playback" << std::endl;
         return false;
     }
+    
+    // Set master gain to a very low level to avoid distortion
+    audioEngine->setMasterGain(0.3f);
     
     // Convert the pattern to a MIDI sequence
     currentSequence = convertJSONToMIDISequence(pattern);
@@ -885,41 +855,99 @@ bool Instrument::playMIDIPattern(const var& pattern, double newTempo)
         }
     }
     
+    // Sort the MIDI sequence by timestamp to ensure proper ordering
+    currentSequence->sort();
+    
+    // Get the current sample rate from the audio device
+    double currentSampleRate = 44100.0; // Default fallback
+    int bufferSize = 512; // Default buffer size
+    auto& deviceManager = audioEngine->getDeviceManager();
+    auto* currentDevice = deviceManager.getCurrentAudioDevice();
+    if (currentDevice != nullptr)
+    {
+        currentSampleRate = currentDevice->getCurrentSampleRate();
+        bufferSize = currentDevice->getCurrentBufferSizeSamples();
+    }
+    
+    // IMPORTANT CHANGE: Bypass AudioProcessorPlayer completely
+    // Instead, we'll directly process MIDI events through the processor graph
+    
+    // If we have an AudioProcessorPlayer, remove it from the audio callbacks
+    if (audioProcessorPlayer != nullptr)
+    {
+        deviceManager.removeAudioCallback(audioProcessorPlayer.get());
+        audioProcessorPlayer = nullptr; // We won't be using it
+    }
+    
+    // Make sure the processor graph is prepared for playback
+    processorGraph->setPlayConfigDetails(2, 2, currentSampleRate, bufferSize);
+    processorGraph->prepareToPlay(currentSampleRate, bufferSize);
+    
+    // Create a temporary buffer for audio processing
+    AudioBuffer<float> tempBuffer(2, bufferSize);
+    
+    // Process all MIDI events directly
+    std::cout << "Processing MIDI events directly through processor graph" << std::endl;
+    std::cout << "Total events: " << currentSequence->getNumEvents() << std::endl;
+    
+    // Create a map to store note-on/note-off pairs to ensure proper note durations
+    std::map<int, MidiMessage> activeNotes; // note number -> note-off message
+    
+    // First pass: Reduce velocities of all note-on events to minimize distortion
+    // and ensure all events have proper timestamps
+    std::cout << "Preparing MIDI events for playback:" << std::endl;
+    for (int i = 0; i < currentSequence->getNumEvents(); ++i)
+    {
+        auto event = currentSequence->getEventPointer(i);
+        double originalTimestamp = event->message.getTimeStamp();
+        
+        if (event->message.isNoteOn())
+        {
+            // Reduce velocity to 50% of original for better audio quality
+            uint8 newVelocity = static_cast<uint8>(event->message.getVelocity() * 0.5f);
+            
+            // Create a fresh note-on message
+            event->message = MidiMessage::noteOn(
+                event->message.getChannel(),
+                event->message.getNoteNumber(),
+                newVelocity);
+                
+            // Preserve the original timestamp
+            event->message.setTimeStamp(originalTimestamp);
+            
+            std::cout << "  Prepared note on: channel=" << (int)event->message.getChannel()
+                      << ", note=" << event->message.getNoteNumber()
+                      << ", velocity=" << (int)newVelocity
+                      << ", timestamp=" << originalTimestamp << std::endl;
+        }
+        else if (event->message.isNoteOff())
+        {
+            // Create a fresh note-off message
+            event->message = MidiMessage::noteOff(
+                event->message.getChannel(),
+                event->message.getNoteNumber());
+                
+            // Preserve the original timestamp
+            event->message.setTimeStamp(originalTimestamp);
+            
+            std::cout << "  Prepared note off: channel=" << (int)event->message.getChannel()
+                      << ", note=" << event->message.getNoteNumber()
+                      << ", timestamp=" << originalTimestamp << std::endl;
+        }
+    }
+    
+    // Register the processor with the AudioEngine to ensure it's in the audio chain
+    audioEngine->registerProcessor(processorGraph.get());
+    
     // Reset playback state
     nextEventIndex = 0;
     currentTime = 0.0;
     playing = true;
     paused = false;
     
-    // Create AudioProcessorPlayer if it doesn't exist
-    if (audioProcessorPlayer == nullptr)
-    {
-        audioProcessorPlayer = std::make_unique<AudioProcessorPlayer>();
-    }
-    
-    // Set the processor for the player
-    audioProcessorPlayer->setProcessor(processorGraph.get());
-    
-    // Register the AudioProcessorPlayer with the AudioEngine
-    auto& deviceManager = audioEngine->getDeviceManager();
-    deviceManager.addAudioCallback(audioProcessorPlayer.get());
-    
-    std::cout << "Registered AudioProcessorPlayer for pattern playback" << std::endl;
-    
     // Start a timer to process MIDI events from the pattern
-    startTimer(10); // Check every 10ms for more responsive playback
-    
-    // Send a test note to verify audio path (with moderate velocity to avoid distortion)
-    MidiMessage testNote = MidiMessage::noteOn(1, 60, 0.5f);
-    testNote.setTimeStamp(0.01); // 10ms in the future
-    audioProcessorPlayer->getMidiMessageCollector().addMessageToQueue(testNote);
-    
-    // Schedule a note off for the test note (500ms later)
-    MidiMessage noteOff = MidiMessage::noteOff(1, 60);
-    noteOff.setTimeStamp(0.5); // 500ms in the future
-    audioProcessorPlayer->getMidiMessageCollector().addMessageToQueue(noteOff);
-    
-    std::cout << "Added test MIDI note to verify audio path" << std::endl;
+    // We'll use a slightly longer interval to reduce CPU usage
+    startTimer(5); // Check every 5ms for responsive playback
     
     std::cout << "Started MIDI pattern playback on " << instrumentName 
               << " (tempo: " << tempo << " BPM, duration: " << totalDuration << " ticks)" << std::endl;
@@ -1069,18 +1097,20 @@ void Instrument::removeMidiInputListener(MidiInputCallback* listener)
 
 void Instrument::timerCallback()
 {
-    // Process MIDI events from the pattern during playback
-    if (playing && !paused && currentSequence != nullptr && audioProcessorPlayer != nullptr)
+    // Process MIDI events directly through the processor graph
+    if (playing && !paused && currentSequence != nullptr && processorGraph != nullptr)
     {
         // Calculate the current time in seconds
         double currentTimeInSeconds = currentTime;
         
-        // Calculate the time for the next block (10ms from now)
-        double blockEndTime = currentTimeInSeconds + 0.01; // 10ms in seconds
+        // Calculate the time for the next block (5ms from now)
+        double blockEndTime = currentTimeInSeconds + 0.005; // 5ms in seconds
         
-        // Feed MIDI events that fall within this time window to the AudioProcessorPlayer
+        // Create a MIDI buffer for this time window
+        MidiBuffer midiBuffer;
         bool addedEvents = false;
         
+        // Add all events that fall within this time window to the buffer
         while (nextEventIndex < currentSequence->getNumEvents())
         {
             auto event = currentSequence->getEventPointer(nextEventIndex);
@@ -1091,42 +1121,63 @@ void Instrument::timerCallback()
                 break; // This event is for a future block
             }
             
-            if (eventTime >= currentTimeInSeconds)
+            // Important: Process all events in the time window, not just those >= currentTimeInSeconds
+            // This ensures we don't miss any events due to timing precision issues
+            
+            // Create a copy of the message to modify if needed
+            MidiMessage messageCopy = event->message;
+            
+            // For note-on events, make sure we use the reduced velocity
+            if (messageCopy.isNoteOn())
             {
-                // Create a copy of the message with a proper timestamp
-                MidiMessage messageCopy = event->message;
-                
-                // For JUCE's MidiMessageCollector, timestamps should be relative to the current time
-                // A timestamp of 0 means "now", and positive values mean "in the future"
-                double relativeTime = (eventTime - currentTimeInSeconds) * (60.0 / tempo);
-                
-                // Add a small offset (10ms) to ensure it's not exactly 0
-                messageCopy.setTimeStamp(relativeTime + 0.01);
-                
-                // Add the timestamped message to the MIDI message collector
-                audioProcessorPlayer->getMidiMessageCollector().addMessageToQueue(messageCopy);
-                
-                // Log the event (for debugging)
-                if (event->message.isNoteOn())
-                {
-                    std::cout << "Added note on event to queue: channel=" << event->message.getChannel() 
-                              << ", note=" << event->message.getNoteNumber() 
-                              << ", velocity=" << event->message.getVelocity() 
-                              << ", pattern time=" << eventTime 
-                              << ", timestamp=" << messageCopy.getTimeStamp() << std::endl;
-                }
-                else if (event->message.isNoteOff())
-                {
-                    std::cout << "Added note off event to queue: channel=" << event->message.getChannel() 
-                              << ", note=" << event->message.getNoteNumber() 
-                              << ", pattern time=" << eventTime 
-                              << ", timestamp=" << messageCopy.getTimeStamp() << std::endl;
-                }
-                
-                addedEvents = true;
+                // Use the velocity that was set in the pattern (already reduced in playMIDIPattern)
+                // but create a fresh note-on message to ensure it's properly processed
+                messageCopy = MidiMessage::noteOn(
+                    messageCopy.getChannel(),
+                    messageCopy.getNoteNumber(),
+                    messageCopy.getVelocity());
+                    
+                std::cout << "Processing note on: channel=" << (int)messageCopy.getChannel() 
+                          << ", note=" << messageCopy.getNoteNumber() 
+                          << ", velocity=" << (int)messageCopy.getVelocity() 
+                          << ", pattern time=" << eventTime << std::endl;
+            }
+            else if (messageCopy.isNoteOff())
+            {
+                // Create a fresh note-off message to ensure it's properly processed
+                messageCopy = MidiMessage::noteOff(
+                    messageCopy.getChannel(),
+                    messageCopy.getNoteNumber());
+                    
+                std::cout << "Processing note off: channel=" << (int)messageCopy.getChannel() 
+                          << ", note=" << messageCopy.getNoteNumber() 
+                          << ", pattern time=" << eventTime << std::endl;
             }
             
+            // Add the event to our buffer at sample position 0 (immediate)
+            midiBuffer.addEvent(messageCopy, 0);
+            addedEvents = true;
             nextEventIndex++;
+        }
+        
+        // If we have events to process, send them directly to the processor graph
+        if (!midiBuffer.isEmpty())
+        {
+            // Get the current buffer size from the audio device
+            int bufferSize = 512; // Default buffer size
+            auto& deviceManager = audioEngine->getDeviceManager();
+            auto* currentDevice = deviceManager.getCurrentAudioDevice();
+            if (currentDevice != nullptr)
+            {
+                bufferSize = currentDevice->getCurrentBufferSizeSamples();
+            }
+            
+            // Create a temporary audio buffer
+            AudioBuffer<float> tempBuffer(2, bufferSize);
+            tempBuffer.clear();
+            
+            // Process the MIDI events directly through the processor graph
+            processorGraph->processBlock(tempBuffer, midiBuffer);
         }
         
         // Update the current time
@@ -1147,7 +1198,7 @@ void Instrument::timerCallback()
                 stopScheduled = true;
                 std::cout << "Scheduling playback to stop after delay..." << std::endl;
                 
-                Timer::callAfterDelay(500, [this]()
+                Timer::callAfterDelay(1000, [this]()
                 {
                     this->stopPlayback();
                     stopScheduled = false;

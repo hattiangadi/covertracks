@@ -25,6 +25,7 @@ PlayerModeComponent::PlayerModeComponent(PlayerManager& pm)
     instrumentTypeSelector.addItem("Bass", 2);
     instrumentTypeSelector.addItem("Piano", 3);
     instrumentTypeSelector.addItem("Guitar", 4);
+    instrumentTypeSelector.addItem("Other", 5);
     instrumentTypeSelector.setTextWhenNothingSelected("Select instrument type");
     instrumentTypeSelector.addListener(this);
     addAndMakeVisible(instrumentTypeSelector);
@@ -334,11 +335,53 @@ void PlayerModeComponent::updatePlayerSelector()
 
 void PlayerModeComponent::createDefaultPatterns()
 {
-    // Create default patterns for each instrument type
-    createDrumPattern();
-    createBassPattern();
-    createPianoPattern();
-    createGuitarPattern();
+    // Create patterns for drums with different styles
+    auto drumsBasic = createDrumPattern("basic");
+    auto drumsComplex = createDrumPattern("complex");
+    auto drumsFunky = createDrumPattern("funky");
+    auto drumsJazzy = createDrumPattern("jazzy");
+    
+    // Register the drum patterns
+    patternSystem->addChart("drums_basic", drumsBasic);
+    patternSystem->addChart("drums_complex", drumsComplex);
+    patternSystem->addChart("drums_funky", drumsFunky);
+    patternSystem->addChart("drums_jazzy", drumsJazzy);
+    
+    // Create patterns for bass with different styles
+    auto bassBasic = createBassPattern("basic");
+    auto bassComplex = createBassPattern("complex");
+    auto bassFunky = createBassPattern("funky");
+    auto bassJazzy = createBassPattern("jazzy");
+    
+    // Register the bass patterns
+    patternSystem->addChart("bass_basic", bassBasic);
+    patternSystem->addChart("bass_complex", bassComplex);
+    patternSystem->addChart("bass_funky", bassFunky);
+    patternSystem->addChart("bass_jazzy", bassJazzy);
+    
+    // Create patterns for piano with different styles
+    auto pianoBasic = createPianoPattern("basic");
+    auto pianoComplex = createPianoPattern("complex");
+    auto pianoFunky = createPianoPattern("funky");
+    auto pianoJazzy = createPianoPattern("jazzy");
+    
+    // Register the piano patterns
+    patternSystem->addChart("piano_basic", pianoBasic);
+    patternSystem->addChart("piano_complex", pianoComplex);
+    patternSystem->addChart("piano_funky", pianoFunky);
+    patternSystem->addChart("piano_jazzy", pianoJazzy);
+    
+    // Create patterns for guitar with different styles
+    auto guitarBasic = createGuitarPattern("basic");
+    auto guitarComplex = createGuitarPattern("complex");
+    auto guitarFunky = createGuitarPattern("funky");
+    auto guitarJazzy = createGuitarPattern("jazzy");
+    
+    // Register the guitar patterns
+    patternSystem->addChart("guitar_basic", guitarBasic);
+    patternSystem->addChart("guitar_complex", guitarComplex);
+    patternSystem->addChart("guitar_funky", guitarFunky);
+    patternSystem->addChart("guitar_jazzy", guitarJazzy);
     
     // Select the first instrument and pattern by default
     if (instrumentTypeSelector.getNumItems() > 0)
@@ -355,34 +398,132 @@ void PlayerModeComponent::createDefaultPatterns()
     }
 }
 
-std::shared_ptr<Chart> PlayerModeComponent::createDrumPattern()
+std::shared_ptr<Chart> PlayerModeComponent::createDrumPattern(const juce::String& style)
 {
-    // Create a basic drum pattern
-    auto chart = std::make_shared<Chart>("Basic Drum Pattern", 120.0);
+    // Create a drum pattern based on the style
+    juce::String patternName = "Drum Pattern - " + style;
+    auto chart = std::make_shared<Chart>(patternName, 120.0);
     
-    // Create a section (e.g., "Verse")
+    // Create a section
     auto section = std::make_shared<Section>("Verse");
     
     // Create a phrase
     auto phrase = std::make_shared<Phrase>("Main Beat");
     
-    // Create a bar with a basic drum pattern
+    // Create a bar with a drum pattern based on the style
     auto bar = std::make_shared<Bar>(4, 4);
     
-    // Add kick drum on beats 1 and 3
     // Note: Channel 9 in code = Channel 10 in MIDI (standard drum channel)
-    // Using longer durations for better playback
-    bar->addNote(0, 9, 36, 0.8f, 0.5f);  // Beat 1, channel 10 (MIDI channel 9 is drums), note 36 (kick)
-    bar->addNote(2, 9, 36, 0.8f, 0.5f);  // Beat 3
+    // Common drum notes:
+    // 36 = Kick drum
+    // 38 = Snare drum
+    // 42 = Closed hi-hat
+    // 46 = Open hi-hat
+    // 49 = Crash cymbal
+    // 51 = Ride cymbal
+    // 43 = Floor tom
     
-    // Add snare on beats 2 and 4
-    bar->addNote(1, 9, 38, 0.7f, 0.5f);  // Beat 2, note 38 (snare)
-    bar->addNote(3, 9, 38, 0.7f, 0.5f);  // Beat 4
-    
-    // Add hi-hat on every eighth note with longer durations
-    for (int i = 0; i < 8; ++i)
+    if (style == "basic")
     {
-        bar->addNote(static_cast<float>(i * 0.5f), 9, 42, 0.6f, 0.5f);  // Note 42 (closed hi-hat)
+        // Basic rock beat
+        // Kick drum on beats 1 and 3
+        bar->addNote(0, 9, 36, 0.7f, 0.5f);  // Beat 1
+        bar->addNote(2, 9, 36, 0.7f, 0.5f);  // Beat 3
+        
+        // Snare on beats 2 and 4
+        bar->addNote(1, 9, 38, 0.7f, 0.5f);  // Beat 2
+        bar->addNote(3, 9, 38, 0.7f, 0.5f);  // Beat 4
+        
+        // Hi-hat on every eighth note
+        for (int i = 0; i < 8; ++i)
+        {
+            bar->addNote(static_cast<float>(i * 0.5f), 9, 42, 0.6f, 0.5f);
+        }
+    }
+    else if (style == "complex")
+    {
+        // More complex beat with sixteenth notes
+        // Kick pattern
+        bar->addNote(0.0, 9, 36, 0.7f, 0.5f);  // Beat 1
+        bar->addNote(1.5, 9, 36, 0.7f, 0.5f);  // Beat 2.5
+        bar->addNote(2.0, 9, 36, 0.7f, 0.5f);  // Beat 3
+        bar->addNote(3.5, 9, 36, 0.7f, 0.5f);  // Beat 4.5
+        
+        // Snare pattern
+        bar->addNote(1.0, 9, 38, 0.7f, 0.5f);  // Beat 2
+        bar->addNote(3.0, 9, 38, 0.7f, 0.5f);  // Beat 4
+        
+        // Hi-hat pattern with sixteenth notes
+        for (int i = 0; i < 16; ++i)
+        {
+            float time = static_cast<float>(i * 0.25f);
+            // Alternate between closed and open hi-hat
+            int hiHatNote = (i % 4 == 2) ? 46 : 42;  // Open hi-hat on "e" of each beat
+            bar->addNote(time, 9, hiHatNote, 0.6f, 0.25f);
+        }
+    }
+    else if (style == "funky")
+    {
+        // Funky syncopated beat
+        // Kick pattern
+        bar->addNote(0.0, 9, 36, 0.7f, 0.5f);   // Beat 1
+        bar->addNote(1.75, 9, 36, 0.7f, 0.5f);  // Beat 2.75
+        bar->addNote(2.5, 9, 36, 0.7f, 0.5f);   // Beat 3.5
+        
+        // Snare pattern
+        bar->addNote(1.0, 9, 38, 0.7f, 0.5f);   // Beat 2
+        bar->addNote(2.75, 9, 38, 0.6f, 0.25f); // Beat 3.75 (ghost note)
+        bar->addNote(3.0, 9, 38, 0.7f, 0.5f);   // Beat 4
+        bar->addNote(3.5, 9, 38, 0.6f, 0.25f);  // Beat 4.5 (ghost note)
+        
+        // Hi-hat pattern
+        for (int i = 0; i < 8; ++i)
+        {
+            float time = static_cast<float>(i * 0.5f);
+            // Open hi-hat on offbeats
+            int hiHatNote = (i % 2 == 1) ? 46 : 42;
+            bar->addNote(time, 9, hiHatNote, 0.6f, 0.5f);
+        }
+    }
+    else if (style == "jazzy")
+    {
+        // Jazz ride pattern with swing feel
+        // Kick pattern (sparse)
+        bar->addNote(0.0, 9, 36, 0.7f, 0.5f);  // Beat 1
+        bar->addNote(2.66, 9, 36, 0.7f, 0.5f); // Beat 3 with swing
+        
+        // Snare pattern (light)
+        bar->addNote(1.33, 9, 38, 0.6f, 0.5f); // Beat 2 with swing
+        bar->addNote(3.33, 9, 38, 0.6f, 0.5f); // Beat 4 with swing
+        
+        // Ride cymbal pattern with swing feel
+        bar->addNote(0.0, 9, 51, 0.7f, 0.5f);  // Beat 1
+        bar->addNote(0.66, 9, 51, 0.6f, 0.5f); // Beat 1.5 with swing
+        bar->addNote(1.33, 9, 51, 0.7f, 0.5f); // Beat 2 with swing
+        bar->addNote(2.0, 9, 51, 0.6f, 0.5f);  // Beat 2.5 with swing
+        bar->addNote(2.66, 9, 51, 0.7f, 0.5f); // Beat 3 with swing
+        bar->addNote(3.33, 9, 51, 0.7f, 0.5f); // Beat 4 with swing
+        
+        // Hi-hat with foot on beats 2 and 4
+        bar->addNote(1.33, 9, 44, 0.5f, 0.5f); // Beat 2 with swing
+        bar->addNote(3.33, 9, 44, 0.5f, 0.5f); // Beat 4 with swing
+    }
+    else
+    {
+        // Default to basic if style is not recognized
+        // Kick drum on beats 1 and 3
+        bar->addNote(0, 9, 36, 0.7f, 0.5f);  // Beat 1
+        bar->addNote(2, 9, 36, 0.7f, 0.5f);  // Beat 3
+        
+        // Snare on beats 2 and 4
+        bar->addNote(1, 9, 38, 0.7f, 0.5f);  // Beat 2
+        bar->addNote(3, 9, 38, 0.7f, 0.5f);  // Beat 4
+        
+        // Hi-hat on every eighth note
+        for (int i = 0; i < 8; ++i)
+        {
+            bar->addNote(static_cast<float>(i * 0.5f), 9, 42, 0.6f, 0.5f);
+        }
     }
     
     // Add the bar to the phrase
@@ -394,16 +535,14 @@ std::shared_ptr<Chart> PlayerModeComponent::createDrumPattern()
     // Add the section to the chart
     chart->addSection(section);
     
-    // Store the chart in the pattern system
-    patternSystem->addChart("drums_basic", chart);
-    
     return chart;
 }
 
-std::shared_ptr<Chart> PlayerModeComponent::createBassPattern()
+std::shared_ptr<Chart> PlayerModeComponent::createBassPattern(const juce::String& style)
 {
-    // Create a basic bass pattern
-    auto chart = std::make_shared<Chart>("Basic Bass Pattern", 120.0);
+    // Create a bass pattern based on the style
+    juce::String patternName = "Bass Pattern - " + style;
+    auto chart = std::make_shared<Chart>(patternName, 120.0);
     
     // Create a section
     auto section = std::make_shared<Section>("Verse");
@@ -411,15 +550,57 @@ std::shared_ptr<Chart> PlayerModeComponent::createBassPattern()
     // Create a phrase
     auto phrase = std::make_shared<Phrase>("Bass Line");
     
-    // Create a bar with a simple bass line
+    // Create a bar with a bass line based on the style
     auto bar = std::make_shared<Bar>(4, 4);
     
-    // Add bass notes (simple walking bass line)
-    // Using longer durations for better playback
-    bar->addNote(0, 0, 36, 0.9f, 1.0f);    // C2 (1 beat duration)
-    bar->addNote(1, 0, 38, 0.8f, 1.0f);    // D2 (1 beat duration)
-    bar->addNote(2, 0, 40, 0.8f, 1.0f);    // E2 (1 beat duration)
-    bar->addNote(3, 0, 43, 0.9f, 1.0f);    // G2 (1 beat duration)
+    if (style == "basic")
+    {
+        // Basic walking bass line in C
+        bar->addNote(0, 0, 36, 0.7f, 1.0f);    // C2 (1 beat duration)
+        bar->addNote(1, 0, 38, 0.7f, 1.0f);    // D2 (1 beat duration)
+        bar->addNote(2, 0, 40, 0.7f, 1.0f);    // E2 (1 beat duration)
+        bar->addNote(3, 0, 43, 0.7f, 1.0f);    // G2 (1 beat duration)
+    }
+    else if (style == "complex")
+    {
+        // More complex pattern with eighth notes
+        bar->addNote(0.0, 0, 36, 0.7f, 0.5f);    // C2 (half beat duration)
+        bar->addNote(0.5, 0, 43, 0.7f, 0.5f);    // G2 (half beat duration)
+        bar->addNote(1.0, 0, 36, 0.7f, 0.5f);    // C2 (half beat duration)
+        bar->addNote(1.5, 0, 43, 0.7f, 0.5f);    // G2 (half beat duration)
+        bar->addNote(2.0, 0, 38, 0.7f, 0.5f);    // D2 (half beat duration)
+        bar->addNote(2.5, 0, 45, 0.7f, 0.5f);    // A2 (half beat duration)
+        bar->addNote(3.0, 0, 43, 0.7f, 0.5f);    // G2 (half beat duration)
+        bar->addNote(3.5, 0, 41, 0.7f, 0.5f);    // F2 (half beat duration)
+    }
+    else if (style == "funky")
+    {
+        // Funky slap bass pattern
+        bar->addNote(0.0, 0, 36, 0.8f, 0.25f);   // C2 (1/4 beat duration) - slap
+        bar->addNote(0.5, 0, 36, 0.6f, 0.25f);   // C2 (1/4 beat duration) - ghost note
+        bar->addNote(1.0, 0, 43, 0.8f, 0.25f);   // G2 (1/4 beat duration) - pop
+        bar->addNote(1.5, 0, 36, 0.6f, 0.25f);   // C2 (1/4 beat duration) - ghost note
+        bar->addNote(2.0, 0, 36, 0.8f, 0.25f);   // C2 (1/4 beat duration) - slap
+        bar->addNote(2.5, 0, 38, 0.6f, 0.25f);   // D2 (1/4 beat duration) - ghost note
+        bar->addNote(3.0, 0, 43, 0.8f, 0.25f);   // G2 (1/4 beat duration) - pop
+        bar->addNote(3.5, 0, 41, 0.8f, 0.5f);    // F2 (1/2 beat duration) - slide
+    }
+    else if (style == "jazzy")
+    {
+        // Jazzy walking bass line
+        bar->addNote(0.0, 0, 36, 0.7f, 0.9f);    // C2 (slightly less than 1 beat)
+        bar->addNote(1.0, 0, 40, 0.7f, 0.9f);    // E2 (slightly less than 1 beat)
+        bar->addNote(2.0, 0, 43, 0.7f, 0.9f);    // G2 (slightly less than 1 beat)
+        bar->addNote(3.0, 0, 41, 0.7f, 0.9f);    // F2 (slightly less than 1 beat)
+    }
+    else
+    {
+        // Default to basic if style is not recognized
+        bar->addNote(0, 0, 36, 0.7f, 1.0f);    // C2 (1 beat duration)
+        bar->addNote(1, 0, 38, 0.7f, 1.0f);    // D2 (1 beat duration)
+        bar->addNote(2, 0, 40, 0.7f, 1.0f);    // E2 (1 beat duration)
+        bar->addNote(3, 0, 43, 0.7f, 1.0f);    // G2 (1 beat duration)
+    }
     
     // Add the bar to the phrase
     phrase->addBar(bar);
@@ -430,16 +611,14 @@ std::shared_ptr<Chart> PlayerModeComponent::createBassPattern()
     // Add the section to the chart
     chart->addSection(section);
     
-    // Store the chart in the pattern system
-    patternSystem->addChart("bass_basic", chart);
-    
     return chart;
 }
 
-std::shared_ptr<Chart> PlayerModeComponent::createPianoPattern()
+std::shared_ptr<Chart> PlayerModeComponent::createPianoPattern(const juce::String& style)
 {
-    // Create a basic piano pattern
-    auto chart = std::make_shared<Chart>("Basic Piano Pattern", 120.0);
+    // Create a piano pattern based on the style
+    juce::String patternName = "Piano Pattern - " + style;
+    auto chart = std::make_shared<Chart>(patternName, 120.0);
     
     // Create a section
     auto section = std::make_shared<Section>("Verse");
@@ -447,15 +626,60 @@ std::shared_ptr<Chart> PlayerModeComponent::createPianoPattern()
     // Create a phrase
     auto phrase = std::make_shared<Phrase>("Piano Melody");
     
-    // Create a bar with a simple piano melody
+    // Create a bar with a piano melody based on the style
     auto bar = std::make_shared<Bar>(4, 4);
     
-    // Add piano notes (C major chord arpeggio with proper timing)
-    // Note: Channel is 0-based in addNote but becomes 1-based in MIDI
-    bar->addNote(0, 0, 60, 0.8f, 1.0f);    // C4 (1 beat duration)
-    bar->addNote(1, 0, 64, 0.7f, 1.0f);    // E4 (1 beat duration)
-    bar->addNote(2, 0, 67, 0.7f, 1.0f);    // G4 (1 beat duration)
-    bar->addNote(3, 0, 72, 0.8f, 1.0f);    // C5 (1 beat duration)
+    if (style == "basic")
+    {
+        // Basic C major chord arpeggio (up)
+        bar->addNote(0, 0, 60, 0.6f, 1.0f);    // C4 (1 beat duration)
+        bar->addNote(1, 0, 64, 0.6f, 1.0f);    // E4 (1 beat duration)
+        bar->addNote(2, 0, 67, 0.6f, 1.0f);    // G4 (1 beat duration)
+        bar->addNote(3, 0, 72, 0.6f, 1.0f);    // C5 (1 beat duration)
+    }
+    else if (style == "complex")
+    {
+        // More complex pattern with eighth notes
+        bar->addNote(0.0, 0, 60, 0.6f, 0.5f);    // C4 (half beat duration)
+        bar->addNote(0.5, 0, 64, 0.6f, 0.5f);    // E4 (half beat duration)
+        bar->addNote(1.0, 0, 67, 0.6f, 0.5f);    // G4 (half beat duration)
+        bar->addNote(1.5, 0, 72, 0.6f, 0.5f);    // C5 (half beat duration)
+        bar->addNote(2.0, 0, 72, 0.6f, 0.5f);    // C5 (half beat duration)
+        bar->addNote(2.5, 0, 67, 0.6f, 0.5f);    // G4 (half beat duration)
+        bar->addNote(3.0, 0, 64, 0.6f, 0.5f);    // E4 (half beat duration)
+        bar->addNote(3.5, 0, 60, 0.6f, 0.5f);    // C4 (half beat duration)
+    }
+    else if (style == "funky")
+    {
+        // Funky pattern with syncopation
+        bar->addNote(0.0, 0, 60, 0.7f, 0.75f);   // C4 (3/4 beat duration)
+        bar->addNote(1.0, 0, 67, 0.7f, 0.5f);    // G4 (1/2 beat duration)
+        bar->addNote(1.75, 0, 64, 0.7f, 0.25f);  // E4 (1/4 beat duration)
+        bar->addNote(2.0, 0, 65, 0.7f, 0.5f);    // F4 (1/2 beat duration)
+        bar->addNote(2.5, 0, 67, 0.7f, 0.5f);    // G4 (1/2 beat duration)
+        bar->addNote(3.0, 0, 72, 0.7f, 0.75f);   // C5 (3/4 beat duration)
+        bar->addNote(3.75, 0, 71, 0.7f, 0.25f);  // B4 (1/4 beat duration)
+    }
+    else if (style == "jazzy")
+    {
+        // Jazzy pattern with 7th chords
+        bar->addNote(0.0, 0, 60, 0.6f, 0.5f);    // C4 (half beat duration)
+        bar->addNote(0.5, 0, 64, 0.6f, 0.5f);    // E4 (half beat duration)
+        bar->addNote(1.0, 0, 67, 0.6f, 0.5f);    // G4 (half beat duration)
+        bar->addNote(1.5, 0, 70, 0.6f, 0.5f);    // Bb4 (half beat duration) - 7th
+        bar->addNote(2.0, 0, 65, 0.6f, 0.5f);    // F4 (half beat duration)
+        bar->addNote(2.5, 0, 69, 0.6f, 0.5f);    // A4 (half beat duration)
+        bar->addNote(3.0, 0, 72, 0.6f, 0.5f);    // C5 (half beat duration)
+        bar->addNote(3.5, 0, 74, 0.6f, 0.5f);    // D5 (half beat duration)
+    }
+    else
+    {
+        // Default to basic if style is not recognized
+        bar->addNote(0, 0, 60, 0.6f, 1.0f);    // C4 (1 beat duration)
+        bar->addNote(1, 0, 64, 0.6f, 1.0f);    // E4 (1 beat duration)
+        bar->addNote(2, 0, 67, 0.6f, 1.0f);    // G4 (1 beat duration)
+        bar->addNote(3, 0, 72, 0.6f, 1.0f);    // C5 (1 beat duration)
+    }
     
     // Add the bar to the phrase
     phrase->addBar(bar);
@@ -466,16 +690,14 @@ std::shared_ptr<Chart> PlayerModeComponent::createPianoPattern()
     // Add the section to the chart
     chart->addSection(section);
     
-    // Store the chart in the pattern system
-    patternSystem->addChart("piano_basic", chart);
-    
     return chart;
 }
 
-std::shared_ptr<Chart> PlayerModeComponent::createGuitarPattern()
+std::shared_ptr<Chart> PlayerModeComponent::createGuitarPattern(const juce::String& style)
 {
-    // Create a basic guitar pattern
-    auto chart = std::make_shared<Chart>("Basic Guitar Pattern", 120.0);
+    // Create a guitar pattern based on the style
+    juce::String patternName = "Guitar Pattern - " + style;
+    auto chart = std::make_shared<Chart>(patternName, 120.0);
     
     // Create a section
     auto section = std::make_shared<Section>("Verse");
@@ -483,19 +705,136 @@ std::shared_ptr<Chart> PlayerModeComponent::createGuitarPattern()
     // Create a phrase
     auto phrase = std::make_shared<Phrase>("Guitar Riff");
     
-    // Create a bar with a simple guitar riff
+    // Create a bar with a guitar pattern based on the style
     auto bar = std::make_shared<Bar>(4, 4);
     
-    // Add guitar notes (C, E, G, C pattern with strumming)
-    // Using longer durations for better playback
-    bar->addNote(0, 0, 48, 0.8f, 0.5f);    // C3 (half beat duration)
-    bar->addNote(static_cast<int>(0.5f), 0, 52, 0.7f, 0.5f);    // E3 (half beat duration)
-    bar->addNote(1, 0, 55, 0.7f, 0.5f);    // G3 (half beat duration)
-    bar->addNote(static_cast<int>(1.5f), 0, 60, 0.8f, 0.5f);    // C4 (half beat duration)
-    bar->addNote(2, 0, 48, 0.8f, 0.5f);    // C3 (half beat duration)
-    bar->addNote(static_cast<int>(2.5f), 0, 52, 0.7f, 0.5f);    // E3 (half beat duration)
-    bar->addNote(3, 0, 55, 0.7f, 0.5f);    // G3 (half beat duration)
-    bar->addNote(static_cast<int>(3.5f), 0, 60, 0.8f, 0.5f);    // C4 (half beat duration)
+    if (style == "basic")
+    {
+        // Basic C major arpeggio pattern
+        bar->addNote(0.0, 0, 48, 0.6f, 0.5f);    // C3 (half beat duration)
+        bar->addNote(0.5, 0, 52, 0.6f, 0.5f);    // E3 (half beat duration)
+        bar->addNote(1.0, 0, 55, 0.6f, 0.5f);    // G3 (half beat duration)
+        bar->addNote(1.5, 0, 60, 0.6f, 0.5f);    // C4 (half beat duration)
+        bar->addNote(2.0, 0, 48, 0.6f, 0.5f);    // C3 (half beat duration)
+        bar->addNote(2.5, 0, 52, 0.6f, 0.5f);    // E3 (half beat duration)
+        bar->addNote(3.0, 0, 55, 0.6f, 0.5f);    // G3 (half beat duration)
+        bar->addNote(3.5, 0, 60, 0.6f, 0.5f);    // C4 (half beat duration)
+    }
+    else if (style == "complex")
+    {
+        // More complex pattern with chord strumming
+        // C major chord
+        bar->addNote(0.0, 0, 48, 0.6f, 0.25f);    // C3
+        bar->addNote(0.0, 0, 52, 0.6f, 0.25f);    // E3
+        bar->addNote(0.0, 0, 55, 0.6f, 0.25f);    // G3
+        
+        // G major chord
+        bar->addNote(1.0, 0, 43, 0.6f, 0.25f);    // G2
+        bar->addNote(1.0, 0, 47, 0.6f, 0.25f);    // B2
+        bar->addNote(1.0, 0, 50, 0.6f, 0.25f);    // D3
+        
+        // A minor chord
+        bar->addNote(2.0, 0, 45, 0.6f, 0.25f);    // A2
+        bar->addNote(2.0, 0, 48, 0.6f, 0.25f);    // C3
+        bar->addNote(2.0, 0, 52, 0.6f, 0.25f);    // E3
+        
+        // F major chord
+        bar->addNote(3.0, 0, 41, 0.6f, 0.25f);    // F2
+        bar->addNote(3.0, 0, 45, 0.6f, 0.25f);    // A2
+        bar->addNote(3.0, 0, 48, 0.6f, 0.25f);    // C3
+        
+        // Add some picking between chords
+        bar->addNote(0.5, 0, 55, 0.5f, 0.25f);    // G3
+        bar->addNote(1.5, 0, 50, 0.5f, 0.25f);    // D3
+        bar->addNote(2.5, 0, 52, 0.5f, 0.25f);    // E3
+        bar->addNote(3.5, 0, 48, 0.5f, 0.25f);    // C3
+    }
+    else if (style == "funky")
+    {
+        // Funky rhythm guitar pattern
+        // Muted 16th note strums
+        for (int i = 0; i < 16; i++)
+        {
+            // Skip certain 16ths for syncopation
+            if (i == 3 || i == 7 || i == 11 || i == 15) continue;
+            
+            float time = static_cast<float>(i * 0.25f);
+            // Use different chord voicings
+            if (i < 4) // C9 chord
+            {
+                bar->addNote(time, 0, 48, 0.7f, 0.2f);    // C3
+                bar->addNote(time, 0, 52, 0.7f, 0.2f);    // E3
+                bar->addNote(time, 0, 55, 0.7f, 0.2f);    // G3
+                bar->addNote(time, 0, 58, 0.7f, 0.2f);    // Bb3
+            }
+            else if (i < 8) // F13 chord
+            {
+                bar->addNote(time, 0, 41, 0.7f, 0.2f);    // F2
+                bar->addNote(time, 0, 45, 0.7f, 0.2f);    // A2
+                bar->addNote(time, 0, 48, 0.7f, 0.2f);    // C3
+                bar->addNote(time, 0, 57, 0.7f, 0.2f);    // A3
+            }
+            else if (i < 12) // G13 chord
+            {
+                bar->addNote(time, 0, 43, 0.7f, 0.2f);    // G2
+                bar->addNote(time, 0, 47, 0.7f, 0.2f);    // B2
+                bar->addNote(time, 0, 50, 0.7f, 0.2f);    // D3
+                bar->addNote(time, 0, 59, 0.7f, 0.2f);    // B3
+            }
+            else // C9 chord again
+            {
+                bar->addNote(time, 0, 48, 0.7f, 0.2f);    // C3
+                bar->addNote(time, 0, 52, 0.7f, 0.2f);    // E3
+                bar->addNote(time, 0, 55, 0.7f, 0.2f);    // G3
+                bar->addNote(time, 0, 58, 0.7f, 0.2f);    // Bb3
+            }
+        }
+    }
+    else if (style == "jazzy")
+    {
+        // Jazz comping pattern with 7th and 9th chords
+        // Cmaj7 chord
+        bar->addNote(0.0, 0, 48, 0.6f, 0.33f);    // C3
+        bar->addNote(0.0, 0, 52, 0.6f, 0.33f);    // E3
+        bar->addNote(0.0, 0, 55, 0.6f, 0.33f);    // G3
+        bar->addNote(0.0, 0, 59, 0.6f, 0.33f);    // B3
+        
+        // Dm7 chord
+        bar->addNote(1.0, 0, 50, 0.6f, 0.33f);    // D3
+        bar->addNote(1.0, 0, 53, 0.6f, 0.33f);    // F3
+        bar->addNote(1.0, 0, 57, 0.6f, 0.33f);    // A3
+        bar->addNote(1.0, 0, 60, 0.6f, 0.33f);    // C4
+        
+        // G7 chord
+        bar->addNote(2.0, 0, 43, 0.6f, 0.33f);    // G2
+        bar->addNote(2.0, 0, 47, 0.6f, 0.33f);    // B2
+        bar->addNote(2.0, 0, 50, 0.6f, 0.33f);    // D3
+        bar->addNote(2.0, 0, 53, 0.6f, 0.33f);    // F3
+        
+        // Cmaj9 chord
+        bar->addNote(3.0, 0, 48, 0.6f, 0.33f);    // C3
+        bar->addNote(3.0, 0, 52, 0.6f, 0.33f);    // E3
+        bar->addNote(3.0, 0, 55, 0.6f, 0.33f);    // G3
+        bar->addNote(3.0, 0, 59, 0.6f, 0.33f);    // B3
+        bar->addNote(3.0, 0, 62, 0.6f, 0.33f);    // D4
+        
+        // Add some jazz-style approach notes
+        bar->addNote(0.66, 0, 47, 0.5f, 0.25f);   // B2 - approach to C
+        bar->addNote(1.66, 0, 49, 0.5f, 0.25f);   // C#3 - approach to D
+        bar->addNote(2.66, 0, 42, 0.5f, 0.25f);   // F#2 - approach to G
+    }
+    else
+    {
+        // Default to basic if style is not recognized
+        bar->addNote(0.0, 0, 48, 0.6f, 0.5f);    // C3 (half beat duration)
+        bar->addNote(0.5, 0, 52, 0.6f, 0.5f);    // E3 (half beat duration)
+        bar->addNote(1.0, 0, 55, 0.6f, 0.5f);    // G3 (half beat duration)
+        bar->addNote(1.5, 0, 60, 0.6f, 0.5f);    // C4 (half beat duration)
+        bar->addNote(2.0, 0, 48, 0.6f, 0.5f);    // C3 (half beat duration)
+        bar->addNote(2.5, 0, 52, 0.6f, 0.5f);    // E3 (half beat duration)
+        bar->addNote(3.0, 0, 55, 0.6f, 0.5f);    // G3 (half beat duration)
+        bar->addNote(3.5, 0, 60, 0.6f, 0.5f);    // C4 (half beat duration)
+    }
     
     // Add the bar to the phrase
     phrase->addBar(bar);
@@ -505,9 +844,6 @@ std::shared_ptr<Chart> PlayerModeComponent::createGuitarPattern()
     
     // Add the section to the chart
     chart->addSection(section);
-    
-    // Store the chart in the pattern system
-    patternSystem->addChart("guitar_basic", chart);
     
     return chart;
 }
@@ -635,28 +971,87 @@ juce::String PlayerModeComponent::getMidiNoteName(int midiNoteNumber)
 
 void PlayerModeComponent::updateCurrentChart()
 {
-    // Get the selected instrument type
-    int instrumentType = instrumentTypeSelector.getSelectedId();
-    
     // Default to nullptr
     currentChart = nullptr;
     
-    // Select the appropriate chart based on the selections
-    if (instrumentType == 1) // Drums
+    // Try to detect instrument type from player if one is selected
+    int instrumentType = instrumentTypeSelector.getSelectedId();
+    bool autoDetectedInstrument = false;
+    
+    if (selectedPlayer != nullptr)
     {
-        currentChart = patternSystem->getChart("drums_basic");
+        // Get the player's metadata to check for instrument type
+        auto& metadata = selectedPlayer->getMetadata();
+        juce::String category = metadata.category.toLowerCase();
+        
+        // Auto-detect instrument type if possible
+        if (category.contains("drum"))
+        {
+            instrumentType = 1; // Drums
+            autoDetectedInstrument = true;
+        }
+        else if (category.contains("bass"))
+        {
+            instrumentType = 2; // Bass
+            autoDetectedInstrument = true;
+        }
+        else if (category.contains("piano") || category.contains("keyboard") || 
+                 category.contains("keys") || category.contains("synth"))
+        {
+            instrumentType = 3; // Piano/Keys
+            autoDetectedInstrument = true;
+        }
+        else if (category.contains("guitar"))
+        {
+            instrumentType = 4; // Guitar
+            autoDetectedInstrument = true;
+        }
+        else
+        {
+            instrumentType = 5; // Other/Unknown
+            autoDetectedInstrument = true;
+        }
+        
+        // Update the instrument type selector if we auto-detected
+        if (autoDetectedInstrument && instrumentTypeSelector.getSelectedId() != instrumentType)
+        {
+            instrumentTypeSelector.setSelectedId(instrumentType, juce::dontSendNotification);
+        }
     }
-    else if (instrumentType == 2) // Bass
+    
+    // Get the selected pattern type
+    int patternType = patternSelector.getSelectedId();
+    juce::String patternSuffix;
+    
+    switch (patternType)
     {
-        currentChart = patternSystem->getChart("bass_basic");
+        case 1: patternSuffix = "_basic"; break;
+        case 2: patternSuffix = "_complex"; break;
+        case 3: patternSuffix = "_funky"; break;
+        case 4: patternSuffix = "_jazzy"; break;
+        default: patternSuffix = "_basic"; break;
     }
-    else if (instrumentType == 3) // Piano
+    
+    // Select the appropriate chart based on the instrument and pattern type
+    juce::String chartName;
+    
+    switch (instrumentType)
     {
-        currentChart = patternSystem->getChart("piano_basic");
+        case 1: chartName = "drums" + patternSuffix; break;
+        case 2: chartName = "bass" + patternSuffix; break;
+        case 3: chartName = "piano" + patternSuffix; break;
+        case 4: chartName = "guitar" + patternSuffix; break;
+        case 5: // Other/Unknown - default to piano
+        default: chartName = "piano" + patternSuffix; break;
     }
-    else if (instrumentType == 4) // Guitar
+    
+    currentChart = patternSystem->getChart(chartName);
+    
+    // If the chart doesn't exist, fall back to basic pattern
+    if (currentChart == nullptr && patternSuffix != "_basic")
     {
-        currentChart = patternSystem->getChart("guitar_basic");
+        chartName = chartName.replace(patternSuffix, "_basic");
+        currentChart = patternSystem->getChart(chartName);
     }
     
     // Update the pattern viewer
@@ -686,7 +1081,7 @@ void PlayerModeComponent::playCurrentPattern()
     noteOn1->setProperty("type", "note_on");
     noteOn1->setProperty("channel", 1);
     noteOn1->setProperty("note", 60); // C4
-    noteOn1->setProperty("velocity", 100);
+    noteOn1->setProperty("velocity", 64);
     noteOn1->setProperty("timestamp", 0.0);
     events.add(juce::var(noteOn1));
     
@@ -703,7 +1098,7 @@ void PlayerModeComponent::playCurrentPattern()
     noteOn2->setProperty("type", "note_on");
     noteOn2->setProperty("channel", 1);
     noteOn2->setProperty("note", 64); // E4
-    noteOn2->setProperty("velocity", 100);
+    noteOn2->setProperty("velocity", 64);
     noteOn2->setProperty("timestamp", 0.5);
     events.add(juce::var(noteOn2));
     
@@ -720,7 +1115,7 @@ void PlayerModeComponent::playCurrentPattern()
     noteOn3->setProperty("type", "note_on");
     noteOn3->setProperty("channel", 1);
     noteOn3->setProperty("note", 67); // G4
-    noteOn3->setProperty("velocity", 100);
+    noteOn3->setProperty("velocity", 64);
     noteOn3->setProperty("timestamp", 1.0);
     events.add(juce::var(noteOn3));
     
@@ -737,7 +1132,7 @@ void PlayerModeComponent::playCurrentPattern()
     noteOn4->setProperty("type", "note_on");
     noteOn4->setProperty("channel", 1);
     noteOn4->setProperty("note", 72); // C5
-    noteOn4->setProperty("velocity", 100);
+    noteOn4->setProperty("velocity", 64);
     noteOn4->setProperty("timestamp", 1.5);
     events.add(juce::var(noteOn4));
     

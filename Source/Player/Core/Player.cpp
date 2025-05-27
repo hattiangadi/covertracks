@@ -42,7 +42,7 @@ Player::Player(const String& playerId, const String& name,
 {
     // Initialize metadata
     metadata.name = name;
-    metadata.category = "Undefined";
+    metadata.category = "Keyboard"; // Default to Keyboard category
     metadata.description = "A new player";
     metadata.created = Time::getCurrentTime();
     metadata.lastModified = metadata.created;
