@@ -631,46 +631,115 @@ std::shared_ptr<Chart> PlayerModeComponent::createPianoPattern(const juce::Strin
     
     if (style == "basic")
     {
-        // Basic C major chord arpeggio (up)
-        bar->addNote(0, 0, 60, 0.6f, 1.0f);    // C4 (1 beat duration)
-        bar->addNote(1, 0, 64, 0.6f, 1.0f);    // E4 (1 beat duration)
-        bar->addNote(2, 0, 67, 0.6f, 1.0f);    // G4 (1 beat duration)
-        bar->addNote(3, 0, 72, 0.6f, 1.0f);    // C5 (1 beat duration)
+        // Basic C major chord arpeggio with clear pattern
+        // C major triad (C-E-G) with octave
+        bar->addNote(0.0, 0, 60, 0.7f, 0.9f);    // C4 (nearly 1 beat duration)
+        bar->addNote(1.0, 0, 64, 0.7f, 0.9f);    // E4 (nearly 1 beat duration)
+        bar->addNote(2.0, 0, 67, 0.7f, 0.9f);    // G4 (nearly 1 beat duration)
+        bar->addNote(3.0, 0, 72, 0.7f, 0.9f);    // C5 (nearly 1 beat duration)
+        
+        // Add chord on beat 1 for emphasis
+        bar->addNote(0.0, 0, 48, 0.5f, 0.9f);    // C3 (lower octave)
+        bar->addNote(0.0, 0, 52, 0.5f, 0.9f);    // E3 (lower octave)
+        bar->addNote(0.0, 0, 55, 0.5f, 0.9f);    // G3 (lower octave)
     }
     else if (style == "complex")
     {
-        // More complex pattern with eighth notes
-        bar->addNote(0.0, 0, 60, 0.6f, 0.5f);    // C4 (half beat duration)
-        bar->addNote(0.5, 0, 64, 0.6f, 0.5f);    // E4 (half beat duration)
-        bar->addNote(1.0, 0, 67, 0.6f, 0.5f);    // G4 (half beat duration)
-        bar->addNote(1.5, 0, 72, 0.6f, 0.5f);    // C5 (half beat duration)
-        bar->addNote(2.0, 0, 72, 0.6f, 0.5f);    // C5 (half beat duration)
-        bar->addNote(2.5, 0, 67, 0.6f, 0.5f);    // G4 (half beat duration)
-        bar->addNote(3.0, 0, 64, 0.6f, 0.5f);    // E4 (half beat duration)
-        bar->addNote(3.5, 0, 60, 0.6f, 0.5f);    // C4 (half beat duration)
+        // Complex pattern with sixteenth notes and chord variations
+        // First beat: C major chord broken into 16th notes
+        bar->addNote(0.00, 0, 60, 0.6f, 0.24f);  // C4 (16th note)
+        bar->addNote(0.25, 0, 64, 0.6f, 0.24f);  // E4 (16th note)
+        bar->addNote(0.50, 0, 67, 0.6f, 0.24f);  // G4 (16th note)
+        bar->addNote(0.75, 0, 72, 0.6f, 0.24f);  // C5 (16th note)
+        
+        // Second beat: F major chord (F-A-C) broken pattern
+        bar->addNote(1.00, 0, 65, 0.6f, 0.24f);  // F4 (16th note)
+        bar->addNote(1.25, 0, 69, 0.6f, 0.24f);  // A4 (16th note)
+        bar->addNote(1.50, 0, 72, 0.6f, 0.24f);  // C5 (16th note)
+        bar->addNote(1.75, 0, 69, 0.6f, 0.24f);  // A4 (16th note)
+        
+        // Third beat: G major chord (G-B-D) broken pattern
+        bar->addNote(2.00, 0, 67, 0.6f, 0.24f);  // G4 (16th note)
+        bar->addNote(2.25, 0, 71, 0.6f, 0.24f);  // B4 (16th note)
+        bar->addNote(2.50, 0, 74, 0.6f, 0.24f);  // D5 (16th note)
+        bar->addNote(2.75, 0, 71, 0.6f, 0.24f);  // B4 (16th note)
+        
+        // Fourth beat: C major chord descending
+        bar->addNote(3.00, 0, 72, 0.6f, 0.24f);  // C5 (16th note)
+        bar->addNote(3.25, 0, 67, 0.6f, 0.24f);  // G4 (16th note)
+        bar->addNote(3.50, 0, 64, 0.6f, 0.24f);  // E4 (16th note)
+        bar->addNote(3.75, 0, 60, 0.6f, 0.24f);  // C4 (16th note)
+        
+        // Add bass notes for harmonic support
+        bar->addNote(0.0, 0, 48, 0.5f, 0.9f);    // C3 (bass note)
+        bar->addNote(1.0, 0, 53, 0.5f, 0.9f);    // F3 (bass note)
+        bar->addNote(2.0, 0, 55, 0.5f, 0.9f);    // G3 (bass note)
+        bar->addNote(3.0, 0, 48, 0.5f, 0.9f);    // C3 (bass note)
     }
     else if (style == "funky")
     {
-        // Funky pattern with syncopation
-        bar->addNote(0.0, 0, 60, 0.7f, 0.75f);   // C4 (3/4 beat duration)
-        bar->addNote(1.0, 0, 67, 0.7f, 0.5f);    // G4 (1/2 beat duration)
-        bar->addNote(1.75, 0, 64, 0.7f, 0.25f);  // E4 (1/4 beat duration)
-        bar->addNote(2.0, 0, 65, 0.7f, 0.5f);    // F4 (1/2 beat duration)
-        bar->addNote(2.5, 0, 67, 0.7f, 0.5f);    // G4 (1/2 beat duration)
-        bar->addNote(3.0, 0, 72, 0.7f, 0.75f);   // C5 (3/4 beat duration)
-        bar->addNote(3.75, 0, 71, 0.7f, 0.25f);  // B4 (1/4 beat duration)
+        // Funky pattern with syncopation and rhythmic interest
+        // Syncopated C7 chord (C-E-G-Bb)
+        bar->addNote(0.0, 0, 60, 0.7f, 0.4f);    // C4 (syncopated rhythm)
+        bar->addNote(0.5, 0, 67, 0.7f, 0.4f);    // G4
+        bar->addNote(1.0, 0, 70, 0.8f, 0.3f);    // Bb4 (7th, accented)
+        bar->addNote(1.5, 0, 64, 0.6f, 0.4f);    // E4
+        
+        // Funky rhythmic pattern continues
+        bar->addNote(2.0, 0, 67, 0.7f, 0.3f);    // G4
+        bar->addNote(2.5, 0, 65, 0.7f, 0.3f);    // F4 (passing tone)
+        bar->addNote(2.75, 0, 64, 0.7f, 0.3f);   // E4 (syncopated 16th)
+        bar->addNote(3.0, 0, 62, 0.7f, 0.3f);    // D4 (passing tone)
+        bar->addNote(3.25, 0, 60, 0.8f, 0.3f);   // C4 (syncopated 16th)
+        bar->addNote(3.5, 0, 62, 0.6f, 0.3f);    // D4 (passing tone)
+        bar->addNote(3.75, 0, 64, 0.7f, 0.3f);   // E4 (leading back to C)
+        
+        // Add percussive chord stabs
+        bar->addNote(0.0, 0, 48, 0.6f, 0.2f);    // C3 (short stab)
+        bar->addNote(0.0, 0, 52, 0.6f, 0.2f);    // E3 (short stab)
+        bar->addNote(1.0, 0, 48, 0.6f, 0.2f);    // C3 (short stab)
+        bar->addNote(1.0, 0, 55, 0.6f, 0.2f);    // G3 (short stab)
+        bar->addNote(2.0, 0, 48, 0.6f, 0.2f);    // C3 (short stab)
+        bar->addNote(2.0, 0, 58, 0.6f, 0.2f);    // Bb3 (short stab)
     }
     else if (style == "jazzy")
     {
-        // Jazzy pattern with 7th chords
+        // Jazzy pattern with extended chords and chromatic movement
+        // Cmaj9 chord (C-E-G-B-D) with jazz voicing
+        bar->addNote(0.0, 0, 52, 0.6f, 0.5f);    // E3 (half beat duration)
         bar->addNote(0.0, 0, 60, 0.6f, 0.5f);    // C4 (half beat duration)
-        bar->addNote(0.5, 0, 64, 0.6f, 0.5f);    // E4 (half beat duration)
-        bar->addNote(1.0, 0, 67, 0.6f, 0.5f);    // G4 (half beat duration)
-        bar->addNote(1.5, 0, 70, 0.6f, 0.5f);    // Bb4 (half beat duration) - 7th
-        bar->addNote(2.0, 0, 65, 0.6f, 0.5f);    // F4 (half beat duration)
-        bar->addNote(2.5, 0, 69, 0.6f, 0.5f);    // A4 (half beat duration)
-        bar->addNote(3.0, 0, 72, 0.6f, 0.5f);    // C5 (half beat duration)
-        bar->addNote(3.5, 0, 74, 0.6f, 0.5f);    // D5 (half beat duration)
+        bar->addNote(0.0, 0, 67, 0.6f, 0.5f);    // G4 (half beat duration)
+        bar->addNote(0.0, 0, 71, 0.6f, 0.5f);    // B4 (half beat duration - 9th)
+        
+        // Chromatic walk down
+        bar->addNote(0.5, 0, 71, 0.5f, 0.25f);    // B4 (short duration)
+        bar->addNote(0.75, 0, 70, 0.5f, 0.25f);   // Bb4 (chromatic passing tone)
+        
+        // A7 chord (A-C#-E-G)
+        bar->addNote(1.0, 0, 57, 0.6f, 0.5f);    // A3
+        bar->addNote(1.0, 0, 61, 0.6f, 0.5f);    // C#4
+        bar->addNote(1.0, 0, 64, 0.6f, 0.5f);    // E4
+        bar->addNote(1.0, 0, 67, 0.6f, 0.5f);    // G4 (7th)
+        
+        // D7 chord (D-F#-A-C)
+        bar->addNote(2.0, 0, 50, 0.6f, 0.5f);    // D3
+        bar->addNote(2.0, 0, 54, 0.6f, 0.5f);    // F#3
+        bar->addNote(2.0, 0, 57, 0.6f, 0.5f);    // A3
+        bar->addNote(2.0, 0, 60, 0.6f, 0.5f);    // C4 (7th)
+        
+        // Chromatic approach to G7
+        bar->addNote(2.5, 0, 66, 0.5f, 0.25f);    // F#4 (approach note)
+        bar->addNote(2.75, 0, 65, 0.5f, 0.25f);   // F4 (chromatic approach)
+        
+        // G7 chord (G-B-D-F)
+        bar->addNote(3.0, 0, 55, 0.6f, 0.5f);    // G3
+        bar->addNote(3.0, 0, 59, 0.6f, 0.5f);    // B3
+        bar->addNote(3.0, 0, 62, 0.6f, 0.5f);    // D4
+        bar->addNote(3.0, 0, 65, 0.6f, 0.5f);    // F4 (7th)
+        
+        // Chromatic approach back to C
+        bar->addNote(3.5, 0, 59, 0.5f, 0.25f);    // B3 (approach note)
+        bar->addNote(3.75, 0, 60, 0.5f, 0.25f);   // C4 (target note)
     }
     else
     {
@@ -793,32 +862,32 @@ std::shared_ptr<Chart> PlayerModeComponent::createGuitarPattern(const juce::Stri
     else if (style == "jazzy")
     {
         // Jazz comping pattern with 7th and 9th chords
-        // Cmaj7 chord
-        bar->addNote(0.0, 0, 48, 0.6f, 0.33f);    // C3
-        bar->addNote(0.0, 0, 52, 0.6f, 0.33f);    // E3
-        bar->addNote(0.0, 0, 55, 0.6f, 0.33f);    // G3
-        bar->addNote(0.0, 0, 59, 0.6f, 0.33f);    // B3
+        // Cmaj7 chord with shell voicing (3rd and 7th emphasized)
+        bar->addNote(0.0, 0, 48, 0.6f, 0.33f);    // C3 (root)
+        bar->addNote(0.0, 0, 52, 0.7f, 0.33f);    // E3 (3rd - emphasized)
+        bar->addNote(0.0, 0, 55, 0.5f, 0.33f);    // G3 (5th)
+        bar->addNote(0.0, 0, 59, 0.7f, 0.33f);    // B3 (maj7 - emphasized)
         
-        // Dm7 chord
-        bar->addNote(1.0, 0, 50, 0.6f, 0.33f);    // D3
-        bar->addNote(1.0, 0, 53, 0.6f, 0.33f);    // F3
-        bar->addNote(1.0, 0, 57, 0.6f, 0.33f);    // A3
-        bar->addNote(1.0, 0, 60, 0.6f, 0.33f);    // C4
+        // Dm7 chord with shell voicing
+        bar->addNote(1.0, 0, 50, 0.6f, 0.33f);    // D3 (root)
+        bar->addNote(1.0, 0, 53, 0.7f, 0.33f);    // F3 (minor 3rd - emphasized)
+        bar->addNote(1.0, 0, 57, 0.5f, 0.33f);    // A3 (5th)
+        bar->addNote(1.0, 0, 60, 0.7f, 0.33f);    // C4 (minor 7th - emphasized)
         
-        // G7 chord
-        bar->addNote(2.0, 0, 43, 0.6f, 0.33f);    // G2
-        bar->addNote(2.0, 0, 47, 0.6f, 0.33f);    // B2
-        bar->addNote(2.0, 0, 50, 0.6f, 0.33f);    // D3
-        bar->addNote(2.0, 0, 53, 0.6f, 0.33f);    // F3
+        // G7 chord with shell voicing
+        bar->addNote(2.0, 0, 43, 0.6f, 0.33f);    // G2 (root)
+        bar->addNote(2.0, 0, 47, 0.7f, 0.33f);    // B2 (3rd - emphasized)
+        bar->addNote(2.0, 0, 50, 0.5f, 0.33f);    // D3 (5th)
+        bar->addNote(2.0, 0, 53, 0.7f, 0.33f);    // F3 (dominant 7th - emphasized)
         
-        // Cmaj9 chord
-        bar->addNote(3.0, 0, 48, 0.6f, 0.33f);    // C3
-        bar->addNote(3.0, 0, 52, 0.6f, 0.33f);    // E3
-        bar->addNote(3.0, 0, 55, 0.6f, 0.33f);    // G3
-        bar->addNote(3.0, 0, 59, 0.6f, 0.33f);    // B3
-        bar->addNote(3.0, 0, 62, 0.6f, 0.33f);    // D4
+        // Cmaj9 chord with extended voicing
+        bar->addNote(3.0, 0, 48, 0.6f, 0.33f);    // C3 (root)
+        bar->addNote(3.0, 0, 52, 0.6f, 0.33f);    // E3 (3rd)
+        bar->addNote(3.0, 0, 55, 0.5f, 0.33f);    // G3 (5th)
+        bar->addNote(3.0, 0, 59, 0.7f, 0.33f);    // B3 (maj7)
+        bar->addNote(3.0, 0, 62, 0.6f, 0.33f);    // D4 (9th)
         
-        // Add some jazz-style approach notes
+        // Add some jazz-style approach notes and chromatic passing tones
         bar->addNote(0.66, 0, 47, 0.5f, 0.25f);   // B2 - approach to C
         bar->addNote(1.66, 0, 49, 0.5f, 0.25f);   // C#3 - approach to D
         bar->addNote(2.66, 0, 42, 0.5f, 0.25f);   // F#2 - approach to G
@@ -1068,92 +1137,126 @@ void PlayerModeComponent::playCurrentPattern()
         return;
     }
     
+    // Get the pattern style from the selector
+    int patternType = patternSelector.getSelectedId();
+    juce::String patternStyle;
+    
+    switch (patternType)
+    {
+        case 1: patternStyle = "Basic"; break;
+        case 2: patternStyle = "Complex"; break;
+        case 3: patternStyle = "Funky"; break;
+        case 4: patternStyle = "Jazzy"; break;
+        default: patternStyle = "Basic"; break;
+    }
+    
+    std::cout << "Playing " << patternStyle << " pattern" << std::endl;
+    
+    // Convert the chart to a MIDI sequence
+    auto midiSequence = currentChart->toMidiSequence();
+    
     // Create a structured var object for the Player's setPatternFromVar method
     juce::DynamicObject* patternObj = new juce::DynamicObject();
     juce::Array<juce::var> events;
     
-    // Create a simple arpeggio pattern with explicit timing values
-    // Note: We're bypassing the Chart->MIDI conversion and creating events directly
-    // with timing values that work with the current implementation
+    // Convert MIDI sequence to the expected format
+    for (int i = 0; i < midiSequence->getNumEvents(); ++i)
+    {
+        auto event = midiSequence->getEventPointer(i);
+        
+        if (event->message.isNoteOn())
+        {
+            juce::DynamicObject* noteOn = new juce::DynamicObject();
+            noteOn->setProperty("type", "note_on");
+            noteOn->setProperty("channel", event->message.getChannel());
+            noteOn->setProperty("note", event->message.getNoteNumber());
+            noteOn->setProperty("velocity", event->message.getVelocity());
+            noteOn->setProperty("timestamp", event->message.getTimeStamp() / 960.0); // Convert from ticks to seconds
+            events.add(juce::var(noteOn));
+        }
+        else if (event->message.isNoteOff())
+        {
+            juce::DynamicObject* noteOff = new juce::DynamicObject();
+            noteOff->setProperty("type", "note_off");
+            noteOff->setProperty("channel", event->message.getChannel());
+            noteOff->setProperty("note", event->message.getNoteNumber());
+            noteOff->setProperty("timestamp", event->message.getTimeStamp() / 960.0); // Convert from ticks to seconds
+            events.add(juce::var(noteOff));
+        }
+        else if (event->message.isController())
+        {
+            juce::DynamicObject* controller = new juce::DynamicObject();
+            controller->setProperty("type", "controller");
+            controller->setProperty("channel", event->message.getChannel());
+            controller->setProperty("controller", event->message.getControllerNumber());
+            controller->setProperty("value", event->message.getControllerValue());
+            controller->setProperty("timestamp", event->message.getTimeStamp() / 960.0); // Convert from ticks to seconds
+            events.add(juce::var(controller));
+        }
+    }
     
-    // C4 note - start at time 0
-    juce::DynamicObject* noteOn1 = new juce::DynamicObject();
-    noteOn1->setProperty("type", "note_on");
-    noteOn1->setProperty("channel", 1);
-    noteOn1->setProperty("note", 60); // C4
-    noteOn1->setProperty("velocity", 64);
-    noteOn1->setProperty("timestamp", 0.0);
-    events.add(juce::var(noteOn1));
-    
-    // C4 note off - after 0.5 seconds
-    juce::DynamicObject* noteOff1 = new juce::DynamicObject();
-    noteOff1->setProperty("type", "note_off");
-    noteOff1->setProperty("channel", 1);
-    noteOff1->setProperty("note", 60); // C4
-    noteOff1->setProperty("timestamp", 0.5);
-    events.add(juce::var(noteOff1));
-    
-    // E4 note - start at 0.5 seconds
-    juce::DynamicObject* noteOn2 = new juce::DynamicObject();
-    noteOn2->setProperty("type", "note_on");
-    noteOn2->setProperty("channel", 1);
-    noteOn2->setProperty("note", 64); // E4
-    noteOn2->setProperty("velocity", 64);
-    noteOn2->setProperty("timestamp", 0.5);
-    events.add(juce::var(noteOn2));
-    
-    // E4 note off - after 1.0 seconds
-    juce::DynamicObject* noteOff2 = new juce::DynamicObject();
-    noteOff2->setProperty("type", "note_off");
-    noteOff2->setProperty("channel", 1);
-    noteOff2->setProperty("note", 64); // E4
-    noteOff2->setProperty("timestamp", 1.0);
-    events.add(juce::var(noteOff2));
-    
-    // G4 note - start at 1.0 seconds
-    juce::DynamicObject* noteOn3 = new juce::DynamicObject();
-    noteOn3->setProperty("type", "note_on");
-    noteOn3->setProperty("channel", 1);
-    noteOn3->setProperty("note", 67); // G4
-    noteOn3->setProperty("velocity", 64);
-    noteOn3->setProperty("timestamp", 1.0);
-    events.add(juce::var(noteOn3));
-    
-    // G4 note off - after 1.5 seconds
-    juce::DynamicObject* noteOff3 = new juce::DynamicObject();
-    noteOff3->setProperty("type", "note_off");
-    noteOff3->setProperty("channel", 1);
-    noteOff3->setProperty("note", 67); // G4
-    noteOff3->setProperty("timestamp", 1.5);
-    events.add(juce::var(noteOff3));
-    
-    // C5 note - start at 1.5 seconds
-    juce::DynamicObject* noteOn4 = new juce::DynamicObject();
-    noteOn4->setProperty("type", "note_on");
-    noteOn4->setProperty("channel", 1);
-    noteOn4->setProperty("note", 72); // C5
-    noteOn4->setProperty("velocity", 64);
-    noteOn4->setProperty("timestamp", 1.5);
-    events.add(juce::var(noteOn4));
-    
-    // C5 note off - after 2.0 seconds
-    juce::DynamicObject* noteOff4 = new juce::DynamicObject();
-    noteOff4->setProperty("type", "note_off");
-    noteOff4->setProperty("channel", 1);
-    noteOff4->setProperty("note", 72); // C5
-    noteOff4->setProperty("timestamp", 2.0);
-    events.add(juce::var(noteOff4));
+    // Add an all-notes-off event at the end to ensure clean playback
+    if (!events.isEmpty())
+    {
+        // Find the maximum timestamp
+        double maxTimestamp = 0.0;
+        for (int i = 0; i < events.size(); ++i)
+        {
+            if (auto* obj = events[i].getDynamicObject())
+            {
+                double timestamp = obj->getProperty("timestamp");
+                maxTimestamp = std::max(maxTimestamp, timestamp);
+            }
+        }
+        
+        // Add all-notes-off controller message
+        juce::DynamicObject* allNotesOff = new juce::DynamicObject();
+        allNotesOff->setProperty("type", "controller");
+        allNotesOff->setProperty("channel", 1);
+        allNotesOff->setProperty("controller", 123); // All notes off
+        allNotesOff->setProperty("value", 0);
+        allNotesOff->setProperty("timestamp", maxTimestamp + 0.5); // 0.5 seconds after the last note
+        events.add(juce::var(allNotesOff));
+    }
     
     patternObj->setProperty("events", events);
     patternObj->setProperty("tempo", currentChart->getTempo());
     juce::var patternVar(patternObj);
     
-    // Update pattern viewer to show what we're playing
-    juce::String text = "Playing C Major Arpeggio:\n";
-    text += "C4 (60) at 0.0s for 0.5s\n";
-    text += "E4 (64) at 0.5s for 0.5s\n";
-    text += "G4 (67) at 1.0s for 0.5s\n";
-    text += "C5 (72) at 1.5s for 0.5s\n";
+    // Update the pattern viewer to show what we're playing
+    juce::String text = "Playing " + currentChart->getTitle() + ":\n";
+    text += "Tempo: " + juce::String(currentChart->getTempo()) + " BPM\n";
+    text += "Total events: " + juce::String(events.size()) + "\n\n";
+    
+    // Show a few events for reference
+    int eventsToShow = std::min(10, events.size());
+    for (int i = 0; i < eventsToShow; ++i)
+    {
+        if (auto* obj = events[i].getDynamicObject())
+        {
+            juce::String type = obj->getProperty("type").toString();
+            if (type == "note_on")
+            {
+                int note = static_cast<int>(obj->getProperty("note"));
+                double timestamp = static_cast<double>(obj->getProperty("timestamp"));
+                text += "Note On: " + getMidiNoteName(note) + " (" + juce::String(note) + ") at " + 
+                        juce::String(timestamp, 2) + "s\n";
+            }
+            else if (type == "note_off")
+            {
+                int note = static_cast<int>(obj->getProperty("note"));
+                double timestamp = static_cast<double>(obj->getProperty("timestamp"));
+                text += "Note Off: " + getMidiNoteName(note) + " (" + juce::String(note) + ") at " + 
+                        juce::String(timestamp, 2) + "s\n";
+            }
+        }
+    }
+    
+    if (events.size() > eventsToShow)
+    {
+        text += "... and " + juce::String(events.size() - eventsToShow) + " more events\n";
+    }
+    
     patternViewer.setText(text);
     
     // Play the MIDI data on the selected player
