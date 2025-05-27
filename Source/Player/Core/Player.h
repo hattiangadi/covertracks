@@ -314,6 +314,7 @@ private:
     // Pattern storage and playback
     var lastGeneratedPattern;
     std::shared_ptr<juce::MidiMessageSequence> currentPattern;
+    double patternTempo = 120.0; // Default tempo in BPM
     
     // Pattern finished callback
     std::function<void(const String&)> onPatternFinished;

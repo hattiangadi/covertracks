@@ -699,6 +699,9 @@ bool Player::setPatternFromVar(const var& patternVar)
         return false;
     }
     
+    // Extract tempo if available, otherwise use default (120 BPM)
+    patternTempo = patternVar.hasProperty("tempo") ? static_cast<double>(patternVar["tempo"]) : 120.0;
+    
     // Create a new MIDI message sequence
     auto sequence = std::make_shared<juce::MidiMessageSequence>();
     
@@ -730,7 +733,7 @@ bool Player::setPatternFromVar(const var& patternVar)
             // Extract common properties
             juce::String type = event.hasProperty("type") ? event["type"].toString() : "";
             int channel = event.hasProperty("channel") ? static_cast<int>(static_cast<double>(event["channel"])) : 1;
-            double timestamp = event.hasProperty("time") ? static_cast<double>(event["time"]) : 0.0;
+            double timestamp = event.hasProperty("timestamp") ? static_cast<double>(event["timestamp"]) : 0.0;
             
             // Ensure channel is in valid range (1-16)
             channel = juce::jlimit(1, 16, channel);
@@ -863,7 +866,7 @@ bool Player::play()
             noteOn->setProperty("channel", event->message.getChannel());
             noteOn->setProperty("note", event->message.getNoteNumber());
             noteOn->setProperty("velocity", (int)(event->message.getVelocity() * 127));
-            noteOn->setProperty("time", event->message.getTimeStamp());
+            noteOn->setProperty("timestamp", event->message.getTimeStamp());
             events.add(var(noteOn));
         }
         else if (event->message.isNoteOff())
@@ -873,7 +876,7 @@ bool Player::play()
             noteOff->setProperty("channel", event->message.getChannel());
             noteOff->setProperty("note", event->message.getNoteNumber());
             noteOff->setProperty("velocity", 0);
-            noteOff->setProperty("time", event->message.getTimeStamp());
+            noteOff->setProperty("timestamp", event->message.getTimeStamp());
             events.add(var(noteOff));
         }
         else if (event->message.isController())
@@ -883,7 +886,7 @@ bool Player::play()
             cc->setProperty("channel", event->message.getChannel());
             cc->setProperty("controller", event->message.getControllerNumber());
             cc->setProperty("value", event->message.getControllerValue());
-            cc->setProperty("time", event->message.getTimeStamp());
+            cc->setProperty("timestamp", event->message.getTimeStamp());
             events.add(var(cc));
         }
         else if (event->message.isProgramChange())
@@ -892,7 +895,7 @@ bool Player::play()
             pc->setProperty("type", "program_change");
             pc->setProperty("channel", event->message.getChannel());
             pc->setProperty("program", event->message.getProgramChangeNumber());
-            pc->setProperty("time", event->message.getTimeStamp());
+            pc->setProperty("timestamp", event->message.getTimeStamp());
             events.add(var(pc));
         }
     }
@@ -905,8 +908,27 @@ bool Player::play()
     
     if (result)
     {
+        // Calculate the duration of the pattern
+        double duration = currentPattern->getEndTime();
+        
         std::cout << "Player::play - Started playback of pattern with " 
-                  << currentPattern->getNumEvents() << " events" << std::endl;
+                  << currentPattern->getNumEvents() << " events"
+                  << ", duration: " << duration << " seconds"
+                  << ", tempo: " << patternTempo << " BPM" << std::endl;
+        
+        // Log the first few events for debugging
+        int eventsToLog = std::min(8, currentPattern->getNumEvents());
+        for (int i = 0; i < eventsToLog; ++i)
+        {
+            auto event = currentPattern->getEventPointer(i);
+            juce::String eventType = event->message.isNoteOn() ? "Note On" : 
+                                    (event->message.isNoteOff() ? "Note Off" : "Other");
+            int noteNumber = event->message.isNoteOnOrOff() ? event->message.getNoteNumber() : -1;
+            
+            std::cout << "  Event " << i << ": " << eventType 
+                      << ", Note: " << noteNumber 
+                      << ", Time: " << event->message.getTimeStamp() << "s" << std::endl;
+        }
     }
     else
     {

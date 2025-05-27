@@ -2,6 +2,8 @@
 
 #include <JuceHeader.h>
 #include "../Core/PlayerManager.h"
+#include "../../Musician/Core/MusicPatternSystem.h"
+#include "../../Musician/Core/MusicPatternComponents.h"
 
 namespace covertracks {
 
@@ -32,8 +34,7 @@ public:
     // ChangeListener implementation
     void changeListenerCallback(ChangeBroadcaster* source) override;
     
-    // Load a pattern from a JSON file
-    var loadPatternFromFile(const File& file);
+
     
 private:
     // Reference to the player manager
@@ -42,19 +43,38 @@ private:
     // UI components
     Label titleLabel;
     ComboBox playerSelector;
+    ComboBox instrumentTypeSelector;
+    ComboBox patternSelector;
     TextButton playButton;
     TextButton stopButton;
     TextButton playAllButton;
     
-    // Currently selected player
-    Player* selectedPlayer = nullptr;
+    // Pattern visualization
+    TextEditor patternViewer;
     
-    // Currently loaded pattern
-    var currentPattern;
+    // Currently selected player and pattern
+    Player* selectedPlayer = nullptr;
+    std::shared_ptr<Chart> currentChart = nullptr;
+    
+    // Pattern system for managing hierarchical patterns
+    std::unique_ptr<MusicPatternSystem> patternSystem;
+    
+    // Helper methods
+    void createDefaultPatterns();
+    std::shared_ptr<Chart> createDrumPattern();
+    std::shared_ptr<Chart> createBassPattern();
+    std::shared_ptr<Chart> createPianoPattern();
+    std::shared_ptr<Chart> createGuitarPattern();
+    
+    void updatePatternViewer();
+    void playCurrentPattern();
+    
+
     
     // Helper methods
     void updatePlayerSelector();
-    void loadDefaultPattern();
+    void updateCurrentChart();
+    juce::String getMidiNoteName(int midiNoteNumber);
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PlayerModeComponent)
 };

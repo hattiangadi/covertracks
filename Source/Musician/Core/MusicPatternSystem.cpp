@@ -438,6 +438,54 @@ bool MusicPatternSystem::hasInstrumentDefinition(const String& name) const
     return instrumentDefinitions.find(name) != instrumentDefinitions.end();
 }
 
+std::shared_ptr<Chart> MusicPatternSystem::getChart(const String& id) const
+{
+    auto it = charts.find(id);
+    if (it != charts.end())
+    {
+        return it->second;
+    }
+    
+    // Return nullptr if chart not found
+    return nullptr;
+}
+
+std::shared_ptr<Section> MusicPatternSystem::getSection(const String& id) const
+{
+    auto it = sections.find(id);
+    if (it != sections.end())
+    {
+        return it->second;
+    }
+    
+    // Return nullptr if section not found
+    return nullptr;
+}
+
+std::shared_ptr<Phrase> MusicPatternSystem::getPhrase(const String& id) const
+{
+    auto it = phrases.find(id);
+    if (it != phrases.end())
+    {
+        return it->second;
+    }
+    
+    // Return nullptr if phrase not found
+    return nullptr;
+}
+
+std::shared_ptr<Bar> MusicPatternSystem::getPattern(const String& id) const
+{
+    auto it = patterns.find(id);
+    if (it != patterns.end())
+    {
+        return it->second;
+    }
+    
+    // Return nullptr if pattern not found
+    return nullptr;
+}
+
 const InstrumentDefinition& MusicPatternSystem::getInstrumentDefinition(const String& name) const
 {
     static InstrumentDefinition emptyDef;

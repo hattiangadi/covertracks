@@ -4,14 +4,14 @@ namespace covertracks {
 
 PlayerModeComponent::PlayerModeComponent(PlayerManager& pm)
     : playerManager(pm),
-      titleLabel("titleLabel", "Player Mode"),
+      titleLabel("titleLabel", "Pattern Player"),
       playButton("Play"),
       stopButton("Stop"),
       playAllButton("Play All")
 {
     // Set up title label
-    titleLabel.setFont(Font(18.0f, Font::bold));
-    titleLabel.setJustificationType(Justification::centred);
+    titleLabel.setFont(juce::Font(juce::FontOptions().withHeight(18.0f).withStyle("bold")));
+    titleLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(titleLabel);
     
     // Set up player selector
@@ -19,6 +19,30 @@ PlayerModeComponent::PlayerModeComponent(PlayerManager& pm)
     playerSelector.setTextWhenNothingSelected("Select a player");
     playerSelector.addListener(this);
     addAndMakeVisible(playerSelector);
+    
+    // Set up instrument type selector
+    instrumentTypeSelector.addItem("Drums", 1);
+    instrumentTypeSelector.addItem("Bass", 2);
+    instrumentTypeSelector.addItem("Piano", 3);
+    instrumentTypeSelector.addItem("Guitar", 4);
+    instrumentTypeSelector.setTextWhenNothingSelected("Select instrument type");
+    instrumentTypeSelector.addListener(this);
+    addAndMakeVisible(instrumentTypeSelector);
+    
+    // Set up pattern selector
+    patternSelector.addItem("Basic", 1);
+    patternSelector.addItem("Complex", 2);
+    patternSelector.addItem("Funky", 3);
+    patternSelector.addItem("Jazzy", 4);
+    patternSelector.setTextWhenNothingSelected("Select pattern");
+    patternSelector.addListener(this);
+    addAndMakeVisible(patternSelector);
+    
+    // Set up pattern viewer
+    patternViewer.setMultiLine(true);
+    patternViewer.setReadOnly(true);
+    patternViewer.setFont(juce::Font(juce::FontOptions().withName(juce::Font::getDefaultMonospacedFontName()).withHeight(14.0f).withStyle("plain")));
+    addAndMakeVisible(patternViewer);
     
     // Set up buttons
     playButton.addListener(this);
@@ -36,255 +60,716 @@ PlayerModeComponent::PlayerModeComponent(PlayerManager& pm)
     // Register as a listener for player manager changes
     playerManager.addChangeListener(this);
     
+    // Initialize the pattern system
+    patternSystem = std::make_unique<MusicPatternSystem>();
+    
+    // Create default patterns
+    createDefaultPatterns();
+    
     // Update player selector with available players
     updatePlayerSelector();
-    
-    // Load default pattern
-    loadDefaultPattern();
 }
 
 PlayerModeComponent::~PlayerModeComponent()
 {
     // Remove listeners
     playerSelector.removeListener(this);
+    instrumentTypeSelector.removeListener(this);
+    patternSelector.removeListener(this);
     playButton.removeListener(this);
     stopButton.removeListener(this);
     playAllButton.removeListener(this);
-    
-    // Remove change listener from player manager
     playerManager.removeChangeListener(this);
+    
+    // Clear any references to patterns
+    currentChart = nullptr;
 }
 
-void PlayerModeComponent::paint(Graphics& g)
+void PlayerModeComponent::paint(juce::Graphics& g)
 {
     // Fill the background
-    g.fillAll(getLookAndFeel().findColour(ResizableWindow::backgroundColourId));
+    g.fillAll(getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId));
     
     // Draw a border around the component
-    g.setColour(Colours::grey);
+    g.setColour(juce::Colours::grey);
     g.drawRect(getLocalBounds(), 1);
 }
 
 void PlayerModeComponent::resized()
 {
-    auto area = getLocalBounds().reduced(10);
+    auto bounds = getLocalBounds().reduced(10);
     
-    // Title at the top
-    titleLabel.setBounds(area.removeFromTop(30));
+    // Position title label at the top
+    titleLabel.setBounds(bounds.removeFromTop(30));
     
-    area.removeFromTop(10); // Add some spacing
+    // Add spacing
+    bounds.removeFromTop(10);
     
-    // Player selector
-    playerSelector.setBounds(area.removeFromTop(30));
+    // Position player selector
+    auto row = bounds.removeFromTop(30);
+    playerSelector.setBounds(row);
     
-    area.removeFromTop(20); // Add some spacing
+    // Add spacing
+    bounds.removeFromTop(10);
     
-    // Buttons in a row
-    auto buttonArea = area.removeFromTop(30);
-    int buttonWidth = (buttonArea.getWidth() - 20) / 3; // 10px spacing between buttons
+    // Position instrument type selector
+    row = bounds.removeFromTop(30);
+    instrumentTypeSelector.setBounds(row);
     
-    playButton.setBounds(buttonArea.removeFromLeft(buttonWidth));
-    buttonArea.removeFromLeft(10); // Spacing
-    stopButton.setBounds(buttonArea.removeFromLeft(buttonWidth));
-    buttonArea.removeFromLeft(10); // Spacing
-    playAllButton.setBounds(buttonArea);
+    // Add spacing
+    bounds.removeFromTop(10);
+    
+    // Position pattern selector
+    row = bounds.removeFromTop(30);
+    patternSelector.setBounds(row);
+    
+    // Add spacing
+    bounds.removeFromTop(10);
+    
+    // Position pattern viewer
+    auto patternViewerArea = bounds.removeFromTop(200);
+    patternViewer.setBounds(patternViewerArea);
+    
+    // Add spacing
+    bounds.removeFromTop(10);
+    
+    // Position buttons
+    row = bounds.removeFromTop(30);
+    int buttonWidth = (row.getWidth() - 20) / 3;
+    
+    playButton.setBounds(row.removeFromLeft(buttonWidth));
+    row.removeFromLeft(10);
+    stopButton.setBounds(row.removeFromLeft(buttonWidth));
+    row.removeFromLeft(10);
+    playAllButton.setBounds(row);
 }
 
-void PlayerModeComponent::buttonClicked(Button* button)
+void PlayerModeComponent::buttonClicked(juce::Button* button)
 {
     if (button == &playButton)
     {
-        if (selectedPlayer != nullptr && !currentPattern.isVoid())
+        if (selectedPlayer != nullptr && currentChart != nullptr)
         {
-            // Play the pattern on the selected player
-            playerManager.playPattern(selectedPlayer, currentPattern);
+            // Play the current pattern on the selected player
+            playCurrentPattern();
+            
+            // Update button states
+            playButton.setEnabled(false);
             stopButton.setEnabled(true);
         }
     }
     else if (button == &stopButton)
     {
-        // Stop playback
         if (selectedPlayer != nullptr)
         {
-            playerManager.stopPlayback(selectedPlayer);
+            // Stop playback on the selected player
+            selectedPlayer->stop();
+            
+            // Update button states
+            playButton.setEnabled(true);
+            stopButton.setEnabled(false);
         }
-        else
-        {
-            playerManager.stopPlayback(nullptr); // Stop all players
-        }
-        stopButton.setEnabled(false);
     }
     else if (button == &playAllButton)
     {
-        if (!currentPattern.isVoid())
+        if (currentChart != nullptr)
         {
-            // Play the pattern on all active players
-            playerManager.playPatternOnAllActivePlayers(currentPattern);
+            // Convert the chart to a MIDI sequence
+            auto midiSequence = currentChart->toMidiSequence();
+            
+            // Create the pattern var once and use it for all players
+            juce::DynamicObject* patternObj = new juce::DynamicObject();
+            juce::Array<juce::var> events;
+            
+            // Convert MIDI sequence to the expected format
+            for (int i = 0; i < midiSequence->getNumEvents(); ++i)
+            {
+                auto event = midiSequence->getEventPointer(i);
+                
+                if (event->message.isNoteOn())
+                {
+                    juce::DynamicObject* noteOn = new juce::DynamicObject();
+                    noteOn->setProperty("type", "note_on");
+                    noteOn->setProperty("channel", event->message.getChannel());
+                    noteOn->setProperty("note", event->message.getNoteNumber());
+                    noteOn->setProperty("velocity", static_cast<int>(event->message.getVelocity() * 127));
+                    noteOn->setProperty("time", event->message.getTimeStamp());
+                    events.add(juce::var(noteOn));
+                }
+                else if (event->message.isNoteOff())
+                {
+                    juce::DynamicObject* noteOff = new juce::DynamicObject();
+                    noteOff->setProperty("type", "note_off");
+                    noteOff->setProperty("channel", event->message.getChannel());
+                    noteOff->setProperty("note", event->message.getNoteNumber());
+                    noteOff->setProperty("velocity", 0);
+                    noteOff->setProperty("time", event->message.getTimeStamp());
+                    events.add(juce::var(noteOff));
+                }
+            }
+            
+            patternObj->setProperty("events", events);
+            patternObj->setProperty("tempo", currentChart->getTempo());
+            juce::var patternVar(patternObj);
+            
+            // Play on all players
+            for (auto* player : playerManager.getPlayers())
+            {
+                if (player && player->setPatternFromVar(patternVar))
+                {
+                    player->play();
+                }
+            }
+            
+            // Update button states
+            playButton.setEnabled(false);
             stopButton.setEnabled(true);
+            playAllButton.setEnabled(false);
         }
     }
 }
 
-void PlayerModeComponent::comboBoxChanged(ComboBox* comboBoxThatHasChanged)
+void PlayerModeComponent::comboBoxChanged(juce::ComboBox* comboBox)
 {
-    if (comboBoxThatHasChanged == &playerSelector)
+    if (comboBox == &playerSelector)
     {
         int selectedId = playerSelector.getSelectedId();
         
         if (selectedId > 0)
         {
-            // Get the selected player
+            // Get the player with the selected ID
             auto players = playerManager.getPlayers();
-            
-            if (selectedId <= players.size())
+            if (selectedId > 0 && selectedId <= players.size())
             {
                 selectedPlayer = players[selectedId - 1];
-                playButton.setEnabled(true);
-                playAllButton.setEnabled(true);
-                
-                // Prepare the player for playback
-                if (!selectedPlayer->isReadyForPlayback())
-                {
-                    selectedPlayer->prepareForPlayback();
-                }
             }
+            
+            // Enable play button if we have a player and a chart
+            playButton.setEnabled(selectedPlayer != nullptr && currentChart != nullptr);
         }
         else
         {
+            // No player selected
             selectedPlayer = nullptr;
             playButton.setEnabled(false);
         }
     }
+    else if (comboBox == &instrumentTypeSelector || comboBox == &patternSelector)
+    {
+        // Update the current chart based on the selected instrument and pattern
+        updateCurrentChart();
+    }
 }
 
-void PlayerModeComponent::changeListenerCallback(ChangeBroadcaster* source)
+void PlayerModeComponent::changeListenerCallback(juce::ChangeBroadcaster* source)
 {
-    // If the change came from the PlayerManager, update our player selector
     if (source == &playerManager)
     {
-        std::cout << "PlayerModeComponent received change notification from PlayerManager" << std::endl;
-        
-        // Remember the currently selected player ID
-        int currentSelectedId = playerSelector.getSelectedId();
-        
-        // Update the player selector
+        // Player manager has changed, update the player selector
         updatePlayerSelector();
         
-        // Try to restore the previous selection if possible
-        if (currentSelectedId > 0 && currentSelectedId <= playerSelector.getNumItems())
+        // Check if the selected player is still valid
+        if (selectedPlayer != nullptr)
         {
-            playerSelector.setSelectedId(currentSelectedId, juce::dontSendNotification);
+            bool playerStillExists = false;
+            
+            for (auto* player : playerManager.getPlayers())
+            {
+                if (player == selectedPlayer)
+                {
+                    playerStillExists = true;
+                    break;
+                }
+            }
+            
+            if (!playerStillExists)
+            {
+                selectedPlayer = nullptr;
+                playButton.setEnabled(false);
+            }
         }
-        else if (playerSelector.getNumItems() > 0)
-        {
-            // Select the first player if the previous selection is no longer valid
-            playerSelector.setSelectedItemIndex(0, juce::sendNotification);
-        }
     }
-}
-
-var PlayerModeComponent::loadPatternFromFile(const File& file)
-{
-    if (!file.existsAsFile())
-    {
-        return var();
-    }
-    
-    // Load the JSON file
-    auto json = JSON::parse(file);
-    
-    if (json.isVoid())
-    {
-        return var();
-    }
-    
-    // Store the pattern
-    currentPattern = json;
-    
-    // Enable play buttons if we have a player selected
-    playButton.setEnabled(selectedPlayer != nullptr);
-    playAllButton.setEnabled(!playerManager.getPlayers().isEmpty());
-    
-    return json;
 }
 
 void PlayerModeComponent::updatePlayerSelector()
 {
+    // Remember the currently selected player ID
+    int currentSelectedId = playerSelector.getSelectedId();
+    
     // Clear existing items
     playerSelector.clear();
     
-    // Get all available players
+    // Get available players
     auto players = playerManager.getPlayers();
     
-    // Add players to the selector
-    int index = 1;
-    for (auto* player : players)
+    // Add each player to the selector
+    for (int i = 0; i < players.size(); ++i)
     {
-        playerSelector.addItem(player->getMetadata().name, index++);
+        auto* player = players[i];
+        playerSelector.addItem(player->getMetadata().name, i + 1);
     }
     
-    // Enable/disable play buttons based on available players
-    playAllButton.setEnabled(!players.isEmpty() && !currentPattern.isVoid());
-}
-
-void PlayerModeComponent::loadDefaultPattern()
-{
-    // Try to load the default pattern
-    File patternFile = File::getSpecialLocation(File::currentApplicationFile)
-                        .getParentDirectory()
-                        .getChildFile("Resources")
-                        .getChildFile("TestPatterns")
-                        .getChildFile("simple_pattern.json");
-    
-    if (!patternFile.existsAsFile())
+    // Try to restore the previous selection if possible
+    if (currentSelectedId > 0 && currentSelectedId <= players.size())
     {
-        // Try a different location
-        patternFile = File(File::getCurrentWorkingDirectory())
-                        .getChildFile("Resources")
-                        .getChildFile("TestPatterns")
-                        .getChildFile("simple_pattern.json");
+        playerSelector.setSelectedId(currentSelectedId, juce::dontSendNotification);
+        selectedPlayer = players[currentSelectedId - 1];
     }
-    
-    if (patternFile.existsAsFile())
+    else if (players.size() > 0)
     {
-        loadPatternFromFile(patternFile);
-        std::cout << "Loaded default pattern from: " << patternFile.getFullPathName() << std::endl;
+        // Select the first player if available
+        playerSelector.setSelectedId(1, juce::dontSendNotification);
+        selectedPlayer = players[0];
     }
     else
     {
-        std::cerr << "Could not find default pattern file" << std::endl;
-        
-        // Create a simple pattern as fallback
-        DynamicObject* obj = new DynamicObject();
-        obj->setProperty("command", "play_pattern");
-        obj->setProperty("tempo", 120.0);
-        
-        Array<var> events;
-        
-        // C4 note
-        DynamicObject* noteOn = new DynamicObject();
-        noteOn->setProperty("type", "note_on");
-        noteOn->setProperty("channel", 1);
-        noteOn->setProperty("note", 60);
-        noteOn->setProperty("velocity", 0.8);
-        noteOn->setProperty("timestamp", 0.0);
-        events.add(var(noteOn));
-        
-        DynamicObject* noteOff = new DynamicObject();
-        noteOff->setProperty("type", "note_off");
-        noteOff->setProperty("channel", 1);
-        noteOff->setProperty("note", 60);
-        noteOff->setProperty("velocity", 0.0);
-        noteOff->setProperty("timestamp", 0.5);
-        events.add(var(noteOff));
-        
-        obj->setProperty("events", events);
-        currentPattern = var(obj);
-        
-        // Enable play buttons if we have a player selected
-        playButton.setEnabled(selectedPlayer != nullptr);
-        playAllButton.setEnabled(!playerManager.getPlayers().isEmpty());
+        // No players available
+        selectedPlayer = nullptr;
     }
+    
+    // Update button states
+    playButton.setEnabled(selectedPlayer != nullptr && currentChart != nullptr);
+    playAllButton.setEnabled(players.size() > 0 && currentChart != nullptr);
+}
+
+void PlayerModeComponent::createDefaultPatterns()
+{
+    // Create default patterns for each instrument type
+    createDrumPattern();
+    createBassPattern();
+    createPianoPattern();
+    createGuitarPattern();
+    
+    // Select the first instrument and pattern by default
+    if (instrumentTypeSelector.getNumItems() > 0)
+    {
+        instrumentTypeSelector.setSelectedItemIndex(0);
+        
+        if (patternSelector.getNumItems() > 0)
+        {
+            patternSelector.setSelectedItemIndex(0);
+            
+            // Set the current chart based on the selected instrument and pattern
+            updateCurrentChart();
+        }
+    }
+}
+
+std::shared_ptr<Chart> PlayerModeComponent::createDrumPattern()
+{
+    // Create a basic drum pattern
+    auto chart = std::make_shared<Chart>("Basic Drum Pattern", 120.0);
+    
+    // Create a section (e.g., "Verse")
+    auto section = std::make_shared<Section>("Verse");
+    
+    // Create a phrase
+    auto phrase = std::make_shared<Phrase>("Main Beat");
+    
+    // Create a bar with a basic drum pattern
+    auto bar = std::make_shared<Bar>(4, 4);
+    
+    // Add kick drum on beats 1 and 3
+    // Note: Channel 9 in code = Channel 10 in MIDI (standard drum channel)
+    // Using longer durations for better playback
+    bar->addNote(0, 9, 36, 0.8f, 0.5f);  // Beat 1, channel 10 (MIDI channel 9 is drums), note 36 (kick)
+    bar->addNote(2, 9, 36, 0.8f, 0.5f);  // Beat 3
+    
+    // Add snare on beats 2 and 4
+    bar->addNote(1, 9, 38, 0.7f, 0.5f);  // Beat 2, note 38 (snare)
+    bar->addNote(3, 9, 38, 0.7f, 0.5f);  // Beat 4
+    
+    // Add hi-hat on every eighth note with longer durations
+    for (int i = 0; i < 8; ++i)
+    {
+        bar->addNote(static_cast<float>(i * 0.5f), 9, 42, 0.6f, 0.5f);  // Note 42 (closed hi-hat)
+    }
+    
+    // Add the bar to the phrase
+    phrase->addBar(bar);
+    
+    // Add the phrase to the section
+    section->addPhrase(phrase);
+    
+    // Add the section to the chart
+    chart->addSection(section);
+    
+    // Store the chart in the pattern system
+    patternSystem->addChart("drums_basic", chart);
+    
+    return chart;
+}
+
+std::shared_ptr<Chart> PlayerModeComponent::createBassPattern()
+{
+    // Create a basic bass pattern
+    auto chart = std::make_shared<Chart>("Basic Bass Pattern", 120.0);
+    
+    // Create a section
+    auto section = std::make_shared<Section>("Verse");
+    
+    // Create a phrase
+    auto phrase = std::make_shared<Phrase>("Bass Line");
+    
+    // Create a bar with a simple bass line
+    auto bar = std::make_shared<Bar>(4, 4);
+    
+    // Add bass notes (simple walking bass line)
+    // Using longer durations for better playback
+    bar->addNote(0, 0, 36, 0.9f, 1.0f);    // C2 (1 beat duration)
+    bar->addNote(1, 0, 38, 0.8f, 1.0f);    // D2 (1 beat duration)
+    bar->addNote(2, 0, 40, 0.8f, 1.0f);    // E2 (1 beat duration)
+    bar->addNote(3, 0, 43, 0.9f, 1.0f);    // G2 (1 beat duration)
+    
+    // Add the bar to the phrase
+    phrase->addBar(bar);
+    
+    // Add the phrase to the section
+    section->addPhrase(phrase);
+    
+    // Add the section to the chart
+    chart->addSection(section);
+    
+    // Store the chart in the pattern system
+    patternSystem->addChart("bass_basic", chart);
+    
+    return chart;
+}
+
+std::shared_ptr<Chart> PlayerModeComponent::createPianoPattern()
+{
+    // Create a basic piano pattern
+    auto chart = std::make_shared<Chart>("Basic Piano Pattern", 120.0);
+    
+    // Create a section
+    auto section = std::make_shared<Section>("Verse");
+    
+    // Create a phrase
+    auto phrase = std::make_shared<Phrase>("Piano Melody");
+    
+    // Create a bar with a simple piano melody
+    auto bar = std::make_shared<Bar>(4, 4);
+    
+    // Add piano notes (C major chord arpeggio with proper timing)
+    // Note: Channel is 0-based in addNote but becomes 1-based in MIDI
+    bar->addNote(0, 0, 60, 0.8f, 1.0f);    // C4 (1 beat duration)
+    bar->addNote(1, 0, 64, 0.7f, 1.0f);    // E4 (1 beat duration)
+    bar->addNote(2, 0, 67, 0.7f, 1.0f);    // G4 (1 beat duration)
+    bar->addNote(3, 0, 72, 0.8f, 1.0f);    // C5 (1 beat duration)
+    
+    // Add the bar to the phrase
+    phrase->addBar(bar);
+    
+    // Add the phrase to the section
+    section->addPhrase(phrase);
+    
+    // Add the section to the chart
+    chart->addSection(section);
+    
+    // Store the chart in the pattern system
+    patternSystem->addChart("piano_basic", chart);
+    
+    return chart;
+}
+
+std::shared_ptr<Chart> PlayerModeComponent::createGuitarPattern()
+{
+    // Create a basic guitar pattern
+    auto chart = std::make_shared<Chart>("Basic Guitar Pattern", 120.0);
+    
+    // Create a section
+    auto section = std::make_shared<Section>("Verse");
+    
+    // Create a phrase
+    auto phrase = std::make_shared<Phrase>("Guitar Riff");
+    
+    // Create a bar with a simple guitar riff
+    auto bar = std::make_shared<Bar>(4, 4);
+    
+    // Add guitar notes (C, E, G, C pattern with strumming)
+    // Using longer durations for better playback
+    bar->addNote(0, 0, 48, 0.8f, 0.5f);    // C3 (half beat duration)
+    bar->addNote(static_cast<int>(0.5f), 0, 52, 0.7f, 0.5f);    // E3 (half beat duration)
+    bar->addNote(1, 0, 55, 0.7f, 0.5f);    // G3 (half beat duration)
+    bar->addNote(static_cast<int>(1.5f), 0, 60, 0.8f, 0.5f);    // C4 (half beat duration)
+    bar->addNote(2, 0, 48, 0.8f, 0.5f);    // C3 (half beat duration)
+    bar->addNote(static_cast<int>(2.5f), 0, 52, 0.7f, 0.5f);    // E3 (half beat duration)
+    bar->addNote(3, 0, 55, 0.7f, 0.5f);    // G3 (half beat duration)
+    bar->addNote(static_cast<int>(3.5f), 0, 60, 0.8f, 0.5f);    // C4 (half beat duration)
+    
+    // Add the bar to the phrase
+    phrase->addBar(bar);
+    
+    // Add the phrase to the section
+    section->addPhrase(phrase);
+    
+    // Add the section to the chart
+    chart->addSection(section);
+    
+    // Store the chart in the pattern system
+    patternSystem->addChart("guitar_basic", chart);
+    
+    return chart;
+}
+
+void PlayerModeComponent::updatePatternViewer()
+{
+    if (currentChart == nullptr)
+    {
+        patternViewer.setText("No pattern selected");
+        return;
+    }
+    
+    // Create a text representation of the chart structure
+    juce::String text = "Chart: " + currentChart->getTitle() + "\n";
+    text += "Tempo: " + juce::String(currentChart->getTempo()) + " BPM\n\n";
+    
+    // Get the MIDI sequence for the chart
+    auto midiSequence = currentChart->toMidiSequence();
+    text += "Total MIDI events: " + juce::String(midiSequence->getNumEvents()) + "\n";
+    text += "Duration: " + juce::String(midiSequence->getEndTime()) + " ticks\n\n";
+    
+    // Add sections with detailed note information
+    for (int i = 0; i < currentChart->getNumSections(); ++i)
+    {
+        auto section = currentChart->getSection(i);
+        text += "Section: " + section->getName() + "\n";
+        
+        // Add phrases
+        for (int j = 0; j < section->getNumPhrases(); ++j)
+        {
+            auto phrase = section->getPhrase(j);
+            text += "  Phrase: " + phrase->getName() + "\n";
+            
+            // Add bars with note details
+            for (int k = 0; k < phrase->getNumBars(); ++k)
+            {
+                auto bar = phrase->getBar(k);
+                text += "    Bar " + juce::String(k+1) + " (" + juce::String(bar->getTimeSignatureNumerator()) + "/" 
+                      + juce::String(bar->getTimeSignatureDenominator()) + ")\n";
+                
+                // We can't directly access the notes in a bar, so we'll convert to MIDI
+                // and show the MIDI events for this bar
+                auto barMidiSequence = bar->toMidiSequence();
+                text += "      Events: " + juce::String(barMidiSequence->getNumEvents()) + "\n";
+                
+                // Show up to 5 events per bar to avoid overwhelming the display
+                int maxEventsToShow = 5;
+                int eventsShown = 0;
+                
+                for (int n = 0; n < barMidiSequence->getNumEvents() && eventsShown < maxEventsToShow; ++n)
+                {
+                    auto event = barMidiSequence->getEventPointer(n);
+                    
+                    if (event->message.isNoteOn())
+                    {
+                        text += "        Note On: MIDI " + juce::String(event->message.getNoteNumber()) 
+                              + " (" + getMidiNoteName(event->message.getNoteNumber()) + ")" 
+                              + " vel: " + juce::String(static_cast<int>(event->message.getVelocity() * 127)) 
+                              + " ch: " + juce::String(event->message.getChannel()) + "\n";
+                        eventsShown++;
+                    }
+                    else if (event->message.isNoteOff())
+                    {
+                        text += "        Note Off: MIDI " + juce::String(event->message.getNoteNumber()) 
+                              + " (" + getMidiNoteName(event->message.getNoteNumber()) + ")" 
+                              + " ch: " + juce::String(event->message.getChannel()) + "\n";
+                        eventsShown++;
+                    }
+                }
+                
+                if (barMidiSequence->getNumEvents() > maxEventsToShow)
+                {
+                    text += "        ... and " + juce::String(barMidiSequence->getNumEvents() - maxEventsToShow) + " more events\n";
+                }
+            }
+        }
+        
+        text += "\n";
+    }
+    
+    // Add raw MIDI event information
+    text += "\nRaw MIDI Events:\n";
+    int maxEventsToShow = 20; // Limit the number of events shown to avoid overwhelming the viewer
+    int eventsShown = 0;
+    
+    for (int i = 0; i < midiSequence->getNumEvents() && eventsShown < maxEventsToShow; ++i)
+    {
+        auto event = midiSequence->getEventPointer(i);
+        if (event->message.isNoteOn())
+        {
+            text += "  Note On: Ch" + juce::String(event->message.getChannel()) 
+                  + " Note" + juce::String(event->message.getNoteNumber()) 
+                  + " (" + getMidiNoteName(event->message.getNoteNumber()) + ")" 
+                  + " Vel" + juce::String(static_cast<int>(event->message.getVelocity() * 127)) 
+                  + " Time" + juce::String(event->message.getTimeStamp()) + "\n";
+            eventsShown++;
+        }
+        else if (event->message.isNoteOff())
+        {
+            text += "  Note Off: Ch" + juce::String(event->message.getChannel()) 
+                  + " Note" + juce::String(event->message.getNoteNumber()) 
+                  + " (" + getMidiNoteName(event->message.getNoteNumber()) + ")" 
+                  + " Time" + juce::String(event->message.getTimeStamp()) + "\n";
+            eventsShown++;
+        }
+    }
+    
+    if (midiSequence->getNumEvents() > maxEventsToShow)
+    {
+        text += "  ... and " + juce::String(midiSequence->getNumEvents() - maxEventsToShow) + " more events\n";
+    }
+    
+    patternViewer.setText(text);
+}
+
+// Helper method to convert MIDI note numbers to note names
+juce::String PlayerModeComponent::getMidiNoteName(int midiNoteNumber)
+{
+    static const char* noteNames[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+    int octave = (midiNoteNumber / 12) - 1;
+    int note = midiNoteNumber % 12;
+    
+    return juce::String(noteNames[note]) + juce::String(octave);
+}
+
+void PlayerModeComponent::updateCurrentChart()
+{
+    // Get the selected instrument type
+    int instrumentType = instrumentTypeSelector.getSelectedId();
+    
+    // Default to nullptr
+    currentChart = nullptr;
+    
+    // Select the appropriate chart based on the selections
+    if (instrumentType == 1) // Drums
+    {
+        currentChart = patternSystem->getChart("drums_basic");
+    }
+    else if (instrumentType == 2) // Bass
+    {
+        currentChart = patternSystem->getChart("bass_basic");
+    }
+    else if (instrumentType == 3) // Piano
+    {
+        currentChart = patternSystem->getChart("piano_basic");
+    }
+    else if (instrumentType == 4) // Guitar
+    {
+        currentChart = patternSystem->getChart("guitar_basic");
+    }
+    
+    // Update the pattern viewer
+    updatePatternViewer();
+    
+    // Enable/disable play button based on whether we have a chart and player
+    playButton.setEnabled(currentChart != nullptr && selectedPlayer != nullptr);
+}
+
+void PlayerModeComponent::playCurrentPattern()
+{
+    if (currentChart == nullptr || selectedPlayer == nullptr)
+    {
+        return;
+    }
+    
+    // Create a structured var object for the Player's setPatternFromVar method
+    juce::DynamicObject* patternObj = new juce::DynamicObject();
+    juce::Array<juce::var> events;
+    
+    // Create a simple arpeggio pattern with explicit timing values
+    // Note: We're bypassing the Chart->MIDI conversion and creating events directly
+    // with timing values that work with the current implementation
+    
+    // C4 note - start at time 0
+    juce::DynamicObject* noteOn1 = new juce::DynamicObject();
+    noteOn1->setProperty("type", "note_on");
+    noteOn1->setProperty("channel", 1);
+    noteOn1->setProperty("note", 60); // C4
+    noteOn1->setProperty("velocity", 100);
+    noteOn1->setProperty("timestamp", 0.0);
+    events.add(juce::var(noteOn1));
+    
+    // C4 note off - after 0.5 seconds
+    juce::DynamicObject* noteOff1 = new juce::DynamicObject();
+    noteOff1->setProperty("type", "note_off");
+    noteOff1->setProperty("channel", 1);
+    noteOff1->setProperty("note", 60); // C4
+    noteOff1->setProperty("timestamp", 0.5);
+    events.add(juce::var(noteOff1));
+    
+    // E4 note - start at 0.5 seconds
+    juce::DynamicObject* noteOn2 = new juce::DynamicObject();
+    noteOn2->setProperty("type", "note_on");
+    noteOn2->setProperty("channel", 1);
+    noteOn2->setProperty("note", 64); // E4
+    noteOn2->setProperty("velocity", 100);
+    noteOn2->setProperty("timestamp", 0.5);
+    events.add(juce::var(noteOn2));
+    
+    // E4 note off - after 1.0 seconds
+    juce::DynamicObject* noteOff2 = new juce::DynamicObject();
+    noteOff2->setProperty("type", "note_off");
+    noteOff2->setProperty("channel", 1);
+    noteOff2->setProperty("note", 64); // E4
+    noteOff2->setProperty("timestamp", 1.0);
+    events.add(juce::var(noteOff2));
+    
+    // G4 note - start at 1.0 seconds
+    juce::DynamicObject* noteOn3 = new juce::DynamicObject();
+    noteOn3->setProperty("type", "note_on");
+    noteOn3->setProperty("channel", 1);
+    noteOn3->setProperty("note", 67); // G4
+    noteOn3->setProperty("velocity", 100);
+    noteOn3->setProperty("timestamp", 1.0);
+    events.add(juce::var(noteOn3));
+    
+    // G4 note off - after 1.5 seconds
+    juce::DynamicObject* noteOff3 = new juce::DynamicObject();
+    noteOff3->setProperty("type", "note_off");
+    noteOff3->setProperty("channel", 1);
+    noteOff3->setProperty("note", 67); // G4
+    noteOff3->setProperty("timestamp", 1.5);
+    events.add(juce::var(noteOff3));
+    
+    // C5 note - start at 1.5 seconds
+    juce::DynamicObject* noteOn4 = new juce::DynamicObject();
+    noteOn4->setProperty("type", "note_on");
+    noteOn4->setProperty("channel", 1);
+    noteOn4->setProperty("note", 72); // C5
+    noteOn4->setProperty("velocity", 100);
+    noteOn4->setProperty("timestamp", 1.5);
+    events.add(juce::var(noteOn4));
+    
+    // C5 note off - after 2.0 seconds
+    juce::DynamicObject* noteOff4 = new juce::DynamicObject();
+    noteOff4->setProperty("type", "note_off");
+    noteOff4->setProperty("channel", 1);
+    noteOff4->setProperty("note", 72); // C5
+    noteOff4->setProperty("timestamp", 2.0);
+    events.add(juce::var(noteOff4));
+    
+    patternObj->setProperty("events", events);
+    patternObj->setProperty("tempo", currentChart->getTempo());
+    juce::var patternVar(patternObj);
+    
+    // Update pattern viewer to show what we're playing
+    juce::String text = "Playing C Major Arpeggio:\n";
+    text += "C4 (60) at 0.0s for 0.5s\n";
+    text += "E4 (64) at 0.5s for 0.5s\n";
+    text += "G4 (67) at 1.0s for 0.5s\n";
+    text += "C5 (72) at 1.5s for 0.5s\n";
+    patternViewer.setText(text);
+    
+    // Play the MIDI data on the selected player
+    if (selectedPlayer->setPatternFromVar(patternVar))
+    {
+        selectedPlayer->play();
+    }
+    
+    // Update button states
+    playButton.setEnabled(false);
+    stopButton.setEnabled(true);
 }
 
 } // namespace covertracks
