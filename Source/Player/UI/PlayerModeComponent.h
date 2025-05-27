@@ -3,6 +3,7 @@
 #include <JuceHeader.h>
 #include "../Core/PlayerManager.h"
 #include "../../Musician/Core/MusicPatternSystem.h"
+#include "../../Musician/Core/PatternParser.h"
 #include "../../Musician/Core/MusicPatternComponents.h"
 
 namespace covertracks {
@@ -48,6 +49,7 @@ private:
     TextButton playButton;
     TextButton stopButton;
     TextButton playAllButton;
+    ToggleButton patternModeToggle;
     
     // Pattern visualization
     TextEditor patternViewer;
@@ -59,6 +61,10 @@ private:
     // Pattern system for managing hierarchical patterns
     std::unique_ptr<MusicPatternSystem> patternSystem;
     
+    // Pattern-based playback
+    bool usePatternBasedPlayback = false;
+    std::unique_ptr<PatternParser> patternParser;
+    
     // Helper methods
     void createDefaultPatterns();
     std::shared_ptr<Chart> createDrumPattern(const juce::String& style);
@@ -68,6 +74,8 @@ private:
     
     void updatePatternViewer();
     void playCurrentPattern();
+    void playPatternBasedPattern();
+    std::shared_ptr<Chart> createPatternBasedChart(const juce::String& instrumentType, const juce::String& style);
     
 
     
