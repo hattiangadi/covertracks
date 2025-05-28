@@ -578,48 +578,69 @@ std::shared_ptr<Bar> MusicPatternSystem::createBarFromNotation(const String& not
         int midiNote = 60; // Default to Middle C
         int channel = 0;   // Default channel
         float velocity = event.velocity > 0 ? event.velocity / 127.0f : 0.8f;
+        
+        // Set more natural durations based on instrument type
         float duration = event.duration > 0 ? static_cast<float>(event.duration) : 0.25f;
+        
+        // Percussion instruments have short durations
+        bool isPercussion = false;
         
         // Map drum primitives
         if (event.primitive == "kick")
         {
             midiNote = 36; // Bass Drum 1
             channel = 9;   // Drum channel
+            isPercussion = true;
+            duration = 0.2f; // Short duration for kick
         }
         else if (event.primitive == "snare")
         {
             midiNote = 38; // Acoustic Snare
             channel = 9;
+            isPercussion = true;
+            duration = 0.15f; // Short duration for snare
         }
         else if (event.primitive == "closed_hat" || event.primitive == "hi_hat")
         {
             midiNote = 42; // Closed Hi-Hat
             channel = 9;
+            isPercussion = true;
+            duration = 0.1f; // Very short duration for closed hi-hat
         }
         else if (event.primitive == "open_hat")
         {
             midiNote = 46; // Open Hi-Hat
             channel = 9;
+            isPercussion = true;
+            duration = 0.3f; // Longer duration for open hi-hat
         }
         else if (event.primitive == "ride")
         {
             midiNote = 51; // Ride Cymbal 1
             channel = 9;
+            isPercussion = true;
+            duration = 0.4f; // Longer duration for ride
         }
         else if (event.primitive == "crash")
         {
             midiNote = 49; // Crash Cymbal 1
             channel = 9;
+            isPercussion = true;
+            duration = 0.8f; // Long duration for crash
         }
         else if (event.primitive == "tom1")
         {
             midiNote = 48; // Hi-Mid Tom
             channel = 9;
+            isPercussion = true;
+            duration = 0.25f; // Medium duration for toms
         }
         else if (event.primitive == "tom2")
         {
             midiNote = 45; // Low Tom
             channel = 9;
+            isPercussion = true;
+            duration = 0.3f; // Medium duration for toms
         }
         // Map note primitives (e.g., "C3", "E4", etc.)
         else if (event.primitive.length() >= 2)
@@ -656,6 +677,22 @@ std::shared_ptr<Bar> MusicPatternSystem::createBarFromNotation(const String& not
             if (baseNote >= 0)
             {
                 midiNote = (octave * 12) + baseNote;
+                
+                // Set more natural durations based on the octave (instrument type)
+                // Lower octaves (bass) have medium duration
+                // Middle octaves (guitar/piano) have longer durations
+                if (octave < 3) // Bass range
+                {
+                    duration = 0.6f + (Random::getSystemRandom().nextFloat() * 0.2f); // 0.6-0.8 seconds with slight randomization
+                }
+                else if (octave < 5) // Guitar/Piano range
+                {
+                    duration = 0.8f + (Random::getSystemRandom().nextFloat() * 0.4f); // 0.8-1.2 seconds with randomization
+                }
+                else // Higher octaves
+                {
+                    duration = 0.5f + (Random::getSystemRandom().nextFloat() * 0.3f); // 0.5-0.8 seconds with randomization
+                }
             }
         }
         
