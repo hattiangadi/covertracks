@@ -1527,7 +1527,113 @@ std::shared_ptr<Chart> PlayerModeComponent::createPatternBasedChart(const juce::
     
     auto phrase = std::make_shared<Phrase>();
     phrase->setName(style + " " + instrumentType + " Pattern");
+    
+    // Add multiple bars to create a longer pattern
+    const int numBars = 4; // Create a 4-bar pattern
+    
+    // First bar - use the original pattern
     phrase->addBar(bar);
+    
+    // Create variations for the remaining bars
+    for (int i = 1; i < numBars; ++i)
+    {
+        // For drums and bass, create variation patterns
+        if (instrumentType == "Drums" || instrumentType == "Bass")
+        {
+            // Create variation patterns based on the bar number
+            juce::String variationPattern;
+            
+            if (instrumentType == "Drums")
+            {
+                if (i == 1) // Second bar - similar to first but with a fill at the end
+                {
+                    if (style == "Basic")
+                        variationPattern = "4/4: [1: kick] [2: snare] [3: kick] [3.5: kick] [4: snare+closed_hat] [4.5: snare]";
+                    else if (style == "Complex")
+                        variationPattern = "4/4: [1: kick+closed_hat] [1.5: closed_hat] [2: snare+closed_hat] [2.5: closed_hat] [3: kick+closed_hat] [3.5: kick] [4: snare+closed_hat] [4.25: snare] [4.5: snare] [4.75: snare]";
+                    else if (style == "Funky")
+                        variationPattern = "4/4: [1: kick+closed_hat] [1.75: kick] [2: snare+closed_hat] [2.5: closed_hat] [3: kick+closed_hat] [3.25: kick] [3.5: kick] [4: snare+closed_hat] [4.5: closed_hat]";
+                    else if (style == "Jazzy")
+                        variationPattern = "4/4: [1: ride] [1.33: ride] [1.67: ride] [2: snare+ride] [2.33: ride] [2.67: ride] [3: ride] [3.33: ride] [3.67: ride] [4: snare+ride] [4.33: crash] [4.67: snare]";
+                }
+                else if (i == 2) // Third bar - variation
+                {
+                    if (style == "Basic")
+                        variationPattern = "4/4: [1: kick+closed_hat] [2: snare] [3: kick+closed_hat] [4: snare]";
+                    else if (style == "Complex")
+                        variationPattern = "4/4: [1: kick+closed_hat] [1.5: closed_hat] [2: snare+closed_hat] [2.5: closed_hat] [3: kick+closed_hat] [3.25: kick] [3.5: closed_hat] [4: snare+closed_hat] [4.5: closed_hat]";
+                    else if (style == "Funky")
+                        variationPattern = "4/4: [1: kick+closed_hat] [1.5: closed_hat] [2: snare+closed_hat] [2.5: closed_hat] [3: kick+closed_hat] [3.5: kick] [4: snare+closed_hat] [4.5: closed_hat]";
+                    else if (style == "Jazzy")
+                        variationPattern = "4/4: [1: ride] [1.33: ride] [1.67: ride] [2: snare+ride] [2.33: ride] [2.67: ride] [3: ride+kick] [3.33: ride] [3.67: ride+kick] [4: snare+ride] [4.33: ride] [4.67: ride]";
+                }
+                else // Fourth bar - fill or transition
+                {
+                    if (style == "Basic")
+                        variationPattern = "4/4: [1: kick] [2: snare] [3: kick] [3.5: snare] [4: snare] [4.25: snare] [4.5: snare] [4.75: snare]";
+                    else if (style == "Complex")
+                        variationPattern = "4/4: [1: kick+closed_hat] [1.5: closed_hat] [2: snare+closed_hat] [2.5: closed_hat] [3: tom1] [3.25: tom1] [3.5: tom2] [3.75: tom2] [4: snare] [4.25: snare] [4.5: snare] [4.75: crash]";
+                    else if (style == "Funky")
+                        variationPattern = "4/4: [1: kick+closed_hat] [1.5: kick] [2: snare+closed_hat] [2.5: kick] [3: kick] [3.25: kick] [3.5: snare] [3.75: kick] [4: snare] [4.25: snare] [4.5: snare] [4.75: snare]";
+                    else if (style == "Jazzy")
+                        variationPattern = "4/4: [1: ride] [1.33: ride] [1.67: ride] [2: snare+ride] [2.33: ride] [2.67: ride] [3: tom1] [3.33: tom1] [3.67: tom2] [4: snare] [4.33: snare] [4.67: crash]";
+                }
+            }
+            else if (instrumentType == "Bass")
+            {
+                if (i == 1) // Second bar - slight variation
+                {
+                    if (style == "Basic")
+                        variationPattern = "4/4: [1: C2] [2: G2] [3: E2] [4: G2]";
+                    else if (style == "Complex")
+                        variationPattern = "4/4: [1: C2] [1.5: E2] [2: G2] [2.5: A2] [3: E2] [3.5: A2] [4: G2] [4.5: E2]";
+                    else if (style == "Funky")
+                        variationPattern = "4/4: [1: C2] [1.75: C2] [2: E2] [2.5: G2] [3: A2] [3.5: G2] [4: E2] [4.5: C2]";
+                    else if (style == "Jazzy")
+                        variationPattern = "4/4: [1: C2] [1.33: E2] [1.67: G2] [2: Bb2] [2.33: A2] [2.67: G2] [3: E2] [3.33: D2] [3.67: C2] [4: D2] [4.33: E2] [4.67: G2]";
+                }
+                else if (i == 2) // Third bar - different chord or pattern
+                {
+                    if (style == "Basic")
+                        variationPattern = "4/4: [1: F2] [2: C3] [3: F2] [4: C3]";
+                    else if (style == "Complex")
+                        variationPattern = "4/4: [1: F2] [1.5: A2] [2: C3] [2.5: D3] [3: F2] [3.5: D3] [4: C3] [4.5: A2]";
+                    else if (style == "Funky")
+                        variationPattern = "4/4: [1: F2] [1.75: F2] [2: A2] [2.5: C3] [3: F3] [3.5: E3] [4: D3] [4.5: C3]";
+                    else if (style == "Jazzy")
+                        variationPattern = "4/4: [1: F2] [1.33: A2] [1.67: C3] [2: E3] [2.33: D3] [2.67: C3] [3: Bb2] [3.33: A2] [3.67: G2] [4: F2] [4.33: G2] [4.67: A2]";
+                }
+                else // Fourth bar - return to root or transition
+                {
+                    if (style == "Basic")
+                        variationPattern = "4/4: [1: G2] [2: D3] [3: G2] [4: C2]";
+                    else if (style == "Complex")
+                        variationPattern = "4/4: [1: G2] [1.5: B2] [2: D3] [2.5: E3] [3: G2] [3.5: F2] [4: E2] [4.5: D2]";
+                    else if (style == "Funky")
+                        variationPattern = "4/4: [1: G2] [1.75: G2] [2: B2] [2.5: D3] [3: G3] [3.5: F3] [4: E3] [4.5: D3]";
+                    else if (style == "Jazzy")
+                        variationPattern = "4/4: [1: G2] [1.33: B2] [1.67: D3] [2: F3] [2.33: E3] [2.67: D3] [3: C3] [3.33: B2] [3.67: A2] [4: G2] [4.33: F2] [4.67: E2]";
+                }
+            }
+            
+            if (!variationPattern.isEmpty())
+            {
+                auto variationBar = patternSystem->createBarFromNotation(variationPattern);
+                phrase->addBar(variationBar);
+            }
+            else
+            {
+                // Fallback to the original bar if no variation defined
+                phrase->addBar(bar);
+            }
+        }
+        else
+        {
+            // For other instruments, just repeat the original bar for now
+            // In a more advanced implementation, we could create variations for piano and guitar too
+            phrase->addBar(bar);
+        }
+    }
     
     auto section = std::make_shared<Section>();
     section->setName(style + " Section");
@@ -1535,7 +1641,7 @@ std::shared_ptr<Chart> PlayerModeComponent::createPatternBasedChart(const juce::
     
     auto chart = std::make_shared<Chart>();
     chart->setTitle(style + " " + instrumentType + " Pattern");
-    chart->setTempo(120); // Default tempo
+    chart->setTempo(480); // Increase tempo to compensate for timing issues (4x faster)
     chart->addSection(section);
     
     return chart;

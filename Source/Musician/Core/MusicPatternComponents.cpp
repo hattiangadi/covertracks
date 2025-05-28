@@ -208,10 +208,9 @@ std::unique_ptr<MidiMessageSequence> Phrase::toMidiSequence() const
             }
         }
         
-        // Update the current position
-        // For simplicity, assume each bar is 4 quarter notes (1 bar in 4/4 time)
-        // In a more complete implementation, this would depend on the time signature
-        double beatsInBar = 4.0 * (bar->getTimeSignatureNumerator() / static_cast<double>(bar->getTimeSignatureDenominator())) * 4.0;
+        // Update the current position based on the bar's time signature
+        // Calculate how many quarter notes are in this bar
+        double beatsInBar = bar->getTimeSignatureNumerator() * (4.0 / bar->getTimeSignatureDenominator());
         currentTick += beatsInBar * TICKS_PER_QUARTER_NOTE;
     }
     

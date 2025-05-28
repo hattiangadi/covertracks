@@ -574,14 +574,94 @@ std::shared_ptr<Bar> MusicPatternSystem::createBarFromNotation(const String& not
     // Add the events to the bar
     for (const auto& event : events)
     {
-        // In a real implementation, you would map the primitive to a MIDI note
-        // and add it to the bar with the appropriate position, duration, etc.
-        // For simplicity, we'll just use a default mapping here
-        int midiNote = 60; // Middle C
+        // Map the primitive to a MIDI note
+        int midiNote = 60; // Default to Middle C
+        int channel = 0;   // Default channel
         float velocity = event.velocity > 0 ? event.velocity / 127.0f : 0.8f;
         float duration = event.duration > 0 ? static_cast<float>(event.duration) : 0.25f;
         
-        bar->addNote(static_cast<int>(event.position), 0, midiNote, velocity, duration);
+        // Map drum primitives
+        if (event.primitive == "kick")
+        {
+            midiNote = 36; // Bass Drum 1
+            channel = 9;   // Drum channel
+        }
+        else if (event.primitive == "snare")
+        {
+            midiNote = 38; // Acoustic Snare
+            channel = 9;
+        }
+        else if (event.primitive == "closed_hat" || event.primitive == "hi_hat")
+        {
+            midiNote = 42; // Closed Hi-Hat
+            channel = 9;
+        }
+        else if (event.primitive == "open_hat")
+        {
+            midiNote = 46; // Open Hi-Hat
+            channel = 9;
+        }
+        else if (event.primitive == "ride")
+        {
+            midiNote = 51; // Ride Cymbal 1
+            channel = 9;
+        }
+        else if (event.primitive == "crash")
+        {
+            midiNote = 49; // Crash Cymbal 1
+            channel = 9;
+        }
+        else if (event.primitive == "tom1")
+        {
+            midiNote = 48; // Hi-Mid Tom
+            channel = 9;
+        }
+        else if (event.primitive == "tom2")
+        {
+            midiNote = 45; // Low Tom
+            channel = 9;
+        }
+        // Map note primitives (e.g., "C3", "E4", etc.)
+        else if (event.primitive.length() >= 2)
+        {
+            // Check if it's a note name like C3, E4, etc.
+            String noteName = event.primitive.substring(0, 1);
+            int octave = event.primitive.substring(1).getIntValue();
+            
+            // Base note values (C = 0, D = 2, E = 4, etc.)
+            int baseNote = -1;
+            if (noteName == "C") baseNote = 0;
+            else if (noteName == "D") baseNote = 2;
+            else if (noteName == "E") baseNote = 4;
+            else if (noteName == "F") baseNote = 5;
+            else if (noteName == "G") baseNote = 7;
+            else if (noteName == "A") baseNote = 9;
+            else if (noteName == "B") baseNote = 11;
+            
+            // Check for sharps and flats
+            if (event.primitive.length() > 2)
+            {
+                if (event.primitive.substring(1, 2) == "#")
+                {
+                    baseNote += 1;
+                    octave = event.primitive.substring(2).getIntValue();
+                }
+                else if (event.primitive.substring(1, 2) == "b")
+                {
+                    baseNote -= 1;
+                    octave = event.primitive.substring(2).getIntValue();
+                }
+            }
+            
+            if (baseNote >= 0)
+            {
+                midiNote = (octave * 12) + baseNote;
+            }
+        }
+        
+        // Add the note to the bar - use the position directly without scaling
+        // This ensures the timing is preserved exactly as specified in the pattern
+        bar->addNote(static_cast<int>(event.position), channel, midiNote, velocity, duration);
     }
     
     return bar;
