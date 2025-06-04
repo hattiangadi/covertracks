@@ -10,6 +10,7 @@ namespace covertracks {
 
     class PlayerEditorComponent : public Component,
     public Button::Listener,
+    public ComboBox::Listener,
     public Timer,
     public MidiKeyboardStateListener,
     public MidiInputCallback
@@ -29,6 +30,7 @@ void resized() override;
 void paint(Graphics& g) override;
 void mouseDown(const MouseEvent& e) override;
 void buttonClicked(Button* button) override;
+void comboBoxChanged(ComboBox* comboBox) override;
 
 // Plugin creation and management
 void createPlugin(const PluginDescriptionAndPreference& desc, Point<int> pos);
@@ -70,6 +72,25 @@ TextButton saveButton;
 TextButton cancelButton;
 TextButton loadGraphButton;
 
+// Instrument capabilities UI
+Label capabilitiesLabel;
+ComboBox instrumentTypeCombo;
+Label instrumentTypeLabel;
+ComboBox capabilityTypeCombo;
+Label capabilityTypeLabel;
+
+// Note range controls
+Label noteRangeLabel;
+Slider minNoteSlider;
+Label minNoteLabel;
+Slider maxNoteSlider;
+Label maxNoteLabel;
+
+// Sound mapping controls
+Label soundMappingLabel;
+TextEditor soundMappingEditor;
+TextButton addPresetButton;
+
 // Graph editor
 std::unique_ptr<GraphDocumentComponent> graphEditor;
 
@@ -82,6 +103,12 @@ AudioEngine* audioEngine = nullptr;
 // Player state update methods
 void updatePlayerFromUI();
 void updateUIFromPlayer();
+
+// Instrument capabilities methods
+void setupCapabilitiesUI();
+void updateCapabilitiesUIVisibility();
+void updateCapabilitiesFromUI();
+void updateCapabilitiesInUI();
 
 // Timer callback
 void timerCallback() override;

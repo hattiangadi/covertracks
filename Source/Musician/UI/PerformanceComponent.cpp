@@ -1,6 +1,9 @@
 #include "PerformanceComponent.h"
 #include "../Core/Song.h"
 #include "../Core/MusicPatternComponents.h"
+#include "../Core/PatternParser.h"
+#include "../Core/MusicPatternSystem.h"
+#include "../../LLM/Core/PromptManager.h"
 
 namespace covertracks {
 
@@ -891,8 +894,15 @@ void PerformanceComponent::startGeneration()
             // Process the response
             juce::MessageManager::callAsync([this, i, role, response]()
             {
-                // Parse the response to get a MIDI pattern
-                auto pattern = ensembleManager->parseMIDIPattern(response);
+                // Parse the response to get a Chart, then convert to MIDI pattern
+                auto chart = parseJSONPatternFromResponse(response);
+                std::shared_ptr<juce::MidiMessageSequence> pattern = nullptr;
+                
+                if (chart != nullptr)
+                {
+                    // Convert Chart to MidiMessageSequence
+                    pattern = chart->toMidiSequence();
+                }
                 
                 if (pattern)
                 {
@@ -989,8 +999,15 @@ void PerformanceComponent::startGenerationForRole(const MusicianRole& role)
             // Process the response
             juce::MessageManager::callAsync([this, roleIndex, role, response]()
             {
-                // Parse the response to get a MIDI pattern
-                auto pattern = ensembleManager->parseMIDIPattern(response);
+                // Parse the response to get a Chart, then convert to MIDI pattern
+                auto chart = parseJSONPatternFromResponse(response);
+                std::shared_ptr<juce::MidiMessageSequence> pattern = nullptr;
+                
+                if (chart != nullptr)
+                {
+                    // Convert Chart to MidiMessageSequence
+                    pattern = chart->toMidiSequence();
+                }
                 
                 if (pattern)
                 {
@@ -1323,156 +1340,98 @@ juce::String PerformanceComponent::generateMusicianPrompt(const MusicianRole& ro
                                                         std::shared_ptr<Song> song,
                                                         const juce::String& performanceInstructions)
 {
-    juce::String prompt;
+    // Use PromptManager to create a proper music generation prompt
+    PromptManager promptManager;
     
-    // Add system context
-    prompt += "You are an expert musician who specializes in playing the " + role.instrument + ".\n";
-    prompt += "You are part of an ensemble and need to create a MIDI pattern for a song.\n";
-    prompt += "Please respond with a MIDI pattern in the following format:\n";
-    prompt += "```midi\n";
-    prompt += "<channel>:<note>:<velocity>:<start_time>:<duration>\n";
-    prompt += "```\n";
-    prompt += "For example:\n";
-    prompt += "```midi\n";
-    prompt += "1:C4:80:0:0.5\n";
-    prompt += "1:E4:80:0.5:0.5\n";
-    prompt += "1:G4:80:1:1\n";
-    prompt += "```\n";
-    prompt += "This represents a C major chord with the notes played sequentially.\n";
-    prompt += "Channel should be 1-16, note should be in scientific pitch notation (e.g., C4), velocity should be 0-127, start_time and duration are in beats.\n\n";
+    // Determine the musical style/genre from the performance
+    juce::String style = "Pop"; // Default
+    if (genreSelector.getSelectedId() > 0)
+    {
+        style = genreSelector.getText();
+    }
     
-    // Add detailed song and performance information
+    // Create instrument array with just this musician's instrument
+    juce::StringArray instruments;
+    instruments.add(role.instrument);
+    
+    // Get tempo from song or default
+    int tempo = song ? static_cast<int>(song->getTempo()) : 120;
+    
+    // Build comprehensive description including all performance context
+    juce::String description;
+    
+    // Add song information
     if (song)
     {
-        prompt += "Song Information:\n";
-        prompt += "Title: " + song->getTitle() + "\n";
-        prompt += "Tempo: " + juce::String(song->getTempo()) + " BPM\n";
-        
-        // Song description is not available in the Song class
-        
-        // Lyrics are not available in the Song class
+        description += "Song: " + song->getTitle() + "\n";
         
         // Add song structure if available
         juce::String songStructure = song->getSourceStructureJson();
         if (songStructure.isNotEmpty())
         {
-            prompt += "\nSong Structure:\n";
-            prompt += songStructure + "\n";
+            description += "Song Structure: " + songStructure + "\n";
         }
-        
-        prompt += "\n";
     }
     
-    // Add performance-specific attributes
-    prompt += "Performance Attributes:\n";
+    // Add performance attributes
+    juce::String key = (currentPerformance && currentPerformance->getKey().isNotEmpty()) 
+                      ? currentPerformance->getKey() : keySelector.getText();
+    description += "Key: " + key + "\n";
     
-    // Add key from the performance
-    if (currentPerformance && currentPerformance->getKey().isNotEmpty())
-    {
-        prompt += "Key: " + currentPerformance->getKey() + "\n";
-    }
-    else
-    {
-        prompt += "Key: " + keySelector.getText() + "\n";
-    }
+    juce::String mood = (currentPerformance && currentPerformance->getMood().isNotEmpty()) 
+                       ? currentPerformance->getMood() : moodSelector.getText();
+    description += "Mood: " + mood + "\n";
     
-    // Add genre from the performance
-    if (currentPerformance && currentPerformance->getGenre().isNotEmpty())
-    {
-        prompt += "Genre: " + currentPerformance->getGenre() + "\n";
-    }
-    else
-    {
-        prompt += "Genre: " + genreSelector.getText() + "\n";
-    }
+    // Add role-specific instructions
+    description += "Musician Role: " + role.name + " (" + role.instrument + ")\n";
+    description += "Musical Style: " + style + "\n";
     
-    // Add mood from the performance
-    if (currentPerformance && currentPerformance->getMood().isNotEmpty())
-    {
-        prompt += "Mood: " + currentPerformance->getMood() + "\n";
-    }
-    else
-    {
-        prompt += "Mood: " + moodSelector.getText() + "\n";
-    }
-    
-    prompt += "\n";
-    
-    // Add role information
-    prompt += "Your Role: " + role.name + "\n";
-    prompt += "Instrument: " + role.instrument + "\n\n";
-    
-    // Add performance instructions
+    // Add user instructions
     if (performanceInstructions.isNotEmpty())
     {
-        prompt += "Performance Instructions:\n";
-        prompt += performanceInstructions + "\n\n";
+        description += "Performance Instructions: " + performanceInstructions + "\n";
     }
     
-    // Add guidance for creating hierarchical musical structures
-    prompt += "Musical Structure Guidelines:\n";
-    prompt += "1. Organize your pattern into clear musical phrases and sections (e.g., intro, verse, chorus, bridge, outro).\n";
-    prompt += "2. Create motifs and themes that can be repeated and varied throughout the song.\n";
-    prompt += "3. Use appropriate rhythmic patterns for your instrument and the song's genre.\n";
-    prompt += "4. Consider dynamics (varying velocity) to add expressiveness.\n";
-    prompt += "5. Structure your part to complement other instruments in the ensemble.\n\n";
-    
-    // Instrument-specific guidance
+    // Add instrument-specific guidance to description
     if (role.instrument.containsIgnoreCase("bass"))
     {
-        prompt += "Bass-specific guidance:\n";
-        prompt += "- Focus on providing a solid rhythmic and harmonic foundation.\n";
-        prompt += "- Emphasize root notes on strong beats, with passing tones and fills where appropriate.\n";
-        prompt += "- Consider using walking bass lines, ostinatos, or riffs depending on the style.\n\n";
+        description += "\nBass Guidance: Provide solid rhythmic and harmonic foundation with root notes on strong beats, walking lines or riffs as appropriate for " + style + " style.\n";
     }
     else if (role.instrument.containsIgnoreCase("drum") || role.instrument.containsIgnoreCase("percussion"))
     {
-        prompt += "Percussion-specific guidance:\n";
-        prompt += "- Create consistent patterns for each section of the song.\n";
-        prompt += "- Use fills to transition between sections.\n";
-        prompt += "- Balance between keeping time and adding interest.\n\n";
+        description += "\nDrum Guidance: Create consistent patterns for each section, use fills for transitions, balance timekeeping with interest for " + style + " style.\n";
     }
     else if (role.instrument.containsIgnoreCase("guitar") || role.instrument.containsIgnoreCase("piano") || 
              role.instrument.containsIgnoreCase("keyboard"))
     {
-        prompt += "Harmonic instrument guidance:\n";
-        prompt += "- Balance between chordal accompaniment and melodic elements.\n";
-        prompt += "- Consider using arpeggios, chord voicings, and inversions for variety.\n";
-        prompt += "- Provide rhythmic support while leaving space for other instruments.\n\n";
+        description += "\nHarmonic Instrument Guidance: Balance chordal accompaniment with melodic elements, use arpeggios and chord voicings appropriate for " + style + " style.\n";
     }
     else if (role.instrument.containsIgnoreCase("lead") || 
              role.instrument.containsIgnoreCase("vocal") || 
              role.instrument.containsIgnoreCase("melody"))
     {
-        prompt += "Lead/Melody instrument guidance:\n";
-        prompt += "- Focus on creating memorable melodic phrases that complement the song structure.\n";
-        prompt += "- Use appropriate scales and modes for the song's key and style.\n";
-        prompt += "- Balance between active playing and rests.\n\n";
+        description += "\nLead/Melody Guidance: Create memorable melodic phrases using appropriate scales/modes for " + style + " style, balance activity with rests.\n";
     }
     
-    // Add final request
-    prompt += "Please create a MIDI pattern for your part in this song. The pattern should reflect the song structure and your role in the ensemble.\n";
-    prompt += "Be creative but appropriate for the style of the song. Your pattern should be musical and complement the other instruments in the ensemble.\n";
-    prompt += "Organize your pattern into clear musical sections (intro, verse, chorus, etc.) following the song structure provided.\n";
-    
-    return prompt;
+    // Use PromptManager to create the final prompt with our new JSON format
+    return promptManager.createMusicGenerationPrompt(style, instruments, tempo, description);
 }
 
-std::shared_ptr<juce::MidiMessageSequence> PerformanceComponent::parseMIDIPatternFromResponse(const juce::String& response)
+std::shared_ptr<Chart> PerformanceComponent::parseJSONPatternFromResponse(const juce::String& response)
 {
-    // Create a new MIDI message sequence
-    auto sequence = std::make_shared<juce::MidiMessageSequence>();
+    // Look for JSON pattern between ```json and ``` markers, or just raw JSON
+    juce::String jsonPattern = response.trim();
     
-    // Look for MIDI pattern between ```midi and ``` markers
-    int startIndex = response.indexOf(juce::StringRef("```midi"));
+    // Try to extract JSON from code blocks first
+    int startIndex = response.indexOf(juce::StringRef("```json"));
     if (startIndex == -1)
     {
-        startIndex = response.indexOf(juce::StringRef("```MIDI"));
+        startIndex = response.indexOf(juce::StringRef("```JSON"));
     }
     
     if (startIndex != -1)
     {
-        // Find the next newline character after the ```midi marker
+        // Find the next newline character after the ```json marker
         for (int i = startIndex; i < response.length(); ++i)
         {
             if (response[i] == '\n')
@@ -1483,61 +1442,49 @@ std::shared_ptr<juce::MidiMessageSequence> PerformanceComponent::parseMIDIPatter
         }
         
         // Find the closing ``` marker
-        int endIndex = -1;
-        juce::String closingMarker = "```";
-        for (int i = startIndex; i < response.length() - closingMarker.length() + 1; ++i)
-        {
-            if (response.substring(i, i + closingMarker.length()) == closingMarker)
-            {
-                endIndex = i;
-                break;
-            }
-        }
-        
+        juce::String remainingResponse = response.substring(startIndex);
+        int endIndex = remainingResponse.indexOf("```");
         if (endIndex != -1)
         {
-            // Extract the MIDI pattern
-            juce::String midiPattern = response.substring(startIndex, endIndex).trim();
+            endIndex += startIndex;
+        }
+        if (endIndex != -1)
+        {
+            jsonPattern = response.substring(startIndex, endIndex).trim();
+        }
+    }
+    else
+    {
+        // Try to find JSON by looking for opening and closing braces
+        int openBrace = response.indexOf("{");
+        int closeBrace = response.lastIndexOf("}");
+        
+        if (openBrace != -1 && closeBrace != -1 && closeBrace > openBrace)
+        {
+            jsonPattern = response.substring(openBrace, closeBrace + 1).trim();
+        }
+    }
+    
+    // If we found potential JSON, try to parse it using PatternParser
+    if (jsonPattern.isNotEmpty() && jsonPattern.startsWith("{"))
+    {
+        try
+        {
+            // Create a MusicPatternSystem for parsing
+            MusicPatternSystem patternSystem;
+            PatternParser parser(patternSystem);
             
-            // Parse each line of the MIDI pattern
-            juce::StringArray lines;
-            lines.addLines(midiPattern);
+            // Parse the JSON using our PatternParser
+            auto chart = parser.parseChart(jsonPattern);
             
-            for (const auto& line : lines)
+            if (chart != nullptr && chart->getNumSections() > 0)
             {
-                if (line.trim().isEmpty())
-                    continue;
-                
-                // Parse the line in format: channel:note:velocity:start_time:duration
-                juce::StringArray parts;
-                parts.addTokens(line, ":", "");
-                
-                if (parts.size() >= 5)
-                {
-                    int channel = parts[0].getIntValue();
-                    juce::String noteName = parts[1].trim();
-                    int velocity = parts[2].getIntValue();
-                    double startTime = parts[3].getDoubleValue();
-                    double duration = parts[4].getDoubleValue();
-                    
-                    // Convert note name to MIDI note number
-                    int noteNumber = getMidiNoteFromName(noteName);
-                    
-                    // Create note on message
-                    juce::MidiMessage noteOn = juce::MidiMessage::noteOn(channel, noteNumber, (float)velocity / 127.0f);
-                    noteOn.setTimeStamp(startTime);
-                    sequence->addEvent(noteOn);
-                    
-                    // Create note off message
-                    juce::MidiMessage noteOff = juce::MidiMessage::noteOff(channel, noteNumber);
-                    noteOff.setTimeStamp(startTime + duration);
-                    sequence->addEvent(noteOff);
-                }
+                return chart;
             }
-            
-            // Sort the sequence by timestamp
-            sequence->sort();
-            return sequence;
+        }
+        catch (...)
+        {
+            // If parsing fails, we'll fall through to return nullptr
         }
     }
     

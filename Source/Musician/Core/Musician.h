@@ -5,13 +5,13 @@
 #include "MusicPatternComponents.h"
 #include "Song.h"
 #include "../../LLM/Core/LLMClient.h"
-#include "../../LLM/Core/PromptManager.h"
 
 namespace covertracks {
 
 // Forward declarations
 class PatternGenerator;
 class MusicPatternSystem;
+class PromptManager;
 
 /**
  * @brief Core class for generating and managing musical patterns
@@ -124,7 +124,7 @@ public:
      * 
      * @return PromptManager& Reference to the prompt manager
      */
-    PromptManager& getPromptManager() { return promptManager; }
+    PromptManager& getPromptManager() { return *promptManager; }
     
     /**
      * @brief Get the pattern generator
@@ -183,7 +183,7 @@ private:
     
     // Music pattern generation
     std::unique_ptr<MusicPatternSystem> patternSystem;
-    PromptManager promptManager;
+    std::unique_ptr<PromptManager> promptManager;
     std::unique_ptr<PatternGenerator> patternGenerator;
     
     // Player interface

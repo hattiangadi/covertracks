@@ -3,6 +3,61 @@
 
 namespace covertracks {
 
+// InstrumentCapabilities implementation
+var InstrumentCapabilities::toVar() const
+{
+    DynamicObject* obj = new DynamicObject();
+    
+    obj->setProperty("type", static_cast<int>(type));
+    obj->setProperty("instrumentType", instrumentType);
+    obj->setProperty("minNote", minNote);
+    obj->setProperty("maxNote", maxNote);
+    
+    // Serialize sound mappings
+    DynamicObject* mappingsObj = new DynamicObject();
+    for (const auto& mapping : soundMappings)
+    {
+        mappingsObj->setProperty(mapping.first, mapping.second);
+    }
+    obj->setProperty("soundMappings", var(mappingsObj));
+    
+    return var(obj);
+}
+
+void InstrumentCapabilities::fromVar(const var& v)
+{
+    if (auto* obj = v.getDynamicObject())
+    {
+        // Get properties with default values
+        auto typeVar = obj->getProperty("type");
+        type = typeVar.isVoid() ? InstrumentCapabilityType::NoteRange : 
+              static_cast<InstrumentCapabilityType>(static_cast<int>(typeVar));
+              
+        auto instrumentTypeVar = obj->getProperty("instrumentType");
+        instrumentType = instrumentTypeVar.isVoid() ? String() : instrumentTypeVar.toString();
+        
+        auto minNoteVar = obj->getProperty("minNote");
+        minNote = minNoteVar.isVoid() ? 0 : static_cast<int>(minNoteVar);
+        
+        auto maxNoteVar = obj->getProperty("maxNote");
+        maxNote = maxNoteVar.isVoid() ? 127 : static_cast<int>(maxNoteVar);
+        
+        // Deserialize sound mappings
+        soundMappings.clear();
+        auto mappingsVar = obj->getProperty("soundMappings");
+        if (!mappingsVar.isVoid())
+        {
+            if (auto* mappingsObj = mappingsVar.getDynamicObject())
+            {
+                for (auto& prop : mappingsObj->getProperties())
+                {
+                    soundMappings[prop.name.toString()] = static_cast<int>(prop.value);
+                }
+            }
+        }
+    }
+}
+
 // PlayerMetadata implementation
 var PlayerMetadata::toVar() const
 {
@@ -13,6 +68,7 @@ var PlayerMetadata::toVar() const
     obj->setProperty("description", description);
     obj->setProperty("created", created.toISO8601(true));
     obj->setProperty("lastModified", lastModified.toISO8601(true));
+    obj->setProperty("capabilities", capabilities.toVar());
     
     return var(obj);
 }
@@ -27,6 +83,11 @@ void PlayerMetadata::fromVar(const var& v)
         
         created = Time::fromISO8601(obj->getProperty("created").toString());
         lastModified = Time::fromISO8601(obj->getProperty("lastModified").toString());
+        
+        if (auto capabilitiesVar = obj->getProperty("capabilities"))
+        {
+            capabilities.fromVar(capabilitiesVar);
+        }
     }
 }
 
@@ -1366,4 +1427,64 @@ std::unique_ptr<covertracks::Player> covertracks::Player::fromVar(const var& v, 
     return std::make_unique<Player>(String::toHexString(Random::getSystemRandom().nextInt()), 
                                    "Default Player", fm, kpl, engine);
 }
+
+// Static helper functions for creating instrument capabilities
+InstrumentCapabilities Player::createDrumCapabilities()
+{
+    InstrumentCapabilities capabilities;
+    capabilities.type = InstrumentCapabilityType::Mapping;
+    capabilities.instrumentType = "drums";
+    
+    // Standard GM percussion mapping
+    capabilities.soundMappings = {
+        {"kick", 36},           // Bass Drum 1
+        {"snare", 38},          // Acoustic Snare
+        {"hihat", 42},          // Closed Hi Hat
+        {"openHihat", 46},      // Open Hi-Hat
+        {"crash", 49},          // Crash Cymbal 1
+        {"ride", 51},           // Ride Cymbal 1
+        {"tom1", 50},           // High Tom
+        {"tom2", 47},           // Low-Mid Tom
+        {"tom3", 43},           // High Floor Tom
+        {"rimshot", 37},        // Side Stick
+        {"cowbell", 56},        // Cowbell
+        {"splash", 55}          // Splash Cymbal
+    };
+    
+    return capabilities;
+}
+
+InstrumentCapabilities Player::createPianoCapabilities(int minNote, int maxNote)
+{
+    InstrumentCapabilities capabilities;
+    capabilities.type = InstrumentCapabilityType::NoteRange;
+    capabilities.instrumentType = "piano";
+    capabilities.minNote = minNote;
+    capabilities.maxNote = maxNote;
+    
+    return capabilities;
+}
+
+InstrumentCapabilities Player::createBassCapabilities(int minNote, int maxNote)
+{
+    InstrumentCapabilities capabilities;
+    capabilities.type = InstrumentCapabilityType::NoteRange;
+    capabilities.instrumentType = "bass";
+    capabilities.minNote = minNote;
+    capabilities.maxNote = maxNote;
+    
+    return capabilities;
+}
+
+InstrumentCapabilities Player::createGuitarCapabilities(int minNote, int maxNote)
+{
+    InstrumentCapabilities capabilities;
+    capabilities.type = InstrumentCapabilityType::NoteRange;
+    capabilities.instrumentType = "guitar";
+    capabilities.minNote = minNote;
+    capabilities.maxNote = maxNote;
+    
+    return capabilities;
+}
+
 } // namespace covertracks

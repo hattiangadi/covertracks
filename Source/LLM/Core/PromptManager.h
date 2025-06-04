@@ -5,6 +5,10 @@
 
 namespace covertracks {
 
+// Forward declarations
+class Player;
+struct InstrumentCapabilities;
+
 /**
  * @brief Manages prompt templates for LLM interactions
  * 
@@ -29,6 +33,20 @@ public:
      */
     String createMusicGenerationPrompt(const String& style,
                                      const StringArray& instruments,
+                                     int tempo,
+                                     const String& description);
+    
+    /**
+     * @brief Create a prompt for generating a musical pattern using Player capabilities
+     * 
+     * @param style The musical style (e.g., "jazz", "rock")
+     * @param players The players with their instrument capabilities
+     * @param tempo The tempo in BPM
+     * @param description Additional description or constraints
+     * @return String The generated prompt
+     */
+    String createMusicGenerationPrompt(const String& style,
+                                     const std::vector<Player*>& players,
                                      int tempo,
                                      const String& description);
     
@@ -84,6 +102,9 @@ private:
     
     // Helper method to load instrument definitions
     void loadInstrumentDefinitions();
+    
+    // Helper method to convert Player capabilities to instrument definitions
+    String createInstrumentDefinitionsFromPlayers(const std::vector<Player*>& players);
     
     // Helper method to replace template variables
     String processTemplate(const String& templateText, 

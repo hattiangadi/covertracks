@@ -251,8 +251,8 @@ private:
                                       std::shared_ptr<Song> song,
                                       const juce::String& performanceInstructions);
     
-    // Parse a MIDI pattern from an LLM response
-    std::shared_ptr<juce::MidiMessageSequence> parseMIDIPatternFromResponse(const juce::String& response);
+    // Parse a JSON pattern from an LLM response using PatternParser
+    std::shared_ptr<Chart> parseJSONPatternFromResponse(const juce::String& response);
     
     // Convert a note name to a MIDI note number
     int getMidiNoteFromName(const juce::String& name);

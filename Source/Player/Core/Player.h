@@ -8,6 +8,33 @@
 namespace covertracks {
 
 /**
+ * @brief Instrument capability types
+ */
+enum class InstrumentCapabilityType {
+    NoteRange,    // Has min/max MIDI note range (e.g., Piano: C2-G5)
+    Mapping       // Has specific note-to-sound mappings (e.g., Drums: kick=36, snare=38)
+};
+
+/**
+ * @brief Instrument capabilities for LLM integration
+ */
+struct InstrumentCapabilities {
+    InstrumentCapabilityType type;
+    String instrumentType;  // "drums", "piano", "bass", "guitar", etc.
+    
+    // For NoteRange type
+    int minNote = 0;        // Minimum MIDI note number
+    int maxNote = 127;      // Maximum MIDI note number
+    
+    // For Mapping type  
+    std::map<String, int> soundMappings;  // sound name -> MIDI note (e.g., "kick" -> 36)
+    
+    // Serialize to/from var
+    var toVar() const;
+    void fromVar(const var& v);
+};
+
+/**
  * @brief Metadata for the Player
  */
 struct PlayerMetadata {
@@ -16,6 +43,9 @@ struct PlayerMetadata {
     String description;
     Time created;
     Time lastModified;
+    
+    // Instrument capabilities for LLM integration
+    InstrumentCapabilities capabilities;
     
     // Serialize to/from var
     var toVar() const;
@@ -202,6 +232,54 @@ public:
      * @param callback Function to call when pattern playback completes
      */
     void setPatternFinishedCallback(std::function<void(const String&)> callback);
+    
+    /**
+     * @brief Get instrument capabilities for LLM integration
+     * 
+     * @return const InstrumentCapabilities& Instrument capabilities
+     */
+    const InstrumentCapabilities& getInstrumentCapabilities() const { return metadata.capabilities; }
+    
+    /**
+     * @brief Set instrument capabilities for LLM integration
+     * 
+     * @param capabilities The instrument capabilities to set
+     */
+    void setInstrumentCapabilities(const InstrumentCapabilities& capabilities) { metadata.capabilities = capabilities; }
+    
+    /**
+     * @brief Create standard drum capabilities with GM percussion mapping
+     * 
+     * @return InstrumentCapabilities Standard drum capabilities
+     */
+    static InstrumentCapabilities createDrumCapabilities();
+    
+    /**
+     * @brief Create piano capabilities with note range
+     * 
+     * @param minNote Minimum MIDI note (default: C2 = 36)
+     * @param maxNote Maximum MIDI note (default: G5 = 79)
+     * @return InstrumentCapabilities Piano capabilities
+     */
+    static InstrumentCapabilities createPianoCapabilities(int minNote = 36, int maxNote = 79);
+    
+    /**
+     * @brief Create bass capabilities with note range
+     * 
+     * @param minNote Minimum MIDI note (default: E1 = 28)
+     * @param maxNote Maximum MIDI note (default: G3 = 55)
+     * @return InstrumentCapabilities Bass capabilities
+     */
+    static InstrumentCapabilities createBassCapabilities(int minNote = 28, int maxNote = 55);
+    
+    /**
+     * @brief Create guitar capabilities with note range
+     * 
+     * @param minNote Minimum MIDI note (default: E2 = 40)
+     * @param maxNote Maximum MIDI note (default: E6 = 88)
+     * @return InstrumentCapabilities Guitar capabilities
+     */
+    static InstrumentCapabilities createGuitarCapabilities(int minNote = 40, int maxNote = 88);
     
     /**
      * @brief Serialize player to JSON

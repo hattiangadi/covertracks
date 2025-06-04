@@ -63,6 +63,9 @@ PlayerEditorComponent::PlayerEditorComponent(Player* playerToEdit, AudioEngine* 
     loadGraphButton.addListener(this);
     addAndMakeVisible(loadGraphButton);
 
+    // Setup instrument capabilities UI
+    setupCapabilitiesUI();
+
     // Create a graph editor if we have a player
     if (player != nullptr && audioEngine != nullptr)
     {
@@ -95,6 +98,9 @@ PlayerEditorComponent::PlayerEditorComponent(Player* playerToEdit, AudioEngine* 
         else
             categoryEditor.setSelectedId(5, dontSendNotification); // Other
         descriptionEditor.setText(metadata.description);
+        
+        // Update capabilities UI from player
+        updateCapabilitiesInUI();
     }
 }
 
@@ -103,6 +109,8 @@ PlayerEditorComponent::~PlayerEditorComponent()
     saveButton.removeListener(this);
     cancelButton.removeListener(this);
     loadGraphButton.removeListener(this);
+    instrumentTypeCombo.removeListener(this);
+    capabilityTypeCombo.removeListener(this);
 }
 
 // Add a static flag to track if we've already loaded this player for editing
@@ -286,6 +294,9 @@ void PlayerEditorComponent::updatePlayerFromUI()
         metadata.description = descriptionEditor.getText();
         metadata.lastModified = Time::getCurrentTime();
         
+        // Update capabilities from UI
+        updateCapabilitiesFromUI();
+        
         // Update graph state
         if (graphEditor != nullptr && graphEditor->graph != nullptr)
         {
@@ -323,6 +334,9 @@ void PlayerEditorComponent::updateUIFromPlayer()
         categoryEditor.setSelectedId(5, dontSendNotification); // Other
         
     descriptionEditor.setText(metadata.description);
+    
+    // Update capabilities UI
+    updateCapabilitiesInUI();
     
     // Start timer to load the graph state after a short delay
     // This ensures the audio device is fully initialized
@@ -498,7 +512,13 @@ void PlayerEditorComponent::buttonClicked(Button* button)
     }
 }
 
-
+void PlayerEditorComponent::comboBoxChanged(ComboBox* comboBox)
+{
+    if (comboBox == &capabilityTypeCombo || comboBox == &instrumentTypeCombo)
+    {
+        updateCapabilitiesUIVisibility();
+    }
+}
 
 void PlayerEditorComponent::resized()
 {
@@ -531,6 +551,44 @@ void PlayerEditorComponent::resized()
     descriptionLabel.setBounds(sidePanel.getX() + panelMargin, y, labelWidth, fieldHeight);
     descriptionEditor.setBounds(descriptionLabel.getRight() + labelFieldGap, y, fieldWidth, fieldHeight * 3);
     y += fieldHeight * 3 + fieldSpacing * 2;
+
+    // Instrument Capabilities section
+    capabilitiesLabel.setBounds(sidePanel.getX() + panelMargin, y, fieldWidth + labelWidth + labelFieldGap, fieldHeight);
+    y += fieldHeight + fieldSpacing;
+
+    // Instrument type
+    instrumentTypeLabel.setBounds(sidePanel.getX() + panelMargin, y, labelWidth, fieldHeight);
+    instrumentTypeCombo.setBounds(instrumentTypeLabel.getRight() + labelFieldGap, y, fieldWidth, fieldHeight);
+    y += fieldHeight + fieldSpacing;
+
+    // Capability type
+    capabilityTypeLabel.setBounds(sidePanel.getX() + panelMargin, y, labelWidth, fieldHeight);
+    capabilityTypeCombo.setBounds(capabilityTypeLabel.getRight() + labelFieldGap, y, fieldWidth, fieldHeight);
+    y += fieldHeight + fieldSpacing;
+
+    // Note range section
+    noteRangeLabel.setBounds(sidePanel.getX() + panelMargin, y, fieldWidth + labelWidth + labelFieldGap, fieldHeight);
+    y += fieldHeight + 4;
+
+    // Min note
+    minNoteLabel.setBounds(sidePanel.getX() + panelMargin, y, labelWidth, fieldHeight);
+    minNoteSlider.setBounds(minNoteLabel.getRight() + labelFieldGap, y, fieldWidth, fieldHeight);
+    y += fieldHeight + 4;
+
+    // Max note
+    maxNoteLabel.setBounds(sidePanel.getX() + panelMargin, y, labelWidth, fieldHeight);
+    maxNoteSlider.setBounds(maxNoteLabel.getRight() + labelFieldGap, y, fieldWidth, fieldHeight);
+    y += fieldHeight + fieldSpacing;
+
+    // Sound mapping section
+    soundMappingLabel.setBounds(sidePanel.getX() + panelMargin, y, fieldWidth + labelWidth + labelFieldGap, fieldHeight);
+    y += fieldHeight + 4;
+
+    soundMappingEditor.setBounds(sidePanel.getX() + panelMargin, y, fieldWidth + labelWidth + labelFieldGap, fieldHeight * 4);
+    y += fieldHeight * 4 + 4;
+
+    addPresetButton.setBounds(sidePanel.getX() + panelMargin, y, 100, fieldHeight);
+    y += fieldHeight + fieldSpacing * 2;
 
     // Buttons
     const int buttonWidth = (fieldWidth + labelWidth + labelFieldGap - 2 * panelMargin) / 3;
@@ -658,5 +716,204 @@ void covertracks::PlayerEditorComponent::removeListener(Listener* listener)
 }
 
 
+void PlayerEditorComponent::setupCapabilitiesUI()
+{
+    // Capabilities section label
+    capabilitiesLabel.setText("Instrument Capabilities", dontSendNotification);
+    capabilitiesLabel.setFont(Font(FontOptions(16.0f, Font::bold)));
+    addAndMakeVisible(capabilitiesLabel);
+    
+    // Instrument type
+    instrumentTypeLabel.setText("Instrument Type:", dontSendNotification);
+    instrumentTypeLabel.setJustificationType(Justification::centredRight);
+    addAndMakeVisible(instrumentTypeLabel);
+    
+    instrumentTypeCombo.addItem("drums", 1);
+    instrumentTypeCombo.addItem("piano", 2);
+    instrumentTypeCombo.addItem("bass", 3);
+    instrumentTypeCombo.addItem("guitar", 4);
+    instrumentTypeCombo.addItem("other", 5);
+    instrumentTypeCombo.setTextWhenNothingSelected("Select type");
+    instrumentTypeCombo.addListener(this);
+    addAndMakeVisible(instrumentTypeCombo);
+    
+    // Capability type
+    capabilityTypeLabel.setText("Capability Type:", dontSendNotification);
+    capabilityTypeLabel.setJustificationType(Justification::centredRight);
+    addAndMakeVisible(capabilityTypeLabel);
+    
+    capabilityTypeCombo.addItem("Note Range", 1);
+    capabilityTypeCombo.addItem("Sound Mapping", 2);
+    capabilityTypeCombo.setSelectedId(1, dontSendNotification);
+    capabilityTypeCombo.addListener(this);
+    addAndMakeVisible(capabilityTypeCombo);
+    
+    // Note range controls
+    noteRangeLabel.setText("MIDI Note Range", dontSendNotification);
+    noteRangeLabel.setFont(Font(FontOptions(14.0f, Font::bold)));
+    addAndMakeVisible(noteRangeLabel);
+    
+    minNoteLabel.setText("Min Note:", dontSendNotification);
+    minNoteLabel.setJustificationType(Justification::centredRight);
+    addAndMakeVisible(minNoteLabel);
+    
+    minNoteSlider.setRange(0, 127, 1);
+    minNoteSlider.setValue(36); // C2
+    minNoteSlider.setSliderStyle(Slider::LinearHorizontal);
+    minNoteSlider.setTextBoxStyle(Slider::TextBoxRight, false, 50, 20);
+    addAndMakeVisible(minNoteSlider);
+    
+    maxNoteLabel.setText("Max Note:", dontSendNotification);
+    maxNoteLabel.setJustificationType(Justification::centredRight);
+    addAndMakeVisible(maxNoteLabel);
+    
+    maxNoteSlider.setRange(0, 127, 1);
+    maxNoteSlider.setValue(79); // G5
+    maxNoteSlider.setSliderStyle(Slider::LinearHorizontal);
+    maxNoteSlider.setTextBoxStyle(Slider::TextBoxRight, false, 50, 20);
+    addAndMakeVisible(maxNoteSlider);
+    
+    // Sound mapping controls
+    soundMappingLabel.setText("Sound Mappings (format: soundName:midiNote)", dontSendNotification);
+    soundMappingLabel.setFont(Font(FontOptions(14.0f, Font::bold)));
+    addAndMakeVisible(soundMappingLabel);
+    
+    soundMappingEditor.setMultiLine(true);
+    soundMappingEditor.setReturnKeyStartsNewLine(true);
+    soundMappingEditor.setScrollbarsShown(true);
+    soundMappingEditor.setCaretVisible(true);
+    soundMappingEditor.setPopupMenuEnabled(true);
+    soundMappingEditor.setText("kick:36\nsnare:38\nhihat:42");
+    addAndMakeVisible(soundMappingEditor);
+    
+    addPresetButton.setButtonText("Add Preset");
+    addPresetButton.onClick = [this] {
+        PopupMenu menu;
+        menu.addItem(1, "Drums (GM Standard)");
+        menu.addItem(2, "Piano (C2-G5)");
+        menu.addItem(3, "Bass (E1-G3)");
+        menu.addItem(4, "Guitar (E2-E6)");
+        
+        menu.showMenuAsync(PopupMenu::Options(), [this](int result) {
+            if (result > 0)
+            {
+                InstrumentCapabilities capabilities;
+                switch (result)
+                {
+                    case 1: capabilities = Player::createDrumCapabilities(); break;
+                    case 2: capabilities = Player::createPianoCapabilities(); break;
+                    case 3: capabilities = Player::createBassCapabilities(); break;
+                    case 4: capabilities = Player::createGuitarCapabilities(); break;
+                }
+                
+                // Update UI with preset
+                instrumentTypeCombo.setText(capabilities.instrumentType, dontSendNotification);
+                if (capabilities.type == InstrumentCapabilityType::Mapping)
+                {
+                    capabilityTypeCombo.setSelectedId(2, dontSendNotification);
+                    String mappingText;
+                    for (const auto& mapping : capabilities.soundMappings)
+                    {
+                        mappingText += mapping.first + ":" + String(mapping.second) + "\n";
+                    }
+                    soundMappingEditor.setText(mappingText);
+                }
+                else
+                {
+                    capabilityTypeCombo.setSelectedId(1, dontSendNotification);
+                    minNoteSlider.setValue(capabilities.minNote);
+                    maxNoteSlider.setValue(capabilities.maxNote);
+                }
+                updateCapabilitiesUIVisibility();
+            }
+        });
+    };
+    addAndMakeVisible(addPresetButton);
+    
+    // Initially update visibility
+    updateCapabilitiesUIVisibility();
+}
+
+void PlayerEditorComponent::updateCapabilitiesUIVisibility()
+{
+    bool isMapping = capabilityTypeCombo.getSelectedId() == 2;
+    
+    // Show/hide note range controls
+    noteRangeLabel.setVisible(!isMapping);
+    minNoteLabel.setVisible(!isMapping);
+    minNoteSlider.setVisible(!isMapping);
+    maxNoteLabel.setVisible(!isMapping);
+    maxNoteSlider.setVisible(!isMapping);
+    
+    // Show/hide sound mapping controls
+    soundMappingLabel.setVisible(isMapping);
+    soundMappingEditor.setVisible(isMapping);
+}
+
+void PlayerEditorComponent::updateCapabilitiesFromUI()
+{
+    if (!player) return;
+    
+    InstrumentCapabilities capabilities;
+    capabilities.instrumentType = instrumentTypeCombo.getText();
+    capabilities.type = (capabilityTypeCombo.getSelectedId() == 2) ? 
+                       InstrumentCapabilityType::Mapping : InstrumentCapabilityType::NoteRange;
+    
+    if (capabilities.type == InstrumentCapabilityType::Mapping)
+    {
+        // Parse sound mappings from text editor
+        capabilities.soundMappings.clear();
+        StringArray lines = StringArray::fromLines(soundMappingEditor.getText());
+        for (const auto& line : lines)
+        {
+            StringArray parts = StringArray::fromTokens(line, ":", "");
+            if (parts.size() == 2)
+            {
+                String soundName = parts[0].trim();
+                int midiNote = parts[1].getIntValue();
+                if (midiNote >= 0 && midiNote <= 127)
+                {
+                    capabilities.soundMappings[soundName] = midiNote;
+                }
+            }
+        }
+    }
+    else
+    {
+        capabilities.minNote = (int)minNoteSlider.getValue();
+        capabilities.maxNote = (int)maxNoteSlider.getValue();
+    }
+    
+    player->setInstrumentCapabilities(capabilities);
+}
+
+void PlayerEditorComponent::updateCapabilitiesInUI()
+{
+    if (!player) return;
+    
+    const auto& capabilities = player->getInstrumentCapabilities();
+    
+    instrumentTypeCombo.setText(capabilities.instrumentType, dontSendNotification);
+    capabilityTypeCombo.setSelectedId(
+        (capabilities.type == InstrumentCapabilityType::Mapping) ? 2 : 1, 
+        dontSendNotification);
+    
+    if (capabilities.type == InstrumentCapabilityType::Mapping)
+    {
+        String mappingText;
+        for (const auto& mapping : capabilities.soundMappings)
+        {
+            mappingText += mapping.first + ":" + String(mapping.second) + "\n";
+        }
+        soundMappingEditor.setText(mappingText, dontSendNotification);
+    }
+    else
+    {
+        minNoteSlider.setValue(capabilities.minNote, dontSendNotification);
+        maxNoteSlider.setValue(capabilities.maxNote, dontSendNotification);
+    }
+    
+    updateCapabilitiesUIVisibility();
+}
 
 } // namespace covertracks

@@ -3,12 +3,13 @@
 #include "MusicPatternSystem.h"
 #include "PatternGenerator.h"
 #include "PatternParser.h"
+#include "../../LLM/Core/PromptManager.h"
 #include <iostream>
 
 namespace covertracks {
 
 Musician::Musician(const String& idValue, const String& styleValue)
-    : id(idValue), style(styleValue), patternSystem(std::make_unique<MusicPatternSystem>()), promptManager()
+    : id(idValue), style(styleValue), patternSystem(std::make_unique<MusicPatternSystem>()), promptManager(std::make_unique<PromptManager>())
 {
     // Initialize pattern generator when LLM client is set
 }
@@ -25,7 +26,7 @@ void Musician::setLLMClient(std::shared_ptr<LLMClient> client)
     // Create the pattern generator now that we have an LLM client
     if (llmClient)
     {
-        patternGenerator = std::make_unique<PatternGenerator>(*patternSystem, llmClient, promptManager);
+        patternGenerator = std::make_unique<PatternGenerator>(*patternSystem, llmClient, *promptManager);
         
         // Set the system prompt
         String systemPrompt = 
