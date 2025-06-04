@@ -25,36 +25,46 @@ public:
     PatternParser(MusicPatternSystem& patternSystem);
     
     /**
-     * @brief Parse a complete chart from notation
+     * @brief Parse a complete chart from JSON notation
      * 
-     * @param notation The chart notation
+     * @param jsonText The JSON chart notation
      * @return std::shared_ptr<Chart> The parsed chart
      */
-    std::shared_ptr<Chart> parseChart(const String& notation);
+    std::shared_ptr<Chart> parseChart(const String& jsonText);
     
     /**
-     * @brief Parse a section from notation
+     * @brief Parse a chart from JSON object
      * 
-     * @param notation The section notation
+     * @param json The JSON object
+     * @return std::shared_ptr<Chart> The parsed chart
+     */
+    std::shared_ptr<Chart> parseChartFromJson(const var& json);
+    
+    /**
+     * @brief Parse a section from JSON
+     * 
+     * @param sectionJson The section JSON object
+     * @param primitives Available primitives
+     * @param chords Available chords
+     * @param patterns Available patterns
      * @return std::shared_ptr<Section> The parsed section
      */
-    std::shared_ptr<Section> parseSection(const String& notation);
+    std::shared_ptr<Section> parseSectionFromJson(const var& sectionJson, 
+                                                  const std::map<String, std::map<String, int>>& primitives,
+                                                  const std::map<String, Array<String>>& chords,
+                                                  const std::map<String, Array<var>>& patterns);
     
     /**
-     * @brief Parse a phrase from notation
+     * @brief Parse a bar from events JSON
      * 
-     * @param notation The phrase notation
-     * @return std::shared_ptr<Phrase> The parsed phrase
-     */
-    std::shared_ptr<Phrase> parsePhrase(const String& notation);
-    
-    /**
-     * @brief Parse a bar from notation
-     * 
-     * @param notation The bar notation
+     * @param eventsJson Array of event objects
+     * @param primitives Available primitives
+     * @param chords Available chords
      * @return std::shared_ptr<Bar> The parsed bar
      */
-    std::shared_ptr<Bar> parseBar(const String& notation);
+    std::shared_ptr<Bar> parseBarFromJson(const Array<var>& eventsJson,
+                                          const std::map<String, std::map<String, int>>& primitives,
+                                          const std::map<String, Array<String>>& chords);
     
     /**
      * @brief Parse an LLM-generated response into a chart

@@ -452,7 +452,7 @@ void PlayerModeComponent::createDefaultPatterns()
 
 std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String& testType, const juce::String& instrument)
 {
-    String patternText = "";
+    String jsonPattern = "";
     String patternName = testType + " - " + instrument;
     
     if (testType == "T1_Notes")
@@ -460,178 +460,180 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
         // Test 1: Basic note patterns
         if (instrument == "drums")
         {
-            patternText = "T1_Notes_Drums BPM:120 {kick snare kick snare}";
+            jsonPattern = R"({
+                "title": "T1_Notes_Drums",
+                "tempo": 120,
+                "primitives": {
+                    "drums": {"kick": 36, "snare": 38, "hihat": 42}
+                },
+                "sections": {
+                    "main": [
+                        {"beat": 1.0, "primitive": "kick"},
+                        {"beat": 2.0, "primitive": "snare"},
+                        {"beat": 3.0, "primitive": "kick"},
+                        {"beat": 4.0, "primitive": "snare"}
+                    ]
+                }
+            })";
         }
         else if (instrument == "bass")
         {
-            patternText = "T1_Notes_Bass BPM:120 {C2 D2 E2 G2}";
+            jsonPattern = R"({
+                "title": "T1_Notes_Bass",
+                "tempo": 120,
+                "primitives": {
+                    "bass": {"C2": 36, "D2": 38, "E2": 40, "G2": 43}
+                },
+                "sections": {
+                    "main": [
+                        {"beat": 1.0, "primitive": "C2"},
+                        {"beat": 2.0, "primitive": "D2"},
+                        {"beat": 3.0, "primitive": "E2"},
+                        {"beat": 4.0, "primitive": "G2"}
+                    ]
+                }
+            })";
         }
         else if (instrument == "piano")
         {
-            patternText = "T1_Notes_Piano BPM:120 {C3 E3 G3 C4}";
+            jsonPattern = R"({
+                "title": "T1_Notes_Piano",
+                "tempo": 120,
+                "primitives": {
+                    "piano": {"C3": 48, "E3": 52, "G3": 55, "C4": 60}
+                },
+                "sections": {
+                    "main": [
+                        {"beat": 1.0, "primitive": "C3"},
+                        {"beat": 2.0, "primitive": "E3"},
+                        {"beat": 3.0, "primitive": "G3"},
+                        {"beat": 4.0, "primitive": "C4"}
+                    ]
+                }
+            })";
         }
         else if (instrument == "guitar")
         {
-            patternText = "T1_Notes_Guitar BPM:120 {E3 A3 D4 G4}";
+            jsonPattern = R"({
+                "title": "T1_Notes_Guitar",
+                "tempo": 120,
+                "primitives": {
+                    "guitar": {"E3": 52, "A3": 57, "D4": 62, "G4": 67}
+                },
+                "sections": {
+                    "main": [
+                        {"beat": 1.0, "primitive": "E3"},
+                        {"beat": 2.0, "primitive": "A3"},
+                        {"beat": 3.0, "primitive": "D4"},
+                        {"beat": 4.0, "primitive": "G4"}
+                    ]
+                }
+            })";
         }
     }
     else if (testType == "T2_MultiBars")
     {
-        // Test 2: Multi-bar patterns  
+        // Test 2: Position-based patterns with precise timing
         if (instrument == "drums")
         {
-            patternText = "T2_MultiBars_Drums BPM:120 VERSE {[1: kick] [1.5: kick] [2: snare] [3: kick] [4: snare] [4.5: snare]}";
+            jsonPattern = R"({
+                "title": "T2_MultiBars_Drums",
+                "tempo": 120,
+                "primitives": {
+                    "drums": {"kick": 36, "snare": 38}
+                },
+                "sections": {
+                    "main": [
+                        {"beat": 1.0, "primitive": "kick"},
+                        {"beat": 1.5, "primitive": "kick"},
+                        {"beat": 2.0, "primitive": "snare"},
+                        {"beat": 3.0, "primitive": "kick"},
+                        {"beat": 4.0, "primitive": "snare"},
+                        {"beat": 4.5, "primitive": "snare"}
+                    ]
+                }
+            })";
         }
         else
         {
-            patternText = "T2_MultiBars_Other BPM:120 VERSE {[1: C4] [1.5: E4] [2: G4] [2.5: C5] [3: D4] [3.5: F4] [4: A4] [4.5: D5]}";
+            jsonPattern = R"({
+                "title": "T2_MultiBars_Other",
+                "tempo": 120,
+                "primitives": {
+                    "piano": {"C4": 60, "E4": 64, "G4": 67, "C5": 72, "D4": 62, "F4": 65, "A4": 69, "D5": 74}
+                },
+                "sections": {
+                    "main": [
+                        {"beat": 1.0, "primitive": "C4"},
+                        {"beat": 1.5, "primitive": "E4"},
+                        {"beat": 2.0, "primitive": "G4"},
+                        {"beat": 2.5, "primitive": "C5"},
+                        {"beat": 3.0, "primitive": "D4"},
+                        {"beat": 3.5, "primitive": "F4"},
+                        {"beat": 4.0, "primitive": "A4"},
+                        {"beat": 4.5, "primitive": "D5"}
+                    ]
+                }
+            })";
         }
     }
     else if (testType == "T3_Chords")
     {
-        // Test 3: Chord definitions and usage (simplified for now)
-        patternText = "T3_Chords BPM:120 VERSE {[1: C3] [2: E3] [3: G3] [4: C4]}";
-    }
-    else if (testType == "T4_Layers")
-    {
-        // Test 4: Rhythmic layers (simplified for now)
-        if (instrument == "drums")
-        {
-            patternText = "T4_Layers_Drums BPM:120 VERSE {[1: kick] [1.5: hihat] [2: snare] [2.5: hihat] [3: kick] [3.5: hihat] [4: snare] [4.5: hihat]}";
-        }
-        else
-        {
-            patternText = "T4_Layers_Other BPM:120 VERSE {[1: C3] [1.25: E3] [1.5: G3] [1.75: C4] [2: E3] [3: G3] [4: C4]}";
-        }
-    }
-    else if (testType == "T5_LayersChords")
-    {
-        // Test 5: Layers + chords combined (simplified)
-        patternText = "T5_LayersChords BPM:120 VERSE {[1: C2] [1.5: C3] [2: E3] [2.5: G3] [3: G1] [3.5: G3] [4: C4]}";
-    }
-    else if (testType == "T6_Sections")
-    {
-        // Test 6: Phrase/section structure (simplified)
-        patternText = "T6_Sections BPM:120 VERSE {[1: C4] [2: E4] [3: G4] [4: C5]} CHORUS {[1: G4] [2: B4] [3: D5] [4: G5]}";
-    }
-    else if (testType == "T7_References")
-    {
-        // Test 7: Pattern references and copying (simplified)
-        patternText = "T7_References BPM:120 VERSE {[1: C4] [2: E4] [3: G4] [4: C5]}";
-    }
-    else if (testType == "T8_Exceptions")
-    {
-        // Test 8: Exceptions and modifications (simplified)
-        patternText = "T8_Exceptions BPM:120 VERSE {[1: C4] [2: E4] [3: F4] [4: G4]}";
+        // Test 3: Chord definitions and usage
+        jsonPattern = R"({
+            "title": "T3_Chords",
+            "tempo": 120,
+            "primitives": {
+                "piano": {"C3": 48, "E3": 52, "G3": 55, "F3": 53, "A3": 57, "C4": 60}
+            },
+            "chords": {
+                "Cmaj": ["C3", "E3", "G3"],
+                "Fmaj": ["F3", "A3", "C4"]
+            },
+            "sections": {
+                "main": [
+                    {"beat": 1.0, "chord": "Cmaj"},
+                    {"beat": 3.0, "chord": "Fmaj"}
+                ]
+            }
+        })";
     }
     else
     {
         // Default fallback pattern
-        patternText = "Default BPM:120 VERSE {[1: C4] [2: E4] [3: G4] [4: C5]}";
+        jsonPattern = R"({
+            "title": "Default",
+            "tempo": 120,
+            "primitives": {
+                "piano": {"C4": 60, "E4": 64, "G4": 67, "C5": 72}
+            },
+            "sections": {
+                "main": [
+                    {"beat": 1.0, "primitive": "C4"},
+                    {"beat": 2.0, "primitive": "E4"},
+                    {"beat": 3.0, "primitive": "G4"},
+                    {"beat": 4.0, "primitive": "C5"}
+                ]
+            }
+        })";
     }
     
-    // Parse the pattern text using the PatternParser
-    std::cout << "Pattern text for " << patternName << ":\n" << patternText << std::endl;
+    // Parse the JSON pattern using the PatternParser
+    std::cout << "JSON pattern for " << patternName << ":\n" << jsonPattern << std::endl;
     
-    // Try to parse the text pattern first
-    auto chart = patternParser->parseChart(patternText);
+    // Parse the JSON pattern using the PatternParser
+    auto chart = patternParser->parseChart(jsonPattern);
     
-    // If parsing failed or returned empty chart, fall back to hardcoded patterns
+    // Log parsing success/failure
     if (chart == nullptr || chart->getNumSections() == 0)
     {
-        std::cout << "Pattern parsing failed, falling back to hardcoded pattern\n";
-        
-        // Create fallback chart
-        chart = std::make_shared<Chart>(patternName, 120.0);
-        auto section = std::make_shared<Section>("Test");
-        auto phrase = std::make_shared<Phrase>("Test Phrase");
-        auto bar = std::make_shared<Bar>(4, 4);
-    
-        // Create different patterns based on test type and instrument
-        if (testType == "T1_Notes")
-        {
-            if (instrument == "drums")
-            {
-                // Basic drum pattern: kick on 1&3, snare on 2&4
-                bar->addNote(0, 9, 36, 0.7f, 0.5f);  // Kick on beat 1
-                bar->addNote(1, 9, 38, 0.7f, 0.5f);  // Snare on beat 2
-                bar->addNote(2, 9, 36, 0.7f, 0.5f);  // Kick on beat 3
-                bar->addNote(3, 9, 38, 0.7f, 0.5f);  // Snare on beat 4
-            }
-            else if (instrument == "bass")
-            {
-                // Simple bass line
-                bar->addNote(0, 0, 36, 0.7f, 1.0f);  // C2
-                bar->addNote(1, 0, 38, 0.7f, 1.0f);  // D2
-                bar->addNote(2, 0, 40, 0.7f, 1.0f);  // E2
-                bar->addNote(3, 0, 43, 0.7f, 1.0f);  // G2
-            }
-            else if (instrument == "piano")
-            {
-                // Piano arpeggio
-                bar->addNote(0, 0, 60, 0.7f, 1.0f);  // C4
-                bar->addNote(1, 0, 64, 0.7f, 1.0f);  // E4
-                bar->addNote(2, 0, 67, 0.7f, 1.0f);  // G4
-                bar->addNote(3, 0, 72, 0.7f, 1.0f);  // C5
-            }
-            else if (instrument == "guitar")
-            {
-                // Guitar pattern
-                bar->addNote(0, 0, 52, 0.7f, 1.0f);  // E3
-                bar->addNote(1, 0, 57, 0.7f, 1.0f);  // A3
-                bar->addNote(2, 0, 62, 0.7f, 1.0f);  // D4
-                bar->addNote(3, 0, 67, 0.7f, 1.0f);  // G4
-            }
-            else
-            {
-                // Default pattern
-                bar->addNote(0, 0, 60, 0.7f, 1.0f);  // C4
-                bar->addNote(1, 0, 64, 0.7f, 1.0f);  // E4
-            }
-        } else if (testType == "T2_MultiBars")
-        {
-            // For multi-bar test, create a longer pattern (this is just a placeholder for now)
-            if (instrument == "drums")
-            {
-                // More complex drum pattern with some variation
-            bar->addNote(0.0f, 9, 36, 0.7f, 0.5f);   // Kick
-                bar->addNote(1.0f, 9, 38, 0.7f, 0.5f);   // Snare
-                bar->addNote(1.5f, 9, 36, 0.6f, 0.25f);  // Ghost kick
-                bar->addNote(2.0f, 9, 36, 0.7f, 0.5f);   // Kick
-                bar->addNote(3.0f, 9, 38, 0.7f, 0.5f);   // Snare
-                bar->addNote(3.5f, 9, 38, 0.6f, 0.25f);  // Ghost snare
-            }
-            else
-            {
-                // More notes for other instruments
-                for (int i = 0; i < 8; ++i)
-                {
-                int note = 60 + (i % 5);  // C, D, E, F, G pattern
-                bar->addNote(i * 0.5f, 0, note, 0.7f, 0.4f);
-                }
-            }
-        } else {
-            // Default fallback for other test types (T3, T4, etc.)
-            if (instrument == "drums")
-            {
-                bar->addNote(0, 9, 36, 0.7f, 0.5f);  // Kick
-                bar->addNote(1, 9, 38, 0.7f, 0.5f);  // Snare
-            }
-            else
-            {
-                bar->addNote(0, 0, 60, 0.7f, 1.0f);  // C4
-                bar->addNote(1, 0, 64, 0.7f, 1.0f);  // E4
-            }
-        }
-        phrase->addBar(bar);
-        section->addPhrase(phrase);
-        chart->addSection(section);
+        std::cout << "JSON pattern parsing failed for: " << patternName << std::endl;
+        // Return empty chart - we're no longer using fallback patterns
+        return std::make_shared<Chart>(patternName, 120.0);
     }
-    
-    // Set the chart title if it was parsed successfully
-    if (chart != nullptr && chart->getTitle().isEmpty())
+    else
     {
-        chart->setTitle(patternName);
+        std::cout << "JSON pattern parsing succeeded: " << patternName << std::endl;
     }
     
     return chart;

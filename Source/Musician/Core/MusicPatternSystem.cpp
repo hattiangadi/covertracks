@@ -850,8 +850,31 @@ std::shared_ptr<Section> MusicPatternSystem::createSectionFromNotation(const Str
     // Split the content into phrase definitions
     StringArray phraseDefs;
     
+    // Check if this looks like position-based notation (e.g., "[1: kick] [2: snare]")
+    bool isPositionBased = false;
+    if (content.contains("[") && content.contains("]") && content.contains(":"))
+    {
+        // Look for pattern like "[number: primitive]"
+        StringArray testSplit;
+        testSplit.addTokens(content, " ", "");
+        for (const auto& token : testSplit)
+        {
+            if (token.startsWith("[") && token.contains(":") && token.endsWith("]"))
+            {
+                isPositionBased = true;
+                break;
+            }
+        }
+    }
+    
+    if (isPositionBased)
+    {
+        // Treat the entire content as one phrase with position-based events
+        phraseDefs.add(content);
+        DBG("Detected position-based notation, treating as single phrase: '" + content + "'");
+    }
     // Strategy 1: Look for phrase definitions enclosed in brackets
-    if (content.contains("[") && content.contains("]"))
+    else if (content.contains("[") && content.contains("]"))
     {
         int startPos = 0;
         int endPos = 0;
@@ -907,23 +930,33 @@ std::shared_ptr<Chart> MusicPatternSystem::createChartFromNotation(const String&
         content = content.substring(1, content.length() - 1).trim();
     }
     
-    // Check for chart name and tempo
-    if (content.contains(":"))
-    {
-        int colonPos = content.indexOf(":");
-        String chartName = content.substring(0, colonPos).trim();
-        chart->setTitle(chartName);
-        
-        // Extract the rest of the content
-        content = content.substring(colonPos + 1).trim();
-    }
+    // Parse chart name and tempo from format: "ChartName BPM:tempo {content}"
+    DBG("Initial content: '" + content + "'");
     
-    // Look for tempo
+    // Look for BPM: first to extract tempo
     if (content.contains("BPM:"))
     {
         int bpmPos = content.indexOf("BPM:");
-        int endBpmPos = content.indexOf("\n");
-        if (endBpmPos < bpmPos) endBpmPos = -1;
+        
+        // Chart title is everything before " BPM:"
+        String chartTitle = content.substring(0, bpmPos).trim();
+        if (!chartTitle.isEmpty())
+        {
+            chart->setTitle(chartTitle);
+            DBG("Extracted chart title: '" + chartTitle + "'");
+        }
+        
+        // Find the end of the BPM value - look for space, newline, or {
+        int endBpmPos = -1;
+        for (int i = bpmPos + 4; i < content.length(); ++i)
+        {
+            char c = content[i];
+            if (c == ' ' || c == '\n' || c == '\t' || c == '{')
+            {
+                endBpmPos = i;
+                break;
+            }
+        }
         if (endBpmPos == -1) endBpmPos = content.length();
         
         String bpmStr = content.substring(bpmPos + 4, endBpmPos).trim();
@@ -931,18 +964,38 @@ std::shared_ptr<Chart> MusicPatternSystem::createChartFromNotation(const String&
         if (tempo > 0)
         {
             chart->setTempo(tempo);
+            DBG("Extracted BPM: " + String(tempo) + " from '" + bpmStr + "'");
         }
         
-        // Remove the BPM line from content
-        content = content.substring(0, bpmPos) + content.substring(endBpmPos);
+        // Content is everything after the BPM value
+        content = content.substring(endBpmPos).trim();
+        DBG("Content after title/BPM extraction: '" + content + "'");
+    }
+    else
+    {
+        // Fallback: look for colon to separate title (old behavior)
+        if (content.contains(":"))
+        {
+            int colonPos = content.indexOf(":");
+            String chartName = content.substring(0, colonPos).trim();
+            chart->setTitle(chartName);
+            DBG("Extracted chart title (fallback): '" + chartName + "'");
+            
+            // Extract the rest of the content
+            content = content.substring(colonPos + 1).trim();
+            DBG("Content after title extraction (fallback): '" + content + "'");
+        }
     }
     
     // Split into sections
     StringArray sectionDefs;
     
+    DBG("Chart parsing - content after BPM extraction: '" + content + "'");
+    
     // Strategy 1: Look for sections enclosed in brackets
     if (content.contains("{") && content.contains("}"))
     {
+        DBG("Found braces, parsing as sectioned content");
         int startPos = 0;
         while (startPos < content.length())
         {
@@ -958,11 +1011,19 @@ std::shared_ptr<Chart> MusicPatternSystem::createChartFromNotation(const String&
             String sectionName = content.substring(startPos, openBracket).trim();
             if (sectionName.endsWith(":")) sectionName = sectionName.dropLastCharacters(1).trim();
             
+            // If no section name, use default
+            if (sectionName.isEmpty())
+            {
+                sectionName = "Main";
+            }
+            
             // Get the section content including brackets
             String sectionContent = content.substring(openBracket, closeBracket + 1);
             
             // Add the section definition
-            sectionDefs.add(sectionName + ": " + sectionContent);
+            String fullSectionDef = sectionName + ": " + sectionContent;
+            sectionDefs.add(fullSectionDef);
+            DBG("Added section definition: '" + fullSectionDef + "'");
             
             // Move to next section
             startPos = closeBracket + 1;
