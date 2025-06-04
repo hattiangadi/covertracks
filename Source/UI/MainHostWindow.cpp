@@ -476,6 +476,11 @@ MainHostWindow::MainHostWindow()
     ensembleMainWindow = std::make_unique<EnsembleMainPanel>(playerManager.get());
     std::cout << "[MainHostWindow] EnsembleMainPanel created" << std::endl;
     
+    // Create Tests component
+    std::cout << "[MainHostWindow] Creating TestsComponent" << std::endl;
+    testsWindow = std::make_unique<TestsComponent>();
+    std::cout << "[MainHostWindow] TestsComponent created" << std::endl;
+    
     // Create a tabbed component to hold all views
     auto* tabbedComponent = new TabbedComponent(TabbedButtonBar::TabsAtTop);
     tabbedComponent->addTab("Player Library", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), playerLibraryWindow.get(), false);
@@ -484,6 +489,7 @@ MainHostWindow::MainHostWindow()
     tabbedComponent->addTab("Performances", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), performanceWindow.get(), false);
     tabbedComponent->addTab("Pattern Editor", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), patternEditorWindow.get(), false);
     tabbedComponent->addTab("Ensembles", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), ensembleMainWindow.get(), false);
+    tabbedComponent->addTab("Tests", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), testsWindow.get(), false);
     
     // Set it as the main content
     std::cout << "[MainHostWindow] Setting content" << std::endl;

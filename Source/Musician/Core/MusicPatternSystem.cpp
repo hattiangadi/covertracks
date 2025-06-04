@@ -533,8 +533,9 @@ std::shared_ptr<Bar> MusicPatternSystem::createBarFromNotation(const String& not
     String timeSignature = "4/4"; // Default time signature
     String eventsText = notation;
     
-    // Remove the outer brackets if present
-    if (eventsText.startsWith("[") && eventsText.endsWith("]"))
+    // Remove the outer brackets if present (square or curly)
+    if ((eventsText.startsWith("[") && eventsText.endsWith("]")) ||
+        (eventsText.startsWith("{") && eventsText.endsWith("}")))
     {
         eventsText = eventsText.substring(1, eventsText.length() - 1).trim();
     }
@@ -584,117 +585,160 @@ std::shared_ptr<Bar> MusicPatternSystem::createBarFromNotation(const String& not
         
         // Percussion instruments have short durations
         bool isPercussion = false;
+        bool primitiveFound = false;
         
-        // Map drum primitives
-        if (event.primitive == "kick")
+        // First, check if this primitive exists in any instrument definition
+        for (const auto& instrumentPair : instrumentDefinitions)
         {
-            midiNote = 36; // Bass Drum 1
-            channel = 9;   // Drum channel
-            isPercussion = true;
-            duration = 0.2f; // Short duration for kick
-        }
-        else if (event.primitive == "snare")
-        {
-            midiNote = 38; // Acoustic Snare
-            channel = 9;
-            isPercussion = true;
-            duration = 0.15f; // Short duration for snare
-        }
-        else if (event.primitive == "closed_hat" || event.primitive == "hi_hat")
-        {
-            midiNote = 42; // Closed Hi-Hat
-            channel = 9;
-            isPercussion = true;
-            duration = 0.1f; // Very short duration for closed hi-hat
-        }
-        else if (event.primitive == "open_hat")
-        {
-            midiNote = 46; // Open Hi-Hat
-            channel = 9;
-            isPercussion = true;
-            duration = 0.3f; // Longer duration for open hi-hat
-        }
-        else if (event.primitive == "ride")
-        {
-            midiNote = 51; // Ride Cymbal 1
-            channel = 9;
-            isPercussion = true;
-            duration = 0.4f; // Longer duration for ride
-        }
-        else if (event.primitive == "crash")
-        {
-            midiNote = 49; // Crash Cymbal 1
-            channel = 9;
-            isPercussion = true;
-            duration = 0.8f; // Long duration for crash
-        }
-        else if (event.primitive == "tom1")
-        {
-            midiNote = 48; // Hi-Mid Tom
-            channel = 9;
-            isPercussion = true;
-            duration = 0.25f; // Medium duration for toms
-        }
-        else if (event.primitive == "tom2")
-        {
-            midiNote = 45; // Low Tom
-            channel = 9;
-            isPercussion = true;
-            duration = 0.3f; // Medium duration for toms
-        }
-        // Map note primitives (e.g., "C3", "E4", etc.)
-        else if (event.primitive.length() >= 2)
-        {
-            // Check if it's a note name like C3, E4, etc.
-            String noteName = event.primitive.substring(0, 1);
-            int octave = event.primitive.substring(1).getIntValue();
-            
-            // Base note values (C = 0, D = 2, E = 4, etc.)
-            int baseNote = -1;
-            if (noteName == "C") baseNote = 0;
-            else if (noteName == "D") baseNote = 2;
-            else if (noteName == "E") baseNote = 4;
-            else if (noteName == "F") baseNote = 5;
-            else if (noteName == "G") baseNote = 7;
-            else if (noteName == "A") baseNote = 9;
-            else if (noteName == "B") baseNote = 11;
-            
-            // Check for sharps and flats
-            if (event.primitive.length() > 2)
+            const InstrumentDefinition& instrument = instrumentPair.second;
+            Primitive primitive = instrument.getPrimitive(event.primitive);
+            if (!primitive.name.isEmpty())
             {
-                if (event.primitive.substring(1, 2) == "#")
-                {
-                    baseNote += 1;
-                    octave = event.primitive.substring(2).getIntValue();
-                }
-                else if (event.primitive.substring(1, 2) == "b")
-                {
-                    baseNote -= 1;
-                    octave = event.primitive.substring(2).getIntValue();
-                }
-            }
-            
-            if (baseNote >= 0)
-            {
-                midiNote = (octave * 12) + baseNote;
+                // Found the primitive in this instrument
+                DBG("Found primitive '" + event.primitive + "' in instrument '" + instrumentPair.first + "' with MIDI note " + String(primitive.midiNote));
+                midiNote = primitive.midiNote;
+                primitiveFound = true;
                 
-                // Set more natural durations based on the octave (instrument type)
-                // Lower octaves (bass) have medium duration
-                // Middle octaves (guitar/piano) have longer durations
-                if (octave < 3) // Bass range
+                // Set channel based on instrument type
+                if (instrumentPair.first == "drums")
                 {
-                    duration = 0.6f + (Random::getSystemRandom().nextFloat() * 0.2f); // 0.6-0.8 seconds with slight randomization
+                    channel = 9; // Drum channel
+                    isPercussion = true;
+                    duration = 0.2f; // Short duration for percussion
                 }
-                else if (octave < 5) // Guitar/Piano range
+                else
                 {
-                    duration = 0.8f + (Random::getSystemRandom().nextFloat() * 0.4f); // 0.8-1.2 seconds with randomization
+                    channel = 0; // Default melodic channel
+                    // Set duration based on octave for melodic instruments
+                    int octave = midiNote / 12;
+                    if (octave < 3) duration = 0.6f; // Bass range
+                    else if (octave < 5) duration = 0.8f; // Mid range
+                    else duration = 0.5f; // High range
                 }
-                else // Higher octaves
-                {
-                    duration = 0.5f + (Random::getSystemRandom().nextFloat() * 0.3f); // 0.5-0.8 seconds with randomization
-                }
+                break;
             }
         }
+        
+        // Debug: if primitive not found, log what we were looking for
+        if (!primitiveFound)
+        {
+            DBG("Primitive '" + event.primitive + "' not found in any instrument definition, using fallback mapping");
+        }
+        
+        // If primitive not found in instrument definitions, fall back to hardcoded mapping
+        if (!primitiveFound)
+        {
+            // Map drum primitives
+            if (event.primitive == "kick")
+            {
+                midiNote = 36; // Bass Drum 1
+                channel = 9;   // Drum channel
+                isPercussion = true;
+                duration = 0.2f; // Short duration for kick
+            }
+            else if (event.primitive == "snare")
+            {
+                midiNote = 38; // Acoustic Snare
+                channel = 9;
+                isPercussion = true;
+                duration = 0.15f; // Short duration for snare
+            }
+            else if (event.primitive == "closed_hat" || event.primitive == "hi_hat")
+            {
+                midiNote = 42; // Closed Hi-Hat
+                channel = 9;
+                isPercussion = true;
+                duration = 0.1f; // Very short duration for closed hi-hat
+            }
+            else if (event.primitive == "open_hat")
+            {
+                midiNote = 46; // Open Hi-Hat
+                channel = 9;
+                isPercussion = true;
+                duration = 0.3f; // Longer duration for open hi-hat
+            }
+            else if (event.primitive == "ride")
+            {
+                midiNote = 51; // Ride Cymbal 1
+                channel = 9;
+                isPercussion = true;
+                duration = 0.4f; // Longer duration for ride
+            }
+            else if (event.primitive == "crash")
+            {
+                midiNote = 49; // Crash Cymbal 1
+                channel = 9;
+                isPercussion = true;
+                duration = 0.8f; // Long duration for crash
+            }
+            else if (event.primitive == "tom1")
+            {
+                midiNote = 48; // Hi-Mid Tom
+                channel = 9;
+                isPercussion = true;
+                duration = 0.25f; // Medium duration for toms
+            }
+            else if (event.primitive == "tom2")
+            {
+                midiNote = 45; // Low Tom
+                channel = 9;
+                isPercussion = true;
+                duration = 0.3f; // Medium duration for toms
+            }
+            // Map note primitives (e.g., "C3", "E4", etc.)
+            else if (event.primitive.length() >= 2)
+            {
+                // Check if it's a note name like C3, E4, etc.
+                String noteName = event.primitive.substring(0, 1);
+                int octave = event.primitive.substring(1).getIntValue();
+                
+                // Base note values (C = 0, D = 2, E = 4, etc.)
+                int baseNote = -1;
+                if (noteName == "C") baseNote = 0;
+                else if (noteName == "D") baseNote = 2;
+                else if (noteName == "E") baseNote = 4;
+                else if (noteName == "F") baseNote = 5;
+                else if (noteName == "G") baseNote = 7;
+                else if (noteName == "A") baseNote = 9;
+                else if (noteName == "B") baseNote = 11;
+                
+                // Check for sharps and flats
+                if (event.primitive.length() > 2)
+                {
+                    if (event.primitive.substring(1, 2) == "#")
+                    {
+                        baseNote += 1;
+                        octave = event.primitive.substring(2).getIntValue();
+                    }
+                    else if (event.primitive.substring(1, 2) == "b")
+                    {
+                        baseNote -= 1;
+                        octave = event.primitive.substring(2).getIntValue();
+                    }
+                }
+                
+                if (baseNote >= 0)
+                {
+                    midiNote = (octave * 12) + baseNote;
+                    
+                    // Set more natural durations based on the octave (instrument type)
+                    // Lower octaves (bass) have medium duration
+                    // Middle octaves (guitar/piano) have longer durations
+                    if (octave < 3) // Bass range
+                    {
+                        duration = 0.6f + (Random::getSystemRandom().nextFloat() * 0.2f); // 0.6-0.8 seconds with slight randomization
+                    }
+                    else if (octave < 5) // Guitar/Piano range
+                    {
+                        duration = 0.8f + (Random::getSystemRandom().nextFloat() * 0.4f); // 0.8-1.2 seconds with randomization
+                    }
+                    else // Higher octaves
+                    {
+                        duration = 0.5f + (Random::getSystemRandom().nextFloat() * 0.3f); // 0.5-0.8 seconds with randomization
+                    }
+                }
+            } // End of note name parsing
+        } // End of if (!primitiveFound)
         
         // Add the note to the bar - use the position directly without scaling
         // This ensures the timing is preserved exactly as specified in the pattern

@@ -49,7 +49,6 @@ private:
     TextButton playButton;
     TextButton stopButton;
     TextButton playAllButton;
-    ToggleButton patternModeToggle;
     
     // Pattern visualization
     TextEditor patternViewer;
@@ -61,21 +60,15 @@ private:
     // Pattern system for managing hierarchical patterns
     std::unique_ptr<MusicPatternSystem> patternSystem;
     
-    // Pattern-based playback
-    bool usePatternBasedPlayback = false;
+    // Pattern parser for text-based patterns
     std::unique_ptr<PatternParser> patternParser;
     
     // Helper methods
     void createDefaultPatterns();
-    std::shared_ptr<Chart> createDrumPattern(const juce::String& style);
-    std::shared_ptr<Chart> createBassPattern(const juce::String& style);
-    std::shared_ptr<Chart> createPianoPattern(const juce::String& style);
-    std::shared_ptr<Chart> createGuitarPattern(const juce::String& style);
+    std::shared_ptr<Chart> createTestPattern(const juce::String& testType, const juce::String& instrument);
     
     void updatePatternViewer();
     void playCurrentPattern();
-    void playPatternBasedPattern();
-    std::shared_ptr<Chart> createPatternBasedChart(const juce::String& instrumentType, const juce::String& style);
     
 
     
