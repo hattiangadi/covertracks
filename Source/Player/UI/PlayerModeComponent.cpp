@@ -40,6 +40,8 @@ PlayerModeComponent::PlayerModeComponent(PlayerManager& pm)
     patternSelector.addItem("T6_Sections", 6);    // Phrase/section structure
     patternSelector.addItem("T7_References", 7);  // Pattern references
     patternSelector.addItem("T8_Exceptions", 8);  // Exceptions/modifications
+    // Integration test pattern with all features (auto-selects based on instrument)
+    patternSelector.addItem("Integration", 9);  // Complete chart for selected instrument
     patternSelector.setTextWhenNothingSelected("Select pattern");
     patternSelector.addListener(this);
     addAndMakeVisible(patternSelector);
@@ -434,6 +436,17 @@ void PlayerModeComponent::createDefaultPatterns()
     patternSystem->addChart("bass_T8_Exceptions", bassT8);
     patternSystem->addChart("piano_T8_Exceptions", pianoT8);
     patternSystem->addChart("guitar_T8_Exceptions", guitarT8);
+    
+    // Integration: Complete integration charts for each instrument
+    auto drumsIntegration = createTestPattern("Integration", "drums");
+    auto bassIntegration = createTestPattern("Integration", "bass");
+    auto pianoIntegration = createTestPattern("Integration", "piano");
+    auto guitarIntegration = createTestPattern("Integration", "guitar");
+    
+    patternSystem->addChart("drums_Integration", drumsIntegration);
+    patternSystem->addChart("bass_Integration", bassIntegration);
+    patternSystem->addChart("piano_Integration", pianoIntegration);
+    patternSystem->addChart("guitar_Integration", guitarIntegration);
     
     // Select the first instrument and pattern by default
     if (instrumentTypeSelector.getNumItems() > 0)
@@ -830,6 +843,475 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
             }
         })";
     }
+    else if (testType == "Integration")
+    {
+        // Complete integration chart - select based on instrument type
+        if (instrument == "piano")
+        {
+            jsonPattern = R"({
+                "title": "Integration_Piano_Chart",
+            "tempo": 120,
+            "primitives": {
+                "piano": {
+                    "C2": 36, "D2": 38, "E2": 40, "F2": 41, "G2": 43, "A2": 45, "B2": 47,
+                    "C3": 48, "D3": 50, "E3": 52, "F3": 53, "G3": 55, "A3": 57, "B3": 59,
+                    "C4": 60, "D4": 62, "E4": 64, "F4": 65, "G4": 67, "A4": 69, "B4": 71,
+                    "C5": 72, "D5": 74, "E5": 76, "F5": 77, "G5": 79
+                }
+            },
+            "chords": {
+                "Cmaj": ["C3", "E3", "G3"],
+                "Fmaj": ["F3", "A3", "C4"],
+                "Gmaj": ["G3", "B3", "D4"],
+                "Am": ["A3", "C4", "E4"]
+            },
+            "patterns": {
+                "leftHandBass": [
+                    {"beat": 1.0, "primitive": "C2"},
+                    {"beat": 1.5, "primitive": "G2"},
+                    {"beat": 2.0, "primitive": "C3"},
+                    {"beat": 2.5, "primitive": "G2"}
+                ],
+                "rightHandMelody": [
+                    {"beat": 1.0, "primitive": "C4"},
+                    {"beat": 1.5, "primitive": "E4"},
+                    {"beat": 2.0, "primitive": "G4"},
+                    {"beat": 3.0, "primitive": "C5"}
+                ],
+                "arpeggioPattern": [
+                    {"beat": 1.0, "primitive": "C3"},
+                    {"beat": 1.25, "primitive": "E3"},
+                    {"beat": 1.5, "primitive": "G3"},
+                    {"beat": 1.75, "primitive": "C4"},
+                    {"beat": 2.0, "primitive": "E4"},
+                    {"beat": 2.25, "primitive": "G4"},
+                    {"beat": 2.5, "primitive": "C5"},
+                    {"beat": 2.75, "primitive": "G4"}
+                ]
+            },
+            "sections": {
+                "verse": {
+                    "bars": 4,
+                    "basePattern": "leftHandBass",
+                    "variations": {
+                        "bar4": "arpeggioPattern"
+                    },
+                    "layers": {
+                        "leftHandChords": [
+                            {"beat": 1.0, "chord": "Cmaj"},
+                            {"beat": 3.0, "chord": "Fmaj"}
+                        ],
+                        "rightHandMelody": {"pattern": "rightHandMelody"},
+                        "bassLine": [
+                            {"beat": 1.0, "primitive": "C2"},
+                            {"beat": 3.0, "primitive": "F2"}
+                        ]
+                    }
+                },
+                "chorus": {
+                    "bars": 4,
+                    "barPatterns": [
+                        [
+                            {"beat": 1.0, "primitive": "G3"},
+                            {"beat": 1.5, "primitive": "B3"},
+                            {"beat": 2.0, "primitive": "D4"},
+                            {"beat": 3.0, "primitive": "G4"},
+                            {"beat": 4.0, "primitive": "B4"}
+                        ],
+                        [
+                            {"beat": 1.0, "primitive": "A3"},
+                            {"beat": 2.0, "primitive": "C4"},
+                            {"beat": 3.0, "primitive": "E4"},
+                            {"beat": 4.0, "primitive": "A4"}
+                        ],
+                        [
+                            {"beat": 1.0, "primitive": "F3"},
+                            {"beat": 2.0, "primitive": "A3"},
+                            {"beat": 3.0, "primitive": "C4"},
+                            {"beat": 4.0, "primitive": "F4"}
+                        ],
+                        [
+                            {"beat": 1.0, "primitive": "C3"},
+                            {"beat": 2.0, "primitive": "E3"},
+                            {"beat": 3.0, "primitive": "G3"},
+                            {"beat": 4.0, "primitive": "C4"}
+                        ]
+                    ],
+                    "layers": {
+                        "harmonyChords": [
+                            {"beat": 1.0, "chord": "Gmaj"},
+                            {"beat": 2.0, "chord": "Am"},
+                            {"beat": 3.0, "chord": "Fmaj"},
+                            {"beat": 4.0, "chord": "Cmaj"}
+                        ],
+                        "melodyLine": {"pattern": "arpeggioPattern"}
+                    }
+                },
+                "bridge": {
+                    "layers": {
+                        "leftHandArpeggios": [
+                            {"beat": 1.0, "primitive": "A2"},
+                            {"beat": 1.5, "primitive": "C3"},
+                            {"beat": 2.0, "primitive": "E3"},
+                            {"beat": 2.5, "primitive": "A3"},
+                            {"beat": 3.0, "primitive": "G2"},
+                            {"beat": 3.5, "primitive": "B2"},
+                            {"beat": 4.0, "primitive": "D3"}
+                        ],
+                        "rightHandHarmony": [
+                            {"beat": 1.0, "chord": "Am"},
+                            {"beat": 3.0, "chord": "Gmaj"}
+                        ]
+                    }
+                }
+            },
+            "arrangement": ["verse", "chorus", "verse", "chorus", "bridge", "chorus"]
+        })";
+        }
+        else if (instrument == "drums")
+        {
+            jsonPattern = R"({
+                "title": "Integration_Drum_Chart",
+            "tempo": 120,
+            "primitives": {
+                "drums": {
+                    "kick": 36, "snare": 38, "hihat": 42, "openHihat": 46,
+                    "crash": 49, "ride": 51, "tom1": 47, "tom2": 45, "tom3": 43,
+                    "rimshot": 37, "cowbell": 56, "splash": 55
+                }
+            },
+            "patterns": {
+                "kickPattern": [
+                    {"beat": 1.0, "primitive": "kick"},
+                    {"beat": 3.0, "primitive": "kick"}
+                ],
+                "snareBackbeat": [
+                    {"beat": 2.0, "primitive": "snare"},
+                    {"beat": 4.0, "primitive": "snare"}
+                ],
+                "hihatGroove": [
+                    {"beat": 1.0, "primitive": "hihat"},
+                    {"beat": 1.5, "primitive": "hihat"},
+                    {"beat": 2.0, "primitive": "hihat"},
+                    {"beat": 2.5, "primitive": "hihat"},
+                    {"beat": 3.0, "primitive": "hihat"},
+                    {"beat": 3.5, "primitive": "hihat"},
+                    {"beat": 4.0, "primitive": "hihat"},
+                    {"beat": 4.5, "primitive": "hihat"}
+                ],
+                "tomFill": [
+                    {"beat": 1.0, "primitive": "tom1"},
+                    {"beat": 1.5, "primitive": "tom1"},
+                    {"beat": 2.0, "primitive": "tom2"},
+                    {"beat": 2.5, "primitive": "tom2"},
+                    {"beat": 3.0, "primitive": "tom3"},
+                    {"beat": 3.5, "primitive": "tom3"},
+                    {"beat": 4.0, "primitive": "crash"}
+                ]
+            },
+            "sections": {
+                "verse": {
+                    "bars": 4,
+                    "basePattern": "kickPattern",
+                    "variations": {
+                        "bar4": "tomFill"
+                    },
+                    "layers": {
+                        "kickLayer": {"pattern": "kickPattern"},
+                        "snareLayer": {"pattern": "snareBackbeat"},
+                        "hihatLayer": {"pattern": "hihatGroove"}
+                    }
+                },
+                "chorus": {
+                    "bars": 4,
+                    "barPatterns": [
+                        [
+                            {"beat": 1.0, "primitive": "kick"},
+                            {"beat": 1.5, "primitive": "kick"},
+                            {"beat": 2.0, "primitive": "snare"},
+                            {"beat": 3.0, "primitive": "kick"},
+                            {"beat": 4.0, "primitive": "snare"}
+                        ],
+                        [
+                            {"beat": 1.0, "primitive": "kick"},
+                            {"beat": 2.0, "primitive": "snare"},
+                            {"beat": 2.5, "primitive": "rimshot"},
+                            {"beat": 3.0, "primitive": "kick"},
+                            {"beat": 4.0, "primitive": "snare"}
+                        ],
+                        [
+                            {"beat": 1.0, "primitive": "kick"},
+                            {"beat": 1.5, "primitive": "ride"},
+                            {"beat": 2.0, "primitive": "snare"},
+                            {"beat": 2.5, "primitive": "ride"},
+                            {"beat": 3.0, "primitive": "kick"},
+                            {"beat": 3.5, "primitive": "ride"},
+                            {"beat": 4.0, "primitive": "snare"}
+                        ],
+                        [
+                            {"beat": 1.0, "primitive": "kick"},
+                            {"beat": 2.0, "primitive": "crash"},
+                            {"beat": 2.5, "primitive": "splash"},
+                            {"beat": 3.0, "primitive": "kick"},
+                            {"beat": 4.0, "primitive": "crash"}
+                        ]
+                    ]
+                },
+                "breakdown": {
+                    "layers": {
+                        "kickOnly": [
+                            {"beat": 1.0, "primitive": "kick"},
+                            {"beat": 4.0, "primitive": "kick"}
+                        ],
+                        "ghostSnares": [
+                            {"beat": 2.25, "primitive": "snare"},
+                            {"beat": 3.75, "primitive": "snare"}
+                        ],
+                        "openHats": [
+                            {"beat": 2.0, "primitive": "openHihat"},
+                            {"beat": 4.0, "primitive": "openHihat"}
+                        ]
+                    }
+                }
+            },
+            "arrangement": ["verse", "chorus", "verse", "chorus", "breakdown", "chorus"]
+        })";
+        }
+        else if (instrument == "guitar")
+        {
+            jsonPattern = R"({
+                "title": "Integration_Guitar_Chart",
+            "tempo": 120,
+            "primitives": {
+                "guitar": {
+                    "E2": 40, "A2": 45, "D3": 50, "G3": 55, "B3": 59, "E4": 64,
+                    "F2": 41, "Fs2": 42, "G2": 43, "Gs2": 44, "As2": 46, "C3": 48,
+                    "Cs3": 49, "Ds3": 51, "F3": 53, "Fs3": 54, "Gs3": 56, "A3": 57,
+                    "As3": 58, "C4": 60, "Cs4": 61, "D4": 62, "Ds4": 63, "F4": 65
+                }
+            },
+            "chords": {
+                "Cmaj": ["C3", "E4", "G3"],
+                "Fmaj": ["F2", "A2", "C3"],
+                "Gmaj": ["G2", "B3", "D3"],
+                "Am": ["A2", "C3", "E4"]
+            },
+            "patterns": {
+                "strummingPattern": [
+                    {"beat": 1.0, "primitive": "G3"},
+                    {"beat": 1.5, "primitive": "B3"},
+                    {"beat": 2.0, "primitive": "E4"},
+                    {"beat": 2.5, "primitive": "B3"},
+                    {"beat": 3.0, "primitive": "G3"},
+                    {"beat": 3.5, "primitive": "B3"},
+                    {"beat": 4.0, "primitive": "E4"}
+                ],
+                "bassLine": [
+                    {"beat": 1.0, "primitive": "E2"},
+                    {"beat": 1.5, "primitive": "G2"},
+                    {"beat": 2.0, "primitive": "A2"},
+                    {"beat": 3.0, "primitive": "G2"},
+                    {"beat": 4.0, "primitive": "E2"}
+                ],
+                "fingerpicking": [
+                    {"beat": 1.0, "primitive": "E2"},
+                    {"beat": 1.25, "primitive": "G3"},
+                    {"beat": 1.5, "primitive": "B3"},
+                    {"beat": 1.75, "primitive": "E4"},
+                    {"beat": 2.0, "primitive": "B3"},
+                    {"beat": 2.25, "primitive": "G3"},
+                    {"beat": 2.5, "primitive": "E2"},
+                    {"beat": 3.0, "primitive": "A2"}
+                ]
+            },
+            "sections": {
+                "verse": {
+                    "bars": 4,
+                    "basePattern": "strummingPattern",
+                    "variations": {
+                        "bar4": "fingerpicking"
+                    },
+                    "layers": {
+                        "chordProg": [
+                            {"beat": 1.0, "chord": "Cmaj"},
+                            {"beat": 3.0, "chord": "Fmaj"}
+                        ],
+                        "bassLayer": {"pattern": "bassLine"}
+                    }
+                },
+                "chorus": {
+                    "bars": 4,
+                    "barPatterns": [
+                        [
+                            {"beat": 1.0, "primitive": "G2"},
+                            {"beat": 1.5, "primitive": "D3"},
+                            {"beat": 2.0, "primitive": "G3"},
+                            {"beat": 3.0, "primitive": "B3"},
+                            {"beat": 4.0, "primitive": "D4"}
+                        ],
+                        [
+                            {"beat": 1.0, "primitive": "A2"},
+                            {"beat": 2.0, "primitive": "C3"},
+                            {"beat": 3.0, "primitive": "E4"},
+                            {"beat": 4.0, "primitive": "A3"}
+                        ],
+                        [
+                            {"beat": 1.0, "primitive": "F2"},
+                            {"beat": 2.0, "primitive": "A2"},
+                            {"beat": 3.0, "primitive": "C3"},
+                            {"beat": 4.0, "primitive": "F3"}
+                        ],
+                        [
+                            {"beat": 1.0, "primitive": "G2"},
+                            {"beat": 2.0, "primitive": "B3"},
+                            {"beat": 3.0, "primitive": "D3"},
+                            {"beat": 4.0, "primitive": "G3"}
+                        ]
+                    ],
+                    "layers": {
+                        "harmonyChords": [
+                            {"beat": 1.0, "chord": "Gmaj"},
+                            {"beat": 2.0, "chord": "Am"},
+                            {"beat": 3.0, "chord": "Fmaj"},
+                            {"beat": 4.0, "chord": "Gmaj"}
+                        ]
+                    }
+                },
+                "bridge": {
+                    "layers": {
+                        "arpeggios": {"pattern": "fingerpicking"},
+                        "sustainedChords": [
+                            {"beat": 1.0, "chord": "Am"},
+                            {"beat": 3.0, "chord": "Fmaj"}
+                        ]
+                    }
+                }
+            },
+            "arrangement": ["verse", "chorus", "verse", "chorus", "bridge", "chorus"]
+        })";
+        }
+        else if (instrument == "bass")
+        {
+            jsonPattern = R"({
+                "title": "Integration_Bass_Chart",
+            "tempo": 120,
+            "primitives": {
+                "bass": {
+                    "E1": 28, "F1": 29, "Fs1": 30, "G1": 31, "Gs1": 32, "A1": 33, "As1": 34, "B1": 35,
+                    "C2": 36, "Cs2": 37, "D2": 38, "Ds2": 39, "E2": 40, "F2": 41, "Fs2": 42, "G2": 43,
+                    "Gs2": 44, "A2": 45, "As2": 46, "B2": 47, "C3": 48, "Cs3": 49, "D3": 50, "Ds3": 51,
+                    "E3": 52, "F3": 53, "Fs3": 54, "G3": 55
+                }
+            },
+            "patterns": {
+                "walkingBass": [
+                    {"beat": 1.0, "primitive": "C2"},
+                    {"beat": 1.5, "primitive": "D2"},
+                    {"beat": 2.0, "primitive": "E2"},
+                    {"beat": 2.5, "primitive": "F2"},
+                    {"beat": 3.0, "primitive": "G2"},
+                    {"beat": 3.5, "primitive": "A2"},
+                    {"beat": 4.0, "primitive": "B2"},
+                    {"beat": 4.5, "primitive": "C3"}
+                ],
+                "rootNotes": [
+                    {"beat": 1.0, "primitive": "C2"},
+                    {"beat": 3.0, "primitive": "F2"}
+                ],
+                "rhythmicPattern": [
+                    {"beat": 1.0, "primitive": "C2"},
+                    {"beat": 1.75, "primitive": "C2"},
+                    {"beat": 2.5, "primitive": "E2"},
+                    {"beat": 3.0, "primitive": "G2"},
+                    {"beat": 4.0, "primitive": "C2"},
+                    {"beat": 4.5, "primitive": "G2"}
+                ],
+                "slapBass": [
+                    {"beat": 1.0, "primitive": "E2"},
+                    {"beat": 1.25, "primitive": "E2"},
+                    {"beat": 1.5, "primitive": "G2"},
+                    {"beat": 2.0, "primitive": "A2"},
+                    {"beat": 2.5, "primitive": "G2"},
+                    {"beat": 3.0, "primitive": "E2"},
+                    {"beat": 4.0, "primitive": "C2"}
+                ]
+            },
+            "sections": {
+                "verse": {
+                    "bars": 4,
+                    "basePattern": "rootNotes",
+                    "variations": {
+                        "bar4": "walkingBass"
+                    },
+                    "layers": {
+                        "fundamentals": {"pattern": "rootNotes"},
+                        "rhythmLayer": [
+                            {"beat": 2.0, "primitive": "C2"},
+                            {"beat": 4.0, "primitive": "F2"}
+                        ]
+                    }
+                },
+                "chorus": {
+                    "bars": 4,
+                    "barPatterns": [
+                        [
+                            {"beat": 1.0, "primitive": "G1"},
+                            {"beat": 1.5, "primitive": "G2"},
+                            {"beat": 2.0, "primitive": "D2"},
+                            {"beat": 3.0, "primitive": "G2"},
+                            {"beat": 4.0, "primitive": "B2"}
+                        ],
+                        [
+                            {"beat": 1.0, "primitive": "A1"},
+                            {"beat": 2.0, "primitive": "C2"},
+                            {"beat": 3.0, "primitive": "E2"},
+                            {"beat": 4.0, "primitive": "A2"}
+                        ],
+                        [
+                            {"beat": 1.0, "primitive": "F1"},
+                            {"beat": 2.0, "primitive": "A2"},
+                            {"beat": 3.0, "primitive": "C2"},
+                            {"beat": 4.0, "primitive": "F2"}
+                        ],
+                        [
+                            {"beat": 1.0, "primitive": "C2"},
+                            {"beat": 1.5, "primitive": "E2"},
+                            {"beat": 2.0, "primitive": "G2"},
+                            {"beat": 3.0, "primitive": "C3"},
+                            {"beat": 4.0, "primitive": "G2"}
+                        ]
+                    ]
+                },
+                "breakdown": {
+                    "layers": {
+                        "slapGroove": {"pattern": "slapBass"},
+                        "rhythmicAccents": {"pattern": "rhythmicPattern"}
+                    }
+                }
+            },
+            "arrangement": ["verse", "chorus", "verse", "chorus", "breakdown", "chorus"]
+        })";
+        }
+        else
+        {
+            // Default integration pattern for other instruments
+            jsonPattern = R"({
+                "title": "Integration_Default_Chart",
+                "tempo": 120,
+                "primitives": {
+                    "instrument": {"C4": 60, "E4": 64, "G4": 67, "C5": 72}
+                },
+                "sections": {
+                    "main": [
+                        {"beat": 1.0, "primitive": "C4"},
+                        {"beat": 2.0, "primitive": "E4"},
+                        {"beat": 3.0, "primitive": "G4"},
+                        {"beat": 4.0, "primitive": "C5"}
+                    ]
+                }
+            })";
+        }
+    }
     else
     {
         // Default fallback pattern
@@ -1056,6 +1538,7 @@ void PlayerModeComponent::updateCurrentChart()
         case 6: patternSuffix = "_T6_Sections"; break;
         case 7: patternSuffix = "_T7_References"; break;
         case 8: patternSuffix = "_T8_Exceptions"; break;
+        case 9: patternSuffix = "_Integration"; break;
         default: patternSuffix = "_T1_Notes"; break;
     }
     
