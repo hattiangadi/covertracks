@@ -481,10 +481,10 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
                 },
                 "sections": {
                     "main": [
-                        {"beat": 1.0, "primitive": "kick"},
-                        {"beat": 2.0, "primitive": "snare"},
-                        {"beat": 3.0, "primitive": "kick"},
-                        {"beat": 4.0, "primitive": "snare"}
+                        [1.0, "kick"],
+                        [2.0, "snare"],
+                        [3.0, "kick"],
+                        [4.0, "snare"]
                     ]
                 }
             })";
@@ -499,10 +499,10 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
                 },
                 "sections": {
                     "main": [
-                        {"beat": 1.0, "primitive": "C2"},
-                        {"beat": 2.0, "primitive": "D2"},
-                        {"beat": 3.0, "primitive": "E2"},
-                        {"beat": 4.0, "primitive": "G2"}
+                        [1.0, "C2"],
+                        [2.0, "D2"],
+                        [3.0, "E2"],
+                        [4.0, "G2"]
                     ]
                 }
             })";
@@ -517,10 +517,10 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
                 },
                 "sections": {
                     "main": [
-                        {"beat": 1.0, "primitive": "C3"},
-                        {"beat": 2.0, "primitive": "E3"},
-                        {"beat": 3.0, "primitive": "G3"},
-                        {"beat": 4.0, "primitive": "C4"}
+                        [1.0, "C3"],
+                        [2.0, "E3"],
+                        [3.0, "G3"],
+                        [4.0, "C4"]
                     ]
                 }
             })";
@@ -535,10 +535,10 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
                 },
                 "sections": {
                     "main": [
-                        {"beat": 1.0, "primitive": "E3"},
-                        {"beat": 2.0, "primitive": "A3"},
-                        {"beat": 3.0, "primitive": "D4"},
-                        {"beat": 4.0, "primitive": "G4"}
+                        [1.0, "E3"],
+                        [2.0, "A3"],
+                        [3.0, "D4"],
+                        [4.0, "G4"]
                     ]
                 }
             })";
@@ -560,29 +560,29 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
                         "bars": 4,
                         "barPatterns": [
                             [
-                                {"beat": 1.0, "primitive": "kick"},
-                                {"beat": 2.0, "primitive": "snare"},
-                                {"beat": 3.0, "primitive": "kick"},
-                                {"beat": 4.0, "primitive": "snare"}
+                                [1.0, "kick"],
+                                [2.0, "snare"],
+                                [3.0, "kick"],
+                                [4.0, "snare"]
                             ],
                             [
-                                {"beat": 1.0, "primitive": "kick"},
-                                {"beat": 1.5, "primitive": "kick"},
-                                {"beat": 2.0, "primitive": "snare"},
-                                {"beat": 4.0, "primitive": "snare"}
+                                [1.0, "kick"],
+                                [1.5, "kick"],
+                                [2.0, "snare"],
+                                [4.0, "snare"]
                             ],
                             [
-                                {"beat": 1.0, "primitive": "kick"},
-                                {"beat": 2.0, "primitive": "snare"},
-                                {"beat": 3.0, "primitive": "kick"},
-                                {"beat": 4.0, "primitive": "snare"}
+                                [1.0, "kick"],
+                                [2.0, "snare"],
+                                [3.0, "kick"],
+                                [4.0, "snare"]
                             ],
                             [
-                                {"beat": 1.0, "primitive": "kick"},
-                                {"beat": 2.0, "primitive": "tom"},
-                                {"beat": 2.5, "primitive": "tom"},
-                                {"beat": 3.0, "primitive": "tom"},
-                                {"beat": 4.0, "primitive": "snare"}
+                                [1.0, "kick"],
+                                [2.0, "tom"],
+                                [2.5, "tom"],
+                                [3.0, "tom"],
+                                [4.0, "snare"]
                             ]
                         ]
                     }
@@ -602,23 +602,23 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
                         "bars": 3,
                         "barPatterns": [
                             [
-                                {"beat": 1.0, "primitive": "C4"},
-                                {"beat": 2.0, "primitive": "E4"},
-                                {"beat": 3.0, "primitive": "G4"},
-                                {"beat": 4.0, "primitive": "C5"}
+                                [1.0, "C4"],
+                                [2.0, "E4"],
+                                [3.0, "G4"],
+                                [4.0, "C5"]
                             ],
                             [
-                                {"beat": 1.0, "primitive": "D4"},
-                                {"beat": 2.0, "primitive": "F4"},
-                                {"beat": 3.0, "primitive": "A4"},
-                                {"beat": 4.0, "primitive": "D5"}
+                                [1.0, "D4"],
+                                [2.0, "F4"],
+                                [3.0, "A4"],
+                                [4.0, "D5"]
                             ],
                             [
-                                {"beat": 1.0, "primitive": "C4"},
-                                {"beat": 1.5, "primitive": "E4"},
-                                {"beat": 2.0, "primitive": "G4"},
-                                {"beat": 3.0, "primitive": "C5"},
-                                {"beat": 4.0, "primitive": "G4"}
+                                [1.0, "C4"],
+                                [1.5, "E4"],
+                                [2.0, "G4"],
+                                [3.0, "C5"],
+                                [4.0, "G4"]
                             ]
                         ]
                     }
@@ -641,8 +641,8 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
             },
             "sections": {
                 "main": [
-                    {"beat": 1.0, "chord": "Cmaj"},
-                    {"beat": 3.0, "chord": "Fmaj"}
+                    [1.0, {"chord": "Cmaj"}],
+                    [3.0, {"chord": "Fmaj"}]
                 ]
             }
         })";
@@ -662,22 +662,22 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
                     "main": {
                         "layers": {
                             "kickPattern": [
-                                {"beat": 1.0, "primitive": "kick"},
-                                {"beat": 3.0, "primitive": "kick"}
+                                [1.0, "kick"],
+                                [3.0, "kick"]
                             ],
                             "snarePattern": [
-                                {"beat": 2.0, "primitive": "snare"},
-                                {"beat": 4.0, "primitive": "snare"}
+                                [2.0, "snare"],
+                                [4.0, "snare"]
                             ],
                             "hihatPattern": [
-                                {"beat": 1.0, "primitive": "hihat"},
-                                {"beat": 1.5, "primitive": "hihat"},
-                                {"beat": 2.0, "primitive": "hihat"},
-                                {"beat": 2.5, "primitive": "hihat"},
-                                {"beat": 3.0, "primitive": "hihat"},
-                                {"beat": 3.5, "primitive": "hihat"},
-                                {"beat": 4.0, "primitive": "hihat"},
-                                {"beat": 4.5, "primitive": "hihat"}
+                                [1.0, "hihat"],
+                                [1.5, "hihat"],
+                                [2.0, "hihat"],
+                                [2.5, "hihat"],
+                                [3.0, "hihat"],
+                                [3.5, "hihat"],
+                                [4.0, "hihat"],
+                                [4.5, "hihat"]
                             ]
                         }
                     }
@@ -697,14 +697,14 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
                     "main": {
                         "layers": {
                             "piano": [
-                                {"beat": 1.0, "primitive": "C4"},
-                                {"beat": 1.5, "primitive": "E4"},
-                                {"beat": 2.0, "primitive": "G4"},
-                                {"beat": 2.5, "primitive": "C5"}
+                                [1.0, "C4"],
+                                [1.5, "E4"],
+                                [2.0, "G4"],
+                                [2.5, "C5"]
                             ],
                             "bass": [
-                                {"beat": 1.0, "primitive": "C2"},
-                                {"beat": 3.0, "primitive": "G2"}
+                                [1.0, "C2"],
+                                [3.0, "G2"]
                             ]
                         }
                     }
@@ -734,15 +734,15 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
                 "main": {
                     "layers": {
                         "leftHand": [
-                            {"beat": 1.0, "chord": "Cmaj"},
-                            {"beat": 2.0, "chord": "Cmaj"},
-                            {"beat": 3.0, "chord": "Fmaj"},
-                            {"beat": 4.0, "chord": "Gmaj"}
+                            [1.0, {"chord": "Cmaj"}],
+                            [2.0, {"chord": "Cmaj"}],
+                            [3.0, {"chord": "Fmaj"}],
+                            [4.0, {"chord": "Gmaj"}]
                         ],
                         "rightHandStructure": [
-                            {"beat": 1.5, "primitive": "C4"},
-                            {"beat": 2.5, "primitive": "D4"},
-                            {"beat": 3.5, "primitive": "G4"}
+                            [1.5, "C4"],
+                            [2.5, "D4"],
+                            [3.5, "G4"]
                         ]
                     }
                 }
@@ -760,22 +760,22 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
             },
             "sections": {
                 "verse": [
-                    {"beat": 1.0, "primitive": "C4"},
-                    {"beat": 2.0, "primitive": "E4"},
-                    {"beat": 3.0, "primitive": "G4"},
-                    {"beat": 4.0, "primitive": "C4"}
+                    [1.0, "C4"],
+                    [2.0, "E4"],
+                    [3.0, "G4"],
+                    [4.0, "C4"]
                 ],
                 "chorus": [
-                    {"beat": 1.0, "primitive": "G4"},
-                    {"beat": 2.0, "primitive": "B4"},
-                    {"beat": 3.0, "primitive": "D5"},
-                    {"beat": 4.0, "primitive": "G5"}
+                    [1.0, "G4"],
+                    [2.0, "B4"],
+                    [3.0, "D5"],
+                    [4.0, "G5"]
                 ],
                 "bridge": [
-                    {"beat": 1.0, "primitive": "B4"},
-                    {"beat": 2.0, "primitive": "D5"},
-                    {"beat": 3.0, "primitive": "G5"},
-                    {"beat": 4.0, "primitive": "B4"}
+                    [1.0, "B4"],
+                    [2.0, "D5"],
+                    [3.0, "G5"],
+                    [4.0, "B4"]
                 ]
             },
             "arrangement": ["verse", "chorus", "verse", "chorus", "bridge", "chorus"]
@@ -792,10 +792,10 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
             },
             "patterns": {
                 "basicBeat": [
-                    {"beat": 1.0, "primitive": "kick"},
-                    {"beat": 2.0, "primitive": "snare"},
-                    {"beat": 3.0, "primitive": "kick"},
-                    {"beat": 4.0, "primitive": "snare"}
+                    [1.0, "kick"],
+                    [2.0, "snare"],
+                    [3.0, "kick"],
+                    [4.0, "snare"]
                 ]
             },
             "sections": {
@@ -818,18 +818,18 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
             },
             "patterns": {
                 "basicBeat": [
-                    {"beat": 1.0, "primitive": "kick"},
-                    {"beat": 2.0, "primitive": "snare"},
-                    {"beat": 3.0, "primitive": "kick"},
-                    {"beat": 4.0, "primitive": "snare"}
+                    [1.0, "kick"],
+                    [2.0, "snare"],
+                    [3.0, "kick"],
+                    [4.0, "snare"]
                 ],
                 "fillEnding": [
-                    {"beat": 1.0, "primitive": "kick"},
-                    {"beat": 1.5, "primitive": "tom"},
-                    {"beat": 2.0, "primitive": "tom"},
-                    {"beat": 2.5, "primitive": "tom"},
-                    {"beat": 3.0, "primitive": "snare"},
-                    {"beat": 4.0, "primitive": "crash"}
+                    [1.0, "kick"],
+                    [1.5, "tom"],
+                    [2.0, "tom"],
+                    [2.5, "tom"],
+                    [3.0, "snare"],
+                    [4.0, "crash"]
                 ]
             },
             "sections": {
@@ -867,26 +867,26 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
             },
             "patterns": {
                 "leftHandBass": [
-                    {"beat": 1.0, "primitive": "C2"},
-                    {"beat": 1.5, "primitive": "G2"},
-                    {"beat": 2.0, "primitive": "C3"},
-                    {"beat": 2.5, "primitive": "G2"}
+                    [1.0, "C2"],
+                    [1.5, "G2"],
+                    [2.0, "C3"],
+                    [2.5, "G2"]
                 ],
                 "rightHandMelody": [
-                    {"beat": 1.0, "primitive": "C4"},
-                    {"beat": 1.5, "primitive": "E4"},
-                    {"beat": 2.0, "primitive": "G4"},
-                    {"beat": 3.0, "primitive": "C5"}
+                    [1.0, "C4"],
+                    [1.5, "E4"],
+                    [2.0, "G4"],
+                    [3.0, "C5"]
                 ],
                 "arpeggioPattern": [
-                    {"beat": 1.0, "primitive": "C3"},
-                    {"beat": 1.25, "primitive": "E3"},
-                    {"beat": 1.5, "primitive": "G3"},
-                    {"beat": 1.75, "primitive": "C4"},
-                    {"beat": 2.0, "primitive": "E4"},
-                    {"beat": 2.25, "primitive": "G4"},
-                    {"beat": 2.5, "primitive": "C5"},
-                    {"beat": 2.75, "primitive": "G4"}
+                    [1.0, "C3"],
+                    [1.25, "E3"],
+                    [1.5, "G3"],
+                    [1.75, "C4"],
+                    [2.0, "E4"],
+                    [2.25, "G4"],
+                    [2.5, "C5"],
+                    [2.75, "G4"]
                 ]
             },
             "sections": {
@@ -898,13 +898,13 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
                     },
                     "layers": {
                         "leftHandChords": [
-                            {"beat": 1.0, "chord": "Cmaj"},
-                            {"beat": 3.0, "chord": "Fmaj"}
+                            [1.0, {"chord": "Cmaj"}],
+                            [3.0, {"chord": "Fmaj"}]
                         ],
                         "rightHandMelody": {"pattern": "rightHandMelody"},
                         "bassLine": [
-                            {"beat": 1.0, "primitive": "C2"},
-                            {"beat": 3.0, "primitive": "F2"}
+                            [1.0, "C2"],
+                            [3.0, "F2"]
                         ]
                     }
                 },
@@ -912,37 +912,37 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
                     "bars": 4,
                     "barPatterns": [
                         [
-                            {"beat": 1.0, "primitive": "G3"},
-                            {"beat": 1.5, "primitive": "B3"},
-                            {"beat": 2.0, "primitive": "D4"},
-                            {"beat": 3.0, "primitive": "G4"},
-                            {"beat": 4.0, "primitive": "B4"}
+                            [1.0, "G3"],
+                            [1.5, "B3"],
+                            [2.0, "D4"],
+                            [3.0, "G4"],
+                            [4.0, "B4"]
                         ],
                         [
-                            {"beat": 1.0, "primitive": "A3"},
-                            {"beat": 2.0, "primitive": "C4"},
-                            {"beat": 3.0, "primitive": "E4"},
-                            {"beat": 4.0, "primitive": "A4"}
+                            [1.0, "A3"],
+                            [2.0, "C4"],
+                            [3.0, "E4"],
+                            [4.0, "A4"]
                         ],
                         [
-                            {"beat": 1.0, "primitive": "F3"},
-                            {"beat": 2.0, "primitive": "A3"},
-                            {"beat": 3.0, "primitive": "C4"},
-                            {"beat": 4.0, "primitive": "F4"}
+                            [1.0, "F3"],
+                            [2.0, "A3"],
+                            [3.0, "C4"],
+                            [4.0, "F4"]
                         ],
                         [
-                            {"beat": 1.0, "primitive": "C3"},
-                            {"beat": 2.0, "primitive": "E3"},
-                            {"beat": 3.0, "primitive": "G3"},
-                            {"beat": 4.0, "primitive": "C4"}
+                            [1.0, "C3"],
+                            [2.0, "E3"],
+                            [3.0, "G3"],
+                            [4.0, "C4"]
                         ]
                     ],
                     "layers": {
                         "harmonyChords": [
-                            {"beat": 1.0, "chord": "Gmaj"},
-                            {"beat": 2.0, "chord": "Am"},
-                            {"beat": 3.0, "chord": "Fmaj"},
-                            {"beat": 4.0, "chord": "Cmaj"}
+                            [1.0, {"chord": "Gmaj"}],
+                            [2.0, {"chord": "Am"}],
+                            [3.0, {"chord": "Fmaj"}],
+                            [4.0, {"chord": "Cmaj"}]
                         ],
                         "melodyLine": {"pattern": "arpeggioPattern"}
                     }
@@ -950,17 +950,17 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
                 "bridge": {
                     "layers": {
                         "leftHandArpeggios": [
-                            {"beat": 1.0, "primitive": "A2"},
-                            {"beat": 1.5, "primitive": "C3"},
-                            {"beat": 2.0, "primitive": "E3"},
-                            {"beat": 2.5, "primitive": "A3"},
-                            {"beat": 3.0, "primitive": "G2"},
-                            {"beat": 3.5, "primitive": "B2"},
-                            {"beat": 4.0, "primitive": "D3"}
+                            [1.0, "A2"],
+                            [1.5, "C3"],
+                            [2.0, "E3"],
+                            [2.5, "A3"],
+                            [3.0, "G2"],
+                            [3.5, "B2"],
+                            [4.0, "D3"]
                         ],
                         "rightHandHarmony": [
-                            {"beat": 1.0, "chord": "Am"},
-                            {"beat": 3.0, "chord": "Gmaj"}
+                            [1.0, {"chord": "Am"}],
+                            [3.0, {"chord": "Gmaj"}]
                         ]
                     }
                 }
@@ -982,31 +982,31 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
             },
             "patterns": {
                 "kickPattern": [
-                    {"beat": 1.0, "primitive": "kick"},
-                    {"beat": 3.0, "primitive": "kick"}
+                    [1.0, "kick"],
+                    [3.0, "kick"]
                 ],
                 "snareBackbeat": [
-                    {"beat": 2.0, "primitive": "snare"},
-                    {"beat": 4.0, "primitive": "snare"}
+                    [2.0, "snare"],
+                    [4.0, "snare"]
                 ],
                 "hihatGroove": [
-                    {"beat": 1.0, "primitive": "hihat"},
-                    {"beat": 1.5, "primitive": "hihat"},
-                    {"beat": 2.0, "primitive": "hihat"},
-                    {"beat": 2.5, "primitive": "hihat"},
-                    {"beat": 3.0, "primitive": "hihat"},
-                    {"beat": 3.5, "primitive": "hihat"},
-                    {"beat": 4.0, "primitive": "hihat"},
-                    {"beat": 4.5, "primitive": "hihat"}
+                    [1.0, "hihat"],
+                    [1.5, "hihat"],
+                    [2.0, "hihat"],
+                    [2.5, "hihat"],
+                    [3.0, "hihat"],
+                    [3.5, "hihat"],
+                    [4.0, "hihat"],
+                    [4.5, "hihat"]
                 ],
                 "tomFill": [
-                    {"beat": 1.0, "primitive": "tom1"},
-                    {"beat": 1.5, "primitive": "tom1"},
-                    {"beat": 2.0, "primitive": "tom2"},
-                    {"beat": 2.5, "primitive": "tom2"},
-                    {"beat": 3.0, "primitive": "tom3"},
-                    {"beat": 3.5, "primitive": "tom3"},
-                    {"beat": 4.0, "primitive": "crash"}
+                    [1.0, "tom1"],
+                    [1.5, "tom1"],
+                    [2.0, "tom2"],
+                    [2.5, "tom2"],
+                    [3.0, "tom3"],
+                    [3.5, "tom3"],
+                    [4.0, "crash"]
                 ]
             },
             "sections": {
@@ -1026,50 +1026,50 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
                     "bars": 4,
                     "barPatterns": [
                         [
-                            {"beat": 1.0, "primitive": "kick"},
-                            {"beat": 1.5, "primitive": "kick"},
-                            {"beat": 2.0, "primitive": "snare"},
-                            {"beat": 3.0, "primitive": "kick"},
-                            {"beat": 4.0, "primitive": "snare"}
+                            [1.0, "kick"],
+                            [1.5, "kick"],
+                            [2.0, "snare"],
+                            [3.0, "kick"],
+                            [4.0, "snare"]
                         ],
                         [
-                            {"beat": 1.0, "primitive": "kick"},
-                            {"beat": 2.0, "primitive": "snare"},
-                            {"beat": 2.5, "primitive": "rimshot"},
-                            {"beat": 3.0, "primitive": "kick"},
-                            {"beat": 4.0, "primitive": "snare"}
+                            [1.0, "kick"],
+                            [2.0, "snare"],
+                            [2.5, "rimshot"],
+                            [3.0, "kick"],
+                            [4.0, "snare"]
                         ],
                         [
-                            {"beat": 1.0, "primitive": "kick"},
-                            {"beat": 1.5, "primitive": "ride"},
-                            {"beat": 2.0, "primitive": "snare"},
-                            {"beat": 2.5, "primitive": "ride"},
-                            {"beat": 3.0, "primitive": "kick"},
-                            {"beat": 3.5, "primitive": "ride"},
-                            {"beat": 4.0, "primitive": "snare"}
+                            [1.0, "kick"],
+                            [1.5, "ride"],
+                            [2.0, "snare"],
+                            [2.5, "ride"],
+                            [3.0, "kick"],
+                            [3.5, "ride"],
+                            [4.0, "snare"]
                         ],
                         [
-                            {"beat": 1.0, "primitive": "kick"},
-                            {"beat": 2.0, "primitive": "crash"},
-                            {"beat": 2.5, "primitive": "splash"},
-                            {"beat": 3.0, "primitive": "kick"},
-                            {"beat": 4.0, "primitive": "crash"}
+                            [1.0, "kick"],
+                            [2.0, "crash"],
+                            [2.5, "splash"],
+                            [3.0, "kick"],
+                            [4.0, "crash"]
                         ]
                     ]
                 },
                 "breakdown": {
                     "layers": {
                         "kickOnly": [
-                            {"beat": 1.0, "primitive": "kick"},
-                            {"beat": 4.0, "primitive": "kick"}
+                            [1.0, "kick"],
+                            [4.0, "kick"]
                         ],
                         "ghostSnares": [
-                            {"beat": 2.25, "primitive": "snare"},
-                            {"beat": 3.75, "primitive": "snare"}
+                            [2.25, "snare"],
+                            [3.75, "snare"]
                         ],
                         "openHats": [
-                            {"beat": 2.0, "primitive": "openHihat"},
-                            {"beat": 4.0, "primitive": "openHihat"}
+                            [2.0, "openHihat"],
+                            [4.0, "openHihat"]
                         ]
                     }
                 }
@@ -1098,30 +1098,30 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
             },
             "patterns": {
                 "strummingPattern": [
-                    {"beat": 1.0, "primitive": "G3"},
-                    {"beat": 1.5, "primitive": "B3"},
-                    {"beat": 2.0, "primitive": "E4"},
-                    {"beat": 2.5, "primitive": "B3"},
-                    {"beat": 3.0, "primitive": "G3"},
-                    {"beat": 3.5, "primitive": "B3"},
-                    {"beat": 4.0, "primitive": "E4"}
+                    [1.0, "G3"],
+                    [1.5, "B3"],
+                    [2.0, "E4"],
+                    [2.5, "B3"],
+                    [3.0, "G3"],
+                    [3.5, "B3"],
+                    [4.0, "E4"]
                 ],
                 "bassLine": [
-                    {"beat": 1.0, "primitive": "E2"},
-                    {"beat": 1.5, "primitive": "G2"},
-                    {"beat": 2.0, "primitive": "A2"},
-                    {"beat": 3.0, "primitive": "G2"},
-                    {"beat": 4.0, "primitive": "E2"}
+                    [1.0, "E2"],
+                    [1.5, "G2"],
+                    [2.0, "A2"],
+                    [3.0, "G2"],
+                    [4.0, "E2"]
                 ],
                 "fingerpicking": [
-                    {"beat": 1.0, "primitive": "E2"},
-                    {"beat": 1.25, "primitive": "G3"},
-                    {"beat": 1.5, "primitive": "B3"},
-                    {"beat": 1.75, "primitive": "E4"},
-                    {"beat": 2.0, "primitive": "B3"},
-                    {"beat": 2.25, "primitive": "G3"},
-                    {"beat": 2.5, "primitive": "E2"},
-                    {"beat": 3.0, "primitive": "A2"}
+                    [1.0, "E2"],
+                    [1.25, "G3"],
+                    [1.5, "B3"],
+                    [1.75, "E4"],
+                    [2.0, "B3"],
+                    [2.25, "G3"],
+                    [2.5, "E2"],
+                    [3.0, "A2"]
                 ]
             },
             "sections": {
@@ -1133,8 +1133,8 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
                     },
                     "layers": {
                         "chordProg": [
-                            {"beat": 1.0, "chord": "Cmaj"},
-                            {"beat": 3.0, "chord": "Fmaj"}
+                            [1.0, {"chord": "Cmaj"}],
+                            [3.0, {"chord": "Fmaj"}]
                         ],
                         "bassLayer": {"pattern": "bassLine"}
                     }
@@ -1143,37 +1143,37 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
                     "bars": 4,
                     "barPatterns": [
                         [
-                            {"beat": 1.0, "primitive": "G2"},
-                            {"beat": 1.5, "primitive": "D3"},
-                            {"beat": 2.0, "primitive": "G3"},
-                            {"beat": 3.0, "primitive": "B3"},
-                            {"beat": 4.0, "primitive": "D4"}
+                            [1.0, "G2"],
+                            [1.5, "D3"],
+                            [2.0, "G3"],
+                            [3.0, "B3"],
+                            [4.0, "D4"]
                         ],
                         [
-                            {"beat": 1.0, "primitive": "A2"},
-                            {"beat": 2.0, "primitive": "C3"},
-                            {"beat": 3.0, "primitive": "E4"},
-                            {"beat": 4.0, "primitive": "A3"}
+                            [1.0, "A2"],
+                            [2.0, "C3"],
+                            [3.0, "E4"],
+                            [4.0, "A3"]
                         ],
                         [
-                            {"beat": 1.0, "primitive": "F2"},
-                            {"beat": 2.0, "primitive": "A2"},
-                            {"beat": 3.0, "primitive": "C3"},
-                            {"beat": 4.0, "primitive": "F3"}
+                            [1.0, "F2"],
+                            [2.0, "A2"],
+                            [3.0, "C3"],
+                            [4.0, "F3"]
                         ],
                         [
-                            {"beat": 1.0, "primitive": "G2"},
-                            {"beat": 2.0, "primitive": "B3"},
-                            {"beat": 3.0, "primitive": "D3"},
-                            {"beat": 4.0, "primitive": "G3"}
+                            [1.0, "G2"],
+                            [2.0, "B3"],
+                            [3.0, "D3"],
+                            [4.0, "G3"]
                         ]
                     ],
                     "layers": {
                         "harmonyChords": [
-                            {"beat": 1.0, "chord": "Gmaj"},
-                            {"beat": 2.0, "chord": "Am"},
-                            {"beat": 3.0, "chord": "Fmaj"},
-                            {"beat": 4.0, "chord": "Gmaj"}
+                            [1.0, {"chord": "Gmaj"}],
+                            [2.0, {"chord": "Am"}],
+                            [3.0, {"chord": "Fmaj"}],
+                            [4.0, {"chord": "Gmaj"}]
                         ]
                     }
                 },
@@ -1181,8 +1181,8 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
                     "layers": {
                         "arpeggios": {"pattern": "fingerpicking"},
                         "sustainedChords": [
-                            {"beat": 1.0, "chord": "Am"},
-                            {"beat": 3.0, "chord": "Fmaj"}
+                            [1.0, {"chord": "Am"}],
+                            [3.0, {"chord": "Fmaj"}]
                         ]
                     }
                 }
@@ -1205,35 +1205,35 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
             },
             "patterns": {
                 "walkingBass": [
-                    {"beat": 1.0, "primitive": "C2"},
-                    {"beat": 1.5, "primitive": "D2"},
-                    {"beat": 2.0, "primitive": "E2"},
-                    {"beat": 2.5, "primitive": "F2"},
-                    {"beat": 3.0, "primitive": "G2"},
-                    {"beat": 3.5, "primitive": "A2"},
-                    {"beat": 4.0, "primitive": "B2"},
-                    {"beat": 4.5, "primitive": "C3"}
+                    [1.0, "C2"],
+                    [1.5, "D2"],
+                    [2.0, "E2"],
+                    [2.5, "F2"],
+                    [3.0, "G2"],
+                    [3.5, "A2"],
+                    [4.0, "B2"],
+                    [4.5, "C3"]
                 ],
                 "rootNotes": [
-                    {"beat": 1.0, "primitive": "C2"},
-                    {"beat": 3.0, "primitive": "F2"}
+                    [1.0, "C2"],
+                    [3.0, "F2"]
                 ],
                 "rhythmicPattern": [
-                    {"beat": 1.0, "primitive": "C2"},
-                    {"beat": 1.75, "primitive": "C2"},
-                    {"beat": 2.5, "primitive": "E2"},
-                    {"beat": 3.0, "primitive": "G2"},
-                    {"beat": 4.0, "primitive": "C2"},
-                    {"beat": 4.5, "primitive": "G2"}
+                    [1.0, "C2"],
+                    [1.75, "C2"],
+                    [2.5, "E2"],
+                    [3.0, "G2"],
+                    [4.0, "C2"],
+                    [4.5, "G2"]
                 ],
                 "slapBass": [
-                    {"beat": 1.0, "primitive": "E2"},
-                    {"beat": 1.25, "primitive": "E2"},
-                    {"beat": 1.5, "primitive": "G2"},
-                    {"beat": 2.0, "primitive": "A2"},
-                    {"beat": 2.5, "primitive": "G2"},
-                    {"beat": 3.0, "primitive": "E2"},
-                    {"beat": 4.0, "primitive": "C2"}
+                    [1.0, "E2"],
+                    [1.25, "E2"],
+                    [1.5, "G2"],
+                    [2.0, "A2"],
+                    [2.5, "G2"],
+                    [3.0, "E2"],
+                    [4.0, "C2"]
                 ]
             },
             "sections": {
@@ -1246,8 +1246,8 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
                     "layers": {
                         "fundamentals": {"pattern": "rootNotes"},
                         "rhythmLayer": [
-                            {"beat": 2.0, "primitive": "C2"},
-                            {"beat": 4.0, "primitive": "F2"}
+                            [2.0, "C2"],
+                            [4.0, "F2"]
                         ]
                     }
                 },
@@ -1255,30 +1255,30 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
                     "bars": 4,
                     "barPatterns": [
                         [
-                            {"beat": 1.0, "primitive": "G1"},
-                            {"beat": 1.5, "primitive": "G2"},
-                            {"beat": 2.0, "primitive": "D2"},
-                            {"beat": 3.0, "primitive": "G2"},
-                            {"beat": 4.0, "primitive": "B2"}
+                            [1.0, "G1"],
+                            [1.5, "G2"],
+                            [2.0, "D2"],
+                            [3.0, "G2"],
+                            [4.0, "B2"]
                         ],
                         [
-                            {"beat": 1.0, "primitive": "A1"},
-                            {"beat": 2.0, "primitive": "C2"},
-                            {"beat": 3.0, "primitive": "E2"},
-                            {"beat": 4.0, "primitive": "A2"}
+                            [1.0, "A1"],
+                            [2.0, "C2"],
+                            [3.0, "E2"],
+                            [4.0, "A2"]
                         ],
                         [
-                            {"beat": 1.0, "primitive": "F1"},
-                            {"beat": 2.0, "primitive": "A2"},
-                            {"beat": 3.0, "primitive": "C2"},
-                            {"beat": 4.0, "primitive": "F2"}
+                            [1.0, "F1"],
+                            [2.0, "A2"],
+                            [3.0, "C2"],
+                            [4.0, "F2"]
                         ],
                         [
-                            {"beat": 1.0, "primitive": "C2"},
-                            {"beat": 1.5, "primitive": "E2"},
-                            {"beat": 2.0, "primitive": "G2"},
-                            {"beat": 3.0, "primitive": "C3"},
-                            {"beat": 4.0, "primitive": "G2"}
+                            [1.0, "C2"],
+                            [1.5, "E2"],
+                            [2.0, "G2"],
+                            [3.0, "C3"],
+                            [4.0, "G2"]
                         ]
                     ]
                 },
@@ -1303,10 +1303,10 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
                 },
                 "sections": {
                     "main": [
-                        {"beat": 1.0, "primitive": "C4"},
-                        {"beat": 2.0, "primitive": "E4"},
-                        {"beat": 3.0, "primitive": "G4"},
-                        {"beat": 4.0, "primitive": "C5"}
+                        [1.0, "C4"],
+                        [2.0, "E4"],
+                        [3.0, "G4"],
+                        [4.0, "C5"]
                     ]
                 }
             })";
@@ -1323,10 +1323,10 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
             },
             "sections": {
                 "main": [
-                    {"beat": 1.0, "primitive": "C4"},
-                    {"beat": 2.0, "primitive": "E4"},
-                    {"beat": 3.0, "primitive": "G4"},
-                    {"beat": 4.0, "primitive": "C5"}
+                    [1.0, "C4"],
+                    [2.0, "E4"],
+                    [3.0, "G4"],
+                    [4.0, "C5"]
                 ]
             }
         })";

@@ -394,73 +394,49 @@ std::shared_ptr<Bar> PatternParser::parseBarFromJson(const Array<var>& eventsJso
     
     for (const auto& eventJson : eventsJson)
     {
-        if (!eventJson.isObject())
+        // Handle compact array format: [beat, note] or [beat, {chord: "name"}]
+        if (!eventJson.isArray() || eventJson.size() < 2)
             continue;
             
-        // Extract beat position
-        double beat = 1.0;
-        if (eventJson.hasProperty("beat"))
-            beat = eventJson["beat"];
+        Array<var>* eventArray = eventJson.getArray();
+        double beat = (*eventArray)[0];
+        var noteData = (*eventArray)[1];
         
-        // Extract velocity (0.0-1.0)
+        // Default values
         float velocity = 0.8f;
-        if (eventJson.hasProperty("velocity"))
-            velocity = eventJson["velocity"];
-        
-        // Extract duration
         float duration = 0.25f;
-        if (eventJson.hasProperty("duration"))
-            duration = eventJson["duration"];
         
-        // Handle primitive events
-        if (eventJson.hasProperty("primitive"))
+        // Optional third element for velocity
+        if (eventArray->size() >= 3)
+            velocity = (*eventArray)[2];
+        
+        // Optional fourth element for duration  
+        if (eventArray->size() >= 4)
+            duration = (*eventArray)[3];
+        
+        // Handle note data
+        if (noteData.isString())
         {
-            String primitiveName = eventJson["primitive"].toString();
-            
-            // Find the primitive in any instrument
-            int midiNote = 60; // Default
-            int channel = 0;
-            
-            for (const auto& instrumentPair : primitives)
-            {
-                auto primitiveIt = instrumentPair.second.find(primitiveName);
-                if (primitiveIt != instrumentPair.second.end())
-                {
-                    midiNote = primitiveIt->second;
-                    if (instrumentPair.first == "drums")
-                        channel = 9; // Drum channel
-                    break;
-                }
-            }
-            
+            // Simple note: [1.0, "C4"]
+            String noteName = noteData.toString();
+            int midiNote = findMidiNoteForPrimitive(noteName, primitives);
+            int channel = getChannelForPrimitive(noteName, primitives);
             bar->addNote(static_cast<int>(beat), channel, midiNote, velocity, duration);
-            DBG("Added primitive: " + primitiveName + " at beat " + String(beat) + " (MIDI " + String(midiNote) + ")");
+            DBG("Added note: " + noteName + " at beat " + String(beat) + " (MIDI " + String(midiNote) + ")");
         }
-        // Handle chord events
-        else if (eventJson.hasProperty("chord"))
+        else if (noteData.isObject() && noteData.hasProperty("chord"))
         {
-            String chordName = eventJson["chord"].toString();
+            // Chord reference: [1.0, {chord: "C"}]
+            String chordName = noteData["chord"].toString();
             auto chordIt = chords.find(chordName);
             
             if (chordIt != chords.end())
             {
-                // Add each note in the chord
                 for (const String& noteName : chordIt->second)
                 {
-                    // Find the note in primitives
-                    int midiNote = 60; // Default
-                    
-                    for (const auto& instrumentPair : primitives)
-                    {
-                        auto primitiveIt = instrumentPair.second.find(noteName);
-                        if (primitiveIt != instrumentPair.second.end())
-                        {
-                            midiNote = primitiveIt->second;
-                            break;
-                        }
-                    }
-                    
-                    bar->addNote(static_cast<int>(beat), 0, midiNote, velocity, duration);
+                    int midiNote = findMidiNoteForPrimitive(noteName, primitives);
+                    int channel = getChannelForPrimitive(noteName, primitives);
+                    bar->addNote(static_cast<int>(beat), channel, midiNote, velocity, duration);
                 }
                 DBG("Added chord: " + chordName + " at beat " + String(beat));
             }
@@ -535,6 +511,37 @@ String PatternParser::extractBarNotation(const String& text)
 {
     // For JSON format, bars are part of phrases
     return extractSongNotation(text);
+}
+
+int PatternParser::findMidiNoteForPrimitive(const String& primitiveName, const std::map<String, std::map<String, int>>& primitives)
+{
+    // Find the primitive in any instrument
+    for (const auto& instrumentPair : primitives)
+    {
+        auto primitiveIt = instrumentPair.second.find(primitiveName);
+        if (primitiveIt != instrumentPair.second.end())
+        {
+            return primitiveIt->second;
+        }
+    }
+    return 60; // Default middle C
+}
+
+int PatternParser::getChannelForPrimitive(const String& primitiveName, const std::map<String, std::map<String, int>>& primitives)
+{
+    // Find which instrument this primitive belongs to
+    for (const auto& instrumentPair : primitives)
+    {
+        auto primitiveIt = instrumentPair.second.find(primitiveName);
+        if (primitiveIt != instrumentPair.second.end())
+        {
+            if (instrumentPair.first == "drums")
+                return 9; // Drum channel
+            else
+                return 0; // Default channel
+        }
+    }
+    return 0; // Default channel
 }
 
 } // namespace covertracks

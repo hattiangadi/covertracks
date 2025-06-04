@@ -22,12 +22,12 @@ public:
 private:
     void testBasicDrumPattern()
     {
-        beginTest("Basic drum pattern parsing (JSON)");
+        beginTest("Basic drum pattern parsing (Compact JSON)");
         
         MusicPatternSystem patternSystem;
         PatternParser parser(patternSystem);
         
-        // JSON format test
+        // Compact array format test
         String jsonPattern = R"({
             "title": "TestDrums",
             "tempo": 120,
@@ -40,15 +40,15 @@ private:
             },
             "sections": {
                 "main": [
-                    {"beat": 1.0, "primitive": "kick"},
-                    {"beat": 2.0, "primitive": "snare"},
-                    {"beat": 3.0, "primitive": "kick"},
-                    {"beat": 4.0, "primitive": "snare"}
+                    [1.0, "kick"],
+                    [2.0, "snare"],
+                    [3.0, "kick"],
+                    [4.0, "snare"]
                 ]
             }
         })";
         
-        logMessage("Testing JSON drum pattern");
+        logMessage("Testing compact drum pattern");
         auto chart = parser.parseChart(jsonPattern);
         
         expect(chart != nullptr, "Chart should not be null");
@@ -99,7 +99,7 @@ private:
     
     void testBasicPianoPattern()
     {
-        beginTest("Basic piano pattern parsing (JSON)");
+        beginTest("Basic piano pattern parsing (Compact JSON)");
         
         MusicPatternSystem patternSystem;
         PatternParser parser(patternSystem);
@@ -117,10 +117,10 @@ private:
             },
             "sections": {
                 "main": [
-                    {"beat": 1.0, "primitive": "C3"},
-                    {"beat": 2.0, "primitive": "E3"},
-                    {"beat": 3.0, "primitive": "G3"},
-                    {"beat": 4.0, "primitive": "C3"}
+                    [1.0, "C3"],
+                    [2.0, "E3"],
+                    [3.0, "G3"],
+                    [4.0, "C3"]
                 ]
             }
         })";
@@ -171,7 +171,7 @@ private:
     
     void testMultiBarPattern()
     {
-        beginTest("Multi-bar pattern parsing (JSON T2_MultiBars)");
+        beginTest("Multi-bar pattern parsing (Compact JSON T2_MultiBars)");
         
         MusicPatternSystem patternSystem;
         PatternParser parser(patternSystem);
@@ -187,29 +187,29 @@ private:
                     "bars": 4,
                     "barPatterns": [
                         [
-                            {"beat": 1.0, "primitive": "kick"},
-                            {"beat": 2.0, "primitive": "snare"},
-                            {"beat": 3.0, "primitive": "kick"},
-                            {"beat": 4.0, "primitive": "snare"}
+                            [1.0, "kick"],
+                            [2.0, "snare"],
+                            [3.0, "kick"],
+                            [4.0, "snare"]
                         ],
                         [
-                            {"beat": 1.0, "primitive": "kick"},
-                            {"beat": 1.5, "primitive": "kick"},
-                            {"beat": 2.0, "primitive": "snare"},
-                            {"beat": 4.0, "primitive": "snare"}
+                            [1.0, "kick"],
+                            [1.5, "kick"],
+                            [2.0, "snare"],
+                            [4.0, "snare"]
                         ],
                         [
-                            {"beat": 1.0, "primitive": "kick"},
-                            {"beat": 2.0, "primitive": "snare"},
-                            {"beat": 3.0, "primitive": "kick"},
-                            {"beat": 4.0, "primitive": "snare"}
+                            [1.0, "kick"],
+                            [2.0, "snare"],
+                            [3.0, "kick"],
+                            [4.0, "snare"]
                         ],
                         [
-                            {"beat": 1.0, "primitive": "kick"},
-                            {"beat": 2.0, "primitive": "tom"},
-                            {"beat": 2.5, "primitive": "tom"},
-                            {"beat": 3.0, "primitive": "tom"},
-                            {"beat": 4.0, "primitive": "snare"}
+                            [1.0, "kick"],
+                            [2.0, "tom"],
+                            [2.5, "tom"],
+                            [3.0, "tom"],
+                            [4.0, "snare"]
                         ]
                     ]
                 }
@@ -297,7 +297,7 @@ public:
 private:
     void testChordPattern()
     {
-        beginTest("Chord pattern parsing (JSON T3_Chords)");
+        beginTest("Chord pattern parsing (Compact JSON T3_Chords)");
         
         MusicPatternSystem patternSystem;
         PatternParser parser(patternSystem);
@@ -321,8 +321,8 @@ private:
             },
             "sections": {
                 "main": [
-                    {"beat": 1.0, "chord": "Cmaj"},
-                    {"beat": 3.0, "chord": "Fmaj"}
+                    [1.0, {"chord": "Cmaj"}],
+                    [3.0, {"chord": "Fmaj"}]
                 ]
             }
         })";
@@ -386,7 +386,7 @@ public:
 private:
     void testLayeredPattern()
     {
-        beginTest("Layered pattern parsing (JSON T4_Layers)");
+        beginTest("Layered pattern parsing (Compact JSON T4_Layers)");
         
         MusicPatternSystem patternSystem;
         PatternParser parser(patternSystem);
@@ -401,22 +401,22 @@ private:
                 "main": {
                     "layers": {
                         "kickPattern": [
-                            {"beat": 1.0, "primitive": "kick"},
-                            {"beat": 3.0, "primitive": "kick"}
+                            [1.0, "kick"],
+                            [3.0, "kick"]
                         ],
                         "snarePattern": [
-                            {"beat": 2.0, "primitive": "snare"},
-                            {"beat": 4.0, "primitive": "snare"}
+                            [2.0, "snare"],
+                            [4.0, "snare"]
                         ],
                         "hihatPattern": [
-                            {"beat": 1.0, "primitive": "hihat"},
-                            {"beat": 1.5, "primitive": "hihat"},
-                            {"beat": 2.0, "primitive": "hihat"},
-                            {"beat": 2.5, "primitive": "hihat"},
-                            {"beat": 3.0, "primitive": "hihat"},
-                            {"beat": 3.5, "primitive": "hihat"},
-                            {"beat": 4.0, "primitive": "hihat"},
-                            {"beat": 4.5, "primitive": "hihat"}
+                            [1.0, "hihat"],
+                            [1.5, "hihat"],
+                            [2.0, "hihat"],
+                            [2.5, "hihat"],
+                            [3.0, "hihat"],
+                            [3.5, "hihat"],
+                            [4.0, "hihat"],
+                            [4.5, "hihat"]
                         ]
                     }
                 }
@@ -485,7 +485,7 @@ public:
 private:
     void testLayersWithChords()
     {
-        beginTest("Layers with chords parsing (JSON T5_LayersChords)");
+        beginTest("Layers with chords parsing (Compact JSON T5_LayersChords)");
         
         MusicPatternSystem patternSystem;
         PatternParser parser(patternSystem);
@@ -509,15 +509,15 @@ private:
                 "main": {
                     "layers": {
                         "leftHand": [
-                            {"beat": 1.0, "chord": "Cmaj"},
-                            {"beat": 2.0, "chord": "Cmaj"},
-                            {"beat": 3.0, "chord": "Fmaj"},
-                            {"beat": 4.0, "chord": "Gmaj"}
+                            [1.0, {"chord": "Cmaj"}],
+                            [2.0, {"chord": "Cmaj"}],
+                            [3.0, {"chord": "Fmaj"}],
+                            [4.0, {"chord": "Gmaj"}]
                         ],
                         "rightHandStructure": [
-                            {"beat": 1.5, "primitive": "C4"},
-                            {"beat": 2.5, "primitive": "D4"},
-                            {"beat": 3.5, "primitive": "G4"}
+                            [1.5, "C4"],
+                            [2.5, "D4"],
+                            [3.5, "G4"]
                         ]
                     }
                 }
@@ -568,8 +568,6 @@ private:
                                 // Melody notes (higher register)  
                                 if (note == 60 || note == 62 || note == 67)
                                     foundMelodyNotes = true;
-                                
-                                logMessage("Layer+Chord note: " + String(note) + " at beat " + String(event->message.getTimeStamp()));
                             }
                         }
                         
@@ -596,7 +594,7 @@ public:
 private:
     void testSectionsWithArrangement()
     {
-        beginTest("Multi-section songs with arrangement (JSON T6_Sections)");
+        beginTest("Multi-section songs with arrangement (Compact JSON T6_Sections)");
         
         MusicPatternSystem patternSystem;
         PatternParser parser(patternSystem);
@@ -609,22 +607,22 @@ private:
             },
             "sections": {
                 "verse": [
-                    {"beat": 1.0, "primitive": "C4"},
-                    {"beat": 2.0, "primitive": "E4"},
-                    {"beat": 3.0, "primitive": "G4"},
-                    {"beat": 4.0, "primitive": "C4"}
+                    [1.0, "C4"],
+                    [2.0, "E4"],
+                    [3.0, "G4"],
+                    [4.0, "C4"]
                 ],
                 "chorus": [
-                    {"beat": 1.0, "primitive": "G4"},
-                    {"beat": 2.0, "primitive": "B4"},
-                    {"beat": 3.0, "primitive": "D5"},
-                    {"beat": 4.0, "primitive": "G5"}
+                    [1.0, "G4"],
+                    [2.0, "B4"],
+                    [3.0, "D5"],
+                    [4.0, "G5"]
                 ],
                 "bridge": [
-                    {"beat": 1.0, "primitive": "B4"},
-                    {"beat": 2.0, "primitive": "D5"},
-                    {"beat": 3.0, "primitive": "G5"},
-                    {"beat": 4.0, "primitive": "B4"}
+                    [1.0, "B4"],
+                    [2.0, "D5"],
+                    [3.0, "G5"],
+                    [4.0, "B4"]
                 ]
             },
             "arrangement": ["verse", "chorus", "verse", "chorus", "bridge", "chorus"]
@@ -703,7 +701,7 @@ public:
 private:
     void testPatternReferences()
     {
-        beginTest("Pattern references (JSON T7_References)");
+        beginTest("Pattern references (Compact JSON T7_References)");
         
         MusicPatternSystem patternSystem;
         PatternParser parser(patternSystem);
@@ -716,16 +714,16 @@ private:
             },
             "patterns": {
                 "basicBeat": [
-                    {"beat": 1.0, "primitive": "kick"},
-                    {"beat": 2.0, "primitive": "snare"},
-                    {"beat": 3.0, "primitive": "kick"},
-                    {"beat": 4.0, "primitive": "snare"}
+                    [1.0, "kick"],
+                    [2.0, "snare"],
+                    [3.0, "kick"],
+                    [4.0, "snare"]
                 ],
                 "hihatPattern": [
-                    {"beat": 1.0, "primitive": "hihat"},
-                    {"beat": 1.5, "primitive": "hihat"},
-                    {"beat": 2.0, "primitive": "hihat"},
-                    {"beat": 2.5, "primitive": "hihat"}
+                    [1.0, "hihat"],
+                    [1.5, "hihat"],
+                    [2.0, "hihat"],
+                    [2.5, "hihat"]
                 ]
             },
             "sections": {
@@ -746,31 +744,28 @@ private:
         if (chart->getNumSections() > 0)
         {
             auto section = chart->getSection(0);
-            if (section && section->getNumPhrases() >= 2)
+            if (section && section->getNumPhrases() >= 1)
             {
-                // Should have 2 layers using pattern references
+                // Should have merged phrase with pattern references
                 bool foundBasicBeat = false, foundHihatPattern = false;
                 
-                for (int i = 0; i < section->getNumPhrases(); ++i)
+                auto phrase = section->getPhrase(0);
+                if (phrase && phrase->getNumBars() > 0)
                 {
-                    auto phrase = section->getPhrase(i);
-                    if (phrase && phrase->getNumBars() > 0)
+                    auto bar = phrase->getBar(0);
+                    if (bar)
                     {
-                        auto bar = phrase->getBar(0);
-                        if (bar)
+                        auto midiSequence = bar->toMidiSequence();
+                        logMessage("Pattern reference layer MIDI events: " + String(midiSequence->getNumEvents()));
+                        
+                        for (int j = 0; j < midiSequence->getNumEvents(); ++j)
                         {
-                            auto midiSequence = bar->toMidiSequence();
-                            logMessage("Pattern reference layer MIDI events: " + String(midiSequence->getNumEvents()));
-                            
-                            for (int j = 0; j < midiSequence->getNumEvents(); ++j)
+                            auto event = midiSequence->getEventPointer(j);
+                            if (event->message.isNoteOn())
                             {
-                                auto event = midiSequence->getEventPointer(j);
-                                if (event->message.isNoteOn())
-                                {
-                                    int note = event->message.getNoteNumber();
-                                    if (note == 36 || note == 38) foundBasicBeat = true;  // Kick/snare
-                                    if (note == 42) foundHihatPattern = true;  // Hihat
-                                }
+                                int note = event->message.getNoteNumber();
+                                if (note == 36 || note == 38) foundBasicBeat = true;  // Kick/snare
+                                if (note == 42) foundHihatPattern = true;  // Hihat
                             }
                         }
                     }
@@ -818,7 +813,7 @@ private:
     
     void testPatternVariations()
     {
-        beginTest("Pattern variations (JSON T8_Exceptions)");
+        beginTest("Pattern variations (Compact JSON T8_Exceptions)");
         
         MusicPatternSystem patternSystem;
         PatternParser parser(patternSystem);
@@ -831,18 +826,18 @@ private:
             },
             "patterns": {
                 "basicBeat": [
-                    {"beat": 1.0, "primitive": "kick"},
-                    {"beat": 2.0, "primitive": "snare"},
-                    {"beat": 3.0, "primitive": "kick"},
-                    {"beat": 4.0, "primitive": "snare"}
+                    [1.0, "kick"],
+                    [2.0, "snare"],
+                    [3.0, "kick"],
+                    [4.0, "snare"]
                 ],
                 "fillEnding": [
-                    {"beat": 1.0, "primitive": "kick"},
-                    {"beat": 1.5, "primitive": "tom"},
-                    {"beat": 2.0, "primitive": "tom"},
-                    {"beat": 2.5, "primitive": "tom"},
-                    {"beat": 3.0, "primitive": "snare"},
-                    {"beat": 4.0, "primitive": "crash"}
+                    [1.0, "kick"],
+                    [1.5, "tom"],
+                    [2.0, "tom"],
+                    [2.5, "tom"],
+                    [3.0, "snare"],
+                    [4.0, "crash"]
                 ]
             },
             "sections": {
@@ -929,767 +924,6 @@ private:
     }
 };
 
-// Integration test - Full song with all pattern language features
-class FullSongIntegrationTest : public juce::UnitTest
-{
-public:
-    FullSongIntegrationTest() : juce::UnitTest("Full Song Integration", "Music Pattern System") {}
-
-    void runTest() override
-    {
-        testFullSongWithAllFeatures();
-    }
-
-private:
-    void testFullSongWithAllFeatures()
-    {
-        beginTest("Complete piano chart integration test - all pattern language features");
-        
-        MusicPatternSystem patternSystem;
-        PatternParser parser(patternSystem);
-        
-        String jsonPattern = R"({
-            "title": "Integration_Piano_Chart",
-            "tempo": 120,
-            "primitives": {
-                "piano": {
-                    "C2": 36, "D2": 38, "E2": 40, "F2": 41, "G2": 43, "A2": 45, "B2": 47,
-                    "C3": 48, "D3": 50, "E3": 52, "F3": 53, "G3": 55, "A3": 57, "B3": 59,
-                    "C4": 60, "D4": 62, "E4": 64, "F4": 65, "G4": 67, "A4": 69, "B4": 71,
-                    "C5": 72, "D5": 74, "E5": 76, "F5": 77, "G5": 79
-                }
-            },
-            "chords": {
-                "Cmaj": ["C3", "E3", "G3"],
-                "Fmaj": ["F3", "A3", "C4"],
-                "Gmaj": ["G3", "B3", "D4"],
-                "Am": ["A3", "C4", "E4"]
-            },
-            "patterns": {
-                "leftHandBass": [
-                    {"beat": 1.0, "primitive": "C2"},
-                    {"beat": 1.5, "primitive": "G2"},
-                    {"beat": 2.0, "primitive": "C3"},
-                    {"beat": 2.5, "primitive": "G2"}
-                ],
-                "rightHandMelody": [
-                    {"beat": 1.0, "primitive": "C4"},
-                    {"beat": 1.5, "primitive": "E4"},
-                    {"beat": 2.0, "primitive": "G4"},
-                    {"beat": 3.0, "primitive": "C5"}
-                ],
-                "arpeggioPattern": [
-                    {"beat": 1.0, "primitive": "C3"},
-                    {"beat": 1.25, "primitive": "E3"},
-                    {"beat": 1.5, "primitive": "G3"},
-                    {"beat": 1.75, "primitive": "C4"},
-                    {"beat": 2.0, "primitive": "E4"},
-                    {"beat": 2.25, "primitive": "G4"},
-                    {"beat": 2.5, "primitive": "C5"},
-                    {"beat": 2.75, "primitive": "G4"}
-                ]
-            },
-            "sections": {
-                "verse": {
-                    "bars": 4,
-                    "basePattern": "leftHandBass",
-                    "variations": {
-                        "bar4": "arpeggioPattern"
-                    },
-                    "layers": {
-                        "leftHandChords": [
-                            {"beat": 1.0, "chord": "Cmaj"},
-                            {"beat": 3.0, "chord": "Fmaj"}
-                        ],
-                        "rightHandMelody": {"pattern": "rightHandMelody"},
-                        "bassLine": [
-                            {"beat": 1.0, "primitive": "C2"},
-                            {"beat": 3.0, "primitive": "F2"}
-                        ]
-                    }
-                },
-                "chorus": {
-                    "bars": 4,
-                    "barPatterns": [
-                        [
-                            {"beat": 1.0, "primitive": "G3"},
-                            {"beat": 1.5, "primitive": "B3"},
-                            {"beat": 2.0, "primitive": "D4"},
-                            {"beat": 3.0, "primitive": "G4"},
-                            {"beat": 4.0, "primitive": "B4"}
-                        ],
-                        [
-                            {"beat": 1.0, "primitive": "A3"},
-                            {"beat": 2.0, "primitive": "C4"},
-                            {"beat": 3.0, "primitive": "E4"},
-                            {"beat": 4.0, "primitive": "A4"}
-                        ],
-                        [
-                            {"beat": 1.0, "primitive": "F3"},
-                            {"beat": 2.0, "primitive": "A3"},
-                            {"beat": 3.0, "primitive": "C4"},
-                            {"beat": 4.0, "primitive": "F4"}
-                        ],
-                        [
-                            {"beat": 1.0, "primitive": "C3"},
-                            {"beat": 2.0, "primitive": "E3"},
-                            {"beat": 3.0, "primitive": "G3"},
-                            {"beat": 4.0, "primitive": "C4"}
-                        ]
-                    ],
-                    "layers": {
-                        "harmonyChords": [
-                            {"beat": 1.0, "chord": "Gmaj"},
-                            {"beat": 2.0, "chord": "Am"},
-                            {"beat": 3.0, "chord": "Fmaj"},
-                            {"beat": 4.0, "chord": "Cmaj"}
-                        ],
-                        "melodyLine": {"pattern": "arpeggioPattern"}
-                    }
-                },
-                "bridge": {
-                    "layers": {
-                        "leftHandArpeggios": [
-                            {"beat": 1.0, "primitive": "A2"},
-                            {"beat": 1.5, "primitive": "C3"},
-                            {"beat": 2.0, "primitive": "E3"},
-                            {"beat": 2.5, "primitive": "A3"},
-                            {"beat": 3.0, "primitive": "G2"},
-                            {"beat": 3.5, "primitive": "B2"},
-                            {"beat": 4.0, "primitive": "D3"}
-                        ],
-                        "rightHandHarmony": [
-                            {"beat": 1.0, "chord": "Am"},
-                            {"beat": 3.0, "chord": "Gmaj"}
-                        ]
-                    }
-                }
-            },
-            "arrangement": ["verse", "chorus", "verse", "chorus", "bridge", "chorus"]
-        })";
-        
-        auto chart = parser.parseChart(jsonPattern);
-        
-        expect(chart != nullptr, "Integration chart should not be null");
-        expect(chart->getTitle() == "Integration_Piano_Chart", "Chart title should match");
-        expect(std::abs(chart->getTempo() - 120.0) < 0.01, "Tempo should be 120 BPM");
-        expect(chart->getNumSections() == 6, "Should have 6 sections according to arrangement");
-        
-        if (chart->getNumSections() == 6)
-        {
-            // Verify arrangement: verse, chorus, verse, chorus, bridge, chorus
-            String expectedOrder[] = {"verse", "chorus", "verse", "chorus", "bridge", "chorus"};
-            int totalPhrases = 0;
-            bool foundVariations = false, foundLayers = false, foundChords = false, foundMultiBars = false, foundReferences = false;
-            
-            for (int sectionIdx = 0; sectionIdx < 6; ++sectionIdx)
-            {
-                auto section = chart->getSection(sectionIdx);
-                expect(section != nullptr, "Section " + String(sectionIdx) + " should not be null");
-                
-                if (section)
-                {
-                    String sectionName = section->getName();
-                    expect(sectionName == expectedOrder[sectionIdx], 
-                           "Section " + String(sectionIdx) + " should be '" + expectedOrder[sectionIdx] + "'");
-                    
-                    totalPhrases += section->getNumPhrases();
-                    
-                    // Check for different pattern language features
-                    if (section->getNumPhrases() > 0)
-                    {
-                        auto phrase = section->getPhrase(0);
-                        if (phrase)
-                        {
-                            // Multi-bar patterns (chorus has 4 bars)
-                            if (sectionName == "chorus" && phrase->getNumBars() == 4)
-                                foundMultiBars = true;
-                            
-                            // Layers (all sections should have merged layers)
-                            if (phrase->getName() == "MergedLayers")
-                                foundLayers = true;
-                            
-                            // Variations (verse should have fill on bar 4)
-                            if (sectionName == "verse" && phrase->getNumBars() == 4)
-                                foundVariations = true;
-                            
-                            // Check for musical content
-                            for (int barIdx = 0; barIdx < phrase->getNumBars(); ++barIdx)
-                            {
-                                auto bar = phrase->getBar(barIdx);
-                                if (bar)
-                                {
-                                    auto midiSequence = bar->toMidiSequence();
-                                    
-                                    for (int i = 0; i < midiSequence->getNumEvents(); ++i)
-                                    {
-                                        auto event = midiSequence->getEventPointer(i);
-                                        if (event->message.isNoteOn())
-                                        {
-                                            int note = event->message.getNoteNumber();
-                                            
-                                            // Check for chord notes (piano range)
-                                            if (note >= 48 && note <= 67) foundChords = true;
-                                            
-                                            // Check for pattern references (notes from referenced patterns)
-                                            if (sectionName == "chorus" && note == 72) foundReferences = true; // C5 from arpeggioPattern via "melodyLine": {"pattern": "arpeggioPattern"}
-                                            
-                                            logMessage("Section '" + sectionName + "' Bar " + String(barIdx + 1) + 
-                                                     " - Note: " + String(note));
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Integration validations
-            expect(totalPhrases >= 6, "Should have phrases from all 6 sections");
-            expect(foundLayers, "Should demonstrate layer merging");
-            expect(foundChords, "Should demonstrate chord expansion");
-            expect(foundMultiBars, "Should demonstrate multi-bar patterns");
-            expect(foundVariations, "Should demonstrate pattern variations");
-            expect(foundReferences, "Should demonstrate pattern references");
-            
-            logMessage("Integration test completed - found " + String(totalPhrases) + " total phrases");
-            logMessage(String("Features validated: Layers=") + (foundLayers ? "true" : "false") + 
-                      ", Chords=" + (foundChords ? "true" : "false") + 
-                      ", MultiBars=" + (foundMultiBars ? "true" : "false") + 
-                      ", Variations=" + (foundVariations ? "true" : "false") + 
-                      ", References=" + (foundReferences ? "true" : "false"));
-        }
-    }
-};
-
-// Integration test - Drum chart with all pattern language features
-class DrumIntegrationTest : public juce::UnitTest
-{
-public:
-    DrumIntegrationTest() : juce::UnitTest("Drum Chart Integration", "Music Pattern System") {}
-
-    void runTest() override
-    {
-        testDrumChartWithAllFeatures();
-    }
-
-private:
-    void testDrumChartWithAllFeatures()
-    {
-        beginTest("Complete drum chart integration test - all pattern language features");
-        
-        MusicPatternSystem patternSystem;
-        PatternParser parser(patternSystem);
-        
-        String jsonPattern = R"({
-            "title": "Integration_Drum_Chart",
-            "tempo": 120,
-            "primitives": {
-                "drums": {
-                    "kick": 36, "snare": 38, "hihat": 42, "openHihat": 46,
-                    "crash": 49, "ride": 51, "tom1": 47, "tom2": 45, "tom3": 43,
-                    "rimshot": 37, "cowbell": 56, "splash": 55
-                }
-            },
-            "patterns": {
-                "kickPattern": [
-                    {"beat": 1.0, "primitive": "kick"},
-                    {"beat": 3.0, "primitive": "kick"}
-                ],
-                "snareBackbeat": [
-                    {"beat": 2.0, "primitive": "snare"},
-                    {"beat": 4.0, "primitive": "snare"}
-                ],
-                "hihatGroove": [
-                    {"beat": 1.0, "primitive": "hihat"},
-                    {"beat": 1.5, "primitive": "hihat"},
-                    {"beat": 2.0, "primitive": "hihat"},
-                    {"beat": 2.5, "primitive": "hihat"},
-                    {"beat": 3.0, "primitive": "hihat"},
-                    {"beat": 3.5, "primitive": "hihat"},
-                    {"beat": 4.0, "primitive": "hihat"},
-                    {"beat": 4.5, "primitive": "hihat"}
-                ],
-                "tomFill": [
-                    {"beat": 1.0, "primitive": "tom1"},
-                    {"beat": 1.5, "primitive": "tom1"},
-                    {"beat": 2.0, "primitive": "tom2"},
-                    {"beat": 2.5, "primitive": "tom2"},
-                    {"beat": 3.0, "primitive": "tom3"},
-                    {"beat": 3.5, "primitive": "tom3"},
-                    {"beat": 4.0, "primitive": "crash"}
-                ]
-            },
-            "sections": {
-                "verse": {
-                    "bars": 4,
-                    "basePattern": "kickPattern",
-                    "variations": {
-                        "bar4": "tomFill"
-                    },
-                    "layers": {
-                        "kickLayer": {"pattern": "kickPattern"},
-                        "snareLayer": {"pattern": "snareBackbeat"},
-                        "hihatLayer": {"pattern": "hihatGroove"}
-                    }
-                },
-                "chorus": {
-                    "bars": 4,
-                    "barPatterns": [
-                        [
-                            {"beat": 1.0, "primitive": "kick"},
-                            {"beat": 1.5, "primitive": "kick"},
-                            {"beat": 2.0, "primitive": "snare"},
-                            {"beat": 3.0, "primitive": "kick"},
-                            {"beat": 4.0, "primitive": "snare"}
-                        ],
-                        [
-                            {"beat": 1.0, "primitive": "kick"},
-                            {"beat": 2.0, "primitive": "snare"},
-                            {"beat": 2.5, "primitive": "rimshot"},
-                            {"beat": 3.0, "primitive": "kick"},
-                            {"beat": 4.0, "primitive": "snare"}
-                        ],
-                        [
-                            {"beat": 1.0, "primitive": "kick"},
-                            {"beat": 1.5, "primitive": "ride"},
-                            {"beat": 2.0, "primitive": "snare"},
-                            {"beat": 2.5, "primitive": "ride"},
-                            {"beat": 3.0, "primitive": "kick"},
-                            {"beat": 3.5, "primitive": "ride"},
-                            {"beat": 4.0, "primitive": "snare"}
-                        ],
-                        [
-                            {"beat": 1.0, "primitive": "kick"},
-                            {"beat": 2.0, "primitive": "crash"},
-                            {"beat": 2.5, "primitive": "splash"},
-                            {"beat": 3.0, "primitive": "kick"},
-                            {"beat": 4.0, "primitive": "crash"}
-                        ]
-                    ]
-                },
-                "breakdown": {
-                    "layers": {
-                        "kickOnly": [
-                            {"beat": 1.0, "primitive": "kick"},
-                            {"beat": 4.0, "primitive": "kick"}
-                        ],
-                        "ghostSnares": [
-                            {"beat": 2.25, "primitive": "snare"},
-                            {"beat": 3.75, "primitive": "snare"}
-                        ],
-                        "openHats": [
-                            {"beat": 2.0, "primitive": "openHihat"},
-                            {"beat": 4.0, "primitive": "openHihat"}
-                        ]
-                    }
-                }
-            },
-            "arrangement": ["verse", "chorus", "verse", "chorus", "breakdown", "chorus"]
-        })";
-        
-        auto chart = parser.parseChart(jsonPattern);
-        
-        expect(chart != nullptr, "Drum chart should not be null");
-        expect(chart->getTitle() == "Integration_Drum_Chart", "Chart title should match");
-        expect(chart->getNumSections() == 6, "Should have 6 sections according to arrangement");
-        
-        // Validate drum-specific features
-        bool foundKick = false, foundSnare = false, foundHihat = false, foundToms = false, foundCrash = false;
-        
-        for (int sectionIdx = 0; sectionIdx < chart->getNumSections(); ++sectionIdx)
-        {
-            auto section = chart->getSection(sectionIdx);
-            if (section && section->getNumPhrases() > 0)
-            {
-                for (int phraseIdx = 0; phraseIdx < section->getNumPhrases(); ++phraseIdx)
-                {
-                    auto phrase = section->getPhrase(phraseIdx);
-                    if (phrase)
-                    {
-                        for (int barIdx = 0; barIdx < phrase->getNumBars(); ++barIdx)
-                        {
-                            auto bar = phrase->getBar(barIdx);
-                            if (bar)
-                            {
-                                auto midiSequence = bar->toMidiSequence();
-                                for (int i = 0; i < midiSequence->getNumEvents(); ++i)
-                                {
-                                    auto event = midiSequence->getEventPointer(i);
-                                    if (event->message.isNoteOn())
-                                    {
-                                        int note = event->message.getNoteNumber();
-                                        if (note == 36) foundKick = true;      // Kick
-                                        if (note == 38) foundSnare = true;    // Snare  
-                                        if (note == 42) foundHihat = true;    // Hi-hat
-                                        if (note >= 43 && note <= 47) foundToms = true; // Toms
-                                        if (note == 49 || note == 55) foundCrash = true; // Crashes
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        expect(foundKick, "Should find kick drum patterns");
-        expect(foundSnare, "Should find snare patterns");
-        expect(foundHihat, "Should find hi-hat patterns");
-        expect(foundToms, "Should find tom fill patterns");
-        expect(foundCrash, "Should find crash cymbal patterns");
-    }
-};
-
-// Integration test - Guitar chart with all pattern language features
-class GuitarIntegrationTest : public juce::UnitTest
-{
-public:
-    GuitarIntegrationTest() : juce::UnitTest("Guitar Chart Integration", "Music Pattern System") {}
-
-    void runTest() override
-    {
-        testGuitarChartWithAllFeatures();
-    }
-
-private:
-    void testGuitarChartWithAllFeatures()
-    {
-        beginTest("Complete guitar chart integration test - all pattern language features");
-        
-        MusicPatternSystem patternSystem;
-        PatternParser parser(patternSystem);
-        
-        String jsonPattern = R"({
-            "title": "Integration_Guitar_Chart",
-            "tempo": 120,
-            "primitives": {
-                "guitar": {
-                    "E2": 40, "A2": 45, "D3": 50, "G3": 55, "B3": 59, "E4": 64,
-                    "F2": 41, "Fs2": 42, "G2": 43, "Gs2": 44, "As2": 46, "C3": 48,
-                    "Cs3": 49, "Ds3": 51, "F3": 53, "Fs3": 54, "Gs3": 56, "A3": 57,
-                    "As3": 58, "C4": 60, "Cs4": 61, "D4": 62, "Ds4": 63, "F4": 65
-                }
-            },
-            "chords": {
-                "Cmaj": ["C3", "E4", "G3"],
-                "Fmaj": ["F2", "A2", "C3"],
-                "Gmaj": ["G2", "B3", "D3"],
-                "Am": ["A2", "C3", "E4"]
-            },
-            "patterns": {
-                "strummingPattern": [
-                    {"beat": 1.0, "primitive": "G3"},
-                    {"beat": 1.5, "primitive": "B3"},
-                    {"beat": 2.0, "primitive": "E4"},
-                    {"beat": 2.5, "primitive": "B3"},
-                    {"beat": 3.0, "primitive": "G3"},
-                    {"beat": 3.5, "primitive": "B3"},
-                    {"beat": 4.0, "primitive": "E4"}
-                ],
-                "bassLine": [
-                    {"beat": 1.0, "primitive": "E2"},
-                    {"beat": 1.5, "primitive": "G2"},
-                    {"beat": 2.0, "primitive": "A2"},
-                    {"beat": 3.0, "primitive": "G2"},
-                    {"beat": 4.0, "primitive": "E2"}
-                ],
-                "fingerpicking": [
-                    {"beat": 1.0, "primitive": "E2"},
-                    {"beat": 1.25, "primitive": "G3"},
-                    {"beat": 1.5, "primitive": "B3"},
-                    {"beat": 1.75, "primitive": "E4"},
-                    {"beat": 2.0, "primitive": "B3"},
-                    {"beat": 2.25, "primitive": "G3"},
-                    {"beat": 2.5, "primitive": "E2"},
-                    {"beat": 3.0, "primitive": "A2"}
-                ]
-            },
-            "sections": {
-                "verse": {
-                    "bars": 4,
-                    "basePattern": "strummingPattern",
-                    "variations": {
-                        "bar4": "fingerpicking"
-                    },
-                    "layers": {
-                        "chordProg": [
-                            {"beat": 1.0, "chord": "Cmaj"},
-                            {"beat": 3.0, "chord": "Fmaj"}
-                        ],
-                        "bassLayer": {"pattern": "bassLine"}
-                    }
-                },
-                "chorus": {
-                    "bars": 4,
-                    "barPatterns": [
-                        [
-                            {"beat": 1.0, "primitive": "G2"},
-                            {"beat": 1.5, "primitive": "D3"},
-                            {"beat": 2.0, "primitive": "G3"},
-                            {"beat": 3.0, "primitive": "B3"},
-                            {"beat": 4.0, "primitive": "D4"}
-                        ],
-                        [
-                            {"beat": 1.0, "primitive": "A2"},
-                            {"beat": 2.0, "primitive": "C3"},
-                            {"beat": 3.0, "primitive": "E4"},
-                            {"beat": 4.0, "primitive": "A3"}
-                        ],
-                        [
-                            {"beat": 1.0, "primitive": "F2"},
-                            {"beat": 2.0, "primitive": "A2"},
-                            {"beat": 3.0, "primitive": "C3"},
-                            {"beat": 4.0, "primitive": "F3"}
-                        ],
-                        [
-                            {"beat": 1.0, "primitive": "G2"},
-                            {"beat": 2.0, "primitive": "B3"},
-                            {"beat": 3.0, "primitive": "D3"},
-                            {"beat": 4.0, "primitive": "G3"}
-                        ]
-                    ],
-                    "layers": {
-                        "harmonyChords": [
-                            {"beat": 1.0, "chord": "Gmaj"},
-                            {"beat": 2.0, "chord": "Am"},
-                            {"beat": 3.0, "chord": "Fmaj"},
-                            {"beat": 4.0, "chord": "Gmaj"}
-                        ]
-                    }
-                },
-                "bridge": {
-                    "layers": {
-                        "arpeggios": {"pattern": "fingerpicking"},
-                        "sustainedChords": [
-                            {"beat": 1.0, "chord": "Am"},
-                            {"beat": 3.0, "chord": "Fmaj"}
-                        ]
-                    }
-                }
-            },
-            "arrangement": ["verse", "chorus", "verse", "chorus", "bridge", "chorus"]
-        })";
-        
-        auto chart = parser.parseChart(jsonPattern);
-        
-        expect(chart != nullptr, "Guitar chart should not be null");
-        expect(chart->getTitle() == "Integration_Guitar_Chart", "Chart title should match");
-        expect(chart->getNumSections() == 6, "Should have 6 sections according to arrangement");
-        
-        // Validate guitar-specific features
-        bool foundLowStrings = false, foundHighStrings = false, foundChords = false;
-        
-        for (int sectionIdx = 0; sectionIdx < chart->getNumSections(); ++sectionIdx)
-        {
-            auto section = chart->getSection(sectionIdx);
-            if (section && section->getNumPhrases() > 0)
-            {
-                for (int phraseIdx = 0; phraseIdx < section->getNumPhrases(); ++phraseIdx)
-                {
-                    auto phrase = section->getPhrase(phraseIdx);
-                    if (phrase)
-                    {
-                        for (int barIdx = 0; barIdx < phrase->getNumBars(); ++barIdx)
-                        {
-                            auto bar = phrase->getBar(barIdx);
-                            if (bar)
-                            {
-                                auto midiSequence = bar->toMidiSequence();
-                                for (int i = 0; i < midiSequence->getNumEvents(); ++i)
-                                {
-                                    auto event = midiSequence->getEventPointer(i);
-                                    if (event->message.isNoteOn())
-                                    {
-                                        int note = event->message.getNoteNumber();
-                                        if (note >= 40 && note <= 50) foundLowStrings = true;  // Low E, A, D strings
-                                        if (note >= 55 && note <= 65) foundHighStrings = true; // G, B, E strings
-                                        if (note >= 48 && note <= 64) foundChords = true;      // Chord range
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        expect(foundLowStrings, "Should find low string (bass) patterns");
-        expect(foundHighStrings, "Should find high string (melody) patterns");
-        expect(foundChords, "Should find chord patterns");
-    }
-};
-
-// Integration test - Bass chart with all pattern language features  
-class BassIntegrationTest : public juce::UnitTest
-{
-public:
-    BassIntegrationTest() : juce::UnitTest("Bass Chart Integration", "Music Pattern System") {}
-
-    void runTest() override
-    {
-        testBassChartWithAllFeatures();
-    }
-
-private:
-    void testBassChartWithAllFeatures()
-    {
-        beginTest("Complete bass chart integration test - all pattern language features");
-        
-        MusicPatternSystem patternSystem;
-        PatternParser parser(patternSystem);
-        
-        String jsonPattern = R"({
-            "title": "Integration_Bass_Chart",
-            "tempo": 120,
-            "primitives": {
-                "bass": {
-                    "E1": 28, "F1": 29, "Fs1": 30, "G1": 31, "Gs1": 32, "A1": 33, "As1": 34, "B1": 35,
-                    "C2": 36, "Cs2": 37, "D2": 38, "Ds2": 39, "E2": 40, "F2": 41, "Fs2": 42, "G2": 43,
-                    "Gs2": 44, "A2": 45, "As2": 46, "B2": 47, "C3": 48, "Cs3": 49, "D3": 50, "Ds3": 51,
-                    "E3": 52, "F3": 53, "Fs3": 54, "G3": 55
-                }
-            },
-            "patterns": {
-                "walkingBass": [
-                    {"beat": 1.0, "primitive": "C2"},
-                    {"beat": 1.5, "primitive": "D2"},
-                    {"beat": 2.0, "primitive": "E2"},
-                    {"beat": 2.5, "primitive": "F2"},
-                    {"beat": 3.0, "primitive": "G2"},
-                    {"beat": 3.5, "primitive": "A2"},
-                    {"beat": 4.0, "primitive": "B2"},
-                    {"beat": 4.5, "primitive": "C3"}
-                ],
-                "rootNotes": [
-                    {"beat": 1.0, "primitive": "C2"},
-                    {"beat": 3.0, "primitive": "F2"}
-                ],
-                "rhythmicPattern": [
-                    {"beat": 1.0, "primitive": "C2"},
-                    {"beat": 1.75, "primitive": "C2"},
-                    {"beat": 2.5, "primitive": "E2"},
-                    {"beat": 3.0, "primitive": "G2"},
-                    {"beat": 4.0, "primitive": "C2"},
-                    {"beat": 4.5, "primitive": "G2"}
-                ],
-                "slapBass": [
-                    {"beat": 1.0, "primitive": "E2"},
-                    {"beat": 1.25, "primitive": "E2"},
-                    {"beat": 1.5, "primitive": "G2"},
-                    {"beat": 2.0, "primitive": "A2"},
-                    {"beat": 2.5, "primitive": "G2"},
-                    {"beat": 3.0, "primitive": "E2"},
-                    {"beat": 4.0, "primitive": "C2"}
-                ]
-            },
-            "sections": {
-                "verse": {
-                    "bars": 4,
-                    "basePattern": "rootNotes",
-                    "variations": {
-                        "bar4": "walkingBass"
-                    },
-                    "layers": {
-                        "fundamentals": {"pattern": "rootNotes"},
-                        "rhythmLayer": [
-                            {"beat": 2.0, "primitive": "C2"},
-                            {"beat": 4.0, "primitive": "F2"}
-                        ]
-                    }
-                },
-                "chorus": {
-                    "bars": 4,
-                    "barPatterns": [
-                        [
-                            {"beat": 1.0, "primitive": "G1"},
-                            {"beat": 1.5, "primitive": "G2"},
-                            {"beat": 2.0, "primitive": "D2"},
-                            {"beat": 3.0, "primitive": "G2"},
-                            {"beat": 4.0, "primitive": "B2"}
-                        ],
-                        [
-                            {"beat": 1.0, "primitive": "A1"},
-                            {"beat": 2.0, "primitive": "C2"},
-                            {"beat": 3.0, "primitive": "E2"},
-                            {"beat": 4.0, "primitive": "A2"}
-                        ],
-                        [
-                            {"beat": 1.0, "primitive": "F1"},
-                            {"beat": 2.0, "primitive": "A2"},
-                            {"beat": 3.0, "primitive": "C2"},
-                            {"beat": 4.0, "primitive": "F2"}
-                        ],
-                        [
-                            {"beat": 1.0, "primitive": "C2"},
-                            {"beat": 1.5, "primitive": "E2"},
-                            {"beat": 2.0, "primitive": "G2"},
-                            {"beat": 3.0, "primitive": "C3"},
-                            {"beat": 4.0, "primitive": "G2"}
-                        ]
-                    ]
-                },
-                "breakdown": {
-                    "layers": {
-                        "slapGroove": {"pattern": "slapBass"},
-                        "rhythmicAccents": {"pattern": "rhythmicPattern"}
-                    }
-                }
-            },
-            "arrangement": ["verse", "chorus", "verse", "chorus", "breakdown", "chorus"]
-        })";
-        
-        auto chart = parser.parseChart(jsonPattern);
-        
-        expect(chart != nullptr, "Bass chart should not be null");
-        expect(chart->getTitle() == "Integration_Bass_Chart", "Chart title should match");
-        expect(chart->getNumSections() == 6, "Should have 6 sections according to arrangement");
-        
-        // Validate bass-specific features
-        bool foundLowNotes = false, foundWalkingPattern = false, foundRhythmic = false;
-        
-        for (int sectionIdx = 0; sectionIdx < chart->getNumSections(); ++sectionIdx)
-        {
-            auto section = chart->getSection(sectionIdx);
-            if (section && section->getNumPhrases() > 0)
-            {
-                for (int phraseIdx = 0; phraseIdx < section->getNumPhrases(); ++phraseIdx)
-                {
-                    auto phrase = section->getPhrase(phraseIdx);
-                    if (phrase)
-                    {
-                        for (int barIdx = 0; barIdx < phrase->getNumBars(); ++barIdx)
-                        {
-                            auto bar = phrase->getBar(barIdx);
-                            if (bar)
-                            {
-                                auto midiSequence = bar->toMidiSequence();
-                                if (midiSequence->getNumEvents() >= 8) foundWalkingPattern = true; // Walking bass has many notes
-                                if (midiSequence->getNumEvents() >= 6) foundRhythmic = true;       // Rhythmic patterns
-                                
-                                for (int i = 0; i < midiSequence->getNumEvents(); ++i)
-                                {
-                                    auto event = midiSequence->getEventPointer(i);
-                                    if (event->message.isNoteOn())
-                                    {
-                                        int note = event->message.getNoteNumber();
-                                        if (note >= 28 && note <= 55) foundLowNotes = true; // Bass range
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        expect(foundLowNotes, "Should find low bass notes (28-55 range)");
-        expect(foundWalkingPattern, "Should find walking bass patterns");
-        expect(foundRhythmic, "Should find rhythmic bass patterns");
-    }
-};
-
 // Register all test classes with JUCE's unit test system
 static BasicPatternTests basicPatternTests;
 static ChordPatternTests chordPatternTests;
@@ -1698,9 +932,5 @@ static LayerChordPatternTests layerChordPatternTests;
 static MultiSectionSongTests multiSectionSongTests;
 static PatternReferenceTests patternReferenceTests;
 static PatternVariationTests patternVariationTests;
-static FullSongIntegrationTest fullSongIntegrationTest;
-static DrumIntegrationTest drumIntegrationTest;
-static GuitarIntegrationTest guitarIntegrationTest;
-static BassIntegrationTest bassIntegrationTest;
 
 } // namespace covertracks

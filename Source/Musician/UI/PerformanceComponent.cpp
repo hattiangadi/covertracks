@@ -1350,12 +1350,55 @@ juce::String PerformanceComponent::generateMusicianPrompt(const MusicianRole& ro
         style = genreSelector.getText();
     }
     
-    // Create instrument array with just this musician's instrument
-    juce::StringArray instruments;
-    instruments.add(role.instrument);
-    
     // Get tempo from song or default
     int tempo = song ? static_cast<int>(song->getTempo()) : 120;
+    
+    // Create a temporary Player with capabilities based on the instrument type
+    std::vector<Player*> players;
+    std::unique_ptr<Player> tempPlayer;
+    
+    if (ensembleManager && ensembleManager->getPlayerManager())
+    {
+        // Create a temporary player to get the right instrument capabilities
+        tempPlayer = std::make_unique<Player>(
+            "temp_" + role.getName(), 
+            role.instrument,
+            ensembleManager->getPlayerManager()->getFormatManager(),
+            ensembleManager->getPlayerManager()->getKnownPluginList()
+        );
+        
+        // Set appropriate capabilities based on instrument type
+        InstrumentCapabilities capabilities;
+        String instrumentType = role.instrument.toLowerCase();
+        
+        if (instrumentType.contains("drum"))
+        {
+            capabilities = Player::createDrumCapabilities();
+        }
+        else if (instrumentType.contains("piano") || instrumentType.contains("keyboard"))
+        {
+            capabilities = Player::createPianoCapabilities();
+        }
+        else if (instrumentType.contains("bass"))
+        {
+            capabilities = Player::createBassCapabilities();
+        }
+        else if (instrumentType.contains("guitar"))
+        {
+            capabilities = Player::createGuitarCapabilities();
+        }
+        else
+        {
+            // Default to note range for unknown instruments
+            capabilities.type = InstrumentCapabilityType::NoteRange;
+            capabilities.instrumentType = instrumentType;
+            capabilities.minNote = 36;  // C2
+            capabilities.maxNote = 79;  // G5
+        }
+        
+        tempPlayer->setInstrumentCapabilities(capabilities);
+        players.push_back(tempPlayer.get());
+    }
     
     // Build comprehensive description including all performance context
     juce::String description;
@@ -1414,7 +1457,18 @@ juce::String PerformanceComponent::generateMusicianPrompt(const MusicianRole& ro
     }
     
     // Use PromptManager to create the final prompt with our new JSON format
-    return promptManager.createMusicGenerationPrompt(style, instruments, tempo, description);
+    if (!players.empty())
+    {
+        // Use the Player-based method with instrument capabilities
+        return promptManager.createMusicGenerationPrompt(style, players, tempo, description);
+    }
+    else
+    {
+        // Fall back to string-based method
+        juce::StringArray instruments;
+        instruments.add(role.instrument);
+        return promptManager.createMusicGenerationPrompt(style, instruments, tempo, description);
+    }
 }
 
 std::shared_ptr<Chart> PerformanceComponent::parseJSONPatternFromResponse(const juce::String& response)

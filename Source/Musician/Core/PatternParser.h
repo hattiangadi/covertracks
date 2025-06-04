@@ -83,6 +83,10 @@ private:
     String extractPhraseNotation(const String& text);
     String extractBarNotation(const String& text);
     
+    // Helper methods for compact format parsing
+    int findMidiNoteForPrimitive(const String& primitiveName, const std::map<String, std::map<String, int>>& primitives);
+    int getChannelForPrimitive(const String& primitiveName, const std::map<String, std::map<String, int>>& primitives);
+    
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PatternParser)
 };
 
