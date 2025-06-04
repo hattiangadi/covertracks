@@ -124,12 +124,15 @@ std::shared_ptr<Chart> PatternParser::parseChartFromJson(const var& json)
         }
     }
     
-    // Extract sections
+    // Extract sections with arrangement support
     if (json.hasProperty("sections"))
     {
         var sectionsJson = json["sections"];
         if (sectionsJson.isObject())
         {
+            // First, parse all sections into a map
+            std::map<String, std::shared_ptr<Section>> sectionMap;
+            
             for (auto& sectionProp : sectionsJson.getDynamicObject()->getProperties())
             {
                 String sectionName = sectionProp.name.toString();
@@ -139,8 +142,43 @@ std::shared_ptr<Chart> PatternParser::parseChartFromJson(const var& json)
                 if (section)
                 {
                     section->setName(sectionName);
-                    chart->addSection(section);
-                    DBG("Added section: " + sectionName);
+                    sectionMap[sectionName] = section;
+                    DBG("Parsed section: " + sectionName);
+                }
+            }
+            
+            // Check for arrangement field
+            if (json.hasProperty("arrangement"))
+            {
+                var arrangementJson = json["arrangement"];
+                if (arrangementJson.isArray())
+                {
+                    // Add sections in arrangement order
+                    for (const auto& sectionNameVar : *arrangementJson.getArray())
+                    {
+                        String sectionName = sectionNameVar.toString();
+                        auto sectionIt = sectionMap.find(sectionName);
+                        if (sectionIt != sectionMap.end())
+                        {
+                            // Create a copy of the section for the arrangement
+                            auto arrangedSection = sectionIt->second;
+                            chart->addSection(arrangedSection);
+                            DBG("Added arranged section: " + sectionName);
+                        }
+                        else
+                        {
+                            DBG("Warning: Section '" + sectionName + "' in arrangement not found");
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // No arrangement - add sections in definition order (fallback)
+                for (auto& sectionPair : sectionMap)
+                {
+                    chart->addSection(sectionPair.second);
+                    DBG("Added section (no arrangement): " + sectionPair.first);
                 }
             }
         }
@@ -169,29 +207,30 @@ std::shared_ptr<Section> PatternParser::parseSectionFromJson(const var& sectionJ
     if (sectionJson.hasProperty("bars"))
         numBars = sectionJson["bars"];
     
-    // Parse layers
+    // Parse layers - merge all layers into a single unified phrase
     if (sectionJson.hasProperty("layers"))
     {
         var layersJson = sectionJson["layers"];
         if (layersJson.isObject())
         {
-            // Create phrases for each layer
-            std::map<String, std::shared_ptr<Phrase>> layerPhrases;
+            // Create a single merged phrase for all layers
+            auto mergedPhrase = std::make_shared<Phrase>();
+            mergedPhrase->setName("MergedLayers");
             
-            for (auto& layerProp : layersJson.getDynamicObject()->getProperties())
+            // Create merged bars for each bar index
+            for (int barIndex = 0; barIndex < numBars; ++barIndex)
             {
-                String layerName = layerProp.name.toString();
-                var layerJson = layerProp.value;
+                auto mergedBar = std::make_shared<Bar>();
                 
-                auto phrase = std::make_shared<Phrase>();
-                phrase->setName(layerName);
+                // Collect all events from all layers for this bar
+                Array<var> allEvents;
                 
-                // Create bars for this layer
-                for (int barIndex = 0; barIndex < numBars; ++barIndex)
+                for (auto& layerProp : layersJson.getDynamicObject()->getProperties())
                 {
-                    auto bar = std::make_shared<Bar>();
+                    String layerName = layerProp.name.toString();
+                    var layerJson = layerProp.value;
                     
-                    Array<var> events;
+                    Array<var> layerEvents;
                     
                     // Check if layer uses a pattern reference
                     if (layerJson.hasProperty("pattern"))
@@ -200,8 +239,8 @@ std::shared_ptr<Section> PatternParser::parseSectionFromJson(const var& sectionJ
                         auto patternIt = patterns.find(patternName);
                         if (patternIt != patterns.end())
                         {
-                            events = patternIt->second;
-                            DBG("Using pattern '" + patternName + "' for layer '" + layerName + "'");
+                            layerEvents = patternIt->second;
+                            DBG("Merging pattern '" + patternName + "' from layer '" + layerName + "'");
                         }
                     }
                     // Check if layer has direct events
@@ -209,37 +248,119 @@ std::shared_ptr<Section> PatternParser::parseSectionFromJson(const var& sectionJ
                     {
                         for (const auto& event : *layerJson.getArray())
                         {
-                            events.add(event);
+                            layerEvents.add(event);
                         }
                     }
                     
-                    // Parse events into the bar
-                    if (events.size() > 0)
+                    // Add all events from this layer to the merged collection
+                    for (const auto& event : layerEvents)
                     {
-                        auto parsedBar = parseBarFromJson(events, primitives, chords);
-                        if (parsedBar)
-                        {
-                            // Copy events from parsed bar
-                            phrase->addBar(parsedBar);
-                        }
+                        allEvents.add(event);
                     }
-                    else
+                    
+                    DBG("Added " + String(layerEvents.size()) + " events from layer '" + layerName + "'");
+                }
+                
+                // Parse the merged events into a single bar
+                if (allEvents.size() > 0)
+                {
+                    auto parsedBar = parseBarFromJson(allEvents, primitives, chords);
+                    if (parsedBar)
                     {
-                        // Add empty bar
-                        phrase->addBar(bar);
+                        mergedPhrase->addBar(parsedBar);
+                        DBG("Created merged bar " + String(barIndex) + " with " + String(allEvents.size()) + " total events");
+                    }
+                }
+                else
+                {
+                    // Add empty bar if no events
+                    mergedPhrase->addBar(mergedBar);
+                }
+            }
+            
+            // Add the single merged phrase to the section
+            section->addPhrase(mergedPhrase);
+            DBG("Added merged phrase with " + String(mergedPhrase->getNumBars()) + " bars");
+        }
+    }
+    // Handle pattern variations (basePattern + variations)
+    else if (sectionJson.hasProperty("basePattern") && sectionJson.hasProperty("variations"))
+    {
+        String basePatternName = sectionJson["basePattern"].toString();
+        var variationsJson = sectionJson["variations"];
+        
+        auto basePatternIt = patterns.find(basePatternName);
+        if (basePatternIt != patterns.end())
+        {
+            Array<var> basePattern = basePatternIt->second;
+            
+            auto phrase = std::make_shared<Phrase>();
+            phrase->setName("VariationPhrase");
+            
+            // Create bars with variations
+            for (int barIndex = 0; barIndex < numBars; ++barIndex)
+            {
+                Array<var> barEvents = basePattern;  // Start with base pattern
+                
+                // Check for variation for this bar
+                String barKey = "bar" + String(barIndex + 1);  // bar1, bar2, etc.
+                if (variationsJson.hasProperty(barKey))
+                {
+                    var variationVar = variationsJson.getProperty(barKey, var());
+                    if (!variationVar.isVoid())
+                    {
+                        String variationPatternName = variationVar.toString();
+                        auto variationIt = patterns.find(variationPatternName);
+                        if (variationIt != patterns.end())
+                        {
+                            barEvents = variationIt->second;  // Use variation pattern instead
+                            DBG("Using variation '" + variationPatternName + "' for " + barKey);
+                        }
                     }
                 }
                 
-                layerPhrases[layerName] = phrase;
+                // Parse the events (base or variation) into the bar
+                auto bar = parseBarFromJson(barEvents, primitives, chords);
+                if (bar)
+                {
+                    phrase->addBar(bar);
+                }
             }
             
-            // For now, add all layer phrases to the section
-            // TODO: Implement proper layer merging
-            for (auto& layerPair : layerPhrases)
+            section->addPhrase(phrase);
+            DBG("Added variation phrase with " + String(phrase->getNumBars()) + " bars");
+        }
+    }
+    // Handle multi-bar patterns (T2_MultiBars)
+    else if (sectionJson.hasProperty("barPatterns"))
+    {
+        var barPatternsJson = sectionJson["barPatterns"];
+        if (barPatternsJson.isArray())
+        {
+            auto phrase = std::make_shared<Phrase>();
+            phrase->setName("MultiBarPhrase");
+            
+            // Parse each bar pattern
+            for (const auto& barPatternVar : *barPatternsJson.getArray())
             {
-                section->addPhrase(layerPair.second);
-                DBG("Added layer phrase: " + layerPair.first);
+                if (barPatternVar.isArray())
+                {
+                    Array<var> barEvents;
+                    for (const auto& event : *barPatternVar.getArray())
+                    {
+                        barEvents.add(event);
+                    }
+                    
+                    auto bar = parseBarFromJson(barEvents, primitives, chords);
+                    if (bar)
+                    {
+                        phrase->addBar(bar);
+                    }
+                }
             }
+            
+            section->addPhrase(phrase);
+            DBG("Added multi-bar phrase with " + String(phrase->getNumBars()) + " bars");
         }
     }
     // Handle simple event arrays (no layers)

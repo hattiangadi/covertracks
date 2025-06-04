@@ -533,46 +533,82 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
     }
     else if (testType == "T2_MultiBars")
     {
-        // Test 2: Position-based patterns with precise timing
+        // Test 2: Multi-bar patterns spanning several bars
         if (instrument == "drums")
         {
             jsonPattern = R"({
                 "title": "T2_MultiBars_Drums",
                 "tempo": 120,
                 "primitives": {
-                    "drums": {"kick": 36, "snare": 38}
+                    "drums": {"kick": 36, "snare": 38, "hihat": 42, "tom": 47}
                 },
                 "sections": {
-                    "main": [
-                        {"beat": 1.0, "primitive": "kick"},
-                        {"beat": 1.5, "primitive": "kick"},
-                        {"beat": 2.0, "primitive": "snare"},
-                        {"beat": 3.0, "primitive": "kick"},
-                        {"beat": 4.0, "primitive": "snare"},
-                        {"beat": 4.5, "primitive": "snare"}
-                    ]
+                    "main": {
+                        "bars": 4,
+                        "barPatterns": [
+                            [
+                                {"beat": 1.0, "primitive": "kick"},
+                                {"beat": 2.0, "primitive": "snare"},
+                                {"beat": 3.0, "primitive": "kick"},
+                                {"beat": 4.0, "primitive": "snare"}
+                            ],
+                            [
+                                {"beat": 1.0, "primitive": "kick"},
+                                {"beat": 1.5, "primitive": "kick"},
+                                {"beat": 2.0, "primitive": "snare"},
+                                {"beat": 4.0, "primitive": "snare"}
+                            ],
+                            [
+                                {"beat": 1.0, "primitive": "kick"},
+                                {"beat": 2.0, "primitive": "snare"},
+                                {"beat": 3.0, "primitive": "kick"},
+                                {"beat": 4.0, "primitive": "snare"}
+                            ],
+                            [
+                                {"beat": 1.0, "primitive": "kick"},
+                                {"beat": 2.0, "primitive": "tom"},
+                                {"beat": 2.5, "primitive": "tom"},
+                                {"beat": 3.0, "primitive": "tom"},
+                                {"beat": 4.0, "primitive": "snare"}
+                            ]
+                        ]
+                    }
                 }
             })";
         }
         else
         {
             jsonPattern = R"({
-                "title": "T2_MultiBars_Other",
+                "title": "T2_MultiBars_Piano",
                 "tempo": 120,
                 "primitives": {
                     "piano": {"C4": 60, "E4": 64, "G4": 67, "C5": 72, "D4": 62, "F4": 65, "A4": 69, "D5": 74}
                 },
                 "sections": {
-                    "main": [
-                        {"beat": 1.0, "primitive": "C4"},
-                        {"beat": 1.5, "primitive": "E4"},
-                        {"beat": 2.0, "primitive": "G4"},
-                        {"beat": 2.5, "primitive": "C5"},
-                        {"beat": 3.0, "primitive": "D4"},
-                        {"beat": 3.5, "primitive": "F4"},
-                        {"beat": 4.0, "primitive": "A4"},
-                        {"beat": 4.5, "primitive": "D5"}
-                    ]
+                    "main": {
+                        "bars": 3,
+                        "barPatterns": [
+                            [
+                                {"beat": 1.0, "primitive": "C4"},
+                                {"beat": 2.0, "primitive": "E4"},
+                                {"beat": 3.0, "primitive": "G4"},
+                                {"beat": 4.0, "primitive": "C5"}
+                            ],
+                            [
+                                {"beat": 1.0, "primitive": "D4"},
+                                {"beat": 2.0, "primitive": "F4"},
+                                {"beat": 3.0, "primitive": "A4"},
+                                {"beat": 4.0, "primitive": "D5"}
+                            ],
+                            [
+                                {"beat": 1.0, "primitive": "C4"},
+                                {"beat": 1.5, "primitive": "E4"},
+                                {"beat": 2.0, "primitive": "G4"},
+                                {"beat": 3.0, "primitive": "C5"},
+                                {"beat": 4.0, "primitive": "G4"}
+                            ]
+                        ]
+                    }
                 }
             })";
         }
@@ -595,6 +631,202 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
                     {"beat": 1.0, "chord": "Cmaj"},
                     {"beat": 3.0, "chord": "Fmaj"}
                 ]
+            }
+        })";
+    }
+    else if (testType == "T4_Layers")
+    {
+        // Test 4: Single instrument with multiple rhythm layers
+        if (instrument == "drums")
+        {
+            jsonPattern = R"({
+                "title": "T4_Layers_Drums",
+                "tempo": 120,
+                "primitives": {
+                    "drums": {"kick": 36, "snare": 38, "hihat": 42}
+                },
+                "sections": {
+                    "main": {
+                        "layers": {
+                            "kickPattern": [
+                                {"beat": 1.0, "primitive": "kick"},
+                                {"beat": 3.0, "primitive": "kick"}
+                            ],
+                            "snarePattern": [
+                                {"beat": 2.0, "primitive": "snare"},
+                                {"beat": 4.0, "primitive": "snare"}
+                            ],
+                            "hihatPattern": [
+                                {"beat": 1.0, "primitive": "hihat"},
+                                {"beat": 1.5, "primitive": "hihat"},
+                                {"beat": 2.0, "primitive": "hihat"},
+                                {"beat": 2.5, "primitive": "hihat"},
+                                {"beat": 3.0, "primitive": "hihat"},
+                                {"beat": 3.5, "primitive": "hihat"},
+                                {"beat": 4.0, "primitive": "hihat"},
+                                {"beat": 4.5, "primitive": "hihat"}
+                            ]
+                        }
+                    }
+                }
+            })";
+        }
+        else
+        {
+            jsonPattern = R"({
+                "title": "T4_Layers_Other",
+                "tempo": 120,
+                "primitives": {
+                    "piano": {"C4": 60, "E4": 64, "G4": 67, "C5": 72},
+                    "bass": {"C2": 36, "G2": 43}
+                },
+                "sections": {
+                    "main": {
+                        "layers": {
+                            "piano": [
+                                {"beat": 1.0, "primitive": "C4"},
+                                {"beat": 1.5, "primitive": "E4"},
+                                {"beat": 2.0, "primitive": "G4"},
+                                {"beat": 2.5, "primitive": "C5"}
+                            ],
+                            "bass": [
+                                {"beat": 1.0, "primitive": "C2"},
+                                {"beat": 3.0, "primitive": "G2"}
+                            ]
+                        }
+                    }
+                }
+            })";
+        }
+    }
+    else if (testType == "T5_LayersChords")
+    {
+        // Test 5: Layers + chords combined
+        jsonPattern = R"({
+            "title": "T5_LayersChords_Piano",
+            "tempo": 120,
+            "primitives": {
+                "piano": {
+                    "C3": 48, "E3": 52, "G3": 55, "C4": 60,
+                    "F3": 53, "A3": 57, "D4": 62, "G4": 67,
+                    "B3": 59
+                }
+            },
+            "chords": {
+                "Cmaj": ["C3", "E3", "G3"],
+                "Fmaj": ["F3", "A3", "C4"],
+                "Gmaj": ["G3", "B3", "D4"]
+            },
+            "sections": {
+                "main": {
+                    "layers": {
+                        "leftHand": [
+                            {"beat": 1.0, "chord": "Cmaj"},
+                            {"beat": 2.0, "chord": "Cmaj"},
+                            {"beat": 3.0, "chord": "Fmaj"},
+                            {"beat": 4.0, "chord": "Gmaj"}
+                        ],
+                        "rightHandStructure": [
+                            {"beat": 1.5, "primitive": "C4"},
+                            {"beat": 2.5, "primitive": "D4"},
+                            {"beat": 3.5, "primitive": "G4"}
+                        ]
+                    }
+                }
+            }
+        })";
+    }
+    else if (testType == "T6_Sections")
+    {
+        // Test 6: Multi-section songs
+        jsonPattern = R"({
+            "title": "T6_Sections_Song",
+            "tempo": 120,
+            "primitives": {
+                "piano": {"C4": 60, "E4": 64, "G4": 67, "B4": 71, "D5": 74, "G5": 79}
+            },
+            "sections": {
+                "verse": [
+                    {"beat": 1.0, "primitive": "C4"},
+                    {"beat": 2.0, "primitive": "E4"},
+                    {"beat": 3.0, "primitive": "G4"},
+                    {"beat": 4.0, "primitive": "C4"}
+                ],
+                "chorus": [
+                    {"beat": 1.0, "primitive": "G4"},
+                    {"beat": 2.0, "primitive": "B4"},
+                    {"beat": 3.0, "primitive": "D5"},
+                    {"beat": 4.0, "primitive": "G5"}
+                ],
+                "bridge": [
+                    {"beat": 1.0, "primitive": "B4"},
+                    {"beat": 2.0, "primitive": "D5"},
+                    {"beat": 3.0, "primitive": "G5"},
+                    {"beat": 4.0, "primitive": "B4"}
+                ]
+            },
+            "arrangement": ["verse", "chorus", "verse", "chorus", "bridge", "chorus"]
+        })";
+    }
+    else if (testType == "T7_References")
+    {
+        // Test 7: Pattern references
+        jsonPattern = R"({
+            "title": "T7_References",
+            "tempo": 120,
+            "primitives": {
+                "drums": {"kick": 36, "snare": 38, "hihat": 42}
+            },
+            "patterns": {
+                "basicBeat": [
+                    {"beat": 1.0, "primitive": "kick"},
+                    {"beat": 2.0, "primitive": "snare"},
+                    {"beat": 3.0, "primitive": "kick"},
+                    {"beat": 4.0, "primitive": "snare"}
+                ]
+            },
+            "sections": {
+                "main": {
+                    "layers": {
+                        "drums": {"pattern": "basicBeat"}
+                    }
+                }
+            }
+        })";
+    }
+    else if (testType == "T8_Exceptions")
+    {
+        // Test 8: Pattern variations - base pattern with bar-specific overrides
+        jsonPattern = R"({
+            "title": "T8_Exceptions_Drums",
+            "tempo": 120,
+            "primitives": {
+                "drums": {"kick": 36, "snare": 38, "hihat": 42, "crash": 49, "tom": 47}
+            },
+            "patterns": {
+                "basicBeat": [
+                    {"beat": 1.0, "primitive": "kick"},
+                    {"beat": 2.0, "primitive": "snare"},
+                    {"beat": 3.0, "primitive": "kick"},
+                    {"beat": 4.0, "primitive": "snare"}
+                ],
+                "fillEnding": [
+                    {"beat": 1.0, "primitive": "kick"},
+                    {"beat": 1.5, "primitive": "tom"},
+                    {"beat": 2.0, "primitive": "tom"},
+                    {"beat": 2.5, "primitive": "tom"},
+                    {"beat": 3.0, "primitive": "snare"},
+                    {"beat": 4.0, "primitive": "crash"}
+                ]
+            },
+            "sections": {
+                "verse": {
+                    "bars": 4,
+                    "basePattern": "basicBeat",
+                    "variations": {
+                        "bar4": "fillEnding"
+                    }
+                }
             }
         })";
     }
