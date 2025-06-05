@@ -107,6 +107,19 @@ void EnsembleManager::generateEnsemblePatterns(const juce::String& songDescripti
                 // Log the conversation
                 logEnsembleConversation(songDescription, responses);
                 
+                // Convert all patterns to MIDI sequences and store them in the players
+                for (auto& role : musicianRoles) {
+                    if (role.player && !role.pattern.isEmpty()) {
+                        // Parse the pattern to a MIDI sequence
+                        auto midiSequence = parseMIDIPattern(role.pattern);
+                        if (midiSequence) {
+                            // Store the MIDI sequence in the player
+                            role.player->setCurrentPattern(midiSequence, 120.0); // Default tempo
+                            std::cout << "[EnsembleManager] Set pattern for role: " << role.name << std::endl;
+                        }
+                    }
+                }
+                
                 // Call the callback
                 if (patternGenerationCallback) {
                     patternGenerationCallback(true);

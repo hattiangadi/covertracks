@@ -39,7 +39,8 @@
 #include "../Player/UI/PlayerLibraryComponent.h"
 #include "../Player/UI/PlayerModeComponent.h"
 #include "../Audio/AudioEngine.h"
-#include "../Musician/UI/PerformanceComponent.h"
+#include "../Musician/UI/Song/SongManagerComponent.h"
+#include "../Musician/UI/Performance/PerformanceContainerComponent.h"
 #include "../Musician/UI/PatternEditorComponent.h"
 #include "../LLM/Core/LLMManager.h"
 #include "../Musician/UI/EnsembleMainPanel.h"
@@ -120,7 +121,7 @@ public:
     
     // SongManagerComponent::Listener
     void songSelected(SongManagerComponent* source, std::shared_ptr<Song> song) override;
-
+    
     void menuBarActivated (bool isActive) override;
 
     StringArray getMenuBarNames() override;
@@ -150,7 +151,7 @@ public:
     // Main components
     std::unique_ptr<PlayerLibraryComponent> playerLibraryWindow;
     std::unique_ptr<PlayerModeComponent> playerModeWindow;
-    std::unique_ptr<PerformanceComponent> performanceWindow;
+    std::unique_ptr<PerformanceContainerComponent> performanceContainerWindow;
     std::unique_ptr<SongManagerComponent> songManagerWindow;
     std::unique_ptr<PatternEditorComponent> patternEditorWindow;
     std::unique_ptr<EnsembleMainPanel> ensembleMainWindow;

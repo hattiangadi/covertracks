@@ -40,6 +40,7 @@
 #include "../Musician/Core/Musician.h"
 #include "../LLM/Core/ClaudeClient.h"
 #include "../Musician/UI/EnsembleEditPanel.h"
+#include "../Musician/UI/Performance/PerformanceListComponent.h"
 #include "../Musician/UI/PerformanceComponent.h"
 #include "../Musician/UI/Song/SongManagerComponent.h"
 
@@ -447,21 +448,21 @@ MainHostWindow::MainHostWindow()
     songManagerWindow->addListener(this);
     std::cout << "[MainHostWindow] SongManagerComponent created" << std::endl;
     
-    // Create Performance component
-    std::cout << "[MainHostWindow] Creating PerformanceComponent" << std::endl;
-    // Create a new EnsembleManager instance for the PerformanceComponent
+    // Create Performance container component
+    std::cout << "[MainHostWindow] Creating Performance Container Component" << std::endl;
+    // Create a new EnsembleManager instance for the Performance components
     llmConversationEnsembleManager = std::make_unique<EnsembleManager>(playerManager.get());
     
-    performanceWindow = std::make_unique<PerformanceComponent>(llmConversationEnsembleManager.get(), llmClientShared);
+    // Create the performance container component that manages both list and editor views
+    performanceContainerWindow = std::make_unique<PerformanceContainerComponent>(llmConversationEnsembleManager.get(), llmClientShared);
     
-    // Register the PerformanceComponent with the SongListComponent
-    songManagerWindow->registerSongListListener(performanceWindow.get());
-    
-    // Get the SongListComponent from the SongManagerComponent and register it with the PerformanceComponent
+    // Get the SongListComponent from the SongManagerComponent
     SongListComponent* songList = songManagerWindow->getSongListComponent();
     if (songList != nullptr)
     {
-        performanceWindow->registerWithSongList(songList);
+        // Register the PerformanceContainerComponent with the SongListComponent
+        // The container will handle forwarding events to the performance component
+        performanceContainerWindow->registerWithSongList(songList);
     }
     
     std::cout << "[MainHostWindow] PerformanceComponent created" << std::endl;
@@ -484,9 +485,8 @@ MainHostWindow::MainHostWindow()
     // Create a tabbed component to hold all views
     auto* tabbedComponent = new TabbedComponent(TabbedButtonBar::TabsAtTop);
     tabbedComponent->addTab("Player Library", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), playerLibraryWindow.get(), false);
-    tabbedComponent->addTab("Player Mode", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), playerModeWindow.get(), false);
     tabbedComponent->addTab("Songs", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), songManagerWindow.get(), false);
-    tabbedComponent->addTab("Performances", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), performanceWindow.get(), false);
+    tabbedComponent->addTab("Performances", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), performanceContainerWindow.get(), true);
     tabbedComponent->addTab("Pattern Editor", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), patternEditorWindow.get(), false);
     tabbedComponent->addTab("Ensembles", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), ensembleMainWindow.get(), false);
     tabbedComponent->addTab("Tests", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), testsWindow.get(), false);
@@ -562,9 +562,9 @@ MainHostWindow::~MainHostWindow()
     {
         songManagerWindow->removeListener(this);
         
-        // Unregister the PerformanceComponent from the SongListComponent
-        if (performanceWindow)
-            songManagerWindow->unregisterSongListListener(performanceWindow.get());
+        // Unregister the PerformanceContainerComponent from the SongListComponent
+        if (performanceContainerWindow)
+            songManagerWindow->unregisterSongListListener(performanceContainerWindow.get());
     }
     
     // Clear the content component
@@ -1122,13 +1122,10 @@ void covertracks::MainHostWindow::filesDropped (const StringArray& files, int /*
     }
 }
 
-void covertracks::MainHostWindow::songSelected(SongManagerComponent* /*source*/, std::shared_ptr<Song> song)
+void covertracks::MainHostWindow::songSelected(SongManagerComponent* /*source*/, std::shared_ptr<Song> /*song*/)
 {
-    // When a song is selected in the SongManagerComponent, update the PerformanceComponent
-    if (performanceWindow && song)
-    {
-        performanceWindow->setCurrentSong(song);
-    }
+    // When a song is selected in the SongManagerComponent, we no longer need to update the PerformanceComponent directly
+    // The PerformanceContainerComponent will handle this internally
 }
 
 bool covertracks::MainHostWindow::isDoublePrecisionProcessingEnabled()

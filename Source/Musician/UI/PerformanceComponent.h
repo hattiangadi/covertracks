@@ -88,6 +88,18 @@ public:
     void registerWithSongList(SongListComponent* songList);
     
     /**
+     * @brief Create a new performance
+     */
+    void createNewPerformance();
+    
+    /**
+     * @brief Load a performance
+     * 
+     * @param performance The performance to load
+     */
+    void loadPerformance(std::shared_ptr<Performance> performance);
+    
+    /**
      * @brief Listener interface for performance events
      */
     class Listener
@@ -135,7 +147,7 @@ public:
 private:
     // UI components
     juce::Label performanceLabel;
-    juce::ComboBox performanceSelector;
+    juce::TextEditor performanceName;
     juce::TextButton newPerformanceButton;
     juce::TextButton savePerformanceButton;
     
@@ -159,6 +171,7 @@ private:
     juce::TextEditor instructionsEditor;
     
     juce::TextButton generateButton;
+    juce::TextButton loadButton;
     juce::TextButton playButton;
     juce::TextButton stopButton;
     
@@ -220,6 +233,8 @@ private:
     std::shared_ptr<Performance> currentPerformance;
     juce::String currentInstructions;
     bool isGenerating = false;
+    bool patternsGenerated = false;
+    bool patternsLoaded = false;
     
     // Performance manager for saving/loading performances
     juce::Array<std::shared_ptr<Performance>> loadedPerformances;
@@ -240,11 +255,10 @@ private:
     void stopPerformance();
     bool isPlaying() const;
     void cancelGeneration();
+    void loadPatterns();      // Convert pattern strings to MIDI sequences
     void playGeneratedPatterns();
     void stopPlayback();
     void saveCurrentPerformance();
-    void createNewPerformance();
-    void loadPerformance(std::shared_ptr<Performance> performance);
     
     // Generate a prompt for a specific musician
     juce::String generateMusicianPrompt(const MusicianRole& role, 

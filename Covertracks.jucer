@@ -68,6 +68,18 @@
           <FILE id="yVQC67" name="Song.h" compile="0" resource="0" file="Source/Musician/Core/Song.h"/>
         </GROUP>
         <GROUP id="{CC170D46-B578-C879-6E1F-FDC0D2EB6DC0}" name="UI">
+          <GROUP id="{B8A0DCA4-2B85-4EFF-C05E-CC777569A076}" name="Performance">
+            <FILE id="S7zQL2" name="PerformanceContainerComponent.cpp" compile="1"
+                  resource="0" file="Source/Musician/UI/Performance/PerformanceContainerComponent.cpp"/>
+            <FILE id="nzSwqr" name="PerformanceContainerComponent.h" compile="0"
+                  resource="0" file="Source/Musician/UI/Performance/PerformanceContainerComponent.h"/>
+            <FILE id="ofJcfM" name="PerformanceEditorComponent.h" compile="0" resource="0"
+                  file="Source/Musician/UI/Performance/PerformanceEditorComponent.h"/>
+            <FILE id="dTMyrJ" name="PerformanceListComponent.cpp" compile="1" resource="0"
+                  file="Source/Musician/UI/Performance/PerformanceListComponent.cpp"/>
+            <FILE id="oZopLk" name="PerformanceListComponent.h" compile="0" resource="0"
+                  file="Source/Musician/UI/Performance/PerformanceListComponent.h"/>
+          </GROUP>
           <GROUP id="{8A17FE2D-2E3E-6D8B-BD15-D0DAD03795B9}" name="New Group"/>
           <GROUP id="{F9C0E233-BAD8-8B30-AA5A-55ECFA83800B}" name="Song">
             <FILE id="vaX1Hp" name="SectionEditorDialog.cpp" compile="1" resource="0"

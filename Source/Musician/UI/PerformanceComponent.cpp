@@ -173,8 +173,8 @@ PerformanceComponent::PerformanceComponent(EnsembleManager* manager, std::shared
     performanceLabel.setFont(fontOptions.withHeight(16.0f).withStyle("bold"));
     addAndMakeVisible(performanceLabel);
     
-    performanceSelector.addListener(this);
-    addAndMakeVisible(performanceSelector);
+    performanceName.addListener(this);
+    addAndMakeVisible(performanceName);
     
     newPerformanceButton.setButtonText("New");
     newPerformanceButton.addListener(this);
@@ -300,6 +300,11 @@ PerformanceComponent::PerformanceComponent(EnsembleManager* manager, std::shared
     generateButton.addListener(this);
     addAndMakeVisible(generateButton);
     
+    loadButton.setButtonText("Load");
+    loadButton.addListener(this);
+    loadButton.setEnabled(false);
+    addAndMakeVisible(loadButton);
+    
     playButton.setButtonText("Play");
     playButton.addListener(this);
     playButton.setEnabled(false);
@@ -337,7 +342,7 @@ PerformanceComponent::~PerformanceComponent()
     stopTimer();
     ensembleSelector.removeListener(this);
     songSelector.removeListener(this);
-    performanceSelector.removeListener(this);
+    performanceName.removeListener(this);
     instructionsEditor.removeListener(this);
 }
 
@@ -363,7 +368,7 @@ void PerformanceComponent::resized()
     auto performanceButtonsArea = performanceArea.removeFromRight(150);
     savePerformanceButton.setBounds(performanceButtonsArea.removeFromRight(70).reduced(5, 0));
     newPerformanceButton.setBounds(performanceButtonsArea.reduced(5, 0));
-    performanceSelector.setBounds(performanceArea.reduced(5, 0));
+    performanceName.setBounds(performanceArea.reduced(5, 0));
     
     bounds.removeFromTop(10); // Spacing
     
@@ -516,15 +521,6 @@ void PerformanceComponent::comboBoxChanged(juce::ComboBox* comboBoxThatHasChange
             }
         }
     }
-    else if (comboBoxThatHasChanged == &performanceSelector)
-    {
-        int selectedId = performanceSelector.getSelectedId();
-        if (selectedId > 0 && selectedId <= loadedPerformances.size())
-        {
-            // Load the selected performance
-            loadPerformance(loadedPerformances[selectedId - 1]);
-        }
-    }
     else if (comboBoxThatHasChanged == &keySelector)
     {
         if (currentPerformance)
@@ -559,12 +555,43 @@ void PerformanceComponent::comboBoxChanged(juce::ComboBox* comboBoxThatHasChange
 
 void covertracks::PerformanceComponent::timerCallback()
 {
+    // Check if all generation is complete
+    if (isGenerating)
+    {
+        bool allComplete = true;
+        
+        for (int i = 0; i < musicianStatusTable.getMusicianRoles().size(); ++i)
+        {
+            juce::String status = musicianStatusTable.getStatusMessage(i);
+            if (status.isEmpty() || status == "Generating...")
+            {
+                allComplete = false;
+                break;
+            }
+        }
+        
+        if (allComplete)
+        {
+            isGenerating = false;
+            patternsGenerated = true;
+            generateButton.setEnabled(true);
+            loadButton.setEnabled(true);
+            playButton.setEnabled(false); // Need to load patterns first
+            statusLabel.setText("Generation complete - Ready to load", juce::dontSendNotification);
+            
+            // Save the performance
+            saveCurrentPerformance();
+        }
+    }
+    
     // Update UI based on current state
     if (ensembleManager)
     {
-        // Update play/stop buttons based on playback state
-        playButton.setEnabled(!isGenerating && currentSong != nullptr && !ensembleManager->isPlaying());
+        // Update button states based on workflow state
+        if (!isGenerating)
+        {
         stopButton.setEnabled(ensembleManager->isPlaying());
+        }
     }
 }
 
@@ -641,27 +668,21 @@ void covertracks::PerformanceComponent::registerWithSongList(SongListComponent* 
 
 void covertracks::PerformanceComponent::updatePerformanceSelector()
 {
-    performanceSelector.clear();
-    
-    // Add each performance to the selector
-    int id = 1;
-    for (const auto& performance : loadedPerformances)
+    // This method is kept for compatibility but now just updates the text field
+    // if we have a current performance
+    if (currentPerformance)
     {
-        if (performance)
-        {
-            performanceSelector.addItem(performance->getName(), id++);
-        }
+        performanceName.setText(currentPerformance->getName(), false);
     }
-    
-    if (performanceSelector.getNumItems() > 0)
+    else if (!loadedPerformances.isEmpty())
     {
-        performanceSelector.setSelectedId(1);
+        // If no current performance but we have loaded performances, use the first one
+        performanceName.setText(loadedPerformances[0]->getName(), false);
     }
     else
     {
-        // If no performances are found, add a placeholder message
-        performanceSelector.addItem("No performances found", -1);
-        performanceSelector.setSelectedId(-1);
+        // If no performances are found, set a default text
+        performanceName.setText("New Performance", false);
     }
 }
 
@@ -830,6 +851,94 @@ void PerformanceComponent::updateMusicianStatusTable()
     }
 }
 
+void PerformanceComponent::startGenerationForRole(const MusicianRole& role)
+{
+    if (!ensembleManager || !currentSong || isGenerating)
+    {
+        return;
+    }
+    
+    currentInstructions = instructionsEditor.getText();
+    
+    // Update the current performance with the instructions
+    if (currentPerformance)
+    {
+        currentPerformance->setInstructions(currentInstructions);
+    }
+    
+    // Find the index of the role in the table
+    int roleIndex = -1;
+    for (int i = 0; i < musicianStatusTable.getMusicianRoles().size(); ++i)
+    {
+        if (musicianStatusTable.getMusicianRoles()[i].name == role.name)
+        {
+            roleIndex = i;
+            break;
+        }
+    }
+    
+    if (roleIndex >= 0)
+    {
+        // Update status
+        musicianStatusTable.updateMusicianStatus(roleIndex, "Generating...");
+        
+        // Generate a prompt for this musician
+        juce::String prompt = generateMusicianPrompt(role, currentSong, currentInstructions);
+        
+        // Send the prompt to the LLM
+        llmClient->sendMessage(prompt, [this, roleIndex, role](bool success, const juce::String& response)
+        {
+            // Suppress unused parameter warning
+            juce::ignoreUnused(success);
+            // Process the response
+            juce::MessageManager::callAsync([this, roleIndex, role, response]()
+            {
+                // Parse the response to get a Chart, then convert to MIDI pattern
+                auto chart = parseJSONPatternFromResponse(response);
+                std::shared_ptr<juce::MidiMessageSequence> pattern = nullptr;
+                
+                if (chart != nullptr)
+                {
+                    // Convert Chart to MidiMessageSequence
+                    pattern = chart->toMidiSequence();
+                }
+                
+                if (pattern)
+                {
+                    // Update status
+                    musicianStatusTable.updateMusicianStatus(roleIndex, "Generated");
+                    
+                    // Store the pattern in the ensemble manager
+                    ensembleManager->setMIDIPatternForRole(role.getName(), pattern);
+                    
+                    // Store the pattern in the current performance
+                    if (currentPerformance)
+                    {
+                        currentPerformance->setGeneratedPattern(role.getName(), pattern);
+                        currentPerformance->setStatusMessage(role.getName(), "Generated");
+                        
+                        // Save the performance
+                        saveCurrentPerformance();
+                    }
+                    
+                    // Enable the play button
+                    playButton.setEnabled(true);
+                }
+                else
+                {
+                    // Update status with error
+                    musicianStatusTable.updateMusicianStatus(roleIndex, "Error: Could not parse response");
+                    
+                    if (currentPerformance)
+                    {
+                        currentPerformance->setStatusMessage(role.getName(), "Error: Could not parse response");
+                    }
+                }
+            });
+        });
+    }
+}
+
 void PerformanceComponent::startGeneration()
 {
     if (!ensembleManager || !currentSong || isGenerating)
@@ -839,6 +948,7 @@ void PerformanceComponent::startGeneration()
     
     isGenerating = true;
     generateButton.setEnabled(false);
+    loadButton.setEnabled(false);
     playButton.setEnabled(false);
     
     currentInstructions = instructionsEditor.getText();
@@ -957,91 +1067,36 @@ void PerformanceComponent::startGeneration()
     }
 }
 
-void PerformanceComponent::startGenerationForRole(const MusicianRole& role)
+void PerformanceComponent::loadPatterns()
 {
     if (!ensembleManager || !currentSong || isGenerating)
     {
         return;
     }
     
-    currentInstructions = instructionsEditor.getText();
-    
-    // Update the current performance with the instructions
+    // If we have a current performance, load its patterns into the ensemble manager
     if (currentPerformance)
     {
-        currentPerformance->setInstructions(currentInstructions);
-    }
-    
-    // Find the index of the role in the table
-    int roleIndex = -1;
-    for (int i = 0; i < musicianStatusTable.getMusicianRoles().size(); ++i)
-    {
-        if (musicianStatusTable.getMusicianRoles()[i].name == role.name)
-        {
-            roleIndex = i;
-            break;
-        }
-    }
-    
-    if (roleIndex >= 0)
-    {
-        // Update status
-        musicianStatusTable.updateMusicianStatus(roleIndex, "Generating...");
+        bool hasPatterns = false;
         
-        // Generate a prompt for this musician
-        juce::String prompt = generateMusicianPrompt(role, currentSong, currentInstructions);
-        
-        // Send the prompt to the LLM
-        llmClient->sendMessage(prompt, [this, roleIndex, role](bool success, const juce::String& response)
+        // For each role in the musician status table
+        for (int i = 0; i < musicianStatusTable.getMusicianRoles().size(); ++i)
         {
-            // Suppress unused parameter warning
-            juce::ignoreUnused(success);
-            // Process the response
-            juce::MessageManager::callAsync([this, roleIndex, role, response]()
+            const auto& role = musicianStatusTable.getMusicianRoles()[i];
+            auto pattern = currentPerformance->getGeneratedPattern(role.name);
+            
+            if (pattern)
             {
-                // Parse the response to get a Chart, then convert to MIDI pattern
-                auto chart = parseJSONPatternFromResponse(response);
-                std::shared_ptr<juce::MidiMessageSequence> pattern = nullptr;
-                
-                if (chart != nullptr)
-                {
-                    // Convert Chart to MidiMessageSequence
-                    pattern = chart->toMidiSequence();
-                }
-                
-                if (pattern)
-                {
-                    // Update status
-                    musicianStatusTable.updateMusicianStatus(roleIndex, "Generated");
-                    
-                    // Store the pattern in the ensemble manager
-                    ensembleManager->setMIDIPatternForRole(role.getName(), pattern);
-                    
-                    // Store the pattern in the current performance
-                    if (currentPerformance)
-                    {
-                        currentPerformance->setGeneratedPattern(role.getName(), pattern);
-                        currentPerformance->setStatusMessage(role.getName(), "Generated");
-                        
-                        // Save the performance
-                        saveCurrentPerformance();
-                    }
-                    
-                    // Enable the play button
-                    playButton.setEnabled(true);
-                }
-                else
-                {
-                    // Update status with error
-                    musicianStatusTable.updateMusicianStatus(roleIndex, "Error: Could not parse response");
-                    
-                    if (currentPerformance)
-                    {
-                        currentPerformance->setStatusMessage(role.getName(), "Error: Could not parse response");
-                    }
-                }
-            });
-        });
+                // Load the pattern into the ensemble manager
+                ensembleManager->setMIDIPatternForRole(role.getName(), pattern);
+                musicianStatusTable.updateMusicianStatus(i, "Loaded");
+                hasPatterns = true;
+            }
+        }
+        
+        // Enable the play button if we have patterns
+        playButton.setEnabled(hasPatterns);
+        patternsLoaded = hasPatterns;
     }
 }
 
@@ -1139,17 +1194,8 @@ void PerformanceComponent::saveCurrentPerformance()
     // Reload performances and update the selector
     loadedPerformances = performanceManager->loadPerformancesFromDefaultLocation();
     updatePerformanceSelector();
-    
-    // Select the current performance in the selector
-    for (int i = 0; i < loadedPerformances.size(); ++i)
-    {
-        if (loadedPerformances[i]->getUniqueID() == currentPerformance->getUniqueID())
-        {
-            performanceSelector.setSelectedId(i + 1);
-            break;
-        }
-    }
-    
+    performanceName.setText(currentPerformance->getName());
+
     // Notify listeners
     listeners.call(&Listener::performanceSaved, this, currentPerformance);
 }
@@ -1196,15 +1242,8 @@ void PerformanceComponent::createNewPerformance()
     loadedPerformances = performanceManager->loadPerformancesFromDefaultLocation();
     updatePerformanceSelector();
     
-    // Select the current performance in the selector
-    for (int i = 0; i < loadedPerformances.size(); ++i)
-    {
-        if (loadedPerformances[i]->getUniqueID() == currentPerformance->getUniqueID())
-        {
-            performanceSelector.setSelectedId(i + 1);
-            break;
-        }
-    }
+    performanceName.setText(currentPerformance->getName());
+
 }
 
 void PerformanceComponent::loadPerformance(std::shared_ptr<Performance> performance)

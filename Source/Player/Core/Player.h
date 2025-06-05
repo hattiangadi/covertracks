@@ -213,6 +213,14 @@ public:
     bool playPattern(const var& pattern, double tempo = 120.0);
     
     /**
+     * @brief Set the current pattern for playback
+     * 
+     * @param pattern The MIDI message sequence to play
+     * @param tempo The tempo in BPM
+     */
+    void setCurrentPattern(std::shared_ptr<juce::MidiMessageSequence> pattern, double tempo = 120.0);
+    
+    /**
      * @brief Generate and immediately play a pattern (stubbed)
      * 
      * @param parameters Parameters for pattern generation

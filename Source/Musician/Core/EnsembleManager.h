@@ -480,25 +480,28 @@ public:
     }
     
     /**
-     * @brief Temporary method to set a MIDI pattern for a musician role
+     * @brief Set a MIDI pattern for a musician role
      * 
      * @param roleName The name of the musician role
      * @param pattern The MIDI pattern to set
      */
     void setMIDIPatternForRole(const juce::String& roleName, std::shared_ptr<juce::MidiMessageSequence> pattern)
     {
-        // Suppress unused parameter warning
-        juce::ignoreUnused(pattern);
-        
         // Find the musician role with the given name
         for (auto& role : musicianRoles)
         {
             if (role.name == roleName && role.player)
             {
-                // We need to implement a way to set patterns on players
-                // For now, we'll just store the pattern in the role
-                // This will be used by the PerformanceComponent
+                // Store the pattern in the player's currentPattern field
+                role.player->setCurrentPattern(pattern, 120.0); // Default tempo
+                
+                // Also store a representation in the role's pattern field
+                // This is used for serialization
                 role.pattern = "MIDI pattern stored";
+                
+                std::cout << "EnsembleManager::setMIDIPatternForRole - Set pattern for role: " 
+                          << roleName << " with " << pattern->getNumEvents() 
+                          << " events" << std::endl;
                 break;
             }
         }

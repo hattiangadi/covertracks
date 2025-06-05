@@ -212,6 +212,14 @@ void Player::releaseResources()
     // Release all heavy resources
     if (fullyLoaded)
     {
+        // Save the current pattern before releasing resources
+        // We don't clear currentPattern here, so it persists across resource releases
+        if (currentPattern)
+        {
+            std::cout << "Player " << metadata.name << " saving pattern with " 
+                      << currentPattern->getNumEvents() << " events before releasing resources" << std::endl;
+        }
+        
         // Disconnect from AudioEngine if connected
         if (isConnectedToAudioEngine())
             disconnectFromAudioEngine();
@@ -997,6 +1005,17 @@ bool Player::play()
     }
     
     return result;
+}
+
+void Player::setCurrentPattern(std::shared_ptr<juce::MidiMessageSequence> pattern, double tempo)
+{
+    // Store the pattern and tempo
+    currentPattern = pattern;
+    patternTempo = tempo;
+    
+    std::cout << "Player::setCurrentPattern - Pattern set with " 
+              << pattern->getNumEvents() << " events, tempo: " 
+              << tempo << " BPM" << std::endl;
 }
 
 bool Player::playPattern(const var& pattern, double tempo)
