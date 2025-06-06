@@ -123,6 +123,40 @@ void PerformanceManager::savePerformance(std::shared_ptr<Performance> performanc
     }
 }
 
+bool PerformanceManager::deletePerformance(std::shared_ptr<Performance> performance)
+{
+    if (!performance)
+    {
+        return false;
+    }
+    
+    // Get the file path for this performance
+    juce::File directory = getDefaultPerformancesDirectory();
+    juce::String filename = performance->getUniqueID() + ".json";
+    juce::File file = directory.getChildFile(filename);
+    
+    // Check if the file exists
+    if (!file.exists())
+    {
+        DBG("Performance file does not exist: " + file.getFullPathName());
+        return false;
+    }
+    
+    // Delete the file
+    bool success = file.deleteFile();
+    
+    if (success)
+    {
+        DBG("Deleted performance: " + performance->getName() + " from " + file.getFullPathName());
+    }
+    else
+    {
+        DBG("Failed to delete performance: " + performance->getName() + " at " + file.getFullPathName());
+    }
+    
+    return success;
+}
+
 std::shared_ptr<Song> PerformanceManager::findSongById(const juce::String& songId)
 {
     // Get the songs directory

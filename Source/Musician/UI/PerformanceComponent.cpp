@@ -19,8 +19,8 @@ PerformanceComponent::MusicianStatusTable::MusicianStatusTable()
     table.setHeaderHeight(24);
     table.getHeader().addColumn("Role", 1, 150, 100, -1, juce::TableHeaderComponent::defaultFlags);
     table.getHeader().addColumn("Instrument", 2, 150, 100, -1, juce::TableHeaderComponent::defaultFlags);
-    table.getHeader().addColumn("Status", 3, 200, 100, -1, juce::TableHeaderComponent::defaultFlags);
-    table.getHeader().addColumn("Generate", 4, 100, 80, -1, juce::TableHeaderComponent::defaultFlags);
+    table.getHeader().addColumn("Status", 3, 150, 100, -1, juce::TableHeaderComponent::defaultFlags);
+    table.getHeader().addColumn("Action", 4, 250, 150, -1, juce::TableHeaderComponent::defaultFlags);
     addAndMakeVisible(table);
 }
 
@@ -92,19 +92,34 @@ void PerformanceComponent::MusicianStatusTable::paintCell(juce::Graphics& g, int
 
 juce::Component* PerformanceComponent::MusicianStatusTable::refreshComponentForCell(int rowNumber, int columnId, bool /*isRowSelected*/, juce::Component* existingComponentToUpdate)
 {
-    // Only create components for the "Generate" column
+    // Only create components for the "Action" column
     if (columnId == 4)
     {
-        // Create a generate button for this row
-        auto* genButton = static_cast<juce::TextButton*>(existingComponentToUpdate);
+        // Create a container for the buttons
+        auto* container = static_cast<juce::Component*>(existingComponentToUpdate);
         
-        if (genButton == nullptr)
+        if (container == nullptr)
         {
-            genButton = new juce::TextButton("Generate");
+            container = new juce::Component();
+            
+            // Create the buttons
+            auto* genButton = new juce::TextButton("Generate");
             genButton->setComponentID("generate_" + juce::String(rowNumber));
+            genButton->setBounds(0, 0, 80, 24);
+            container->addAndMakeVisible(genButton);
+            
+            auto* rowLoadButton = new juce::TextButton("Load");
+            rowLoadButton->setComponentID("load_" + juce::String(rowNumber));
+            rowLoadButton->setBounds(85, 0, 70, 24);
+            container->addAndMakeVisible(rowLoadButton);
+            
+            auto* rowPlayButton = new juce::TextButton("Play");
+            rowPlayButton->setComponentID("play_" + juce::String(rowNumber));
+            rowPlayButton->setBounds(160, 0, 70, 24);
+            container->addAndMakeVisible(rowPlayButton);
         }
         
-        return genButton;
+        return container;
     }
     
     return nullptr;
@@ -154,9 +169,61 @@ juce::String PerformanceComponent::MusicianStatusTable::getStatusMessage(int ind
 
 void PerformanceComponent::MusicianStatusTable::addGenerateButton(int rowNumber, juce::Button::Listener* listener)
 {
-    if (auto* button = dynamic_cast<juce::TextButton*>(table.getCellComponent(4, rowNumber)))
+    // The action column now contains multiple buttons, so we need to find the generate button
+    if (auto* container = table.getCellComponent(4, rowNumber))
     {
-        button->addListener(listener);
+        // Find the generate button in the container
+        for (int i = 0; i < container->getNumChildComponents(); ++i)
+        {
+            if (auto* button = dynamic_cast<juce::TextButton*>(container->getChildComponent(i)))
+            {
+                if (button->getComponentID().startsWith("generate_"))
+                {
+                    button->addListener(listener);
+                    break;
+                }
+            }
+        }
+    }
+}
+
+void PerformanceComponent::MusicianStatusTable::addLoadButton(int rowNumber, juce::Button::Listener* listener)
+{
+    // The action column now contains multiple buttons, so we need to find the load button
+    if (auto* container = table.getCellComponent(4, rowNumber))
+    {
+        // Find the load button in the container
+        for (int i = 0; i < container->getNumChildComponents(); ++i)
+        {
+            if (auto* button = dynamic_cast<juce::TextButton*>(container->getChildComponent(i)))
+            {
+                if (button->getComponentID().startsWith("load_"))
+                {
+                    button->addListener(listener);
+                    break;
+                }
+            }
+        }
+    }
+}
+
+void PerformanceComponent::MusicianStatusTable::addPlayButton(int rowNumber, juce::Button::Listener* listener)
+{
+    // The action column now contains multiple buttons, so we need to find the play button
+    if (auto* container = table.getCellComponent(4, rowNumber))
+    {
+        // Find the play button in the container
+        for (int i = 0; i < container->getNumChildComponents(); ++i)
+        {
+            if (auto* button = dynamic_cast<juce::TextButton*>(container->getChildComponent(i)))
+            {
+                if (button->getComponentID().startsWith("play_"))
+                {
+                    button->addListener(listener);
+                    break;
+                }
+            }
+        }
     }
 }
 
@@ -176,13 +243,15 @@ PerformanceComponent::PerformanceComponent(EnsembleManager* manager, std::shared
     performanceName.addListener(this);
     addAndMakeVisible(performanceName);
     
-    newPerformanceButton.setButtonText("New");
-    newPerformanceButton.addListener(this);
-    addAndMakeVisible(newPerformanceButton);
+    // New button removed as requested
     
     savePerformanceButton.setButtonText("Save");
     savePerformanceButton.addListener(this);
     addAndMakeVisible(savePerformanceButton);
+    
+    cancelButton.setButtonText("Cancel");
+    cancelButton.addListener(this);
+    addAndMakeVisible(cancelButton);
     
     // Set up ensemble selector
     ensembleLabel.setText("Ensemble:", juce::dontSendNotification);
@@ -362,12 +431,9 @@ void PerformanceComponent::resized()
     // Title area
     bounds.removeFromTop(40);
     
-    // Performance selector area
+    // Performance name area
     auto performanceArea = bounds.removeFromTop(30);
     performanceLabel.setBounds(performanceArea.removeFromLeft(100));
-    auto performanceButtonsArea = performanceArea.removeFromRight(150);
-    savePerformanceButton.setBounds(performanceButtonsArea.removeFromRight(70).reduced(5, 0));
-    newPerformanceButton.setBounds(performanceButtonsArea.reduced(5, 0));
     performanceName.setBounds(performanceArea.reduced(5, 0));
     
     bounds.removeFromTop(10); // Spacing
@@ -419,9 +485,10 @@ void PerformanceComponent::resized()
     
     // Buttons area
     auto buttonsArea = bounds.removeFromTop(30);
-    auto buttonsWidth = buttonsArea.getWidth() / 3;
+    auto buttonsWidth = buttonsArea.getWidth() / 4;
     
     generateButton.setBounds(buttonsArea.removeFromLeft(buttonsWidth).reduced(5, 0));
+    loadButton.setBounds(buttonsArea.removeFromLeft(buttonsWidth).reduced(5, 0));
     playButton.setBounds(buttonsArea.removeFromLeft(buttonsWidth).reduced(5, 0));
     stopButton.setBounds(buttonsArea.reduced(5, 0));
     
@@ -432,6 +499,12 @@ void PerformanceComponent::resized()
     bounds.removeFromTop(10); // Spacing
     
     // Musician status table
+    auto saveButtonsArea = bounds.removeFromBottom(40);
+    auto saveButtonWidth = 100;
+    savePerformanceButton.setBounds(saveButtonsArea.removeFromRight(saveButtonWidth).reduced(5, 5));
+    cancelButton.setBounds(saveButtonsArea.removeFromRight(saveButtonWidth).reduced(5, 5));
+    
+    // Remaining area for musician status table
     musicianStatusTable.setBounds(bounds);
 }
 
@@ -449,9 +522,14 @@ void PerformanceComponent::buttonClicked(juce::Button* button)
     {
         stopPlayback();
     }
-    else if (button == &newPerformanceButton)
+    else if (button == &cancelButton)
     {
-        createNewPerformance();
+        // Notify listeners that we want to return to the list view without saving
+        listeners.call(&Listener::performanceCancelled, this);
+    }
+    else if (button == &loadButton)
+    {
+        loadPatterns();
     }
     else if (button == &savePerformanceButton)
     {
@@ -459,8 +537,9 @@ void PerformanceComponent::buttonClicked(juce::Button* button)
     }
     else
     {
-        // Check if this is a generate button for a specific musician
+        // Check button IDs for specific actions
         juce::String buttonId = button->getComponentID();
+        
         if (buttonId.startsWith("generate_"))
         {
             int rowNumber = buttonId.substring(9).getIntValue();
@@ -468,6 +547,24 @@ void PerformanceComponent::buttonClicked(juce::Button* button)
             {
                 // Generate pattern for this specific musician
                 startGenerationForRole(musicianStatusTable.getMusicianRoles()[rowNumber]);
+            }
+        }
+        else if (buttonId.startsWith("load_"))
+        {
+            int rowNumber = buttonId.substring(5).getIntValue();
+            if (rowNumber >= 0 && rowNumber < musicianStatusTable.getMusicianRoles().size())
+            {
+                // Load pattern for this specific musician
+                loadPatternForRole(musicianStatusTable.getMusicianRoles()[rowNumber]);
+            }
+        }
+        else if (buttonId.startsWith("play_"))
+        {
+            int rowNumber = buttonId.substring(5).getIntValue();
+            if (rowNumber >= 0 && rowNumber < musicianStatusTable.getMusicianRoles().size())
+            {
+                // Play pattern for this specific musician
+                playPatternForRole(musicianStatusTable.getMusicianRoles()[rowNumber]);
             }
         }
     }
@@ -1069,34 +1166,93 @@ void PerformanceComponent::startGeneration()
 
 void PerformanceComponent::loadPatterns()
 {
-    if (!ensembleManager || !currentSong || isGenerating)
+    if (!currentPerformance || !ensembleManager)
     {
         return;
     }
     
-    // If we have a current performance, load its patterns into the ensemble manager
-    if (currentPerformance)
+    // Get the patterns from the performance
+    auto patterns = currentPerformance->getPatterns();
+    
+    // Load the patterns into the ensemble manager
+    ensembleManager->loadPatterns(patterns);
+    
+    // Update status
+    statusLabel.setText("Patterns loaded", juce::dontSendNotification);
+    
+    // Enable play button
+    playButton.setEnabled(true);
+    
+    // Update musician statuses
+    for (int i = 0; i < musicianStatusTable.getMusicianRoles().size(); ++i)
     {
-        bool hasPatterns = false;
-        
-        // For each role in the musician status table
-        for (int i = 0; i < musicianStatusTable.getMusicianRoles().size(); ++i)
+        if (patterns.find(musicianStatusTable.getMusicianRoles()[i].name) != patterns.end())
         {
-            const auto& role = musicianStatusTable.getMusicianRoles()[i];
-            auto pattern = currentPerformance->getGeneratedPattern(role.name);
-            
-            if (pattern)
-            {
-                // Load the pattern into the ensemble manager
-                ensembleManager->setMIDIPatternForRole(role.getName(), pattern);
-                musicianStatusTable.updateMusicianStatus(i, "Loaded");
-                hasPatterns = true;
-            }
+            musicianStatusTable.updateMusicianStatus(i, "Loaded");
         }
+    }
+}
+
+void PerformanceComponent::loadPatternForRole(const MusicianRole& role)
+{
+    if (!currentPerformance || !ensembleManager)
+    {
+        return;
+    }
+    
+    // Get the patterns from the performance
+    auto patterns = currentPerformance->getPatterns();
+    
+    // Check if this role has a pattern
+    if (patterns.find(role.name) == patterns.end())
+    {
+        statusLabel.setText("No pattern available for " + role.name, juce::dontSendNotification);
+        return;
+    }
+    
+    // Create a map with just this role's pattern
+    std::map<juce::String, std::shared_ptr<juce::MidiMessageSequence>> rolePattern;
+    rolePattern[role.name] = patterns[role.name];
+    
+    // Load just this pattern into the ensemble manager
+    ensembleManager->loadPatterns(rolePattern);
+    
+    // Update status
+    statusLabel.setText("Pattern for " + role.name + " loaded", juce::dontSendNotification);
+    
+    // Update musician status
+    for (int i = 0; i < musicianStatusTable.getMusicianRoles().size(); ++i)
+    {
+        if (musicianStatusTable.getMusicianRoles()[i].name == role.name)
+        {
+            musicianStatusTable.updateMusicianStatus(i, "Loaded");
+            break;
+        }
+    }
+}
+
+void PerformanceComponent::playPatternForRole(const MusicianRole& role)
+{
+    if (!ensembleManager)
+    {
+        return;
+    }
+    
+    // First make sure the pattern is loaded
+    loadPatternForRole(role);
+    
+    // Play just this role
+    if (ensembleManager->hasLoadedPattern(role.name))
+    {
+        ensembleManager->playRole(role.name);
+        statusLabel.setText("Playing " + role.name, juce::dontSendNotification);
         
-        // Enable the play button if we have patterns
-        playButton.setEnabled(hasPatterns);
-        patternsLoaded = hasPatterns;
+        // Notify listeners
+        listeners.call(&Listener::performancePlaybackStarted, this);
+    }
+    else
+    {
+        statusLabel.setText("Cannot play " + role.name + ": pattern not loaded", juce::dontSendNotification);
     }
 }
 
@@ -1165,6 +1321,16 @@ void PerformanceComponent::saveCurrentPerformance()
     }
     
     // Update the performance with current values
+    
+    // Get the name from the text editor
+    juce::String performanceNameText = performanceName.getText();
+    if (performanceNameText.isEmpty())
+    {
+        performanceNameText = "Untitled Performance";
+        performanceName.setText(performanceNameText);
+    }
+    currentPerformance->setName(performanceNameText);
+    
     if (currentSong)
     {
         currentPerformance->setSong(currentSong);

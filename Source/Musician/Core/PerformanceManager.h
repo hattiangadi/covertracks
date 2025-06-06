@@ -67,6 +67,14 @@ public:
     void savePerformance(std::shared_ptr<Performance> performance);
     
     /**
+     * @brief Delete a performance from the default location
+     * 
+     * @param performance The performance to delete
+     * @return bool True if the performance was successfully deleted, false otherwise
+     */
+    bool deletePerformance(std::shared_ptr<Performance> performance);
+    
+    /**
      * @brief Find a song by its unique ID
      * 
      * This method searches the songs directory for a song with the given ID.

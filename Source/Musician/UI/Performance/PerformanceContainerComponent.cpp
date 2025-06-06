@@ -80,11 +80,20 @@ void PerformanceContainerComponent::deletePerformanceRequested(std::shared_ptr<P
     if (listComponent && performance)
     {
         // Get the performance manager from the list component
-        if (auto performanceManager = std::make_shared<PerformanceManager>())
+        auto performanceManager = std::make_shared<PerformanceManager>();
+        
+        // Delete the performance
+        if (performanceManager->deletePerformance(performance))
         {
-            // TODO: Implement proper deletion
-            // For now, just refresh the list
+            // Successfully deleted, refresh the list
             refresh();
+        }
+        else
+        {
+            // Failed to delete, show error message
+            juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
+                                                "Delete Failed",
+                                                "Failed to delete performance: " + performance->getName());
         }
     }
 }
@@ -95,6 +104,12 @@ void PerformanceContainerComponent::performanceSaved(PerformanceComponent* sourc
     refresh();
     
     // Switch back to the list view
+    showListView();
+}
+
+void PerformanceContainerComponent::performanceCancelled(PerformanceComponent* source)
+{
+    // User cancelled editing, just switch back to the list view without saving
     showListView();
 }
 

@@ -300,6 +300,84 @@ private:
     
 public:
     /**
+     * @brief Load patterns into the ensemble
+     * 
+     * @param patterns Map of role names to MIDI patterns
+     * @return true If at least one pattern was loaded successfully
+     * @return false If no patterns were loaded
+     */
+    bool loadPatterns(const std::map<juce::String, std::shared_ptr<juce::MidiMessageSequence>>& patterns)
+    {
+        bool anySuccess = false;
+        
+        // Load patterns for all roles that have a pattern
+        for (auto& role : musicianRoles)
+        {
+            auto it = patterns.find(role.name);
+            if (it != patterns.end() && it->second != nullptr)
+            {
+                if (role.player)
+                {
+                    // Use the player's setPattern method to load the pattern
+                    bool success = role.player->setPattern(it->second);
+                    if (success)
+                    {
+                        anySuccess = true;
+                        std::cout << "EnsembleManager::loadPatterns - Loaded pattern for role: " 
+                                  << role.name << std::endl;
+                    }
+                }
+            }
+        }
+        
+        return anySuccess;
+    }
+    
+    /**
+     * @brief Check if a role has a loaded pattern
+     * 
+     * @param roleName The name of the role to check
+     * @return true If the role has a loaded pattern
+     * @return false If the role does not have a loaded pattern
+     */
+    bool hasLoadedPattern(const juce::String& roleName) const
+    {
+        for (const auto& role : musicianRoles)
+        {
+            if (role.name == roleName && role.player && role.player->getPattern() != nullptr)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * @brief Play a specific role's pattern
+     * 
+     * @param roleName The name of the role to play
+     * @return true If the role's pattern started playing successfully
+     * @return false If the role's pattern could not be played
+     */
+    bool playRole(const juce::String& roleName)
+    {
+        for (auto& role : musicianRoles)
+        {
+            if (role.name == roleName && role.player)
+            {
+                bool success = role.player->play();
+                if (success)
+                {
+                    std::cout << "EnsembleManager::playRole - Started playback for role: " 
+                              << role.name << std::endl;
+                }
+                return success;
+            }
+        }
+        return false;
+    }
+    
+    /**
      * @brief Play all patterns in the ensemble
      * 
      * @return true If at least one player started playing successfully

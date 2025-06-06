@@ -46,6 +46,7 @@ public:
     void performanceSaved(PerformanceComponent* source, std::shared_ptr<Performance> performance) override;
     void performancePlaybackStarted(PerformanceComponent* source) override;
     void performancePlaybackStopped(PerformanceComponent* source) override;
+    void performanceCancelled(PerformanceComponent* source) override;
     
     // SongListComponent::Listener implementation
     void songSelectionChanged(SongListComponent* source, std::shared_ptr<Song> song) override;

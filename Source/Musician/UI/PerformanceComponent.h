@@ -127,7 +127,14 @@ public:
          * 
          * @param source The PerformanceComponent that triggered the event
          */
-        virtual void performancePlaybackStopped(PerformanceComponent* /*source*/) {}
+        virtual void performancePlaybackStopped(PerformanceComponent* source) = 0;
+        
+        /**
+         * @brief Called when the user cancels editing a performance
+         * 
+         * @param source The PerformanceComponent that triggered the event
+         */
+        virtual void performanceCancelled(PerformanceComponent* source) = 0;
     };
     
     /**
@@ -148,8 +155,8 @@ private:
     // UI components
     juce::Label performanceLabel;
     juce::TextEditor performanceName;
-    juce::TextButton newPerformanceButton;
     juce::TextButton savePerformanceButton;
+    juce::TextButton cancelButton;
     
     juce::Label ensembleLabel;
     juce::ComboBox ensembleSelector;
@@ -209,8 +216,10 @@ private:
         // Get the musician roles
         const juce::Array<MusicianRole>& getMusicianRoles() const { return musicianRoles; }
         
-        // Add a generate button for a specific musician
+        // Add action buttons for a specific musician
         void addGenerateButton(int rowNumber, juce::Button::Listener* listener);
+        void addLoadButton(int rowNumber, juce::Button::Listener* listener);
+        void addPlayButton(int rowNumber, juce::Button::Listener* listener);
         
     private:
         juce::TableListBox table;
@@ -249,6 +258,8 @@ private:
     void updateMusicianStatusTable();
     void startGeneration();
     void startGenerationForRole(const MusicianRole& role);
+    void loadPatternForRole(const MusicianRole& role);
+    void playPatternForRole(const MusicianRole& role);
     
     // Playback methods
     void playPerformance();

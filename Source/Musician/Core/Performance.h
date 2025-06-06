@@ -178,6 +178,13 @@ public:
     void clearGeneratedPatterns();
     
     /**
+     * @brief Get all generated patterns for this performance
+     * 
+     * @return std::map<juce::String, std::shared_ptr<juce::MidiMessageSequence>> Map of role names to patterns
+     */
+    std::map<juce::String, std::shared_ptr<juce::MidiMessageSequence>> getPatterns() const { return generatedPatterns; }
+    
+    /**
      * @brief Serialize the performance to a var object
      * 
      * @return juce::var The serialized performance

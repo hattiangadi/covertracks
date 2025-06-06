@@ -77,11 +77,13 @@ void PerformanceListComponent::paintRowBackground(juce::Graphics& g, int rowNumb
     
     if (rowIsSelected)
     {
-        g.fillAll(juce::Colours::lightblue);
+        // Use a consistent blue color for selected rows
+        g.fillAll(getLookAndFeel().findColour(juce::TextEditor::highlightColourId));
     }
-    else if (rowNumber % 2)
+    else
     {
-        g.fillAll(juce::Colour(0xffeeeeee));
+        // Use alternating colors for unselected rows
+        g.fillAll(rowNumber % 2 ? juce::Colour(0xffeeeeee) : getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId));
     }
 }
 
@@ -94,7 +96,8 @@ void PerformanceListComponent::paintCell(juce::Graphics& g, int rowNumber, int c
     if (!performance)
         return;
         
-    g.setColour(rowIsSelected ? juce::Colours::darkblue : juce::Colours::black);
+    // Use white text for selected rows, black for unselected
+    g.setColour(rowIsSelected ? juce::Colours::white : juce::Colours::black);
     g.setFont(14.0f);
     
     juce::String text;
