@@ -42,13 +42,13 @@ public:
     void setLLMClient(std::shared_ptr<LLMClient> client);
     
     /**
-     * @brief Generate a musical pattern
+     * @brief Generate a musical chart
      * 
-     * @param parameters Parameters for pattern generation (JSON/var)
+     * @param parameters Parameters for chart generation (JSON/var)
      * @param callback Callback to be invoked when generation completes
      */
-    void generatePattern(const var& parameters, 
-                        std::function<void(bool success, const var& pattern)> callback);
+    void generateChart(const var& parameters, 
+                      std::function<void(bool success, const var& chart)> callback);
     
     /**
      * @brief Generate a specific section
@@ -58,38 +58,24 @@ public:
      * @param callback Callback to be invoked when generation completes
      */
     void generateSection(const String& section, const var& parameters,
-                        std::function<void(bool success, const var& pattern)> callback);
+                        std::function<void(bool success, const var& chart)> callback);
     
     /**
-     * @brief Modify an existing pattern
+     * @brief Modify an existing chart
      * 
-     * @param currentPattern The current pattern (JSON/var)
+     * @param currentChart The current chart (JSON/var)
      * @param modification Description of modifications to make
      * @param callback Callback to be invoked when generation completes
      */
-    void modifyPattern(const var& currentPattern, const String& modification,
-                      std::function<void(bool success, const var& pattern)> callback);
+    void modifyChart(const var& currentChart, const String& modification,
+                    std::function<void(bool success, const var& chart)> callback);
     
     /**
-     * @brief Set the command interface for playing patterns
+     * @brief Get the last generated chart
      * 
-     * @param commandInterface Function to handle player commands (JSON string in/out)
+     * @return const var& The last generated chart (for modification purposes)
      */
-    void setPlayerInterface(std::function<String(const String&)> commandInterface);
-    
-    /**
-     * @brief Direct interface for playing patterns
-     * 
-     * @param pattern The pattern to play (JSON/var)
-     * @param tempo The tempo in BPM
-     * @return true if playback started successfully
-     */
-    bool playPattern(const var& pattern, double tempo = 120.0);
-    
-    /**
-     * @brief Stop current playback
-     */
-    void stopPlayback();
+    const var& getLastGeneratedChart() const;
     
     /**
      * @brief Get the ID of this musician
@@ -186,8 +172,6 @@ private:
     std::unique_ptr<PromptManager> promptManager;
     std::unique_ptr<PatternGenerator> patternGenerator;
     
-    // Player interface
-    std::function<String(const String&)> playerCommandInterface;
     
     // Pattern storage
     String lastResponseText;

@@ -46,8 +46,8 @@ void Musician::setLLMClient(std::shared_ptr<LLMClient> client)
     sendChangeMessage();
 }
 
-void Musician::generatePattern(const var& parameters, 
-                             std::function<void(bool success, const var& pattern)> callback)
+void Musician::generateChart(const var& parameters, 
+                           std::function<void(bool success, const var& chart)> callback)
 {
     if (!patternGenerator || !llmClient)
     {
@@ -116,7 +116,7 @@ void Musician::generatePattern(const var& parameters,
                 // Create an error response
                 DynamicObject* responseObj = new DynamicObject();
                 responseObj->setProperty("success", false);
-                responseObj->setProperty("error", "Failed to generate pattern");
+                responseObj->setProperty("error", "Failed to generate chart");
                 responseObj->setProperty("response", response);
                 
                 // Call the callback
@@ -130,7 +130,7 @@ void Musician::generatePattern(const var& parameters,
 }
 
 void Musician::generateSection(const String& section, const var& parameters,
-                             std::function<void(bool success, const var& pattern)> callback)
+                             std::function<void(bool success, const var& chart)> callback)
 {
     if (!patternGenerator || !llmClient)
     {
@@ -204,8 +204,8 @@ void Musician::generateSection(const String& section, const var& parameters,
         });
 }
 
-void Musician::modifyPattern(const var& currentPattern, const String& modification,
-                           std::function<void(bool success, const var& pattern)> callback)
+void Musician::modifyChart(const var& currentChart, const String& modification,
+                         std::function<void(bool success, const var& chart)> callback)
 {
     if (!patternGenerator || !llmClient)
     {
@@ -214,13 +214,13 @@ void Musician::modifyPattern(const var& currentPattern, const String& modificati
         return;
     }
     
-    // Convert the current pattern to notation format
+    // Convert the current chart to notation format
     String currentNotation;
     
-    if (currentPattern.isObject() && currentPattern.hasProperty("notation"))
+    if (currentChart.isObject() && currentChart.hasProperty("notation"))
     {
-        // Pattern already has notation
-        currentNotation = currentPattern["notation"].toString();
+        // Chart already has notation
+        currentNotation = currentChart["notation"].toString();
     }
     else if (lastGeneratedChart)
     {
@@ -229,11 +229,11 @@ void Musician::modifyPattern(const var& currentPattern, const String& modificati
     }
     else
     {
-        // Create a simple pattern based on the current pattern
+        // Create a simple chart based on the current chart
         currentNotation = "[4/4: C3 E3 G3 C4]";
     }
     
-    // Modify the pattern
+    // Modify the chart
     patternGenerator->modifyPattern(currentNotation, modification, 
         [this, callback](bool success, std::shared_ptr<Chart> chart, const String& response) {
             // Store the response
@@ -262,7 +262,7 @@ void Musician::modifyPattern(const var& currentPattern, const String& modificati
                 // Create an error response
                 DynamicObject* responseObj = new DynamicObject();
                 responseObj->setProperty("success", false);
-                responseObj->setProperty("error", "Failed to modify pattern");
+                responseObj->setProperty("error", "Failed to modify chart");
                 responseObj->setProperty("response", response);
                 
                 // Call the callback
@@ -275,69 +275,26 @@ void Musician::modifyPattern(const var& currentPattern, const String& modificati
         });
 }
 
-void Musician::setPlayerInterface(std::function<String(const String&)> commandInterface)
+const var& Musician::getLastGeneratedChart() const
 {
-    playerCommandInterface = std::move(commandInterface);
-}
-
-bool Musician::playPattern(const var& pattern, double tempo)
-{
-    if (playerCommandInterface)
+    if (lastGeneratedChart)
     {
-        // Create a play command
-        DynamicObject* command = new DynamicObject();
-        command->setProperty("command", "play_pattern");
+        // Convert the chart to the expected var format
+        static var chartVar;
         
-        // Include the tempo if provided
-        if (tempo > 0)
-            command->setProperty("tempo", tempo);
-        else if (pattern.hasProperty("tempo") && pattern["tempo"].isDouble())
-            command->setProperty("tempo", static_cast<double>(pattern["tempo"]));
-        else
-            command->setProperty("tempo", 120.0);
+        DynamicObject* responseObj = new DynamicObject();
+        responseObj->setProperty("success", true);
+        responseObj->setProperty("command", "play_pattern");
+        responseObj->setProperty("tempo", lastGeneratedChart->getTempo());
+        responseObj->setProperty("events", midiMessageSequenceToVar(*lastGeneratedChart->toMidiSequence(), lastGeneratedChart->getTempo()));
+        responseObj->setProperty("notation", lastResponseText);
         
-        // Include the events if provided
-        if (pattern.hasProperty("events"))
-            command->setProperty("events", pattern["events"]);
-        else
-            command->setProperty("events", pattern);
-        
-        // Send the command
-        String jsonCommand = JSON::toString(var(command));
-        String response = playerCommandInterface(jsonCommand);
-        
-        // Parse the response
-        var responseJson;
-        Result parseResult = JSON::parse(response, responseJson);
-        
-        if (parseResult.wasOk() && responseJson.hasProperty("status") && 
-            responseJson["status"].toString() == "success")
-        {
-            return true;
-        }
-        
-        // Log the error
-        std::cerr << "Failed to play pattern: " << response << std::endl;
-        return false;
+        chartVar = var(responseObj);
+        return chartVar;
     }
     
-    // No player interface
-    std::cerr << "No player interface set" << std::endl;
-    return false;
-}
-
-void Musician::stopPlayback()
-{
-    if (playerCommandInterface)
-    {
-        // Create a stop command
-        DynamicObject* command = new DynamicObject();
-        command->setProperty("command", "stop_player");
-        
-        // Send the command
-        String jsonCommand = JSON::toString(var(command));
-        playerCommandInterface(jsonCommand);
-    }
+    static var emptyChart;
+    return emptyChart;
 }
 
 var Musician::convertNotationToMidiEvents(const String& notation, double tempo)

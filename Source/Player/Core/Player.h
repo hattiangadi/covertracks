@@ -157,37 +157,44 @@ public:
     // void setLLMClient(std::shared_ptr<LLMClient> client);
     
     /**
-     * @brief Generate a musical pattern
+     * @brief Generate a new musical chart
      * 
-     * @param parameters Parameters for pattern generation (key, tempo, etc.)
-     * @return var The generated pattern as JUCE var/JSON
+     * @param parameters Parameters for chart generation (key, tempo, etc.)
+     * @param callback Callback to be invoked when generation completes
      */
-    var generatePattern(const var& parameters);
+    void generateNewChart(const var& parameters, std::function<void(bool success)> callback = nullptr);
     
     /**
-     * @brief Set a MIDI pattern for playback
+     * @brief Load a chart for playback (from any source)
      * 
-     * @param pattern The MIDI pattern as a MidiMessageSequence
-     * @return true If the pattern was set successfully
-     * @return false If there was an error setting the pattern
+     * @param chart The chart as a var/JSON object
+     * @return true If the chart was loaded successfully
+     * @return false If there was an error loading the chart
      */
-    bool setPattern(std::shared_ptr<juce::MidiMessageSequence> pattern);
+    bool loadChart(const var& chart);
     
     /**
-     * @brief Set a MIDI pattern from a var/JSON representation
+     * @brief Load chart from musician's last generated chart
      * 
-     * @param patternVar The MIDI pattern as a var/JSON object
-     * @return true If the pattern was set successfully
-     * @return false If there was an error setting the pattern
+     * @return true If the chart was loaded successfully
+     * @return false If there was an error loading the chart
      */
-    bool setPatternFromVar(const var& patternVar);
+    bool loadChartFromMusician();
     
     /**
-     * @brief Get the current MIDI pattern
+     * @brief Modify the current chart
      * 
-     * @return std::shared_ptr<juce::MidiMessageSequence> The current pattern
+     * @param modifications Description of modifications to make
+     * @param callback Callback to be invoked when modification completes
      */
-    std::shared_ptr<juce::MidiMessageSequence> getPattern() const;
+    void modifyCurrentChart(const String& modifications, std::function<void(bool success)> callback = nullptr);
+    
+    /**
+     * @brief Get the current loaded chart
+     * 
+     * @return const var& The current chart
+     */
+    const var& getCurrentChart() const;
     
     /**
      * @brief Start playing the current pattern
@@ -202,24 +209,14 @@ public:
      */
     void stop();
     
-    /**
-     * @brief Play a MIDI pattern
-     * 
-     * @param pattern MIDI events in JUCE var/JSON format
-     * @param tempo Tempo in BPM
-     * @return true If playback started successfully
-     * @return false If playback failed to start
-     */
-    bool playPattern(const var& pattern, double tempo = 120.0);
     
     /**
-     * @brief Generate and immediately play a pattern (stubbed)
+     * @brief Generate a new chart and immediately load it for playback
      * 
-     * @param parameters Parameters for pattern generation
-     * @return true If generation and playback were successful
-     * @return false If an error occurred
+     * @param parameters Parameters for chart generation
+     * @param callback Callback to be invoked when generation and loading completes
      */
-    bool generateAndPlay(const var& parameters);
+    void generateAndLoad(const var& parameters, std::function<void(bool success)> callback = nullptr);
     
     /**
      * @brief Stop current playback
@@ -227,11 +224,11 @@ public:
     void stopPlayback();
     
     /**
-     * @brief Set callback for pattern completion
+     * @brief Set callback for chart playback completion
      * 
-     * @param callback Function to call when pattern playback completes
+     * @param callback Function to call when chart playback completes
      */
-    void setPatternFinishedCallback(std::function<void(const String&)> callback);
+    void setChartFinishedCallback(std::function<void(const String&)> callback);
     
     /**
      * @brief Get instrument capabilities for LLM integration
@@ -389,16 +386,19 @@ private:
         return appDataDir.getChildFile(id + ".filtergraph");
     }
     
-    // Pattern storage and playback
-    var lastGeneratedPattern;
-    std::shared_ptr<juce::MidiMessageSequence> currentPattern;
-    double patternTempo = 120.0; // Default tempo in BPM
+    // Chart storage and playback
+    var currentLoadedChart;
+    std::shared_ptr<juce::MidiMessageSequence> currentMidiSequence;
+    double chartTempo = 120.0; // Default tempo in BPM
     
-    // Pattern finished callback
-    std::function<void(const String&)> onPatternFinished;
+    // Chart finished callback
+    std::function<void(const String&)> onChartFinished;
     
-    // Handle pattern completion
-    void handlePatternFinished();
+    // Handle chart completion
+    void handleChartFinished();
+    
+    // Convert chart to MIDI sequence (internal helper)
+    bool convertChartToMidi(const var& chart);
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Player)
 

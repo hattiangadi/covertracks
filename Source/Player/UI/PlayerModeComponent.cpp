@@ -227,7 +227,7 @@ void PlayerModeComponent::buttonClicked(juce::Button* button)
             // Play on all players
             for (auto* player : playerManager.getPlayers())
             {
-                if (player && player->setPatternFromVar(patternVar))
+                if (player && player->loadChart(patternVar))
                 {
                     player->play();
                 }
@@ -1701,7 +1701,7 @@ void PlayerModeComponent::playCurrentPattern()
     patternViewer.setText(text);
     
     // Play the MIDI data on the selected player
-    if (selectedPlayer->setPatternFromVar(patternVar))
+    if (selectedPlayer->loadChart(patternVar))
     {
         selectedPlayer->play();
     }

@@ -120,9 +120,12 @@ void PatternEditorComponent::buttonClicked(Button* button)
             // Use a default tempo of 120 BPM if not specified in the pattern
             double tempo = 120.0;
             
-            // Let the musician handle the pattern parsing and playback
+            // Convert notation to MIDI events for playback
+            // Note: This component needs to be refactored to work with Player instead of Musician
             var events = musician->convertNotationToMidiEvents(currentPatternNotation, tempo);
-            musician->playPattern(events, tempo);
+            
+            // For now, just notify listeners - actual playback should be handled by Player
+            std::cout << "Pattern playback requested - events converted: " << events.size() << " events" << std::endl;
         }
     }
     else if (button == &editButton)

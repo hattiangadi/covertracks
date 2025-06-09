@@ -141,9 +141,9 @@ void Player::loadMinimalResources()
         {
             instrument = std::make_unique<Instrument>(metadata.name, formatManager, knownPluginList);
             
-            // Set up pattern finished callback
+            // Set up chart finished callback
             instrument->setPatternFinishedCallback([this]() {
-                this->handlePatternFinished();
+                this->handleChartFinished();
             });
         }
         
@@ -296,9 +296,9 @@ bool Player::initializeMinimal()
     {
         instrument = std::make_unique<Instrument>(metadata.name, formatManager, knownPluginList, audioEngine);
         
-        // Set up pattern finished callback
+        // Set up chart finished callback
         instrument->setPatternFinishedCallback([this]() {
-            this->handlePatternFinished();
+            this->handleChartFinished();
         });
     }
     
@@ -425,9 +425,9 @@ bool Player::initialize()
     {
         instrument = std::make_unique<Instrument>(metadata.name, formatManager, knownPluginList, audioEngine);
         
-        // Set up pattern finished callback
+        // Set up chart finished callback
         instrument->setPatternFinishedCallback([this]() {
-            this->handlePatternFinished();
+            this->handleChartFinished();
         });
     }
     
@@ -691,77 +691,101 @@ void Player::setLLMClient(std::shared_ptr<LLMClient> client)
 }
 */
 
-// Updated to use var instead of json and stubbed implementation
-var Player::generatePattern(const var& parameters)
+void Player::generateNewChart(const var& parameters, std::function<void(bool success)> callback)
 {
     if (musician != nullptr)
     {
-        // Use the musician to generate the pattern
-        // This is asynchronous, so we'll need to return a placeholder
-        // The actual pattern will be played when ready
-        
-        // Need to add wait functionality if we want to return the result synchronously
-        // For now, just return a placeholder
-        
-        musician->generatePattern(parameters, [this](bool success, const var& pattern) {
+        // Use the musician to generate the chart
+        musician->generateChart(parameters, [this, callback](bool success, const var& chart) {
             if (success)
             {
-                // Store the generated pattern
-                lastGeneratedPattern = pattern;
-                
-                // We don't automatically play it - that would be handled by the UI
+                // Load the generated chart
+                bool loaded = loadChart(chart);
+                if (callback)
+                    callback(loaded);
+            }
+            else
+            {
+                if (callback)
+                    callback(false);
             }
         });
-        
-        // Return a placeholder indicating that generation is in progress
-        DynamicObject* placeholder = new DynamicObject();
-        placeholder->setProperty("status", "generating");
-        placeholder->setProperty("message", "Pattern generation in progress");
-        return var(placeholder);
     }
-    
-    // Create a simple placeholder pattern if no musician
-    DynamicObject* errorObj = new DynamicObject();
-    errorObj->setProperty("error", "Musician not available");
-    
-    // Store the last generated pattern
-    lastGeneratedPattern = var(errorObj);
-    
-    return lastGeneratedPattern;
+    else
+    {
+        if (callback)
+            callback(false);
+    }
 }
 
-bool Player::setPattern(std::shared_ptr<juce::MidiMessageSequence> pattern)
+bool Player::loadChart(const var& chart)
 {
-    if (!pattern)
+    if (!chart.isObject())
     {
-        std::cerr << "Player::setPattern - Received null pattern" << std::endl;
+        std::cerr << "Player::loadChart - Invalid chart format (not an object)" << std::endl;
         return false;
     }
     
-    // Store the pattern
-    currentPattern = pattern;
-    
-    std::cout << "Player::setPattern - Pattern set with " << pattern->getNumEvents() 
-              << " events, duration: " << pattern->getEndTime() << " seconds" << std::endl;
-    
-    return true;
-}
-
-std::shared_ptr<juce::MidiMessageSequence> Player::getPattern() const
-{
-    return currentPattern;
-}
-
-bool Player::setPatternFromVar(const var& patternVar)
-{
-    if (!patternVar.isObject())
-    {
-        std::cerr << "Player::setPatternFromVar - Invalid pattern format (not an object)" << std::endl;
-        return false;
-    }
+    // Store the chart
+    currentLoadedChart = chart;
     
     // Extract tempo if available, otherwise use default (120 BPM)
-    patternTempo = patternVar.hasProperty("tempo") ? static_cast<double>(patternVar["tempo"]) : 120.0;
+    chartTempo = chart.hasProperty("tempo") ? static_cast<double>(chart["tempo"]) : 120.0;
+    
+    // Convert chart to MIDI sequence
+    return convertChartToMidi(chart);
+}
+
+bool Player::loadChartFromMusician()
+{
+    if (musician != nullptr)
+    {
+        const var& chart = musician->getLastGeneratedChart();
+        return loadChart(chart);
+    }
+    return false;
+}
+
+const var& Player::getCurrentChart() const
+{
+    return currentLoadedChart;
+}
+
+void Player::modifyCurrentChart(const String& modifications, std::function<void(bool success)> callback)
+{
+    if (musician != nullptr)
+    {
+        musician->modifyChart(currentLoadedChart, modifications, [this, callback](bool success, const var& chart) {
+            if (success)
+            {
+                // Load the modified chart
+                bool loaded = loadChart(chart);
+                if (callback)
+                    callback(loaded);
+            }
+            else
+            {
+                if (callback)
+                    callback(false);
+            }
+        });
+    }
+    else
+    {
+        if (callback)
+            callback(false);
+    }
+}
+
+bool Player::convertChartToMidi(const var& chart)
+{
+    if (!chart.isObject())
+    {
+        std::cerr << "Player::convertChartToMidi - Invalid chart format (not an object)" << std::endl;
+        return false;
+    }
+    
+    // Tempo is already extracted in loadChart method - no need to extract again here
     
     // Create a new MIDI message sequence
     auto sequence = std::make_shared<juce::MidiMessageSequence>();
@@ -769,17 +793,17 @@ bool Player::setPatternFromVar(const var& patternVar)
     try
     {
         // Extract events array
-        var eventsVar = patternVar;
+        var eventsVar = chart;
         
-        // If the pattern is a full command with an events property, extract it
-        if (patternVar.hasProperty("events"))
+        // If the chart is a full command with an events property, extract it
+        if (chart.hasProperty("events"))
         {
-            eventsVar = patternVar["events"];
+            eventsVar = chart["events"];
         }
         
         if (!eventsVar.isArray())
         {
-            std::cerr << "Player::setPatternFromVar - Invalid pattern format (events not an array)" << std::endl;
+            std::cerr << "Player::convertChartToMidi - Invalid chart format (events not an array)" << std::endl;
             return false;
         }
         
@@ -882,21 +906,26 @@ bool Player::setPatternFromVar(const var& patternVar)
         // Re-sort after adding all notes off messages
         sequence->sort();
         
-        // Set the pattern
-        return setPattern(sequence);
+        // Store the MIDI sequence
+        currentMidiSequence = sequence;
+        
+        std::cout << "Player::convertChartToMidi - Chart converted with " << sequence->getNumEvents() 
+                  << " events, duration: " << sequence->getEndTime() << " seconds" << std::endl;
+        
+        return true;
     }
     catch (const std::exception& e)
     {
-        std::cerr << "Player::setPatternFromVar - Error parsing pattern: " << e.what() << std::endl;
+        std::cerr << "Player::convertChartToMidi - Error parsing chart: " << e.what() << std::endl;
         return false;
     }
 }
 
 bool Player::play()
 {
-    if (!currentPattern)
+    if (!currentMidiSequence)
     {
-        std::cerr << "Player::play - No pattern set" << std::endl;
+        std::cerr << "Player::play - No chart loaded" << std::endl;
         return false;
     }
     
@@ -914,12 +943,12 @@ bool Player::play()
     }
     
     // Convert the MIDI message sequence to a var for the instrument
-    DynamicObject* patternObj = new DynamicObject();
+    DynamicObject* chartObj = new DynamicObject();
     Array<var> events;
     
-    for (int i = 0; i < currentPattern->getNumEvents(); ++i)
+    for (int i = 0; i < currentMidiSequence->getNumEvents(); ++i)
     {
-        auto event = currentPattern->getEventPointer(i);
+        auto event = currentMidiSequence->getEventPointer(i);
         if (event->message.isNoteOn())
         {
             DynamicObject* noteOn = new DynamicObject();
@@ -961,27 +990,27 @@ bool Player::play()
         }
     }
     
-    patternObj->setProperty("events", events);
-    var patternVar(patternObj);
+    chartObj->setProperty("events", events);
+    var chartVar(chartObj);
     
-    // Play the pattern using the instrument
-    bool result = instrument->playMIDIPattern(patternVar);
+    // Play the chart using the instrument
+    bool result = instrument->playMIDIPattern(chartVar);
     
     if (result)
     {
-        // Calculate the duration of the pattern
-        double duration = currentPattern->getEndTime();
+        // Calculate the duration of the chart
+        double duration = currentMidiSequence->getEndTime();
         
-        std::cout << "Player::play - Started playback of pattern with " 
-                  << currentPattern->getNumEvents() << " events"
+        std::cout << "Player::play - Started playback of chart with " 
+                  << currentMidiSequence->getNumEvents() << " events"
                   << ", duration: " << duration << " seconds"
-                  << ", tempo: " << patternTempo << " BPM" << std::endl;
+                  << ", tempo: " << chartTempo << " BPM" << std::endl;
         
         // Log the first few events for debugging
-        int eventsToLog = std::min(8, currentPattern->getNumEvents());
+        int eventsToLog = std::min(8, currentMidiSequence->getNumEvents());
         for (int i = 0; i < eventsToLog; ++i)
         {
-            auto event = currentPattern->getEventPointer(i);
+            auto event = currentMidiSequence->getEventPointer(i);
             juce::String eventType = event->message.isNoteOn() ? "Note On" : 
                                     (event->message.isNoteOff() ? "Note Off" : "Other");
             int noteNumber = event->message.isNoteOnOrOff() ? event->message.getNoteNumber() : -1;
@@ -999,73 +1028,11 @@ bool Player::play()
     return result;
 }
 
-bool Player::playPattern(const var& pattern, double tempo)
+void Player::generateAndLoad(const var& parameters, std::function<void(bool success)> callback)
 {
-    if (instrument == nullptr)
-    {
-        std::cerr << "Player::playPattern - Instrument not initialized" << std::endl;
-        return false;
-    }
-    
-    // Make sure the instrument is ready for playback
-    if (instrument->getResourceState() != Instrument::ResourceState::PlaybackReady)
-    {
-        std::cerr << "Player::playPattern - Instrument not ready for playback, preparing now" << std::endl;
-        prepareForPlayback();
-    }
-    
-    // Extract the events array if the pattern is a full command
-    var eventsToPlay = pattern;
-    
-    if (pattern.hasProperty("command") && pattern["command"].toString() == "play_pattern" &&
-        pattern.hasProperty("events"))
-    {
-        eventsToPlay = pattern["events"];
-    }
-    
-    // Use tempo from pattern if available
-    double tempoToUse = tempo;
-    if (pattern.hasProperty("tempo") && pattern["tempo"].isDouble())
-    {
-        tempoToUse = static_cast<double>(pattern["tempo"]);
-    }
-    
-    // Play the pattern using the instrument
-    bool result = instrument->playMIDIPattern(eventsToPlay, tempoToUse);
-    
-    if (result)
-    {
-        std::cout << "Player::playPattern - Started playback of pattern" << std::endl;
-    }
-    else
-    {
-        std::cerr << "Player::playPattern - Failed to start playback" << std::endl;
-    }
-    
-    return result;
+    generateNewChart(parameters, callback);
 }
 
-bool Player::generateAndPlay(const var& parameters)
-{
-    // Generate the pattern
-    var pattern = generatePattern(parameters);
-    
-    // Check for errors
-    if (pattern.hasProperty("error"))
-    {
-        return false;
-    }
-    
-    // Extract tempo from parameters
-    double tempo = 120.0;
-    if (parameters.hasProperty("tempo") && parameters["tempo"].isDouble())
-    {
-        tempo = static_cast<double>(parameters["tempo"]);
-    }
-    
-    // Play the pattern
-    return playPattern(pattern, tempo);
-}
 
 void Player::stopPlayback()
 {
@@ -1084,17 +1051,17 @@ void Player::stop()
     }
 }
 
-void Player::setPatternFinishedCallback(std::function<void(const String&)> callback)
+void Player::setChartFinishedCallback(std::function<void(const String&)> callback)
 {
-    onPatternFinished = std::move(callback);
+    onChartFinished = std::move(callback);
 }
 
-void Player::handlePatternFinished()
+void Player::handleChartFinished()
 {
     // Call the callback if set
-    if (onPatternFinished)
+    if (onChartFinished)
     {
-        onPatternFinished(id);
+        onChartFinished(id);
     }
 }
 
@@ -1102,151 +1069,7 @@ void Player::setMusician(std::unique_ptr<Musician> newMusician)
 {
     musician = std::move(newMusician);
     
-    // Set up the player interface
-    if (musician)
-    {
-        musician->setPlayerInterface([this](const String& jsonCommand) -> String {
-            var command;
-            Result result = JSON::parse(jsonCommand, command);
-            
-            if (result.failed())
-            {
-                DynamicObject* responseObj = new DynamicObject();
-                responseObj->setProperty("status", "error");
-                responseObj->setProperty("message", "Invalid JSON: " + result.getErrorMessage());
-                return JSON::toString(var(responseObj));
-            }
-            
-            if (command.hasProperty("command"))
-            {
-                String commandType = command["command"].toString();
-                
-                if (commandType == "play_pattern")
-                {
-                    // Extract parameters
-                    var events = command.hasProperty("events") ? command["events"] : var();
-                    double tempo = 120.0;
-                    
-                    if (command.hasProperty("tempo") && command["tempo"].isDouble())
-                    {
-                        tempo = static_cast<double>(command["tempo"]);
-                    }
-                    
-                    // Play the pattern on the instrument
-                    bool success = playPattern(events, tempo);
-                    
-                    if (success)
-                    {
-                        DynamicObject* responseObj = new DynamicObject();
-                        responseObj->setProperty("status", "success");
-                        responseObj->setProperty("message", "Pattern playback started");
-                        return JSON::toString(var(responseObj));
-                    }
-                    else
-                    {
-                        DynamicObject* responseObj = new DynamicObject();
-                        responseObj->setProperty("status", "error");
-                        responseObj->setProperty("message", "Failed to start pattern playback");
-                        return JSON::toString(var(responseObj));
-                    }
-                }
-                else if (commandType == "stop_player")
-                {
-                    // Stop playback
-                    stopPlayback();
-                    
-                    DynamicObject* responseObj = new DynamicObject();
-                    responseObj->setProperty("status", "success");
-                    responseObj->setProperty("message", "Playback stopped");
-                    return JSON::toString(var(responseObj));
-                }
-                else if (commandType == "create_player")
-                {
-                    // Player is already created, just acknowledge
-                    DynamicObject* responseObj = new DynamicObject();
-                    responseObj->setProperty("status", "success");
-                    responseObj->setProperty("message", "Player already exists");
-                    return JSON::toString(var(responseObj));
-                }
-                else if (commandType == "generate_pattern")
-                {
-                    // Generate a pattern
-                    var parameters = command.hasProperty("parameters") ? command["parameters"] : var();
-                    var pattern = generatePattern(parameters);
-                    
-                    DynamicObject* responseObj = new DynamicObject();
-                    responseObj->setProperty("status", "success");
-                    responseObj->setProperty("pattern", pattern);
-                    return JSON::toString(var(responseObj));
-                }
-                else if (commandType == "set_pattern")
-                {
-                    // Set a pattern
-                    var pattern = command.hasProperty("pattern") ? command["pattern"] : var();
-                    bool success = setPatternFromVar(pattern);
-                    
-                    if (success)
-                    {
-                        DynamicObject* responseObj = new DynamicObject();
-                        responseObj->setProperty("status", "success");
-                        responseObj->setProperty("message", "Pattern set");
-                        return JSON::toString(var(responseObj));
-                    }
-                    else
-                    {
-                        DynamicObject* responseObj = new DynamicObject();
-                        responseObj->setProperty("status", "error");
-                        responseObj->setProperty("message", "Failed to set pattern");
-                        return JSON::toString(var(responseObj));
-                    }
-                }
-                else if (commandType == "play")
-                {
-                    // Play the current pattern
-                    bool success = play();
-                    
-                    if (success)
-                    {
-                        DynamicObject* responseObj = new DynamicObject();
-                        responseObj->setProperty("status", "success");
-                        responseObj->setProperty("message", "Playback started");
-                        return JSON::toString(var(responseObj));
-                    }
-                    else
-                    {
-                        DynamicObject* responseObj = new DynamicObject();
-                        responseObj->setProperty("status", "error");
-                        responseObj->setProperty("message", "Failed to start playback");
-                        return JSON::toString(var(responseObj));
-                    }
-                }
-                else if (commandType == "stop")
-                {
-                    // Stop playback
-                    stop();
-                    
-                    DynamicObject* responseObj = new DynamicObject();
-                    responseObj->setProperty("status", "success");
-                    responseObj->setProperty("message", "Playback stopped");
-                    return JSON::toString(var(responseObj));
-                }
-                else
-                {
-                    DynamicObject* responseObj = new DynamicObject();
-                    responseObj->setProperty("status", "error");
-                    responseObj->setProperty("message", "Unknown command: " + commandType);
-                    return JSON::toString(var(responseObj));
-                }
-            }
-            else
-            {
-                DynamicObject* responseObj = new DynamicObject();
-                responseObj->setProperty("status", "error");
-                responseObj->setProperty("message", "Missing command field");
-                return JSON::toString(var(responseObj));
-            }
-        });
-    }
+    // Musician setup is complete - no need for command interface since it was removed
 }
 
 void Player::setLLMClient(std::shared_ptr<LLMClient> client)

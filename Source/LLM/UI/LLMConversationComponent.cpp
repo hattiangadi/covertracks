@@ -297,8 +297,8 @@ void LLMConversationComponent::handleGeneratePattern()
     params->setProperty("tempo", 120);
     params->setProperty("description", "C major scale demonstration");
     
-    // Generate the pattern
-    musician->generatePattern(juce::var(params), [this](bool success, const juce::var& pattern) {
+    // Generate the chart
+    musician->generateChart(juce::var(params), [this](bool success, const juce::var& chart) {
         // Remove the "Generating pattern..." message
         if (!messages.isEmpty() && !messages.getLast().fromUser && 
             messages.getLast().message == "Generating pattern...")
@@ -356,8 +356,9 @@ void LLMConversationComponent::handlePlayPattern()
     if (!musician)
         return;
     
-    // Play the most recently generated pattern
-    musician->playPattern(juce::var());
+    // This component needs access to Player to play charts
+    // For now, just log that play was requested
+    std::cout << "Play requested - component needs Player reference to play charts" << std::endl;
 }
 
 void LLMConversationComponent::handleStylePresetClicked(const juce::String& style)

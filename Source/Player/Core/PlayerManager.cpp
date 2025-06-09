@@ -544,9 +544,17 @@ bool PlayerManager::playPattern(Player* player, const var& pattern, double tempo
         return false;
     }
     
-    // Play the pattern
-    std::cout << "Playing pattern on player: " << player->getMetadata().name << std::endl;
-    bool result = player->playPattern(pattern, tempo);
+    // Load and play the chart
+    std::cout << "Loading and playing chart on player: " << player->getMetadata().name << std::endl;
+    
+    // Create a chart object with the pattern data
+    DynamicObject* chartObj = new DynamicObject();
+    chartObj->setProperty("events", pattern);
+    chartObj->setProperty("tempo", tempo);
+    var chartVar(chartObj);
+    
+    bool loaded = player->loadChart(chartVar);
+    bool result = loaded ? player->play() : false;
     
     if (result)
     {
@@ -682,24 +690,24 @@ void PlayerManager::generatePatternForPlayer(Player* player,
     {
         musician->setLLMClient(llmClient);
         
-        // Generate the pattern
-        musician->generatePattern(parameters, [player, callback](bool success, const var& pattern) {
-            // Store the pattern
+        // Generate the chart
+        musician->generateChart(parameters, [player, callback](bool success, const var& chart) {
+            // Load the chart if generation succeeded
             if (success)
             {
-                // The pattern is already stored in the musician
+                // Load the chart into the player
+                bool loaded = player->loadChart(chart);
                 
-                // Play the pattern on the player
-                if (pattern.hasProperty("command") && pattern["command"] == "play_pattern")
+                // Optionally auto-play the chart
+                if (loaded && chart.hasProperty("command") && chart["command"] == "play_pattern")
                 {
-                    player->playPattern(pattern.getProperty("events", var()), 
-                                      pattern.getProperty("tempo", 120.0));
+                    player->play();
                 }
             }
             
             // Call the callback
             if (callback)
-                callback(success, pattern);
+                callback(success, chart);
         });
     }
     else
