@@ -5,9 +5,9 @@ namespace covertracks {
 PlayerModeComponent::PlayerModeComponent(PlayerManager& pm)
     : playerManager(pm),
       titleLabel("titleLabel", "Pattern Player"),
+      loadButton("Load"),
       playButton("Play"),
-      stopButton("Stop"),
-      playAllButton("Play All")
+      stopButton("Stop")
 {
     // Set up title label
     titleLabel.setFont(juce::Font(juce::FontOptions().withHeight(18.0f).withStyle("bold")));
@@ -53,6 +53,10 @@ PlayerModeComponent::PlayerModeComponent(PlayerManager& pm)
     addAndMakeVisible(patternViewer);
     
     // Set up buttons
+    loadButton.addListener(this);
+    loadButton.setEnabled(false);
+    addAndMakeVisible(loadButton);
+    
     playButton.addListener(this);
     playButton.setEnabled(false);
     addAndMakeVisible(playButton);
@@ -60,12 +64,6 @@ PlayerModeComponent::PlayerModeComponent(PlayerManager& pm)
     stopButton.addListener(this);
     stopButton.setEnabled(false);
     addAndMakeVisible(stopButton);
-    
-    playAllButton.setButtonText("Play All");
-    playAllButton.addListener(this);
-    playAllButton.setColour(TextButton::buttonColourId, Colours::green.darker());
-    playAllButton.setEnabled(true);
-    addAndMakeVisible(playAllButton);
     
     // Register as a listener for player manager changes
     playerManager.addChangeListener(this);
@@ -89,9 +87,9 @@ PlayerModeComponent::~PlayerModeComponent()
     playerSelector.removeListener(this);
     instrumentTypeSelector.removeListener(this);
     patternSelector.removeListener(this);
+    loadButton.removeListener(this);
     playButton.removeListener(this);
     stopButton.removeListener(this);
-    playAllButton.removeListener(this);
     playerManager.removeChangeListener(this);
     
     // Clear any references to patterns
@@ -149,18 +147,23 @@ void PlayerModeComponent::resized()
     // Position the buttons
     row = bounds.removeFromTop(30);
     auto buttonArea = row.withWidth(row.getWidth() / 2);
+    loadButton.setBounds(buttonArea.removeFromLeft(100));
     playButton.setBounds(buttonArea.removeFromLeft(100));
     stopButton.setBounds(buttonArea.removeFromLeft(100));
-    playAllButton.setBounds(buttonArea.removeFromLeft(100));
     
 }
 
 void PlayerModeComponent::buttonClicked(juce::Button* button)
 {
-    if (button == &playButton)
+    if (button == &loadButton)
     {
-        // Play the current pattern
-        playCurrentPattern();
+        // Load the current chart into the player
+        loadCurrentChart();
+    }
+    else if (button == &playButton)
+    {
+        // Play the loaded chart
+        playCurrentChart();
     }
     else if (button == &stopButton)
     {
@@ -169,74 +172,10 @@ void PlayerModeComponent::buttonClicked(juce::Button* button)
         {
             selectedPlayer->stop();
             
-            // Update button states
-            playButton.setEnabled(true);
+            // Update button states - enable both load and play since chart might still be loaded
+            loadButton.setEnabled(selectedPlayer != nullptr && currentChart != nullptr);
+            playButton.setEnabled(true);  // Can still play the loaded chart
             stopButton.setEnabled(false);
-        }
-    }
-    else if (button == &playAllButton)
-    {
-        // Play all patterns for all instruments
-        if (selectedPlayer != nullptr && currentChart != nullptr)
-        {
-            // Get the selected pattern style
-            juce::String style = patternSelector.getText();
-            if (style.isEmpty())
-            {
-                style = "Basic"; // Default to basic if none selected
-            }
-            
-            // Convert the chart to a MIDI sequence
-            auto midiSequence = currentChart->toMidiSequence();
-            
-            // Create the pattern var once and use it for all players
-            juce::DynamicObject* patternObj = new juce::DynamicObject();
-            juce::Array<juce::var> events;
-            
-            // Convert MIDI sequence to the expected format
-            for (int i = 0; i < midiSequence->getNumEvents(); ++i)
-            {
-                auto event = midiSequence->getEventPointer(i);
-                
-                if (event->message.isNoteOn())
-                {
-                    juce::DynamicObject* noteOn = new juce::DynamicObject();
-                    noteOn->setProperty("type", "note_on");
-                    noteOn->setProperty("channel", event->message.getChannel());
-                    noteOn->setProperty("note", event->message.getNoteNumber());
-                    noteOn->setProperty("velocity", static_cast<int>(event->message.getVelocity() * 127));
-                    noteOn->setProperty("time", event->message.getTimeStamp());
-                    events.add(juce::var(noteOn));
-                }
-                else if (event->message.isNoteOff())
-                {
-                    juce::DynamicObject* noteOff = new juce::DynamicObject();
-                    noteOff->setProperty("type", "note_off");
-                    noteOff->setProperty("channel", event->message.getChannel());
-                    noteOff->setProperty("note", event->message.getNoteNumber());
-                    noteOff->setProperty("velocity", 0);
-                    noteOff->setProperty("time", event->message.getTimeStamp());
-                    events.add(juce::var(noteOff));
-                }
-            }
-            
-            patternObj->setProperty("events", events);
-            patternObj->setProperty("tempo", currentChart->getTempo());
-            juce::var patternVar(patternObj);
-            
-            // Play on all players
-            for (auto* player : playerManager.getPlayers())
-            {
-                if (player && player->loadChart(patternVar))
-                {
-                    player->play();
-                }
-            }
-            
-            // Update button states
-            playButton.setEnabled(false);
-            stopButton.setEnabled(true);
-            playAllButton.setEnabled(false);
         }
     }
 }
@@ -256,13 +195,16 @@ void PlayerModeComponent::comboBoxChanged(juce::ComboBox* comboBox)
                 selectedPlayer = players[selectedId - 1];
             }
             
-            // Enable play button if we have a player and a chart
-            playButton.setEnabled(selectedPlayer != nullptr && currentChart != nullptr);
+            // Enable load button if we have a player and a chart
+            loadButton.setEnabled(selectedPlayer != nullptr && currentChart != nullptr);
+            // Play button will be enabled after loading
+            playButton.setEnabled(false);
         }
         else
         {
             // No player selected
             selectedPlayer = nullptr;
+            loadButton.setEnabled(false);
             playButton.setEnabled(false);
         }
     }
@@ -297,6 +239,7 @@ void PlayerModeComponent::changeListenerCallback(juce::ChangeBroadcaster* source
             if (!playerStillExists)
             {
                 selectedPlayer = nullptr;
+                loadButton.setEnabled(false);
                 playButton.setEnabled(false);
             }
         }
@@ -340,8 +283,9 @@ void PlayerModeComponent::updatePlayerSelector()
     }
     
     // Update button states
-    playButton.setEnabled(selectedPlayer != nullptr && currentChart != nullptr);
-    playAllButton.setEnabled(players.size() > 0 && currentChart != nullptr);
+    loadButton.setEnabled(selectedPlayer != nullptr && currentChart != nullptr);
+    // Play button will be enabled after loading
+    playButton.setEnabled(false);
 }
 
 void PlayerModeComponent::createDefaultPatterns()
@@ -1567,11 +1511,13 @@ void PlayerModeComponent::updateCurrentChart()
     // Update the pattern viewer
     updatePatternViewer();
     
-    // Enable/disable play button based on whether we have a chart and player
-    playButton.setEnabled(currentChart != nullptr && selectedPlayer != nullptr);
+    // Enable/disable load button based on whether we have a chart and player
+    loadButton.setEnabled(currentChart != nullptr && selectedPlayer != nullptr);
+    // Play button will be enabled after loading
+    playButton.setEnabled(false);
 }
 
-void PlayerModeComponent::playCurrentPattern()
+void PlayerModeComponent::loadCurrentChart()
 {
     if (currentChart == nullptr || selectedPlayer == nullptr)
     {
@@ -1664,8 +1610,8 @@ void PlayerModeComponent::playCurrentPattern()
     patternObj->setProperty("tempo", currentChart->getTempo());
     juce::var patternVar(patternObj);
     
-    // Update the pattern viewer to show what we're playing
-    juce::String text = juce::String("Playing ") + currentChart->getTitle() + juce::String(":\n");
+    // Update the pattern viewer to show what we're loading
+    juce::String text = juce::String("Loaded ") + currentChart->getTitle() + juce::String(":\n");
     text += juce::String("Tempo: ") + juce::String(currentChart->getTempo()) + juce::String(" BPM\n");
     text += juce::String("Total events: ") + juce::String(events.size()) + juce::String("\n\n");
     
@@ -1700,15 +1646,42 @@ void PlayerModeComponent::playCurrentPattern()
     
     patternViewer.setText(text);
     
-    // Play the MIDI data on the selected player
+    // Load the MIDI data into the selected player
     if (selectedPlayer->loadChart(patternVar))
     {
-        selectedPlayer->play();
+        // Update button states - chart is loaded, ready to play
+        loadButton.setEnabled(false);
+        playButton.setEnabled(true);
+        stopButton.setEnabled(false);
+        
+        std::cout << "Chart loaded into player " << selectedPlayer->getMetadata().name << std::endl;
+    }
+    else
+    {
+        std::cerr << "Failed to load chart into player" << std::endl;
+    }
+}
+
+void PlayerModeComponent::playCurrentChart()
+{
+    if (selectedPlayer == nullptr)
+    {
+        return;
     }
     
-    // Update button states
-    playButton.setEnabled(false);
-    stopButton.setEnabled(true);
+    // Simply play the loaded chart
+    if (selectedPlayer->play())
+    {
+        // Update button states
+        playButton.setEnabled(false);
+        stopButton.setEnabled(true);
+        
+        std::cout << "Started playback on player " << selectedPlayer->getMetadata().name << std::endl;
+    }
+    else
+    {
+        std::cerr << "Failed to start playback - no chart loaded?" << std::endl;
+    }
 }
 
 

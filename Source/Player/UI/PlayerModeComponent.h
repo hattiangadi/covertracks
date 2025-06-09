@@ -46,9 +46,9 @@ private:
     ComboBox playerSelector;
     ComboBox instrumentTypeSelector;
     ComboBox patternSelector;
+    TextButton loadButton;
     TextButton playButton;
     TextButton stopButton;
-    TextButton playAllButton;
     
     // Pattern visualization
     TextEditor patternViewer;
@@ -68,7 +68,8 @@ private:
     std::shared_ptr<Chart> createTestPattern(const juce::String& testType, const juce::String& instrument);
     
     void updatePatternViewer();
-    void playCurrentPattern();
+    void loadCurrentChart();
+    void playCurrentChart();
     
 
     
