@@ -137,6 +137,23 @@
         <FILE id="vOsdTR" name="AudioEngine.h" compile="0" resource="0" file="Source/Audio/AudioEngine.h"/>
       </GROUP>
       <GROUP id="{63C773C8-4305-87DD-DB3F-6D1143EFEC61}" name="Musician">
+        <GROUP id="{6E960005-4182-0346-FD90-6B37FE7B26E1}" name="UI">
+          <GROUP id="{8A361CF1-8E9F-41A0-3151-80CB4F7AD9A3}" name="Performance">
+            <FILE id="Nm0Jpw" name="PerformanceEditorComponent.cpp" compile="1"
+                  resource="0" file="Source/Musician/UI/Performance/PerformanceEditorComponent.cpp"/>
+            <FILE id="rEWQHB" name="PerformanceEditorComponent.h" compile="0" resource="0"
+                  file="Source/Musician/UI/Performance/PerformanceEditorComponent.h"/>
+            <FILE id="s2hvIe" name="PerformanceLibraryComponent.cpp" compile="1"
+                  resource="0" file="Source/Musician/UI/Performance/PerformanceLibraryComponent.cpp"/>
+            <FILE id="R0aQdb" name="PerformanceLibraryComponent.h" compile="0"
+                  resource="0" file="Source/Musician/UI/Performance/PerformanceLibraryComponent.h"/>
+            <FILE id="scDlAC" name="PerformanceListComponent.cpp" compile="1" resource="0"
+                  file="Source/Musician/UI/Performance/PerformanceListComponent.cpp"/>
+            <FILE id="Bmk4yV" name="PerformanceListComponent.h" compile="0" resource="0"
+                  file="Source/Musician/UI/Performance/PerformanceListComponent.h"/>
+          </GROUP>
+          <GROUP id="{9BA2F5A8-F2A2-03DF-8539-A60A2FDBEAE3}" name="Song"/>
+        </GROUP>
         <FILE id="hKhTKd" name="LLMClient.h" compile="0" resource="0" file="Source/Musician/LLMClient.h"/>
         <FILE id="tdBLJO" name="MusicalShorthand.h" compile="0" resource="0"
               file="Source/Musician/MusicalShorthand.h"/>

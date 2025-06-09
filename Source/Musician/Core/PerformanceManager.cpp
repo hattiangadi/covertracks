@@ -4,6 +4,8 @@ namespace covertracks {
 
 PerformanceManager::PerformanceManager()
 {
+    // Load existing performances into cache
+    loadedPerformances = loadPerformancesFromDefaultLocation();
 }
 
 PerformanceManager::~PerformanceManager()
@@ -121,6 +123,42 @@ void PerformanceManager::savePerformance(std::shared_ptr<Performance> performanc
         performances.add(performance);
         savePerformancesToDefaultLocation(performances);
     }
+}
+
+juce::Array<Performance*> PerformanceManager::getAllPerformances()
+{
+    juce::Array<Performance*> rawPointers;
+    for (auto& performance : loadedPerformances)
+    {
+        rawPointers.add(performance.get());
+    }
+    return rawPointers;
+}
+
+bool PerformanceManager::removePerformance(const juce::String& performanceId)
+{
+    // Find the performance in the cache
+    for (int i = 0; i < loadedPerformances.size(); ++i)
+    {
+        if (loadedPerformances[i]->getUniqueID() == performanceId)
+        {
+            // Remove from cache
+            loadedPerformances.remove(i);
+            
+            // Remove the file from disk
+            juce::String filename = performanceId + ".json";
+            juce::File file = getDefaultPerformancesDirectory().getChildFile(filename);
+            if (file.exists())
+            {
+                file.deleteFile();
+                DBG("Deleted performance file: " + file.getFullPathName());
+            }
+            
+            return true;
+        }
+    }
+    
+    return false;
 }
 
 std::shared_ptr<Song> PerformanceManager::findSongById(const juce::String& songId)

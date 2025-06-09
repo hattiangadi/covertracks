@@ -67,6 +67,21 @@ public:
     void savePerformance(std::shared_ptr<Performance> performance);
     
     /**
+     * @brief Get all performances from the default location
+     * 
+     * @return juce::Array<Performance*> Array of raw pointers to performances
+     */
+    juce::Array<Performance*> getAllPerformances();
+    
+    /**
+     * @brief Remove a performance by ID
+     * 
+     * @param performanceId The ID of the performance to remove
+     * @return bool True if the performance was found and removed
+     */
+    bool removePerformance(const juce::String& performanceId);
+    
+    /**
      * @brief Find a song by its unique ID
      * 
      * This method searches the songs directory for a song with the given ID.
@@ -77,6 +92,9 @@ public:
     std::shared_ptr<Song> findSongById(const juce::String& songId);
     
 private:
+    // Cache of loaded performances
+    juce::Array<std::shared_ptr<Performance>> loadedPerformances;
+    
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PerformanceManager)
 };
 

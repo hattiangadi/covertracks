@@ -56,12 +56,38 @@ void Performance::clearGeneratedPatterns()
     statusMessages.clear();
 }
 
+juce::Array<MusicianRole> Performance::getEnsemble() const
+{
+    juce::Array<MusicianRole> roles;
+    
+    if (ensembleName.isEmpty())
+        return roles;
+    
+    // Load the actual ensemble from disk
+    juce::Array<juce::File> ensembleFiles = EnsembleManager::getEnsembleFiles();
+    
+    for (const auto& file : ensembleFiles)
+    {
+        // Load the ensemble to check its name
+        auto ensemble = EnsembleManager::loadFromFile(file, nullptr); // We don't need PlayerManager just to get roles
+        if (ensemble && ensemble->getName() == ensembleName)
+        {
+            // Found the matching ensemble, return its musician roles
+            return ensemble->getMusicianRoles();
+        }
+    }
+    
+    // If no ensemble found, return empty array
+    return roles;
+}
+
 juce::var Performance::toVar() const
 {
     juce::DynamicObject* obj = new juce::DynamicObject();
     
     obj->setProperty("id", uniqueID);
     obj->setProperty("name", name);
+    obj->setProperty("description", description);
     
     // Save song ID if we have a song
     if (song)
@@ -104,7 +130,7 @@ juce::var Performance::toVar() const
                 // Write the message
                 auto& message = event->message;
                 stream.writeInt(message.getRawDataSize());
-                stream.write(message.getRawData(), message.getRawDataSize());
+                stream.write(message.getRawData(), static_cast<size_t>(message.getRawDataSize()));
                 
                 // Write the timestamp
                 stream.writeDouble(message.getTimeStamp());
@@ -143,6 +169,11 @@ std::shared_ptr<Performance> Performance::fromVar(const juce::var& v)
         if (obj->hasProperty("name"))
         {
             performance->name = obj->getProperty("name").toString();
+        }
+        
+        if (obj->hasProperty("description"))
+        {
+            performance->description = obj->getProperty("description").toString();
         }
         
         // Note: We don't load the song or chart here, as we need the SongListComponent to find them by ID

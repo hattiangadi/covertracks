@@ -43,6 +43,20 @@ public:
     void setName(const juce::String& newName) { name = newName; }
     
     /**
+     * @brief Get the description of the performance
+     * 
+     * @return juce::String The description
+     */
+    juce::String getDescription() const { return description; }
+    
+    /**
+     * @brief Set the description of the performance
+     * 
+     * @param newDescription The new description
+     */
+    void setDescription(const juce::String& newDescription) { description = newDescription; }
+    
+    /**
      * @brief Get the chart for this performance
      * 
      * @return std::shared_ptr<Chart> The chart
@@ -141,6 +155,20 @@ public:
     void setMood(const juce::String& newMood) { mood = newMood; }
     
     /**
+     * @brief Get the ensemble for this performance
+     * 
+     * @return juce::Array<MusicianRole> The ensemble roles (derived from ensemble name)
+     */
+    juce::Array<MusicianRole> getEnsemble() const;
+    
+    /**
+     * @brief Set the ensemble for this performance by name
+     * 
+     * @param newEnsembleName The name of the ensemble to use
+     */
+    void setEnsemble(const juce::String& newEnsembleName) { ensembleName = newEnsembleName; }
+    
+    /**
      * @brief Get the generated patterns for a specific musician role
      * 
      * @param roleName The name of the musician role
@@ -201,6 +229,7 @@ public:
     
 private:
     juce::String name;
+    juce::String description;
     juce::String uniqueID;
     std::shared_ptr<Song> song;
     std::shared_ptr<Chart> chart;

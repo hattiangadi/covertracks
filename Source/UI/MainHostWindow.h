@@ -39,7 +39,8 @@
 #include "../Player/UI/PlayerLibraryComponent.h"
 #include "../Player/UI/PlayerModeComponent.h"
 #include "../Audio/AudioEngine.h"
-#include "../Musician/UI/PerformanceComponent.h"
+#include "../Musician/UI/Performance/PerformanceLibraryComponent.h"
+#include "../Musician/Core/PerformanceManager.h"
 #include "../Musician/UI/PatternEditorComponent.h"
 #include "../LLM/Core/LLMManager.h"
 #include "../Musician/UI/EnsembleMainPanel.h"
@@ -150,7 +151,7 @@ public:
     // Main components
     std::unique_ptr<PlayerLibraryComponent> playerLibraryWindow;
     std::unique_ptr<PlayerModeComponent> playerModeWindow;
-    std::unique_ptr<PerformanceComponent> performanceWindow;
+    std::unique_ptr<PerformanceLibraryComponent> performanceWindow;
     std::unique_ptr<SongManagerComponent> songManagerWindow;
     std::unique_ptr<PatternEditorComponent> patternEditorWindow;
     std::unique_ptr<EnsembleMainPanel> ensembleMainWindow;
@@ -161,8 +162,8 @@ public:
     LLMClient* llmClient; // Raw pointer for compatibility with older code
     std::shared_ptr<LLMClient> llmClientShared; // Shared pointer for LLMConversationComponent
     
-    // Ensemble manager for LLM conversation
-    std::unique_ptr<EnsembleManager> llmConversationEnsembleManager;
+    // Performance manager for performance system
+    std::unique_ptr<PerformanceManager> performanceManager;
     
 
 

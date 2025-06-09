@@ -1,0 +1,1 @@
+- use projucer/xcode to build and run

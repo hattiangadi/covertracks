@@ -5,7 +5,9 @@
       "Bash(rg:*)",
       "Bash(find:*)",
       "Bash(ls:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(git add:*)",
+      "Bash(xcodebuild:*)"
     ],
     "deny": []
   }
