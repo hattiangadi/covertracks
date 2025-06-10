@@ -33,6 +33,13 @@
   </EXPORTFORMATS>
   <MAINGROUP id="YdWL7hi7p" name="Covertracks">
     <GROUP id="{CFED5B3D-D1D8-0F3F-4D67-B2A810D057EF}" name="Source">
+      <GROUP id="{38DF3E53-C216-ADF7-CCF5-86D5880F46C0}" name="Tests">
+        <FILE id="GQq3uV" name="PatternGeneratorTests.cpp" compile="1" resource="0"
+              file="Source/Tests/PatternGeneratorTests.cpp"/>
+        <FILE id="N8oly3" name="PatternParserTests.cpp" compile="1" resource="0"
+              file="Source/Tests/PatternParserTests.cpp"/>
+        <FILE id="pWTeo6" name="TestRunner.cpp" compile="1" resource="0" file="Source/Tests/TestRunner.cpp"/>
+      </GROUP>
       <GROUP id="{C05A6CB8-92D3-46E6-AD2E-B13D7347AC80}" name="Musician">
         <GROUP id="{34D9D57E-F198-9FB2-4C66-8742C66AFBE3}" name="Core">
           <FILE id="mfdozh" name="EnsembleManager.cpp" compile="1" resource="0"

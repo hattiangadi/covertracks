@@ -28,11 +28,7 @@ private:
     juce::TextButton clearButton;
     juce::TextEditor resultsText;
     
-    // Test runner (not a component)
-    std::unique_ptr<juce::UnitTestRunner> testRunner;
-    
     void runTests();
-    void displayResults();
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TestsComponent)
 };

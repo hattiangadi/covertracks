@@ -2,8 +2,11 @@
 
 // Include all test files
 #include "PatternParserTests.cpp"
+#include "PatternGeneratorTests.h"
 
-int main()
+namespace covertracks {
+
+void runAllTests()
 {
     // Run all unit tests
     juce::UnitTestRunner runner;
@@ -12,7 +15,15 @@ int main()
     std::cout << "Running PatternParser tests...\n" << std::endl;
     
     // Run the pattern parser tests
-    runner.runTests({&covertracks::patternParserTests});
+    runner.runTests({&basicPatternTests, &chordPatternTests, 
+                     &layerPatternTests, &layerChordPatternTests,
+                     &multiSectionSongTests, &patternReferenceTests,
+                     &patternVariationTests});
+    
+    std::cout << "\nRunning PatternGenerator tests...\n" << std::endl;
+    
+    // Run the pattern generator tests  
+    runner.runTests({&patternGeneratorUtilityTests, &patternGeneratorIntegrationTests});
     
     // Print results
     int numTests = runner.getNumResults();
@@ -28,7 +39,6 @@ int main()
             numFailed++;
             
         std::cout << "\n" << result->unitTestName << ":" << std::endl;
-        std::cout << "  Tests: " << result->tests << std::endl;
         std::cout << "  Passes: " << result->passes << std::endl;
         std::cout << "  Failures: " << result->failures << std::endl;
         
@@ -46,6 +56,6 @@ int main()
     std::cout << "Total test suites: " << numTests << std::endl;
     std::cout << "Passed: " << numPassed << std::endl;
     std::cout << "Failed: " << numFailed << std::endl;
-    
-    return numFailed == 0 ? 0 : 1;
 }
+
+} // namespace covertracks

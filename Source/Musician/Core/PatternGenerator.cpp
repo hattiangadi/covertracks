@@ -5,159 +5,63 @@
 
 namespace covertracks {
 
-PatternGenerator::PatternGenerator(MusicPatternSystem& system,
-                                  std::shared_ptr<LLMClient> client,
-                                  PromptManager& manager)
-    : Thread("PatternGeneratorThread"),
-      patternSystem(system),
-      llmClient(client),
+PatternGenerator::PatternGenerator(MusicPatternSystem& system, PromptManager& manager)
+    : patternSystem(system),
       promptManager(manager),
-      parser(std::make_unique<PatternParser>(system)),
-      generating(false),
-      waitEvent(true) // Auto reset
+      parser(std::make_unique<PatternParser>(system))
 {
-    startThread();
+    // Set default system prompt
+    systemPrompt = 
+        "You are a music pattern generator. Your role is to create music patterns based on the user's requests. "
+        "You'll be given specific instructions about the style, instruments, and structure of the music to create. "
+        "Always respond in the specified pattern notation format. Do not include any explanations or comments "
+        "outside the requested pattern format.";
 }
 
-PatternGenerator::~PatternGenerator()
+PatternGenerator::~PatternGenerator() = default;
+
+String PatternGenerator::createSongPrompt(const String& style,
+                                         const StringArray& instruments,
+                                         int tempo,
+                                         const String& description)
 {
-    stopThread(5000);
+    return promptManager.createMusicGenerationPrompt(style, instruments, tempo, description);
 }
 
-void PatternGenerator::generateSong(const String& style,
-                                  const StringArray& instruments,
-                                  int tempo,
-                                  const String& description,
-                                  PatternGenerationCallback callback)
+String PatternGenerator::createModificationPrompt(const String& currentPattern,
+                                                 const String& modification)
 {
-    if (generating)
-    {
-        if (callback)
-            callback(false, nullptr, "Pattern generation already in progress");
-        return;
-    }
-    
-    generating = true;
-    
-    // Create the prompt
-    currentPrompt = promptManager.createMusicGenerationPrompt(style, instruments, tempo, description);
-    currentCallback = std::move(callback);
-    
-    // Signal the thread to start generation
-    waitEvent.signal();
+    return promptManager.createPatternModificationPrompt(currentPattern, modification);
 }
 
-void PatternGenerator::modifyPattern(const String& currentPattern,
-                                   const String& modification,
-                                   PatternGenerationCallback callback)
+String PatternGenerator::createSectionPrompt(const String& section,
+                                            const String& style,
+                                            const StringArray& instruments,
+                                            const String& description)
 {
-    if (generating)
-    {
-        if (callback)
-            callback(false, nullptr, "Pattern generation already in progress");
-        return;
-    }
-    
-    generating = true;
-    
-    // Create the prompt
-    currentPrompt = promptManager.createPatternModificationPrompt(currentPattern, modification);
-    currentCallback = std::move(callback);
-    
-    // Signal the thread to start generation
-    waitEvent.signal();
+    return promptManager.createSectionGenerationPrompt(section, style, instruments, description);
 }
 
-void PatternGenerator::generateSection(const String& section,
-                                     const String& style,
-                                     const StringArray& instruments,
-                                     const String& description,
-                                     PatternGenerationCallback callback)
+std::shared_ptr<Chart> PatternGenerator::parseResponse(const String& response)
 {
-    if (generating)
-    {
-        if (callback)
-            callback(false, nullptr, "Pattern generation already in progress");
-        return;
-    }
-    
-    generating = true;
-    
-    // Create the prompt
-    currentPrompt = promptManager.createSectionGenerationPrompt(section, style, instruments, description);
-    currentCallback = std::move(callback);
-    
-    // Signal the thread to start generation
-    waitEvent.signal();
+    return parser->parseLLMResponse(response);
 }
 
-void PatternGenerator::run()
+bool PatternGenerator::validateResponse(const String& response)
 {
-    while (!threadShouldExit())
-    {
-        // Wait for a generation request
-        waitEvent.wait(-1);
-        
-        if (threadShouldExit())
-            break;
-        
-        if (llmClient && generating)
-        {
-            // Send the prompt to the LLM
-            String prompt = currentPrompt;
-            
-            // Add the system prompt if provided
-            if (systemPrompt.isNotEmpty())
-            {
-                // The system prompt will be handled by prepending it to the user's first message
-                if (conversationHistory.isEmpty())
-                {
-                    prompt = systemPrompt + "\n\n" + prompt;
-                }
-            }
-            
-            // Use conversation history if available
-            llmClient->sendMessageWithHistory(prompt, conversationHistory, 
-                [this](bool success, const String& response) {
-                    // Parse the response
-                    std::shared_ptr<Chart> chart;
-                    
-                    if (success)
-                    {
-                        // Add to conversation history
-                        conversationHistory.add({currentPrompt, response});
-                        
-                        // Parse the response
-                        chart = parser->parseLLMResponse(response);
-                    }
-                    
-                    // Call the callback on the message thread
-                    auto callback = currentCallback;
-                    MessageManager::callAsync([callback, success, chart, response]() {
-                        if (callback)
-                            callback(success, chart, response);
-                        
-                        // Note: We don't clear the song references here because the callback
-                        // might still be using the song object. The callback is responsible for
-                        // proper cleanup when it's done with the song.
-                    });
-                    
-                    // Reset state
-                    generating = false;
-                });
-        }
-        else
-        {
-            // LLM client not available or not generating
-            auto callback = currentCallback;
-            MessageManager::callAsync([callback]() {
-                if (callback)
-                    callback(false, nullptr, "LLM client not available");
-            });
-            
-            generating = false;
-        }
-    }
+    // Basic validation - check if response contains typical pattern notation elements
+    if (response.isEmpty())
+        return false;
+    
+    // Check for JSON-like structure or pattern notation keywords
+    bool hasJsonStructure = response.contains("{") && response.contains("}");
+    bool hasPatternElements = response.contains("tempo") || 
+                             response.contains("sections") || 
+                             response.contains("primitives") ||
+                             response.contains("bars") ||
+                             response.contains("patterns");
+    
+    return hasJsonStructure || hasPatternElements;
 }
 
 } // namespace covertracks

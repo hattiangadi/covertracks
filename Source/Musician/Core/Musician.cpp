@@ -9,26 +9,38 @@
 namespace covertracks {
 
 Musician::Musician(const String& idValue, const String& styleValue)
-    : id(idValue), style(styleValue), patternSystem(std::make_unique<MusicPatternSystem>()), promptManager(std::make_unique<PromptManager>())
+    : Thread("MusicianThread"),
+      id(idValue), 
+      style(styleValue), 
+      patternSystem(std::make_unique<MusicPatternSystem>()), 
+      promptManager(std::make_unique<PromptManager>()),
+      waitEvent(true)
 {
-    // Initialize pattern generator when LLM client is set
+    // Create the pattern generator immediately (no longer needs LLM client)
+    patternGenerator = std::make_unique<PatternGenerator>(*patternSystem, *promptManager);
+    
+    // Start the background thread
+    startThread();
 }
 
 Musician::~Musician()
 {
-    // PatternGenerator will be destroyed automatically
+    // Stop the background thread properly
+    if (isThreadRunning())
+    {
+        signalThreadShouldExit();
+        waitEvent.signal();
+        stopThread(5000);
+    }
 }
 
 void Musician::setLLMClient(std::shared_ptr<LLMClient> client)
 {
     llmClient = client;
     
-    // Create the pattern generator now that we have an LLM client
-    if (llmClient)
+    // Update the system prompt if we have a pattern generator
+    if (patternGenerator)
     {
-        patternGenerator = std::make_unique<PatternGenerator>(*patternSystem, llmClient, *promptManager);
-        
-        // Set the system prompt
         String systemPrompt = 
             "You are a music pattern generator. Your role is to create music patterns based on the user's requests. "
             "You'll be given specific instructions about the style, instruments, and structure of the music to create. "
@@ -37,13 +49,14 @@ void Musician::setLLMClient(std::shared_ptr<LLMClient> client)
         
         patternGenerator->setSystemPrompt(systemPrompt);
     }
-    else
-    {
-        patternGenerator.reset();
-    }
     
     // Notify listeners of the change
     sendChangeMessage();
+}
+
+bool Musician::isGenerating() const
+{
+    return generating.load();
 }
 
 void Musician::generateChart(const var& parameters, 
@@ -53,6 +66,13 @@ void Musician::generateChart(const var& parameters,
     {
         if (callback)
             callback(false, "No LLM client connected");
+        return;
+    }
+    
+    if (generating.load())
+    {
+        if (callback)
+            callback(false, "Pattern generation already in progress");
         return;
     }
     
@@ -84,49 +104,13 @@ void Musician::generateChart(const var& parameters,
     
     String description = parameters.hasProperty("description") ? parameters["description"].toString() : "";
     
-    // Generate the pattern
-    patternGenerator->generateSong(styleToUse, instruments, tempo, description, 
-        [this, callback, tempo](bool success, std::shared_ptr<Chart> chart, const String& response) {
-            // Store the response
-            lastResponseText = response;
-            lastGeneratedChart = chart;
-            
-            if (success && chart)
-            {
-                // Set the tempo if not already set
-                if (chart->getTempo() <= 0)
-                    chart->setTempo(tempo);
-                
-                // Convert the chart to MIDI events
-                var midiEvents = midiMessageSequenceToVar(*chart->toMidiSequence(), chart->getTempo());
-                
-                // Create the response object
-                DynamicObject* responseObj = new DynamicObject();
-                responseObj->setProperty("success", true);
-                responseObj->setProperty("command", "play_pattern");
-                responseObj->setProperty("tempo", chart->getTempo());
-                responseObj->setProperty("events", midiEvents);
-                
-                // Call the callback
-                if (callback)
-                    callback(true, var(responseObj));
-            }
-            else
-            {
-                // Create an error response
-                DynamicObject* responseObj = new DynamicObject();
-                responseObj->setProperty("success", false);
-                responseObj->setProperty("error", "Failed to generate chart");
-                responseObj->setProperty("response", response);
-                
-                // Call the callback
-                if (callback)
-                    callback(false, var(responseObj));
-            }
-            
-            // Notify listeners of the change
-            sendChangeMessage();
-        });
+    // Create the prompt using the PatternGenerator utility
+    currentPrompt = patternGenerator->createSongPrompt(styleToUse, instruments, tempo, description);
+    currentCallback = std::move(callback);
+    
+    // Set generating flag and signal the thread
+    generating = true;
+    waitEvent.signal();
 }
 
 void Musician::generateSection(const String& section, const var& parameters,
@@ -136,6 +120,13 @@ void Musician::generateSection(const String& section, const var& parameters,
     {
         if (callback)
             callback(false, "No LLM client connected");
+        return;
+    }
+    
+    if (generating.load())
+    {
+        if (callback)
+            callback(false, "Pattern generation already in progress");
         return;
     }
     
@@ -163,45 +154,13 @@ void Musician::generateSection(const String& section, const var& parameters,
     
     String description = parameters.hasProperty("description") ? parameters["description"].toString() : "";
     
-    // Generate the section
-    patternGenerator->generateSection(section, styleToUse, instruments, description, 
-        [this, callback](bool success, std::shared_ptr<Chart> chart, const String& response) {
-            // Store the response
-            lastResponseText = response;
-            lastGeneratedChart = chart;
-            
-            if (success && chart)
-            {
-                // Convert the chart to MIDI events
-                var midiEvents = midiMessageSequenceToVar(*chart->toMidiSequence(), chart->getTempo());
-                
-                // Create the response object
-                DynamicObject* responseObj = new DynamicObject();
-                responseObj->setProperty("success", true);
-                responseObj->setProperty("command", "play_pattern");
-                responseObj->setProperty("tempo", chart->getTempo());
-                responseObj->setProperty("events", midiEvents);
-                
-                // Call the callback
-                if (callback)
-                    callback(true, var(responseObj));
-            }
-            else
-            {
-                // Create an error response
-                DynamicObject* responseObj = new DynamicObject();
-                responseObj->setProperty("success", false);
-                responseObj->setProperty("error", "Failed to generate section");
-                responseObj->setProperty("response", response);
-                
-                // Call the callback
-                if (callback)
-                    callback(false, var(responseObj));
-            }
-            
-            // Notify listeners of the change
-            sendChangeMessage();
-        });
+    // Create the prompt using the PatternGenerator utility
+    currentPrompt = patternGenerator->createSectionPrompt(section, styleToUse, instruments, description);
+    currentCallback = std::move(callback);
+    
+    // Set generating flag and signal the thread
+    generating = true;
+    waitEvent.signal();
 }
 
 void Musician::modifyChart(const var& currentChart, const String& modification,
@@ -211,6 +170,13 @@ void Musician::modifyChart(const var& currentChart, const String& modification,
     {
         if (callback)
             callback(false, "No LLM client connected");
+        return;
+    }
+    
+    if (generating.load())
+    {
+        if (callback)
+            callback(false, "Pattern generation already in progress");
         return;
     }
     
@@ -233,46 +199,111 @@ void Musician::modifyChart(const var& currentChart, const String& modification,
         currentNotation = "[4/4: C3 E3 G3 C4]";
     }
     
-    // Modify the chart
-    patternGenerator->modifyPattern(currentNotation, modification, 
-        [this, callback](bool success, std::shared_ptr<Chart> chart, const String& response) {
-            // Store the response
-            lastResponseText = response;
-            lastGeneratedChart = chart;
+    // Create the prompt using the PatternGenerator utility
+    currentPrompt = patternGenerator->createModificationPrompt(currentNotation, modification);
+    currentCallback = std::move(callback);
+    
+    // Set generating flag and signal the thread
+    generating = true;
+    waitEvent.signal();
+}
+
+void Musician::run()
+{
+    while (!threadShouldExit())
+    {
+        // Wait for a generation request
+        waitEvent.wait(-1);
+        
+        if (threadShouldExit())
+            break;
+        
+        if (llmClient && generating.load() && !requestInProgress.load())
+        {
+            // Set request in progress to prevent infinite loop
+            requestInProgress = true;
             
-            if (success && chart)
+            // Prepare the prompt with system prompt if needed
+            String prompt = currentPrompt;
+            String systemPrompt = patternGenerator->getSystemPrompt();
+            if (systemPrompt.isNotEmpty())
             {
-                // Convert the chart to MIDI events
-                var midiEvents = midiMessageSequenceToVar(*chart->toMidiSequence(), chart->getTempo());
-                
-                // Create the response object
-                DynamicObject* responseObj = new DynamicObject();
-                responseObj->setProperty("success", true);
-                responseObj->setProperty("command", "play_pattern");
-                responseObj->setProperty("tempo", chart->getTempo());
-                responseObj->setProperty("events", midiEvents);
-                responseObj->setProperty("notation", response);
-                
-                // Call the callback
-                if (callback)
-                    callback(true, var(responseObj));
-            }
-            else
-            {
-                // Create an error response
-                DynamicObject* responseObj = new DynamicObject();
-                responseObj->setProperty("success", false);
-                responseObj->setProperty("error", "Failed to modify chart");
-                responseObj->setProperty("response", response);
-                
-                // Call the callback
-                if (callback)
-                    callback(false, var(responseObj));
+                prompt = systemPrompt + "\n\n" + prompt;
             }
             
-            // Notify listeners of the change
-            sendChangeMessage();
-        });
+            // Send message to LLM
+            llmClient->sendMessage(prompt, 
+                [this](bool success, const String& response) {
+                    // Parse the response using PatternGenerator utility
+                    std::shared_ptr<Chart> chart;
+                    
+                    if (success && patternGenerator->validateResponse(response))
+                    {
+                        chart = patternGenerator->parseResponse(response);
+                    }
+                    
+                    // Store the response
+                    lastResponseText = response;
+                    lastGeneratedChart = chart;
+                    
+                    // Create the response object for the callback
+                    var resultChart;
+                    
+                    if (success && chart)
+                    {
+                        // Set default tempo if not set
+                        if (chart->getTempo() <= 0)
+                            chart->setTempo(120.0);
+                        
+                        // Convert chart to MIDI events
+                        var midiEvents = midiMessageSequenceToVar(*chart->toMidiSequence(), chart->getTempo());
+                        
+                        DynamicObject* responseObj = new DynamicObject();
+                        responseObj->setProperty("success", true);
+                        responseObj->setProperty("command", "play_pattern");
+                        responseObj->setProperty("tempo", chart->getTempo());
+                        responseObj->setProperty("events", midiEvents);
+                        responseObj->setProperty("notation", response);
+                        
+                        resultChart = var(responseObj);
+                    }
+                    else
+                    {
+                        DynamicObject* responseObj = new DynamicObject();
+                        responseObj->setProperty("success", false);
+                        responseObj->setProperty("error", "Failed to generate chart");
+                        responseObj->setProperty("response", response);
+                        
+                        resultChart = var(responseObj);
+                    }
+                    
+                    // Call the callback on the message thread
+                    auto callback = currentCallback;
+                    MessageManager::callAsync([this, callback, success, resultChart]() {
+                        if (callback)
+                            callback(success, resultChart);
+                        
+                        // Notify listeners of the change
+                        sendChangeMessage();
+                    });
+                    
+                    // Reset flags after LLM response
+                    generating = false;
+                    requestInProgress = false;
+                });
+        }
+        else
+        {
+            // LLM client not available or conditions not met
+            auto callback = currentCallback;
+            MessageManager::callAsync([callback]() {
+                if (callback)
+                    callback(false, "LLM client not available");
+            });
+            
+            generating = false;
+        }
+    }
 }
 
 const var& Musician::getLastGeneratedChart() const

@@ -1,5 +1,7 @@
 #include "TestsComponent.h"
-#include "../Tests/PatternParserTests.cpp"
+#include "../Tests/TestRunner.h"
+#include <sstream>
+#include <iostream>
 
 namespace covertracks {
 
@@ -27,9 +29,7 @@ TestsComponent::TestsComponent()
     resultsText.setText("Click 'Run Tests' to execute PatternParser unit tests...");
     addAndMakeVisible(resultsText);
     
-    // Create the unit test runner (not a component, just for running tests)
-    testRunner = std::make_unique<juce::UnitTestRunner>();
-    testRunner->setAssertOnFailure(false); // Don't crash on failures
+    // Test runner is now handled by the runAllTests() function
 }
 
 TestsComponent::~TestsComponent()
@@ -79,7 +79,7 @@ void TestsComponent::buttonClicked(juce::Button* button)
     }
     else if (button == &clearButton)
     {
-        resultsText.setText("Click 'Run Tests' to execute PatternParser unit tests...");
+        resultsText.setText("Click 'Run Tests' to execute PatternParser and PatternGenerator unit tests...");
     }
 }
 
@@ -87,63 +87,18 @@ void TestsComponent::runTests()
 {
     resultsText.setText("Running tests...\n");
     
-    // Run the tests
-    testRunner->runAllTests();
+    // Capture console output for display
+    std::ostringstream output;
+    std::streambuf* old_cout = std::cout.rdbuf(output.rdbuf());
     
-    // Display results
-    displayResults();
-}
-
-void TestsComponent::displayResults()
-{
-    juce::String results = "=== PATTERN PARSER TEST RESULTS ===\n\n";
+    // Run all tests (this will print to our captured output)
+    covertracks::runAllTests();
     
-    int numResults = testRunner->getNumResults();
-    int totalTests = 0;
-    int totalPasses = 0;
-    int totalFailures = 0;
+    // Restore console output
+    std::cout.rdbuf(old_cout);
     
-    for (int i = 0; i < numResults; ++i)
-    {
-        auto result = testRunner->getResult(i);
-        
-        // JUCE TestResult has passes and failures, tests = passes + failures
-        int tests = result->passes + result->failures;
-        totalTests += tests;
-        totalPasses += result->passes;
-        totalFailures += result->failures;
-        
-        results += "Test Suite: " + result->unitTestName + "\n";
-        results += "  Tests: " + juce::String(tests) + "\n";
-        results += "  Passes: " + juce::String(result->passes) + "\n";
-        results += "  Failures: " + juce::String(result->failures) + "\n";
-        
-        if (result->failures > 0)
-        {
-            results += "  Error Messages:\n";
-            for (auto& message : result->messages)
-            {
-                results += "    " + message + "\n";
-            }
-        }
-        results += "\n";
-    }
-    
-    results += "=== SUMMARY ===\n";
-    results += "Total Tests: " + juce::String(totalTests) + "\n";
-    results += "Total Passes: " + juce::String(totalPasses) + "\n";
-    results += "Total Failures: " + juce::String(totalFailures) + "\n";
-    
-    if (totalFailures == 0)
-    {
-        results += "\nALL TESTS PASSED!\n";
-    }
-    else
-    {
-        results += "\n" + juce::String(totalFailures) + " test(s) failed.\n";
-    }
-    
-    resultsText.setText(results);
+    // Display the captured output
+    resultsText.setText(output.str());
 }
 
 } // namespace covertracks

@@ -42,8 +42,11 @@ class PromptManager;
  * 
  * This class integrates with the Player architecture and provides functionality
  * for generating musical patterns using LLMs, which can then be played by instruments.
+ * 
+ * Musician manages the background thread for pattern generation and coordinates
+ * between the UI layer and the PatternGenerator utility class.
  */
-class Musician : public ChangeBroadcaster {
+class Musician : public ChangeBroadcaster, public Thread {
 public:
     /**
      * @brief Construct a new Musician
@@ -56,7 +59,7 @@ public:
     /**
      * @brief Destroy the Musician
      */
-    ~Musician();
+    ~Musician() override;
     
     /**
      * @brief Set the LLM client
@@ -144,6 +147,13 @@ public:
     PatternGenerator& getPatternGenerator() { return *patternGenerator; }
     
     /**
+     * @brief Check if pattern generation is in progress
+     * 
+     * @return bool True if generation is in progress
+     */
+    bool isGenerating() const;
+    
+    /**
      * @brief Convert LLM_RESPONSE_TEXT to MIDI_EVENT_CHART
      * 
      * @param notation LLM_RESPONSE_TEXT (JSON string from LLM)
@@ -184,6 +194,9 @@ public:
     static std::unique_ptr<Musician> fromVar(const var& v);
     
 private:
+    // Thread interface
+    void run() override;
+    
     // Core properties
     String id;
     String style;
@@ -196,6 +209,17 @@ private:
     std::unique_ptr<PromptManager> promptManager;
     std::unique_ptr<PatternGenerator> patternGenerator;
     
+    // Thread management for async LLM requests
+    struct GenerationRequest {
+        String prompt;
+        std::function<void(bool success, const var& midiEventChart)> callback;
+    };
+    
+    std::atomic<bool> generating{false};
+    std::atomic<bool> requestInProgress{false};
+    String currentPrompt;
+    std::function<void(bool success, const var& midiEventChart)> currentCallback;
+    WaitableEvent waitEvent;
     
     // Pattern storage
     String lastResponseText;

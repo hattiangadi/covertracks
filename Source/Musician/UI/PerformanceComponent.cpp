@@ -3,6 +3,7 @@
 #include "../Core/MusicPatternComponents.h"
 #include "../Core/PatternParser.h"
 #include "../Core/MusicPatternSystem.h"
+#include "../../Player/Core/PlayerManager.h"
 #include "../../LLM/Core/PromptManager.h"
 
 namespace covertracks {
@@ -164,8 +165,8 @@ void PerformanceComponent::MusicianStatusTable::addGenerateButton(int rowNumber,
 // PerformanceComponent implementation
 //==============================================================================
 
-PerformanceComponent::PerformanceComponent(EnsembleManager* manager, std::shared_ptr<LLMClient> client)
-    : ensembleManager(manager), llmClient(client)
+PerformanceComponent::PerformanceComponent(EnsembleManager* manager, PlayerManager* playerMgr)
+    : ensembleManager(manager), playerManager(playerMgr)
 {
     // Set up performance selector
     performanceLabel.setText("Performance:", juce::dontSendNotification);
@@ -432,8 +433,11 @@ void PerformanceComponent::resized()
 
 void PerformanceComponent::buttonClicked(juce::Button* button)
 {
+    DBG("DEBUG: buttonClicked() called - MEMORY CHECK POINT BUTTON");
+    
     if (button == &generateButton)
     {
+        DBG("DEBUG: Generate button clicked - MEMORY CHECK POINT GENERATE_BUTTON");
         startGeneration();
     }
     else if (button == &playButton)
@@ -832,11 +836,14 @@ void PerformanceComponent::updateMusicianStatusTable()
 
 void PerformanceComponent::startGeneration()
 {
+    DBG("DEBUG: startGeneration() called - MEMORY CHECK POINT 1");
+    
     if (!ensembleManager || !currentSong || isGenerating)
     {
         return;
     }
     
+    DBG("DEBUG: startGeneration() - before setting isGenerating - MEMORY CHECK POINT 2");
     isGenerating = true;
     generateButton.setEnabled(false);
     playButton.setEnabled(false);
@@ -853,71 +860,147 @@ void PerformanceComponent::startGeneration()
     // Clear previous statuses
     musicianStatusTable.clearStatuses();
     
-    // Get the musician roles for the selected ensemble
-    juce::Array<MusicianRole> roles;
-    
-    int selectedId = ensembleSelector.getSelectedId();
-    
-    if (selectedId > 0)
-    {
-        // Get the selected ensemble file
-        juce::Array<juce::File> ensembleFiles = EnsembleManager::getEnsembleFiles();
-        if (selectedId <= ensembleFiles.size())
-        {
-            // Load the ensemble to get its musician roles
-            auto ensemble = EnsembleManager::loadFromFile(ensembleFiles[selectedId - 1], 
-                                                       ensembleManager->getPlayerManager());
-            if (ensemble)
-            {
-                // Get the musician roles from the ensemble
-                roles = ensemble->getMusicianRoles();
-            }
-        }
-    }
+    // Use the existing roles from musicianStatusTable to avoid loading ensemble again
+    const juce::Array<MusicianRole>& roles = musicianStatusTable.getMusicianRoles();
     
     // Generate patterns for each musician
+    DBG("DEBUG: About to start musician loop - MEMORY CHECK POINT 3");
     for (int i = 0; i < roles.size(); ++i)
     {
         const auto& role = roles[i];
+        DBG("DEBUG: Processing musician " << i << " (" << role.getName() << ") - MEMORY CHECK POINT 4");
         
         // Update status
         musicianStatusTable.updateMusicianStatus(i, "Generating...");
         
-        // Generate a prompt for this musician
-        juce::String prompt = generateMusicianPrompt(role, currentSong, currentInstructions);
-        
-        // Send the prompt to the LLM
-        llmClient->sendMessage(prompt, [this, i, role](bool success, const juce::String& response)
+        // Get the player for this role
+        Player* player = role.player;
+        if (!player)
         {
-            // Suppress unused parameter warning
-            juce::ignoreUnused(success);
-            // Process the response
-            juce::MessageManager::callAsync([this, i, role, response]()
+            DBG("DEBUG: No player found for role " << role.getName());
+            musicianStatusTable.updateMusicianStatus(i, "No Player");
+            continue;
+        }
+        
+        // Create generation parameters for the Player
+        DynamicObject::Ptr params = new DynamicObject();
+        params->setProperty("style", genreSelector.getText());
+        params->setProperty("tempo", 120);
+        params->setProperty("description", generateMusicianPrompt(role, currentSong, currentInstructions));
+        
+        // Set up instruments array for this role
+        Array<var> instruments;
+        instruments.add(role.getInstrumentName());
+        params->setProperty("instruments", instruments);
+        
+        var parameters(params.get());
+        
+        // Use Player->generateChart instead of direct LLM call
+        juce::String roleName = role.getName();
+        DBG("DEBUG: About to call player->generateChart for " << roleName << " - MEMORY CHECK POINT 7");
+        player->generateChart(parameters, [this, i, roleName](bool success, const var& midiEventChart)
+        {
+            DBG("DEBUG: Player callback received for " << roleName << " - success: " << (success ? "true" : "false"));
+            
+            // Process the response on the message thread
+            juce::MessageManager::callAsync([this, i, roleName, success, midiEventChart]()
             {
-                // Parse the response to get a Chart, then convert to MIDI pattern
-                auto chart = parseJSONPatternFromResponse(response);
                 std::shared_ptr<juce::MidiMessageSequence> pattern = nullptr;
                 
-                if (chart != nullptr)
+                if (success && midiEventChart.isObject())
                 {
-                    // Convert Chart to MidiMessageSequence
-                    pattern = chart->toMidiSequence();
+                    // Extract MIDI events from the Player's response
+                    if (midiEventChart.hasProperty("events"))
+                    {
+                        pattern = std::make_shared<juce::MidiMessageSequence>();
+                        var eventsVar = midiEventChart["events"];
+                        
+                        if (eventsVar.isArray())
+                        {
+                            for (const auto& eventVar : *eventsVar.getArray())
+                            {
+                                if (eventVar.isObject())
+                                {
+                                    String type = eventVar.getProperty("type", "").toString();
+                                    int channel = eventVar.getProperty("channel", 1);
+                                    int note = eventVar.getProperty("note", 60);
+                                    double timestamp = eventVar.getProperty("timestamp", 0.0);
+                                    
+                                    if (type == "note_on")
+                                    {
+                                        int velocity = eventVar.getProperty("velocity", 100);
+                                        juce::MidiMessage msg = juce::MidiMessage::noteOn(channel, note, (juce::uint8)velocity);
+                                        msg.setTimeStamp(timestamp);
+                                        pattern->addEvent(msg);
+                                    }
+                                    else if (type == "note_off")
+                                    {
+                                        juce::MidiMessage msg = juce::MidiMessage::noteOff(channel, note);
+                                        msg.setTimeStamp(timestamp);
+                                        pattern->addEvent(msg);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 
-                if (pattern)
+                if (pattern && pattern->getNumEvents() > 0)
                 {
                     // Update status
                     musicianStatusTable.updateMusicianStatus(i, "Generated");
                     
                     // Store the pattern in the ensemble manager
-                    ensembleManager->setMIDIPatternForRole(role.getName(), pattern);
+                    ensembleManager->setMIDIPatternForRole(roleName, pattern);
                     
                     // Store the pattern in the current performance
                     if (currentPerformance)
                     {
-                        // TODO: Convert MidiMessageSequence to chart var format
-                        // currentPerformance->setGeneratedChart(role.getName(), pattern);
-                        currentPerformance->setStatusMessage(role.getName(), "Generated");
+                        // Convert MidiMessageSequence to MIDI_EVENT_CHART format for storage
+                        DynamicObject* chartObj = new DynamicObject();
+                        Array<var> events;
+                        
+                        for (int i = 0; i < pattern->getNumEvents(); ++i)
+                        {
+                            auto event = pattern->getEventPointer(i);
+                            if (event->message.isNoteOn())
+                            {
+                                DynamicObject* noteOn = new DynamicObject();
+                                noteOn->setProperty("type", "note_on");
+                                noteOn->setProperty("channel", event->message.getChannel());
+                                noteOn->setProperty("note", event->message.getNoteNumber());
+                                noteOn->setProperty("velocity", (int)(event->message.getVelocity() * 127));
+                                noteOn->setProperty("timestamp", event->message.getTimeStamp());
+                                events.add(var(noteOn));
+                            }
+                            else if (event->message.isNoteOff())
+                            {
+                                DynamicObject* noteOff = new DynamicObject();
+                                noteOff->setProperty("type", "note_off");
+                                noteOff->setProperty("channel", event->message.getChannel());
+                                noteOff->setProperty("note", event->message.getNoteNumber());
+                                noteOff->setProperty("timestamp", event->message.getTimeStamp());
+                                events.add(var(noteOff));
+                            }
+                            else if (event->message.isController())
+                            {
+                                DynamicObject* controller = new DynamicObject();
+                                controller->setProperty("type", "controller");
+                                controller->setProperty("channel", event->message.getChannel());
+                                controller->setProperty("controller", event->message.getControllerNumber());
+                                controller->setProperty("value", event->message.getControllerValue());
+                                controller->setProperty("timestamp", event->message.getTimeStamp());
+                                events.add(var(controller));
+                            }
+                        }
+                        
+                        chartObj->setProperty("events", events);
+                        chartObj->setProperty("tempo", currentSong ? currentSong->getTempo() : 120.0);
+                        chartObj->setProperty("success", true);
+                        
+                        // Store the MIDI_EVENT_CHART in the performance
+                        currentPerformance->setGeneratedChart(roleName, var(chartObj));
+                        currentPerformance->setStatusMessage(roleName, "Generated");
                         
                         // Save the performance
                         saveCurrentPerformance();
@@ -930,7 +1013,7 @@ void PerformanceComponent::startGeneration()
                     
                     if (currentPerformance)
                     {
-                        currentPerformance->setStatusMessage(role.getName(), "Error: Could not parse response");
+                        currentPerformance->setStatusMessage(roleName, "Error: Could not parse response");
                     }
                 }
                 
@@ -989,41 +1072,133 @@ void PerformanceComponent::startGenerationForRole(const MusicianRole& role)
         // Update status
         musicianStatusTable.updateMusicianStatus(roleIndex, "Generating...");
         
-        // Generate a prompt for this musician
-        juce::String prompt = generateMusicianPrompt(role, currentSong, currentInstructions);
-        
-        // Send the prompt to the LLM
-        llmClient->sendMessage(prompt, [this, roleIndex, role](bool success, const juce::String& response)
+        // Get the player for this role
+        Player* player = role.player;
+        if (!player)
         {
-            // Suppress unused parameter warning
-            juce::ignoreUnused(success);
-            // Process the response
-            juce::MessageManager::callAsync([this, roleIndex, role, response]()
+            DBG("DEBUG: No player found for role " << role.getName());
+            musicianStatusTable.updateMusicianStatus(roleIndex, "No Player");
+            return;
+        }
+        
+        // Create generation parameters for the Player
+        DynamicObject::Ptr params = new DynamicObject();
+        params->setProperty("style", genreSelector.getText());
+        params->setProperty("tempo", 120);
+        params->setProperty("description", generateMusicianPrompt(role, currentSong, currentInstructions));
+        
+        // Set up instruments array for this role
+        Array<var> instruments;
+        instruments.add(role.getInstrumentName());
+        params->setProperty("instruments", instruments);
+        
+        var parameters(params.get());
+        
+        // Use Player->generateChart instead of direct LLM call
+        juce::String roleName = role.getName();
+        player->generateChart(parameters, [this, roleIndex, roleName](bool success, const var& midiEventChart)
+        {
+            DBG("DEBUG: Player callback received for single role " << roleName << " - success: " << (success ? "true" : "false"));
+            
+            // Process the response on the message thread
+            juce::MessageManager::callAsync([this, roleIndex, roleName, success, midiEventChart]()
             {
-                // Parse the response to get a Chart, then convert to MIDI pattern
-                auto chart = parseJSONPatternFromResponse(response);
                 std::shared_ptr<juce::MidiMessageSequence> pattern = nullptr;
                 
-                if (chart != nullptr)
+                if (success && midiEventChart.isObject())
                 {
-                    // Convert Chart to MidiMessageSequence
-                    pattern = chart->toMidiSequence();
+                    // Extract MIDI events from the Player's response
+                    if (midiEventChart.hasProperty("events"))
+                    {
+                        pattern = std::make_shared<juce::MidiMessageSequence>();
+                        var eventsVar = midiEventChart["events"];
+                        
+                        if (eventsVar.isArray())
+                        {
+                            for (const auto& eventVar : *eventsVar.getArray())
+                            {
+                                if (eventVar.isObject())
+                                {
+                                    String type = eventVar.getProperty("type", "").toString();
+                                    int channel = eventVar.getProperty("channel", 1);
+                                    int note = eventVar.getProperty("note", 60);
+                                    double timestamp = eventVar.getProperty("timestamp", 0.0);
+                                    
+                                    if (type == "note_on")
+                                    {
+                                        int velocity = eventVar.getProperty("velocity", 100);
+                                        juce::MidiMessage msg = juce::MidiMessage::noteOn(channel, note, (juce::uint8)velocity);
+                                        msg.setTimeStamp(timestamp);
+                                        pattern->addEvent(msg);
+                                    }
+                                    else if (type == "note_off")
+                                    {
+                                        juce::MidiMessage msg = juce::MidiMessage::noteOff(channel, note);
+                                        msg.setTimeStamp(timestamp);
+                                        pattern->addEvent(msg);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 
-                if (pattern)
+                if (pattern && pattern->getNumEvents() > 0)
                 {
                     // Update status
                     musicianStatusTable.updateMusicianStatus(roleIndex, "Generated");
                     
                     // Store the pattern in the ensemble manager
-                    ensembleManager->setMIDIPatternForRole(role.getName(), pattern);
+                    ensembleManager->setMIDIPatternForRole(roleName, pattern);
                     
                     // Store the pattern in the current performance
                     if (currentPerformance)
                     {
-                        // TODO: Convert MidiMessageSequence to chart var format
-                        // currentPerformance->setGeneratedChart(role.getName(), pattern);
-                        currentPerformance->setStatusMessage(role.getName(), "Generated");
+                        // Convert MidiMessageSequence to MIDI_EVENT_CHART format for storage
+                        DynamicObject* chartObj = new DynamicObject();
+                        Array<var> events;
+                        
+                        for (int i = 0; i < pattern->getNumEvents(); ++i)
+                        {
+                            auto event = pattern->getEventPointer(i);
+                            if (event->message.isNoteOn())
+                            {
+                                DynamicObject* noteOn = new DynamicObject();
+                                noteOn->setProperty("type", "note_on");
+                                noteOn->setProperty("channel", event->message.getChannel());
+                                noteOn->setProperty("note", event->message.getNoteNumber());
+                                noteOn->setProperty("velocity", (int)(event->message.getVelocity() * 127));
+                                noteOn->setProperty("timestamp", event->message.getTimeStamp());
+                                events.add(var(noteOn));
+                            }
+                            else if (event->message.isNoteOff())
+                            {
+                                DynamicObject* noteOff = new DynamicObject();
+                                noteOff->setProperty("type", "note_off");
+                                noteOff->setProperty("channel", event->message.getChannel());
+                                noteOff->setProperty("note", event->message.getNoteNumber());
+                                noteOff->setProperty("timestamp", event->message.getTimeStamp());
+                                events.add(var(noteOff));
+                            }
+                            else if (event->message.isController())
+                            {
+                                DynamicObject* controller = new DynamicObject();
+                                controller->setProperty("type", "controller");
+                                controller->setProperty("channel", event->message.getChannel());
+                                controller->setProperty("controller", event->message.getControllerNumber());
+                                controller->setProperty("value", event->message.getControllerValue());
+                                controller->setProperty("timestamp", event->message.getTimeStamp());
+                                events.add(var(controller));
+                            }
+                        }
+                        
+                        chartObj->setProperty("events", events);
+                        chartObj->setProperty("tempo", currentSong ? currentSong->getTempo() : 120.0);
+                        chartObj->setProperty("success", true);
+                        
+                        // Store the MIDI_EVENT_CHART in the performance
+                        currentPerformance->setGeneratedChart(roleName, var(chartObj));
+                        currentPerformance->setStatusMessage(roleName, "Generated");
                         
                         // Save the performance
                         saveCurrentPerformance();
@@ -1039,7 +1214,7 @@ void PerformanceComponent::startGenerationForRole(const MusicianRole& role)
                     
                     if (currentPerformance)
                     {
-                        currentPerformance->setStatusMessage(role.getName(), "Error: Could not parse response");
+                        currentPerformance->setStatusMessage(roleName, "Error: Could not parse response");
                     }
                 }
             });
@@ -1343,8 +1518,11 @@ juce::String PerformanceComponent::generateMusicianPrompt(const MusicianRole& ro
                                                         std::shared_ptr<Song> song,
                                                         const juce::String& performanceInstructions)
 {
+    DBG("DEBUG: generateMusicianPrompt() called for " << role.getName() << " - MEMORY CHECK POINT A");
+    
     // Use PromptManager to create a proper music generation prompt
     PromptManager promptManager;
+    DBG("DEBUG: PromptManager created - MEMORY CHECK POINT B");
     
     // Determine the musical style/genre from the performance
     juce::String style = "Pop"; // Default
@@ -1356,52 +1534,9 @@ juce::String PerformanceComponent::generateMusicianPrompt(const MusicianRole& ro
     // Get tempo from song or default
     int tempo = song ? static_cast<int>(song->getTempo()) : 120;
     
-    // Create a temporary Player with capabilities based on the instrument type
-    std::vector<Player*> players;
-    std::unique_ptr<Player> tempPlayer;
-    
-    if (ensembleManager && ensembleManager->getPlayerManager())
-    {
-        // Create a temporary player to get the right instrument capabilities
-        tempPlayer = std::make_unique<Player>(
-            "temp_" + role.getName(), 
-            role.instrument,
-            ensembleManager->getPlayerManager()->getFormatManager(),
-            ensembleManager->getPlayerManager()->getKnownPluginList()
-        );
-        
-        // Set appropriate capabilities based on instrument type
-        InstrumentCapabilities capabilities;
-        String instrumentType = role.instrument.toLowerCase();
-        
-        if (instrumentType.contains("drum"))
-        {
-            capabilities = Player::createDrumCapabilities();
-        }
-        else if (instrumentType.contains("piano") || instrumentType.contains("keyboard"))
-        {
-            capabilities = Player::createPianoCapabilities();
-        }
-        else if (instrumentType.contains("bass"))
-        {
-            capabilities = Player::createBassCapabilities();
-        }
-        else if (instrumentType.contains("guitar"))
-        {
-            capabilities = Player::createGuitarCapabilities();
-        }
-        else
-        {
-            // Default to note range for unknown instruments
-            capabilities.type = InstrumentCapabilityType::NoteRange;
-            capabilities.instrumentType = instrumentType;
-            capabilities.minNote = 36;  // C2
-            capabilities.maxNote = 79;  // G5
-        }
-        
-        tempPlayer->setInstrumentCapabilities(capabilities);
-        players.push_back(tempPlayer.get());
-    }
+    // Don't create temporary Player objects - just use lightweight instrument info
+    StringArray instruments;
+    instruments.add(role.instrument);
     
     // Build comprehensive description including all performance context
     juce::String description;
@@ -1459,94 +1594,13 @@ juce::String PerformanceComponent::generateMusicianPrompt(const MusicianRole& ro
         description += "\nLead/Melody Guidance: Create memorable melodic phrases using appropriate scales/modes for " + style + " style, balance activity with rests.\n";
     }
     
-    // Use PromptManager to create the final prompt with our new JSON format
-    if (!players.empty())
-    {
-        // Use the Player-based method with instrument capabilities
-        return promptManager.createMusicGenerationPrompt(style, players, tempo, description);
-    }
-    else
-    {
-        // Fall back to string-based method
-        juce::StringArray instruments;
-        instruments.add(role.instrument);
-        return promptManager.createMusicGenerationPrompt(style, instruments, tempo, description);
-    }
+    // Use PromptManager to create the final prompt with lightweight string-based method
+    DBG("DEBUG: About to call promptManager.createMusicGenerationPrompt - MEMORY CHECK POINT C");
+    auto result = promptManager.createMusicGenerationPrompt(style, instruments, tempo, description);
+    DBG("DEBUG: generateMusicianPrompt() completed - MEMORY CHECK POINT D");
+    return result;
 }
 
-std::shared_ptr<Chart> PerformanceComponent::parseJSONPatternFromResponse(const juce::String& response)
-{
-    // Look for JSON pattern between ```json and ``` markers, or just raw JSON
-    juce::String jsonPattern = response.trim();
-    
-    // Try to extract JSON from code blocks first
-    int startIndex = response.indexOf(juce::StringRef("```json"));
-    if (startIndex == -1)
-    {
-        startIndex = response.indexOf(juce::StringRef("```JSON"));
-    }
-    
-    if (startIndex != -1)
-    {
-        // Find the next newline character after the ```json marker
-        for (int i = startIndex; i < response.length(); ++i)
-        {
-            if (response[i] == '\n')
-            {
-                startIndex = i + 1;
-                break;
-            }
-        }
-        
-        // Find the closing ``` marker
-        juce::String remainingResponse = response.substring(startIndex);
-        int endIndex = remainingResponse.indexOf("```");
-        if (endIndex != -1)
-        {
-            endIndex += startIndex;
-        }
-        if (endIndex != -1)
-        {
-            jsonPattern = response.substring(startIndex, endIndex).trim();
-        }
-    }
-    else
-    {
-        // Try to find JSON by looking for opening and closing braces
-        int openBrace = response.indexOf("{");
-        int closeBrace = response.lastIndexOf("}");
-        
-        if (openBrace != -1 && closeBrace != -1 && closeBrace > openBrace)
-        {
-            jsonPattern = response.substring(openBrace, closeBrace + 1).trim();
-        }
-    }
-    
-    // If we found potential JSON, try to parse it using PatternParser
-    if (jsonPattern.isNotEmpty() && jsonPattern.startsWith("{"))
-    {
-        try
-        {
-            // Create a MusicPatternSystem for parsing
-            MusicPatternSystem patternSystem;
-            PatternParser parser(patternSystem);
-            
-            // Parse the JSON using our PatternParser
-            auto chart = parser.parseChart(jsonPattern);
-            
-            if (chart != nullptr && chart->getNumSections() > 0)
-            {
-                return chart;
-            }
-        }
-        catch (...)
-        {
-            // If parsing fails, we'll fall through to return nullptr
-        }
-    }
-    
-    return nullptr;
-}
 
 int PerformanceComponent::getMidiNoteFromName(const juce::String& name)
 {

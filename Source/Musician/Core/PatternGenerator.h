@@ -13,128 +13,103 @@ class MusicPatternSystem;
 class PatternParser;
 
 /**
- * @brief Generates musical patterns using an LLM
+ * @brief Pure utility class for pattern generation and parsing
  * 
- * This class coordinates interaction with an LLM to generate musical patterns
- * in the notation format defined in the Music Pattern System specification.
+ * This class provides utilities for creating prompts and parsing LLM responses
+ * to generate musical patterns. It does NOT manage threads or async operations.
+ * Thread management is handled by the Musician class.
  */
-class PatternGenerator : public Thread {
+class PatternGenerator {
 public:
     /**
      * @brief Construct a new Pattern Generator
      * 
      * @param patternSystem Reference to the MusicPatternSystem
-     * @param llmClient Shared pointer to the LLMClient
      * @param promptManager Reference to the PromptManager
      */
-    PatternGenerator(MusicPatternSystem& patternSystem,
-                    std::shared_ptr<LLMClient> llmClient,
-                    PromptManager& promptManager);
+    PatternGenerator(MusicPatternSystem& patternSystem, PromptManager& promptManager);
     
     /**
      * @brief Destroy the Pattern Generator
      */
-    ~PatternGenerator() override;
+    ~PatternGenerator();
     
     /**
-     * @brief Callback for pattern generation completion
-     * 
-     * @param success Whether the generation was successful
-     * @param chart The generated chart (nullptr if generation failed)
-     * @param response The raw response from the LLM
-     */
-    using PatternGenerationCallback = std::function<void(bool success, 
-                                                       std::shared_ptr<Chart> chart, 
-                                                       const String& response)>;
-    
-    /**
-     * @brief Generate a song based on style and instruments
+     * @brief Create a song generation prompt
      * 
      * @param style The musical style (e.g., "jazz", "rock")
      * @param instruments The instruments to include
      * @param tempo The tempo in BPM
      * @param description Additional description or constraints
-     * @param callback Callback to be invoked when generation completes
+     * @return String The formatted prompt for the LLM
      */
-    void generateSong(const String& style,
-                     const StringArray& instruments,
-                     int tempo,
-                     const String& description,
-                     PatternGenerationCallback callback);
+    String createSongPrompt(const String& style,
+                           const StringArray& instruments,
+                           int tempo,
+                           const String& description);
     
     /**
-     * @brief Modify an existing pattern
+     * @brief Create a pattern modification prompt
      * 
      * @param currentPattern The current pattern notation
      * @param modification Description of modifications to make
-     * @param callback Callback to be invoked when generation completes
+     * @return String The formatted prompt for the LLM
      */
-    void modifyPattern(const String& currentPattern,
-                      const String& modification,
-                      PatternGenerationCallback callback);
+    String createModificationPrompt(const String& currentPattern,
+                                   const String& modification);
     
     /**
-     * @brief Generate a specific section for a song
+     * @brief Create a section generation prompt
      * 
      * @param section The section type (e.g., "verse", "chorus")
      * @param style The musical style
      * @param instruments The instruments to include
      * @param description Additional description or constraints
-     * @param callback Callback to be invoked when generation completes
+     * @return String The formatted prompt for the LLM
      */
-    void generateSection(const String& section,
-                        const String& style,
-                        const StringArray& instruments,
-                        const String& description,
-                        PatternGenerationCallback callback);
+    String createSectionPrompt(const String& section,
+                              const String& style,
+                              const StringArray& instruments,
+                              const String& description);
     
     /**
-     * @brief Check if generation is in progress
+     * @brief Parse an LLM response into a Chart
      * 
-     * @return true if generation is in progress
+     * @param response The raw LLM response text
+     * @return std::shared_ptr<Chart> The parsed chart (nullptr if parsing failed)
      */
-    bool isGenerating() const { return generating; }
+    std::shared_ptr<Chart> parseResponse(const String& response);
     
     /**
-     * @brief Get the conversation history
+     * @brief Validate that a response contains valid pattern notation
      * 
-     * @return Array<std::pair<String, String>> The conversation history (user, assistant)
+     * @param response The LLM response to validate
+     * @return bool True if the response appears to contain valid notation
      */
-    Array<std::pair<String, String>> getConversationHistory() const { return conversationHistory; }
+    bool validateResponse(const String& response);
     
     /**
-     * @brief Clear the conversation history
-     */
-    void clearConversationHistory() { conversationHistory.clear(); }
-    
-    /**
-     * @brief Set an initial system prompt for the conversation
+     * @brief Get the system prompt for pattern generation
      * 
-     * @param systemPrompt The system prompt
+     * @return String The system prompt
+     */
+    String getSystemPrompt() const { return systemPrompt; }
+    
+    /**
+     * @brief Set the system prompt for pattern generation
+     * 
+     * @param newSystemPrompt The system prompt
      */
     void setSystemPrompt(const String& newSystemPrompt) { this->systemPrompt = newSystemPrompt; }
     
 private:
-    // Thread interface
-    void run() override;
-    
     // Member variables
     MusicPatternSystem& patternSystem;
-    std::shared_ptr<LLMClient> llmClient;
     PromptManager& promptManager;
     std::unique_ptr<PatternParser> parser;
     
-    // State variables
-    bool generating;
-    String currentPrompt;
-    PatternGenerationCallback currentCallback;
-    
-    // Conversation history
+    // System prompt
     String systemPrompt;
-    Array<std::pair<String, String>> conversationHistory;
-    
-    // Queue management
-    WaitableEvent waitEvent;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PatternGenerator)
 };

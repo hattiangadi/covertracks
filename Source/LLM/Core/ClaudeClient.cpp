@@ -35,6 +35,7 @@ ClaudeClient::~ClaudeClient()
 
 void ClaudeClient::sendMessage(const String& message, ResponseCallback callback)
 {
+    DBG("DEBUG: ClaudeClient::sendMessage() called - MEMORY CHECK POINT X");
     // Just call the history version with an empty history
     sendMessageWithHistory(message, {}, std::move(callback));
 }
@@ -43,11 +44,14 @@ void ClaudeClient::sendMessageWithHistory(const String& message,
                                         const Array<std::pair<String, String>>& history,
                                         ResponseCallback callback)
 {
+    DBG("DEBUG: ClaudeClient::sendMessageWithHistory() called - MEMORY CHECK POINT Y");
+    
     // Add message to the queue
     MessageRequest request;
     request.message = message;
     request.history = history;
     request.callback = std::move(callback);
+    DBG("DEBUG: Created MessageRequest - MEMORY CHECK POINT Z");
     
     {
         const ScopedLock sl(queueLock);
@@ -126,7 +130,8 @@ void ClaudeClient::run()
                 const ScopedLock sl(queueLock);
                 if (messageQueue.isEmpty())
                     break;
-                    
+                
+                DBG("DEBUG: Processing message from queue, queue size: " << messageQueue.size());
                 request = std::move(messageQueue.getReference(0));
                 messageQueue.remove(0);
             }

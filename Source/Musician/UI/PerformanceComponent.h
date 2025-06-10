@@ -2,12 +2,14 @@
 
 #include <JuceHeader.h>
 #include "../Core/EnsembleManager.h"
-#include "../../LLM/Core/LLMClient.h"
+#include "../../Player/Core/PlayerManager.h"
 #include "../Core/MusicPatternComponents.h"
 #include "../Core/Song.h"
 #include "Song/SongListComponent.h"
 #include "../Core/Performance.h"
 #include "../Core/PerformanceManager.h"
+#include "../Core/MusicPatternSystem.h"
+#include "../Core/PatternParser.h"
 
 namespace covertracks {
 
@@ -30,9 +32,9 @@ public:
      * @brief Construct a new Performance Component
      * 
      * @param ensembleManager The ensemble manager to use
-     * @param llmClient The LLM client to use
+     * @param playerManager The player manager to use for proper architecture flow
      */
-    PerformanceComponent(EnsembleManager* ensembleManager, std::shared_ptr<LLMClient> llmClient);
+    PerformanceComponent(EnsembleManager* ensembleManager, PlayerManager* playerManager);
     
     /**
      * @brief Destroy the Performance Component
@@ -211,7 +213,7 @@ private:
     
     // References
     EnsembleManager* ensembleManager;
-    std::shared_ptr<LLMClient> llmClient;
+    PlayerManager* playerManager;
     std::shared_ptr<PerformanceManager> performanceManager;
     SongListComponent* registeredSongList = nullptr;
     
@@ -250,9 +252,6 @@ private:
     juce::String generateMusicianPrompt(const MusicianRole& role, 
                                       std::shared_ptr<Song> song,
                                       const juce::String& performanceInstructions);
-    
-    // Parse a JSON pattern from an LLM response using PatternParser
-    std::shared_ptr<Chart> parseJSONPatternFromResponse(const juce::String& response);
     
     // Convert a note name to a MIDI note number
     int getMidiNoteFromName(const juce::String& name);
