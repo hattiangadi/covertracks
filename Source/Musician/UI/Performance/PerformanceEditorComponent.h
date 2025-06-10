@@ -27,9 +27,11 @@ public:
      * 
      * @param performanceManager The performance manager to use
      * @param llmClient The LLM client for chart generation
+     * @param playerManager The player manager for loading and playing charts
      */
     PerformanceEditorComponent(PerformanceManager* performanceManager,
-                              std::shared_ptr<LLMClient> llmClient);
+                              std::shared_ptr<LLMClient> llmClient,
+                              PlayerManager* playerManager = nullptr);
     
     /**
      * @brief Destroy the Performance Editor Component
@@ -69,12 +71,17 @@ private:
     // Core components
     PerformanceManager* performanceManager;
     std::shared_ptr<LLMClient> llmClient;
+    PlayerManager* playerManager;
     std::unique_ptr<EnsembleManager> ensembleManager;
     
     // Current state
     Performance* currentPerformance = nullptr;
     bool isNewPerformance = false;
     std::function<void()> backCallback;
+    
+    // Temporary storage for new performance data
+    String pendingEnsembleName;
+    std::shared_ptr<Song> pendingSong;
     
     // UI components - Header
     Label titleLabel;
@@ -120,6 +127,7 @@ private:
         Array<TextButton*> playButtons;
         
         void clearButtons();
+        Array<MusicianRole> getEnsembleRolesFromName(const String& ensembleName);
     };
     
     std::unique_ptr<PlayerTable> playerTable;

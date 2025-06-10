@@ -3,9 +3,11 @@
 namespace covertracks {
 
 PerformanceEditorComponent::PerformanceEditorComponent(PerformanceManager* pm,
-                                                     std::shared_ptr<LLMClient> client)
+                                                     std::shared_ptr<LLMClient> client,
+                                                     PlayerManager* pm2)
     : performanceManager(pm),
       llmClient(client),
+      playerManager(pm2),
       titleLabel("titleLabel", "Performance Editor"),
       nameEditor("nameEditor"),
       descriptionEditor("descriptionEditor"),
@@ -79,6 +81,19 @@ PerformanceEditorComponent::PerformanceEditorComponent(PerformanceManager* pm,
     statusDisplay.setReadOnly(true);
     statusDisplay.setColour(TextEditor::backgroundColourId, Colours::black.withAlpha(0.1f));
     addAndMakeVisible(statusDisplay);
+    
+    // Set up LLM client for all players in the PlayerManager
+    if (llmClient && playerManager)
+    {
+        auto players = playerManager->getPlayers();
+        for (auto* player : players)
+        {
+            if (player)
+            {
+                player->setLLMClient(llmClient);
+            }
+        }
+    }
     
     // Set up song and ensemble selectors
     updateSongSelector();
@@ -271,9 +286,11 @@ void PerformanceEditorComponent::setBackCallback(std::function<void()> callback)
 // Helper methods - stub implementations
 void PerformanceEditorComponent::createNewPerformance()
 {
+    currentPerformance = nullptr;  // Will be created when saved
+    isNewPerformance = true;
+    
     nameEditor.setText("New Performance");
     descriptionEditor.setText("");
-    isNewPerformance = true;
     updateTitle();
 }
 
@@ -292,37 +309,476 @@ void PerformanceEditorComponent::updateTitle()
 
 void PerformanceEditorComponent::saveCurrentPerformance()
 {
-    statusDisplay.setText("Save functionality not yet implemented");
+    if (!performanceManager)
+    {
+        statusDisplay.setText("No performance manager available");
+        return;
+    }
+    
+    std::shared_ptr<Performance> performanceToSave;
+    
+    // For new performances, create the Performance object now
+    if (isNewPerformance && !currentPerformance)
+    {
+        performanceToSave = std::make_shared<Performance>(nameEditor.getText());
+        currentPerformance = performanceToSave.get(); // Keep raw pointer for UI
+        
+        // Apply pending data
+        if (pendingEnsembleName.isNotEmpty())
+        {
+            currentPerformance->setEnsembleName(pendingEnsembleName);
+        }
+        if (pendingSong)
+        {
+            currentPerformance->setSong(pendingSong);
+        }
+    }
+    else if (currentPerformance)
+    {
+        // For existing performances, we need to find the shared_ptr
+        // For now, create a new shared_ptr (this is not ideal but works for the fix)
+        performanceToSave = std::shared_ptr<Performance>(currentPerformance, [](Performance*){});
+    }
+    
+    if (!performanceToSave)
+    {
+        statusDisplay.setText("No performance to save");
+        return;
+    }
+    
+    // Update performance with current form data
+    performanceToSave->setName(nameEditor.getText());
+    performanceToSave->setDescription(descriptionEditor.getText());
+    
+    // Save using PerformanceManager (returns void)
+    try 
+    {
+        performanceManager->savePerformance(performanceToSave);
+        isNewPerformance = false; // No longer new after saving
+        statusDisplay.setText("Performance saved successfully");
+        updateTitle();
+    }
+    catch (...)
+    {
+        statusDisplay.setText("Failed to save performance");
+    }
 }
 
 void PerformanceEditorComponent::generateChartForPlayer(int playerIndex)
 {
-    statusDisplay.setText("Generate chart for player " + String(playerIndex) + " - not yet implemented");
+    if (!currentPerformance)
+    {
+        statusDisplay.setText("No performance available");
+        return;
+    }
+    
+    if (!playerManager)
+    {
+        statusDisplay.setText("No player manager available");
+        return;
+    }
+    
+    auto ensemble = currentPerformance->getEnsemble();
+    if (playerIndex < 0 || playerIndex >= ensemble.size())
+    {
+        statusDisplay.setText("Invalid player index: " + String(playerIndex));
+        return;
+    }
+    
+    const auto role = ensemble[playerIndex];
+    statusDisplay.setText("Generating chart for " + role.getName() + "...");
+    
+    // Find the player for this role
+    Player* player = role.player;
+    if (!player)
+    {
+        // Try to find a player by name in the PlayerManager
+        auto players = playerManager->getPlayers();
+        for (auto* p : players)
+        {
+            if (p && p->getMetadata().name == role.getName())
+            {
+                player = p;
+                break;
+            }
+        }
+        
+        if (!player)
+        {
+            statusDisplay.setText("No player assigned to role " + role.getName());
+            return;
+        }
+    }
+    
+    // Create parameters for chart generation
+    var parameters = var(new DynamicObject());
+    
+    // Set instruments as array
+    var instrumentsArray = var(Array<var>());
+    instrumentsArray.append(var(role.getInstrumentName()));
+    parameters.getDynamicObject()->setProperty("instruments", instrumentsArray);
+    
+    // Set style/genre
+    String style = currentPerformance->getGenre();
+    if (style.isEmpty()) style = "default";
+    parameters.getDynamicObject()->setProperty("style", style);
+    
+    // Set tempo
+    int tempo = 120; // Default
+    if (auto song = currentPerformance->getSong())
+    {
+        tempo = static_cast<int>(song->getTempo());
+    }
+    parameters.getDynamicObject()->setProperty("tempo", tempo);
+    
+    // Create comprehensive description for the LLM
+    String description = "Generate a " + role.getInstrumentName() + " chart for the role '" + role.getName() + "'";
+    
+    if (auto song = currentPerformance->getSong())
+    {
+        description += " for the song '" + song->getTitle() + "'";
+        
+        String songStructure = song->getSourceStructureJson();
+        if (songStructure.isNotEmpty())
+        {
+            description += ". Song structure: " + songStructure;
+        }
+    }
+    
+    String instructions = currentPerformance->getInstructions();
+    if (instructions.isNotEmpty())
+    {
+        description += ". Performance instructions: " + instructions;
+    }
+    
+    String key = currentPerformance->getKey();
+    if (key.isNotEmpty())
+    {
+        description += ". Key: " + key;
+    }
+    
+    String mood = currentPerformance->getMood();
+    if (mood.isNotEmpty())
+    {
+        description += ". Mood: " + mood;
+    }
+    
+    parameters.getDynamicObject()->setProperty("description", description);
+    
+    // Generate chart using Player interface (delegates to internal Musician)
+    String roleName = role.getName();
+    player->generateChart(parameters, [this, roleName](bool success, var chart)
+    {
+        if (success)
+        {
+            // Store the generated chart in the performance
+            if (currentPerformance)
+            {
+                currentPerformance->setGeneratedChart(roleName, chart);
+                currentPerformance->setStatusMessage(roleName, "Chart Generated");
+            }
+            statusDisplay.setText("Chart generated for " + roleName + " - ready to load");
+        }
+        else
+        {
+            statusDisplay.setText("Failed to generate chart for " + roleName);
+            if (currentPerformance)
+            {
+                currentPerformance->setStatusMessage(roleName, "Generation Failed");
+            }
+        }
+        
+        // Update the player table to show new status
+        if (playerTable)
+            playerTable->updateContent();
+    });
 }
 
 void PerformanceEditorComponent::loadChartForPlayer(int playerIndex)
 {
-    statusDisplay.setText("Load chart for player " + String(playerIndex) + " - not yet implemented");
+    if (!currentPerformance || !playerManager)
+    {
+        statusDisplay.setText("No performance or player manager available");
+        return;
+    }
+    
+    auto ensemble = currentPerformance->getEnsemble();
+    if (playerIndex < 0 || playerIndex >= ensemble.size())
+    {
+        statusDisplay.setText("Invalid player index: " + String(playerIndex));
+        return;
+    }
+    
+    const auto role = ensemble[playerIndex];
+    statusDisplay.setText("Loading chart for " + role.getName() + "...");
+    
+    // Get the generated chart for this role
+    var chart = currentPerformance->getGeneratedChart(role.getName());
+    if (chart.isVoid())
+    {
+        statusDisplay.setText("No chart generated for " + role.getName() + " - generate first");
+        return;
+    }
+    
+    // Debug: Check if chart has proper structure
+    if (!chart.isObject())
+    {
+        statusDisplay.setText("Invalid chart format for " + role.getName());
+        return;
+    }
+    
+    // Find an existing player for this role or use the one assigned to the role
+    Player* player = role.player;
+    if (!player)
+    {
+        // Try to find a player by name in the PlayerManager
+        auto players = playerManager->getPlayers();
+        for (auto* p : players)
+        {
+            if (p && p->getMetadata().name == role.getName())
+            {
+                player = p;
+                break;
+            }
+        }
+        
+        if (!player)
+        {
+            statusDisplay.setText("No player assigned to role " + role.getName());
+            return;
+        }
+    }
+    
+    // The chart is already in the correct format from Musician
+    // Load the chart into the player
+    if (player->loadChart(chart))
+    {
+        statusDisplay.setText("Chart loaded for " + role.getName());
+        currentPerformance->setStatusMessage(role.getName(), "Chart Loaded");
+    }
+    else
+    {
+        statusDisplay.setText("Failed to load chart for " + role.getName());
+        currentPerformance->setStatusMessage(role.getName(), "Load Failed");
+    }
 }
 
 void PerformanceEditorComponent::playPlayer(int playerIndex)
 {
-    statusDisplay.setText("Play player " + String(playerIndex) + " - not yet implemented");
+    if (!currentPerformance || !playerManager)
+    {
+        statusDisplay.setText("No performance or player manager available");
+        return;
+    }
+    
+    auto ensemble = currentPerformance->getEnsemble();
+    if (playerIndex < 0 || playerIndex >= ensemble.size())
+    {
+        statusDisplay.setText("Invalid player index: " + String(playerIndex));
+        return;
+    }
+    
+    const auto role = ensemble[playerIndex];
+    
+    // Get the player for this role
+    Player* player = role.player;
+    if (!player)
+    {
+        // Try to find a player by name in the PlayerManager
+        auto players = playerManager->getPlayers();
+        for (auto* p : players)
+        {
+            if (p && p->getMetadata().name == role.getName())
+            {
+                player = p;
+                break;
+            }
+        }
+        
+        if (!player)
+        {
+            statusDisplay.setText("No player found for " + role.getName() + " - load chart first");
+            return;
+        }
+    }
+    
+    // Start playing - Player::play() returns bool
+    if (player->play())
+    {
+        statusDisplay.setText("Playing " + role.getName());
+        currentPerformance->setStatusMessage(role.getName(), "Playing");
+    }
+    else
+    {
+        statusDisplay.setText("Failed to start playing " + role.getName());
+        currentPerformance->setStatusMessage(role.getName(), "Play Failed");
+    }
 }
 
 void PerformanceEditorComponent::loadAllCharts()
 {
-    statusDisplay.setText("Load all charts - not yet implemented");
+    if (!currentPerformance)
+    {
+        statusDisplay.setText("No performance available");
+        return;
+    }
+    
+    auto ensemble = currentPerformance->getEnsemble();
+    if (ensemble.isEmpty())
+    {
+        statusDisplay.setText("No ensemble selected");
+        return;
+    }
+    
+    statusDisplay.setText("Loading all charts...");
+    
+    int loaded = 0;
+    int total = ensemble.size();
+    
+    for (int i = 0; i < ensemble.size(); ++i)
+    {
+        const auto role = ensemble[i];
+        
+        // Check if chart is generated
+        auto chart = currentPerformance->getGeneratedChart(role.getName());
+        if (!chart.isVoid())
+        {
+            // Load the chart for this player
+            loadChartForPlayer(i);
+            
+            // Check if it loaded successfully
+            String status = currentPerformance->getStatusMessage(role.getName());
+            if (status == "Chart Loaded")
+            {
+                loaded++;
+            }
+        }
+    }
+    
+    statusDisplay.setText("Loaded " + String(loaded) + " of " + String(total) + " charts");
+    
+    // Update the player table to reflect new status
+    if (playerTable)
+        playerTable->updateContent();
 }
 
 void PerformanceEditorComponent::playAllPlayers()
 {
-    statusDisplay.setText("Play all players - not yet implemented");
+    if (!currentPerformance || !playerManager)
+    {
+        statusDisplay.setText("No performance or player manager available");
+        return;
+    }
+    
+    auto ensemble = currentPerformance->getEnsemble();
+    if (ensemble.isEmpty())
+    {
+        statusDisplay.setText("No ensemble selected");
+        return;
+    }
+    
+    statusDisplay.setText("Starting all players...");
+    
+    int playing = 0;
+    int total = ensemble.size();
+    
+    // Start synchronized playback for all players
+    for (int i = 0; i < ensemble.size(); ++i)
+    {
+        const auto role = ensemble[i];
+        
+        Player* player = role.player;
+        if (!player)
+        {
+            // Try to find a player by name in the PlayerManager
+            auto players = playerManager->getPlayers();
+            for (auto* p : players)
+            {
+                if (p && p->getMetadata().name == role.getName())
+                {
+                    player = p;
+                    break;
+                }
+            }
+        }
+        
+        if (player)
+        {
+            if (player->play())
+            {
+                playing++;
+                currentPerformance->setStatusMessage(role.getName(), "Playing");
+            }
+            else
+            {
+                currentPerformance->setStatusMessage(role.getName(), "Play Failed");
+            }
+        }
+        else
+        {
+            currentPerformance->setStatusMessage(role.getName(), "Not Ready");
+        }
+    }
+    
+    statusDisplay.setText("Playing " + String(playing) + " of " + String(total) + " players");
+    
+    // Update the player table to reflect new status
+    if (playerTable)
+        playerTable->updateContent();
 }
 
 void PerformanceEditorComponent::stopAllPlayers()
 {
-    statusDisplay.setText("Stop all players - not yet implemented");
+    if (!currentPerformance || !playerManager)
+    {
+        statusDisplay.setText("No performance or player manager available");
+        return;
+    }
+    
+    auto ensemble = currentPerformance->getEnsemble();
+    if (ensemble.isEmpty())
+    {
+        statusDisplay.setText("No ensemble selected");
+        return;
+    }
+    
+    statusDisplay.setText("Stopping all players...");
+    
+    int stopped = 0;
+    
+    // Stop all players
+    for (int i = 0; i < ensemble.size(); ++i)
+    {
+        const auto role = ensemble[i];
+        
+        Player* player = role.player;
+        if (!player)
+        {
+            // Try to find a player by name in the PlayerManager
+            auto players = playerManager->getPlayers();
+            for (auto* p : players)
+            {
+                if (p && p->getMetadata().name == role.getName())
+                {
+                    player = p;
+                    break;
+                }
+            }
+        }
+        
+        if (player)
+        {
+            player->stop(); // stop() returns void
+            stopped++;
+            currentPerformance->setStatusMessage(role.getName(), "Stopped");
+        }
+    }
+    
+    statusDisplay.setText("Stopped " + String(stopped) + " players");
+    
+    // Update the player table to reflect new status
+    if (playerTable)
+        playerTable->updateContent();
 }
 
 void PerformanceEditorComponent::updateSongSelector()
@@ -378,8 +834,8 @@ void PerformanceEditorComponent::songSelectionChanged()
     {
         statusDisplay.setText("Selected song: " + selectedSong);
         
-        // Load the selected song and set it on the performance
-        if (currentPerformance && performanceManager)
+        // Load the selected song and set it on the performance (or pending data)
+        if (performanceManager)
         {
             // Find the song by name and load it
             File songsDir = File::getSpecialLocation(File::userApplicationDataDirectory)
@@ -401,7 +857,15 @@ void PerformanceEditorComponent::songSelectionChanged()
                         auto song = Song::fromVar(jsonVar);
                         if (song)
                         {
-                            currentPerformance->setSong(song);
+                            if (currentPerformance)
+                            {
+                                currentPerformance->setSong(song);
+                            }
+                            else
+                            {
+                                // Store in pending data for new performances
+                                pendingSong = song;
+                            }
                             break;
                         }
                     }
@@ -445,13 +909,29 @@ void PerformanceEditorComponent::ensembleSelectionChanged()
     {
         statusDisplay.setText("No ensemble selected");
         if (currentPerformance)
+        {
             currentPerformance->setEnsembleName("");
+        }
+        else
+        {
+            // For new performances, store in pending data
+            pendingEnsembleName = "";
+        }
     }
     else
     {
         statusDisplay.setText("Selected ensemble: " + selectedEnsemble);
         if (currentPerformance)
+        {
             currentPerformance->setEnsembleName(selectedEnsemble);
+            // Refresh the ensemble cache since we changed ensembles
+            currentPerformance->refreshEnsembleCache();
+        }
+        else
+        {
+            // For new performances, store in pending data
+            pendingEnsembleName = selectedEnsemble;
+        }
     }
     
     // Update the player table to show the new ensemble
@@ -484,12 +964,20 @@ void PerformanceEditorComponent::PlayerTable::resized()
 
 int PerformanceEditorComponent::PlayerTable::getNumRows()
 {
+    if (!parent) return 0;
+    
     // Get the number of players from the selected ensemble
-    if (parent && parent->currentPerformance)
+    if (parent->currentPerformance)
     {
         auto ensemble = parent->currentPerformance->getEnsemble();
         return ensemble.size();
     }
+    else if (parent->isNewPerformance && parent->pendingEnsembleName.isNotEmpty())
+    {
+        // For new performances, load ensemble from pending name
+        return getEnsembleRolesFromName(parent->pendingEnsembleName).size();
+    }
+    
     return 0; // No players initially
 }
 
@@ -517,7 +1005,33 @@ void PerformanceEditorComponent::PlayerTable::paintCell(Graphics& g, int rowNumb
             const auto& role = ensemble[rowNumber];
             if (columnId == 1) text = role.getName();
             if (columnId == 2) text = role.getInstrumentName();
-            if (columnId == 3) text = "No Chart";
+            if (columnId == 3) 
+            {
+                // Show the actual status from the performance
+                String status = parent->currentPerformance->getStatusMessage(role.getName());
+                if (status.isEmpty())
+                {
+                    // Check if chart exists
+                    auto chart = parent->currentPerformance->getGeneratedChart(role.getName());
+                    text = !chart.isVoid() ? "Chart Generated" : "No Chart";
+                }
+                else
+                {
+                    text = status;
+                }
+            }
+        }
+    }
+    else if (parent && parent->isNewPerformance && parent->pendingEnsembleName.isNotEmpty())
+    {
+        // For new performances, get ensemble from pending name
+        auto ensemble = getEnsembleRolesFromName(parent->pendingEnsembleName);
+        if (rowNumber < ensemble.size())
+        {
+            const auto& role = ensemble[rowNumber];
+            if (columnId == 1) text = role.getName();
+            if (columnId == 2) text = role.getInstrumentName();
+            if (columnId == 3) text = "No Chart"; // New performance has no charts yet
         }
     }
     else
@@ -530,16 +1044,53 @@ void PerformanceEditorComponent::PlayerTable::paintCell(Graphics& g, int rowNumb
     g.drawText(text, Rectangle<int>(2, 0, width - 4, height), Justification::centredLeft, true);
 }
 
-Component* PerformanceEditorComponent::PlayerTable::refreshComponentForCell(int /*rowNumber*/, int columnId, bool /*isRowSelected*/, Component* existingComponentToUpdate)
+Component* PerformanceEditorComponent::PlayerTable::refreshComponentForCell(int rowNumber, int columnId, bool /*isRowSelected*/, Component* existingComponentToUpdate)
 {
     if (columnId == 4) // Actions column
     {
-        // Return button components for actions
+        // Create a custom component that layouts buttons properly
+        class ActionButtonsComponent : public Component
+        {
+        public:
+            ActionButtonsComponent(PlayerTable* parentTable, int row)
+                : parent(parentTable), rowIndex(row)
+            {
+                generateBtn.setButtonText("Gen");
+                generateBtn.setComponentID("generate_" + String(row));
+                generateBtn.addListener(parent);
+                addAndMakeVisible(generateBtn);
+                
+                loadBtn.setButtonText("Load");
+                loadBtn.setComponentID("load_" + String(row));
+                loadBtn.addListener(parent);
+                addAndMakeVisible(loadBtn);
+                
+                playBtn.setButtonText("Play");
+                playBtn.setComponentID("play_" + String(row));
+                playBtn.addListener(parent);
+                addAndMakeVisible(playBtn);
+            }
+            
+            void resized() override
+            {
+                auto bounds = getLocalBounds();
+                int buttonWidth = bounds.getWidth() / 3;
+                generateBtn.setBounds(bounds.removeFromLeft(buttonWidth).reduced(1));
+                loadBtn.setBounds(bounds.removeFromLeft(buttonWidth).reduced(1));
+                playBtn.setBounds(bounds.reduced(1));
+            }
+            
+        private:
+            PlayerTable* parent;
+            int rowIndex;
+            TextButton generateBtn;
+            TextButton loadBtn;
+            TextButton playBtn;
+        };
+        
         if (existingComponentToUpdate == nullptr)
         {
-            auto* button = new TextButton("Generate");
-            button->addListener(this);
-            return button;
+            return new ActionButtonsComponent(this, rowNumber);
         }
         return existingComponentToUpdate;
     }
@@ -547,9 +1098,28 @@ Component* PerformanceEditorComponent::PlayerTable::refreshComponentForCell(int 
     return nullptr;
 }
 
-void PerformanceEditorComponent::PlayerTable::buttonClicked(Button* /*button*/)
+void PerformanceEditorComponent::PlayerTable::buttonClicked(Button* button)
 {
-    // Handle button clicks in table
+    String buttonId = button->getComponentID();
+    
+    if (buttonId.startsWith("generate_"))
+    {
+        int playerIndex = buttonId.substring(9).getIntValue();
+        if (parent)
+            parent->generateChartForPlayer(playerIndex);
+    }
+    else if (buttonId.startsWith("load_"))
+    {
+        int playerIndex = buttonId.substring(5).getIntValue();
+        if (parent)
+            parent->loadChartForPlayer(playerIndex);
+    }
+    else if (buttonId.startsWith("play_"))
+    {
+        int playerIndex = buttonId.substring(5).getIntValue();
+        if (parent)
+            parent->playPlayer(playerIndex);
+    }
 }
 
 void PerformanceEditorComponent::PlayerTable::updateContent()
@@ -562,6 +1132,34 @@ void PerformanceEditorComponent::PlayerTable::clearButtons()
     generateButtons.clear();
     loadButtons.clear();
     playButtons.clear();
+}
+
+Array<MusicianRole> PerformanceEditorComponent::PlayerTable::getEnsembleRolesFromName(const String& ensembleName)
+{
+    Array<MusicianRole> roles;
+    
+    if (ensembleName.isEmpty())
+        return roles;
+    
+    // Load the ensemble from disk (similar to Performance::refreshEnsembleCache)
+    Array<File> ensembleFiles = EnsembleManager::getEnsembleFiles();
+    
+    for (const auto& file : ensembleFiles)
+    {
+        auto ensemble = EnsembleManager::loadFromFile(file, nullptr);
+        if (ensemble && ensemble->getName() == ensembleName)
+        {
+            auto ensembleRoles = ensemble->getMusicianRoles();
+            for (auto role : ensembleRoles)
+            {
+                role.player = nullptr; // Clear player pointer
+                roles.add(role);
+            }
+            break;
+        }
+    }
+    
+    return roles;
 }
 
 } // namespace covertracks

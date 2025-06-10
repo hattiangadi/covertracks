@@ -14,7 +14,7 @@ namespace covertracks {
  */
 class PerformanceListComponent : public Component,
                                 public Button::Listener,
-                                public ListBoxModel
+                                public TableListBoxModel
 {
 public:
     /**
@@ -49,11 +49,12 @@ public:
     // Button::Listener implementation
     void buttonClicked(Button* button) override;
     
-    // ListBoxModel implementation
+    // TableListBoxModel implementation
     int getNumRows() override;
-    void paintListBoxItem(int rowNumber, Graphics& g, int width, int height, bool rowIsSelected) override;
-    void listBoxItemClicked(int row, const MouseEvent& e) override;
-    void listBoxItemDoubleClicked(int row, const MouseEvent& e) override;
+    void paintRowBackground(Graphics& g, int rowNumber, int width, int height, bool rowIsSelected) override;
+    void paintCell(Graphics& g, int rowNumber, int columnId, int width, int height, bool rowIsSelected) override;
+    void cellClicked(int rowNumber, int columnId, const MouseEvent& e) override;
+    void cellDoubleClicked(int rowNumber, int columnId, const MouseEvent& e) override;
     
     /**
      * @brief Add a listener for performance list events
@@ -87,7 +88,7 @@ private:
     
     // UI components
     Label titleLabel;
-    ListBox performanceList;
+    TableListBox performanceTable;
     TextButton newButton;
     TextButton editButton;
     TextButton deleteButton;

@@ -3,8 +3,9 @@
 namespace covertracks {
 
 PerformanceLibraryComponent::PerformanceLibraryComponent(PerformanceManager* pm, 
-                                                       std::shared_ptr<LLMClient> client)
-    : performanceManager(pm), llmClient(client)
+                                                       std::shared_ptr<LLMClient> client,
+                                                       PlayerManager* pm2)
+    : performanceManager(pm), llmClient(client), playerManager(pm2)
 {
     // Create the list component
     listComponent = std::make_unique<PerformanceListComponent>(performanceManager);
@@ -105,7 +106,7 @@ void PerformanceLibraryComponent::showEditor(Performance* performance)
     // Create editor if it doesn't exist
     if (!editorComponent)
     {
-        editorComponent = std::make_unique<PerformanceEditorComponent>(performanceManager, llmClient);
+        editorComponent = std::make_unique<PerformanceEditorComponent>(performanceManager, llmClient, playerManager);
         addAndMakeVisible(*editorComponent);
         
         // Add callback to return to list

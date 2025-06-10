@@ -6,6 +6,30 @@
 #include "Song.h"
 #include "../../LLM/Core/LLMClient.h"
 
+/*
+ * CHART FORMAT DOCUMENTATION:
+ * 
+ * This system uses several different "chart" formats at different stages:
+ * 
+ * 1. LLM_RESPONSE_TEXT: Raw JSON text from the LLM containing musical notation
+ *    - Format: String containing JSON with sections, primitives, chords, patterns
+ *    - Example: "{\"title\":\"Take the A Train\",\"sections\":{\"A1\":[...]}}"
+ * 
+ * 2. PARSED_CHART: C++ Chart object parsed from LLM response
+ *    - Format: std::shared_ptr<Chart> with Section/Phrase/Bar hierarchy
+ *    - Contains: Structured musical data ready for MIDI conversion
+ * 
+ * 3. MIDI_EVENT_CHART: MIDI events in JSON/var format for Player consumption
+ *    - Format: var object with "events" array containing note_on/note_off messages
+ *    - Example: {"success":true,"tempo":120,"events":[{"type":"note_on",...}]}
+ * 
+ * 4. PLAYER_COMPATIBLE_CHART: Final format expected by Player::loadChart()
+ *    - Format: Same as MIDI_EVENT_CHART but validated for Player use
+ *    - Contains: All necessary properties for playback (tempo, events, metadata)
+ * 
+ * Flow: LLM_RESPONSE_TEXT → PARSED_CHART → MIDI_EVENT_CHART → PLAYER_COMPATIBLE_CHART
+ */
+
 namespace covertracks {
 
 // Forward declarations
@@ -42,38 +66,38 @@ public:
     void setLLMClient(std::shared_ptr<LLMClient> client);
     
     /**
-     * @brief Generate a musical chart
+     * @brief Generate a musical chart from LLM
      * 
-     * @param parameters Parameters for chart generation (JSON/var)
-     * @param callback Callback to be invoked when generation completes
+     * @param parameters Parameters for chart generation (var object)
+     * @param callback Callback with MIDI_EVENT_CHART (Player-compatible format)
      */
     void generateChart(const var& parameters, 
-                      std::function<void(bool success, const var& chart)> callback);
+                      std::function<void(bool success, const var& midiEventChart)> callback);
     
     /**
-     * @brief Generate a specific section
+     * @brief Generate a specific section from LLM
      * 
      * @param section The section type (e.g., "verse", "chorus")
-     * @param parameters Parameters for section generation (JSON/var)
-     * @param callback Callback to be invoked when generation completes
+     * @param parameters Parameters for section generation (var object)
+     * @param callback Callback with MIDI_EVENT_CHART (Player-compatible format)
      */
     void generateSection(const String& section, const var& parameters,
-                        std::function<void(bool success, const var& chart)> callback);
+                        std::function<void(bool success, const var& midiEventChart)> callback);
     
     /**
      * @brief Modify an existing chart
      * 
-     * @param currentChart The current chart (JSON/var)
+     * @param currentChart The current MIDI_EVENT_CHART
      * @param modification Description of modifications to make
-     * @param callback Callback to be invoked when generation completes
+     * @param callback Callback with modified MIDI_EVENT_CHART (Player-compatible format)
      */
     void modifyChart(const var& currentChart, const String& modification,
-                    std::function<void(bool success, const var& chart)> callback);
+                    std::function<void(bool success, const var& midiEventChart)> callback);
     
     /**
      * @brief Get the last generated chart
      * 
-     * @return const var& The last generated chart (for modification purposes)
+     * @return const var& The last MIDI_EVENT_CHART (Player-compatible format)
      */
     const var& getLastGeneratedChart() const;
     
@@ -120,11 +144,11 @@ public:
     PatternGenerator& getPatternGenerator() { return *patternGenerator; }
     
     /**
-     * @brief Convert notation to MIDI events
+     * @brief Convert LLM_RESPONSE_TEXT to MIDI_EVENT_CHART
      * 
-     * @param notation Pattern notation
+     * @param notation LLM_RESPONSE_TEXT (JSON string from LLM)
      * @param tempo Tempo in BPM
-     * @return var MIDI events as JSON/var
+     * @return var MIDI_EVENT_CHART (Player-compatible format)
      */
     var convertNotationToMidiEvents(const String& notation, double tempo = 120.0);
     
@@ -177,7 +201,7 @@ private:
     String lastResponseText;
     std::shared_ptr<Chart> lastGeneratedChart;
     
-    // Convert MIDI message sequence to JSON/var
+    // Convert MIDI message sequence to MIDI_EVENT_CHART format
     var midiMessageSequenceToVar(const MidiMessageSequence& sequence, double tempo = 120.0) const;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Musician)

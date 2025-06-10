@@ -5,6 +5,7 @@
 #include "PerformanceEditorComponent.h"
 #include "../../Core/PerformanceManager.h"
 #include "../../../LLM/Core/LLMClient.h"
+#include "../../../Player/Core/PlayerManager.h"
 
 namespace covertracks {
 
@@ -23,9 +24,11 @@ public:
      * 
      * @param performanceManager The performance manager to use
      * @param llmClient The LLM client for chart generation
+     * @param playerManager The player manager for loading and playing charts
      */
     PerformanceLibraryComponent(PerformanceManager* performanceManager, 
-                               std::shared_ptr<LLMClient> llmClient);
+                               std::shared_ptr<LLMClient> llmClient,
+                               PlayerManager* playerManager = nullptr);
     
     /**
      * @brief Destroy the Performance Library Component
@@ -58,6 +61,7 @@ private:
     // Core components
     PerformanceManager* performanceManager;
     std::shared_ptr<LLMClient> llmClient;
+    PlayerManager* playerManager;
     
     // UI components
     std::unique_ptr<PerformanceListComponent> listComponent;

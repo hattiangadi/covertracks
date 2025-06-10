@@ -166,23 +166,31 @@ public:
      * 
      * @param newEnsembleName The name of the ensemble to use
      */
-    void setEnsemble(const juce::String& newEnsembleName) { ensembleName = newEnsembleName; }
+    void setEnsemble(const juce::String& newEnsembleName) { 
+        ensembleName = newEnsembleName; 
+        ensembleCacheValid = false; // Invalidate cache
+    }
     
     /**
-     * @brief Get the generated patterns for a specific musician role
-     * 
-     * @param roleName The name of the musician role
-     * @return std::shared_ptr<MidiMessageSequence> The generated pattern, or nullptr if not found
+     * @brief Refresh the cached ensemble roles from disk
      */
-    std::shared_ptr<juce::MidiMessageSequence> getGeneratedPattern(const juce::String& roleName) const;
+    void refreshEnsembleCache();
     
     /**
-     * @brief Set the generated pattern for a specific musician role
+     * @brief Get the generated chart for a specific musician role
      * 
      * @param roleName The name of the musician role
-     * @param pattern The generated pattern
+     * @return juce::var The generated chart, or empty var if not found
      */
-    void setGeneratedPattern(const juce::String& roleName, std::shared_ptr<juce::MidiMessageSequence> pattern);
+    juce::var getGeneratedChart(const juce::String& roleName) const;
+    
+    /**
+     * @brief Set the generated chart for a specific musician role
+     * 
+     * @param roleName The name of the musician role
+     * @param chart The generated chart
+     */
+    void setGeneratedChart(const juce::String& roleName, const juce::var& generatedChart);
     
     /**
      * @brief Get the status message for a specific musician role
@@ -203,7 +211,7 @@ public:
     /**
      * @brief Clear all generated patterns
      */
-    void clearGeneratedPatterns();
+    void clearGeneratedCharts();
     
     /**
      * @brief Serialize the performance to a var object
@@ -241,11 +249,15 @@ private:
     juce::String genre;
     juce::String mood;
     
-    // Maps musician role names to their generated patterns
-    std::map<juce::String, std::shared_ptr<juce::MidiMessageSequence>> generatedPatterns;
+    // Maps musician role names to their generated charts
+    std::map<juce::String, juce::var> generatedCharts;
     
     // Maps musician role names to their status messages
     std::map<juce::String, juce::String> statusMessages;
+    
+    // Cached ensemble roles to avoid repeated file loading
+    mutable juce::Array<MusicianRole> cachedEnsembleRoles;
+    mutable bool ensembleCacheValid = false;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Performance)
 };

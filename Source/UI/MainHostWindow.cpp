@@ -452,7 +452,7 @@ MainHostWindow::MainHostWindow()
     // Create a PerformanceManager instance
     performanceManager = std::make_unique<PerformanceManager>();
     
-    performanceWindow = std::make_unique<PerformanceLibraryComponent>(performanceManager.get(), llmClientShared);
+    performanceWindow = std::make_unique<PerformanceLibraryComponent>(performanceManager.get(), llmClientShared, playerManager.get());
     
     std::cout << "[MainHostWindow] PerformanceLibraryComponent created" << std::endl;
     

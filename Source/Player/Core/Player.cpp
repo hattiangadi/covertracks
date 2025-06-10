@@ -718,6 +718,21 @@ void Player::generateNewChart(const var& parameters, std::function<void(bool suc
     }
 }
 
+void Player::generateChart(const var& parameters, 
+                          std::function<void(bool success, const var& midiEventChart)> callback)
+{
+    if (!musician)
+    {
+        std::cerr << "Player::generateChart - No musician available" << std::endl;
+        if (callback)
+            callback(false, var());
+        return;
+    }
+    
+    // Delegate to the internal musician
+    musician->generateChart(parameters, callback);
+}
+
 bool Player::loadChart(const var& chart)
 {
     if (!chart.isObject())

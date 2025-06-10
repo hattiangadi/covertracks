@@ -46,6 +46,7 @@ private:
     ComboBox playerSelector;
     ComboBox instrumentTypeSelector;
     ComboBox patternSelector;
+    TextButton convertButton;
     TextButton loadButton;
     TextButton playButton;
     TextButton stopButton;
@@ -56,6 +57,7 @@ private:
     // Currently selected player and pattern
     Player* selectedPlayer = nullptr;
     std::shared_ptr<Chart> currentChart = nullptr;
+    var currentMidiChart;  // MIDI_EVENT_CHART format
     
     // Pattern system for managing hierarchical patterns
     std::unique_ptr<MusicPatternSystem> patternSystem;
@@ -68,14 +70,16 @@ private:
     std::shared_ptr<Chart> createTestPattern(const juce::String& testType, const juce::String& instrument);
     
     void updatePatternViewer();
-    void loadCurrentChart();
-    void playCurrentChart();
+    void convertToMidiChart();      // Chart → MIDI_EVENT_CHART  
+    void loadMidiChart();           // MIDI_EVENT_CHART → Player
+    void playLoadedChart();         // Player::play()
     
 
     
     // Helper methods
     void updatePlayerSelector();
     void updateCurrentChart();
+    void updateButtonStates();
     juce::String getMidiNoteName(int midiNoteNumber);
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PlayerModeComponent)

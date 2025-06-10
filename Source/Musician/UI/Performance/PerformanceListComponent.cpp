@@ -15,10 +15,13 @@ PerformanceListComponent::PerformanceListComponent(PerformanceManager* pm)
     titleLabel.setJustificationType(Justification::centred);
     addAndMakeVisible(titleLabel);
     
-    // Set up list box
-    performanceList.setModel(this);
-    performanceList.setMultipleSelectionEnabled(false);
-    addAndMakeVisible(performanceList);
+    // Set up table
+    performanceTable.setModel(this);
+    performanceTable.getHeader().addColumn("Performance", 1, 150);
+    performanceTable.getHeader().addColumn("Song", 2, 150);
+    performanceTable.getHeader().addColumn("Ensemble", 3, 150);
+    performanceTable.setMultipleSelectionEnabled(false);
+    addAndMakeVisible(performanceTable);
     
     // Set up buttons
     newButton.addListener(this);
@@ -42,7 +45,7 @@ PerformanceListComponent::PerformanceListComponent(PerformanceManager* pm)
 
 PerformanceListComponent::~PerformanceListComponent()
 {
-    performanceList.setModel(nullptr);
+    performanceTable.setModel(nullptr);
     
     newButton.removeListener(this);
     editButton.removeListener(this);
@@ -54,9 +57,9 @@ void PerformanceListComponent::paint(Graphics& g)
 {
     g.fillAll(getLookAndFeel().findColour(ResizableWindow::backgroundColourId));
     
-    // Draw a border around the list
+    // Draw a border around the table
     g.setColour(Colours::grey);
-    g.drawRect(performanceList.getBounds(), 1);
+    g.drawRect(performanceTable.getBounds(), 1);
 }
 
 void PerformanceListComponent::resized()
@@ -78,8 +81,8 @@ void PerformanceListComponent::resized()
     
     bounds.removeFromBottom(10);
     
-    // List takes remaining space
-    performanceList.setBounds(bounds);
+    // Table takes remaining space
+    performanceTable.setBounds(bounds);
 }
 
 void PerformanceListComponent::buttonClicked(Button* button)
@@ -113,7 +116,15 @@ int PerformanceListComponent::getNumRows()
     return performances.size();
 }
 
-void PerformanceListComponent::paintListBoxItem(int rowNumber, Graphics& g, int width, int height, bool rowIsSelected)
+void PerformanceListComponent::paintRowBackground(Graphics& g, int rowNumber, int /*width*/, int /*height*/, bool rowIsSelected)
+{
+    if (rowIsSelected)
+        g.fillAll(getLookAndFeel().findColour(TextEditor::highlightColourId));
+    else
+        g.fillAll(getLookAndFeel().findColour(ListBox::backgroundColourId));
+}
+
+void PerformanceListComponent::paintCell(Graphics& g, int rowNumber, int columnId, int width, int height, bool /*rowIsSelected*/)
 {
     if (rowNumber < 0 || rowNumber >= performances.size())
         return;
@@ -122,32 +133,36 @@ void PerformanceListComponent::paintListBoxItem(int rowNumber, Graphics& g, int 
     if (!performance)
         return;
     
-    // Background
-    if (rowIsSelected)
-        g.fillAll(getLookAndFeel().findColour(TextEditor::highlightColourId));
-    else
-        g.fillAll(getLookAndFeel().findColour(ListBox::backgroundColourId));
-    
-    // Text
     g.setColour(getLookAndFeel().findColour(ListBox::textColourId));
     g.setFont(Font(FontOptions().withHeight(14.0f)));
     
-    auto textArea = Rectangle<int>(5, 0, width - 10, height);
+    String text;
+    if (columnId == 1) // Performance name
+    {
+        text = performance->getName();
+    }
+    else if (columnId == 2) // Song name
+    {
+        if (auto song = performance->getSong())
+            text = song->getTitle();
+        else
+            text = "No Song";
+    }
+    else if (columnId == 3) // Ensemble name
+    {
+        String ensembleName = performance->getEnsembleName();
+        if (ensembleName.isEmpty())
+            text = "No Ensemble";
+        else
+            text = ensembleName;
+    }
     
-    // Performance name
-    g.drawText(performance->getName(), textArea.removeFromTop(height / 2), 
-               Justification::centredLeft, true);
-    
-    // Performance info (ensemble size, etc.)
-    String info = "Ensemble: " + String(performance->getEnsemble().size()) + " players";
-    g.setFont(Font(FontOptions().withHeight(12.0f)));
-    g.setColour(getLookAndFeel().findColour(ListBox::textColourId).withAlpha(0.7f));
-    g.drawText(info, textArea, Justification::centredLeft, true);
+    g.drawText(text, Rectangle<int>(4, 0, width - 8, height), Justification::centredLeft, true);
 }
 
-void PerformanceListComponent::listBoxItemClicked(int row, const MouseEvent& /*e*/)
+void PerformanceListComponent::cellClicked(int rowNumber, int /*columnId*/, const MouseEvent& /*e*/)
 {
-    selectedRow = row;
+    selectedRow = rowNumber;
     updateButtonStates();
     
     auto* selected = getSelectedPerformance();
@@ -155,9 +170,9 @@ void PerformanceListComponent::listBoxItemClicked(int row, const MouseEvent& /*e
         listeners.call(&Listener::performanceSelected, selected);
 }
 
-void PerformanceListComponent::listBoxItemDoubleClicked(int row, const MouseEvent& /*e*/)
+void PerformanceListComponent::cellDoubleClicked(int rowNumber, int /*columnId*/, const MouseEvent& /*e*/)
 {
-    selectedRow = row;
+    selectedRow = rowNumber;
     auto* selected = getSelectedPerformance();
     if (selected)
         listeners.call(&Listener::editPerformanceRequested, selected);
@@ -176,7 +191,7 @@ void PerformanceListComponent::removeListener(Listener* listener)
 void PerformanceListComponent::refreshList()
 {
     loadPerformances();
-    performanceList.updateContent();
+    performanceTable.updateContent();
     updateButtonStates();
 }
 

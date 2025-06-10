@@ -5,7 +5,8 @@ namespace covertracks {
 PlayerModeComponent::PlayerModeComponent(PlayerManager& pm)
     : playerManager(pm),
       titleLabel("titleLabel", "Pattern Player"),
-      loadButton("Load"),
+      convertButton("Convert to MIDI"),
+      loadButton("Load Chart"),
       playButton("Play"),
       stopButton("Stop")
 {
@@ -53,6 +54,10 @@ PlayerModeComponent::PlayerModeComponent(PlayerManager& pm)
     addAndMakeVisible(patternViewer);
     
     // Set up buttons
+    convertButton.addListener(this);
+    convertButton.setEnabled(false);
+    addAndMakeVisible(convertButton);
+    
     loadButton.addListener(this);
     loadButton.setEnabled(false);
     addAndMakeVisible(loadButton);
@@ -87,6 +92,7 @@ PlayerModeComponent::~PlayerModeComponent()
     playerSelector.removeListener(this);
     instrumentTypeSelector.removeListener(this);
     patternSelector.removeListener(this);
+    convertButton.removeListener(this);
     loadButton.removeListener(this);
     playButton.removeListener(this);
     stopButton.removeListener(this);
@@ -146,24 +152,31 @@ void PlayerModeComponent::resized()
     
     // Position the buttons
     row = bounds.removeFromTop(30);
-    auto buttonArea = row.withWidth(row.getWidth() / 2);
-    loadButton.setBounds(buttonArea.removeFromLeft(100));
-    playButton.setBounds(buttonArea.removeFromLeft(100));
-    stopButton.setBounds(buttonArea.removeFromLeft(100));
+    auto buttonArea = row;
+    int buttonWidth = buttonArea.getWidth() / 4;
+    convertButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(2));
+    loadButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(2));
+    playButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(2));
+    stopButton.setBounds(buttonArea.reduced(2));
     
 }
 
 void PlayerModeComponent::buttonClicked(juce::Button* button)
 {
-    if (button == &loadButton)
+    if (button == &convertButton)
     {
-        // Load the current chart into the player
-        loadCurrentChart();
+        // Convert Chart to MIDI_EVENT_CHART format
+        convertToMidiChart();
+    }
+    else if (button == &loadButton)
+    {
+        // Load the MIDI_EVENT_CHART into the player
+        loadMidiChart();
     }
     else if (button == &playButton)
     {
         // Play the loaded chart
-        playCurrentChart();
+        playLoadedChart();
     }
     else if (button == &stopButton)
     {
@@ -172,9 +185,8 @@ void PlayerModeComponent::buttonClicked(juce::Button* button)
         {
             selectedPlayer->stop();
             
-            // Update button states - enable both load and play since chart might still be loaded
-            loadButton.setEnabled(selectedPlayer != nullptr && currentChart != nullptr);
-            playButton.setEnabled(true);  // Can still play the loaded chart
+            // Update button states
+            playButton.setEnabled(true);   // Can still play the loaded chart
             stopButton.setEnabled(false);
         }
     }
@@ -195,17 +207,14 @@ void PlayerModeComponent::comboBoxChanged(juce::ComboBox* comboBox)
                 selectedPlayer = players[selectedId - 1];
             }
             
-            // Enable load button if we have a player and a chart
-            loadButton.setEnabled(selectedPlayer != nullptr && currentChart != nullptr);
-            // Play button will be enabled after loading
-            playButton.setEnabled(false);
+            // Update button states
+            updateButtonStates();
         }
         else
         {
             // No player selected
             selectedPlayer = nullptr;
-            loadButton.setEnabled(false);
-            playButton.setEnabled(false);
+            updateButtonStates();
         }
     }
     else if (comboBox == &instrumentTypeSelector || comboBox == &patternSelector)
@@ -239,8 +248,7 @@ void PlayerModeComponent::changeListenerCallback(juce::ChangeBroadcaster* source
             if (!playerStillExists)
             {
                 selectedPlayer = nullptr;
-                loadButton.setEnabled(false);
-                playButton.setEnabled(false);
+                updateButtonStates();
             }
         }
     }
@@ -283,9 +291,7 @@ void PlayerModeComponent::updatePlayerSelector()
     }
     
     // Update button states
-    loadButton.setEnabled(selectedPlayer != nullptr && currentChart != nullptr);
-    // Play button will be enabled after loading
-    playButton.setEnabled(false);
+    updateButtonStates();
 }
 
 void PlayerModeComponent::createDefaultPatterns()
@@ -1511,39 +1517,37 @@ void PlayerModeComponent::updateCurrentChart()
     // Update the pattern viewer
     updatePatternViewer();
     
-    // Enable/disable load button based on whether we have a chart and player
-    loadButton.setEnabled(currentChart != nullptr && selectedPlayer != nullptr);
-    // Play button will be enabled after loading
-    playButton.setEnabled(false);
+    // Update button states for the new workflow
+    updateButtonStates();
 }
 
-void PlayerModeComponent::loadCurrentChart()
+void PlayerModeComponent::updateButtonStates()
+{
+    bool hasChart = (currentChart != nullptr);
+    bool hasMidiChart = !currentMidiChart.isVoid();
+    bool hasPlayer = (selectedPlayer != nullptr);
+    
+    convertButton.setEnabled(hasChart && hasPlayer);
+    loadButton.setEnabled(hasMidiChart && hasPlayer);
+    playButton.setEnabled(false);  // Enabled after loading
+    stopButton.setEnabled(false);
+}
+
+void PlayerModeComponent::convertToMidiChart()
 {
     if (currentChart == nullptr || selectedPlayer == nullptr)
     {
+        std::cerr << "PlayerMode::convertToMidiChart - No chart or player selected" << std::endl;
         return;
     }
     
-    // Get the pattern style from the selector
-    int patternType = patternSelector.getSelectedId();
-    juce::String patternStyle;
-    
-    switch (patternType)
-    {
-        case 1: patternStyle = "Basic"; break;
-        case 2: patternStyle = "Complex"; break;
-        case 3: patternStyle = "Funky"; break;
-        case 4: patternStyle = "Jazzy"; break;
-        default: patternStyle = "Basic"; break;
-    }
-    
-    std::cout << "Playing " << patternStyle << " pattern" << std::endl;
+    std::cout << "Converting Chart to MIDI_EVENT_CHART format..." << std::endl;
     
     // Convert the chart to a MIDI sequence
     auto midiSequence = currentChart->toMidiSequence();
     
-    // Create the pattern var
-    juce::DynamicObject* patternObj = new juce::DynamicObject();
+    // Create the MIDI_EVENT_CHART var object
+    juce::DynamicObject* chartObj = new juce::DynamicObject();
     juce::Array<juce::var> events;
     
     // Convert MIDI sequence to the expected format
@@ -1606,12 +1610,15 @@ void PlayerModeComponent::loadCurrentChart()
         events.add(juce::var(allNotesOff));
     }
     
-    patternObj->setProperty("events", events);
-    patternObj->setProperty("tempo", currentChart->getTempo());
-    juce::var patternVar(patternObj);
+    chartObj->setProperty("events", events);
+    chartObj->setProperty("tempo", currentChart->getTempo());
+    chartObj->setProperty("success", true);
     
-    // Update the pattern viewer to show what we're loading
-    juce::String text = juce::String("Loaded ") + currentChart->getTitle() + juce::String(":\n");
+    // Store the MIDI_EVENT_CHART
+    currentMidiChart = juce::var(chartObj);
+    
+    // Update the pattern viewer to show conversion results
+    juce::String text = juce::String("Converted ") + currentChart->getTitle() + juce::String(" to MIDI_EVENT_CHART:\n");
     text += juce::String("Tempo: ") + juce::String(currentChart->getTempo()) + juce::String(" BPM\n");
     text += juce::String("Total events: ") + juce::String(events.size()) + juce::String("\n\n");
     
@@ -1646,30 +1653,52 @@ void PlayerModeComponent::loadCurrentChart()
     
     patternViewer.setText(text);
     
-    // Load the MIDI data into the selected player
-    if (selectedPlayer->loadChart(patternVar))
-    {
-        // Update button states - chart is loaded, ready to play
-        loadButton.setEnabled(false);
-        playButton.setEnabled(true);
-        stopButton.setEnabled(false);
-        
-        std::cout << "Chart loaded into player " << selectedPlayer->getMetadata().name << std::endl;
-    }
-    else
-    {
-        std::cerr << "Failed to load chart into player" << std::endl;
-    }
+    std::cout << "Chart converted to MIDI_EVENT_CHART with " << events.size() << " events" << std::endl;
+    
+    // Update button states
+    updateButtonStates();
 }
 
-void PlayerModeComponent::playCurrentChart()
+void PlayerModeComponent::loadMidiChart()
 {
-    if (selectedPlayer == nullptr)
+    if (currentMidiChart.isVoid() || selectedPlayer == nullptr)
     {
+        std::cerr << "PlayerMode::loadMidiChart - No MIDI chart or player available" << std::endl;
         return;
     }
     
-    // Simply play the loaded chart
+    std::cout << "Loading MIDI_EVENT_CHART into player..." << std::endl;
+    
+    // Load the MIDI_EVENT_CHART into the selected player (same as Performance workflow)
+    if (selectedPlayer->loadChart(currentMidiChart))
+    {
+        // Update button states - chart is loaded, ready to play
+        playButton.setEnabled(true);
+        stopButton.setEnabled(false);
+        
+        std::cout << "MIDI_EVENT_CHART loaded into player " << selectedPlayer->getMetadata().name << std::endl;
+        
+        // Update pattern viewer
+        patternViewer.setText(patternViewer.getText() + "\n\nMIDI_EVENT_CHART successfully loaded into Player!");
+    }
+    else
+    {
+        std::cerr << "Failed to load MIDI_EVENT_CHART into player" << std::endl;
+        patternViewer.setText(patternViewer.getText() + "\n\nERROR: Failed to load MIDI_EVENT_CHART into Player!");
+    }
+}
+
+void PlayerModeComponent::playLoadedChart()
+{
+    if (selectedPlayer == nullptr)
+    {
+        std::cerr << "PlayerMode::playLoadedChart - No player available" << std::endl;
+        return;
+    }
+    
+    std::cout << "Starting playback on player..." << std::endl;
+    
+    // Simply play the loaded chart (same as Performance workflow)
     if (selectedPlayer->play())
     {
         // Update button states
@@ -1677,10 +1706,14 @@ void PlayerModeComponent::playCurrentChart()
         stopButton.setEnabled(true);
         
         std::cout << "Started playback on player " << selectedPlayer->getMetadata().name << std::endl;
+        
+        // Update pattern viewer
+        patternViewer.setText(patternViewer.getText() + "\n\nPlayback started!");
     }
     else
     {
         std::cerr << "Failed to start playback - no chart loaded?" << std::endl;
+        patternViewer.setText(patternViewer.getText() + "\n\nERROR: Failed to start playback!");
     }
 }
 

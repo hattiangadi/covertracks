@@ -847,7 +847,7 @@ void PerformanceComponent::startGeneration()
     if (currentPerformance)
     {
         currentPerformance->setInstructions(currentInstructions);
-        currentPerformance->clearGeneratedPatterns();
+        currentPerformance->clearGeneratedCharts();
     }
     
     // Clear previous statuses
@@ -915,7 +915,8 @@ void PerformanceComponent::startGeneration()
                     // Store the pattern in the current performance
                     if (currentPerformance)
                     {
-                        currentPerformance->setGeneratedPattern(role.getName(), pattern);
+                        // TODO: Convert MidiMessageSequence to chart var format
+                        // currentPerformance->setGeneratedChart(role.getName(), pattern);
                         currentPerformance->setStatusMessage(role.getName(), "Generated");
                         
                         // Save the performance
@@ -1020,7 +1021,8 @@ void PerformanceComponent::startGenerationForRole(const MusicianRole& role)
                     // Store the pattern in the current performance
                     if (currentPerformance)
                     {
-                        currentPerformance->setGeneratedPattern(role.getName(), pattern);
+                        // TODO: Convert MidiMessageSequence to chart var format
+                        // currentPerformance->setGeneratedChart(role.getName(), pattern);
                         currentPerformance->setStatusMessage(role.getName(), "Generated");
                         
                         // Save the performance
@@ -1314,10 +1316,11 @@ void PerformanceComponent::loadPerformance(std::shared_ptr<Performance> performa
     for (int i = 0; i < musicianStatusTable.getMusicianRoles().size(); ++i)
     {
         const auto& role = musicianStatusTable.getMusicianRoles()[i];
-        auto pattern = performance->getGeneratedPattern(role.name);
-        if (pattern)
+        auto chart = performance->getGeneratedChart(role.name);
+        if (!chart.isVoid())
         {
-            ensembleManager->setMIDIPatternForRole(role.getName(), pattern);
+            // For now, skip setting MIDI pattern since we need conversion
+            // TODO: Convert chart var back to MidiMessageSequence if needed
         }
     }
     
@@ -1326,7 +1329,7 @@ void PerformanceComponent::loadPerformance(std::shared_ptr<Performance> performa
     for (int i = 0; i < musicianStatusTable.getMusicianRoles().size(); ++i)
     {
         const auto& role = musicianStatusTable.getMusicianRoles()[i];
-        if (performance->getGeneratedPattern(role.name) != nullptr)
+        if (!performance->getGeneratedChart(role.name).isVoid())
         {
             hasGeneratedPatterns = true;
             break;

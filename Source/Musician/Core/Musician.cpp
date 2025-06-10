@@ -312,10 +312,7 @@ var Musician::convertNotationToMidiEvents(const String& notation, double tempo)
         // Convert the chart to MIDI events
         var result = midiMessageSequenceToVar(*chart->toMidiSequence(), chart->getTempo());
         
-        // Explicitly break any reference cycles
-        chart->clearReferences();
-        
-        // Return the MIDI events
+        // Return the MIDI events (don't clear references to avoid destroying the chart)
         return result;
     }
     

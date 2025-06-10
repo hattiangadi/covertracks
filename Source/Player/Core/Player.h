@@ -182,6 +182,15 @@ public:
     bool loadChartFromMusician();
     
     /**
+     * @brief Generate a chart using the internal Musician
+     * 
+     * @param parameters Parameters for chart generation (var object)
+     * @param callback Callback with MIDI_EVENT_CHART (Player-compatible format)
+     */
+    void generateChart(const var& parameters, 
+                      std::function<void(bool success, const var& midiEventChart)> callback);
+    
+    /**
      * @brief Modify the current chart
      * 
      * @param modifications Description of modifications to make
