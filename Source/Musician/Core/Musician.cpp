@@ -330,6 +330,9 @@ const var& Musician::getLastGeneratedChart() const
 
 var Musician::convertNotationToMidiEvents(const String& notation, double tempo)
 {
+    // Create result object
+    DynamicObject::Ptr result = new DynamicObject();
+    
     // Parse the notation to create a chart
     auto parser = PatternParser(*patternSystem);
     auto chart = parser.parseLLMResponse(notation);
@@ -341,14 +344,22 @@ var Musician::convertNotationToMidiEvents(const String& notation, double tempo)
             chart->setTempo(tempo);
         
         // Convert the chart to MIDI events
-        var result = midiMessageSequenceToVar(*chart->toMidiSequence(), chart->getTempo());
+        var midiEvents = midiMessageSequenceToVar(*chart->toMidiSequence(), chart->getTempo());
         
-        // Return the MIDI events (don't clear references to avoid destroying the chart)
-        return result;
+        // Create success response
+        result->setProperty("success", true);
+        result->setProperty("tempo", chart->getTempo());
+        result->setProperty("events", midiEvents);
+        
+        return var(result.get());
     }
     
-    // Return an empty array if parsing failed
-    return var(Array<var>());
+    // Create failure response
+    result->setProperty("success", false);
+    result->setProperty("tempo", tempo);
+    result->setProperty("events", Array<var>());
+    
+    return var(result.get());
 }
 
 var Musician::midiMessageSequenceToVar(const MidiMessageSequence& sequence, double /*tempo*/) const

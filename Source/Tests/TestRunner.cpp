@@ -3,6 +3,8 @@
 // Include all test files
 #include "PatternParserTests.cpp"
 #include "PatternGeneratorTests.h"
+#include "MusicianTests.cpp"
+#include "MusicianAdvancedTests.cpp"
 
 namespace covertracks {
 
@@ -24,6 +26,17 @@ void runAllTests()
     
     // Run the pattern generator tests  
     runner.runTests({&patternGeneratorUtilityTests, &patternGeneratorIntegrationTests});
+    
+    std::cout << "\nRunning Musician tests...\n" << std::endl;
+    
+    // Run the basic musician tests
+    runner.runTests({&musicianBasicTests, &musicianChartTests, &musicianAsyncTests});
+    
+    std::cout << "\nRunning Musician advanced tests...\n" << std::endl;
+    
+    // Run the advanced musician tests  
+    runner.runTests({&musicianPatternGeneratorTests, &musicianChartFormatTests, 
+                     &musicianMemoryLeakTests, &musicianConcurrencyTests});
     
     // Print results
     int numTests = runner.getNumResults();
