@@ -9,7 +9,9 @@
       "Bash(git add:*)",
       "Bash(xcodebuild:*)",
       "Bash(timeout 60 xcodebuild:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(git merge:*)",
+      "Bash(git push:*)"
     ],
     "deny": []
   }

@@ -53,15 +53,51 @@ bool PatternGenerator::validateResponse(const String& response)
     if (response.isEmpty())
         return false;
     
-    // Check for JSON-like structure or pattern notation keywords
-    bool hasJsonStructure = response.contains("{") && response.contains("}");
+    // Check for basic pattern elements first
     bool hasPatternElements = response.contains("tempo") || 
                              response.contains("sections") || 
                              response.contains("primitives") ||
                              response.contains("bars") ||
                              response.contains("patterns");
     
-    return hasJsonStructure || hasPatternElements;
+    // If no pattern elements, definitely invalid
+    if (!hasPatternElements)
+        return false;
+    
+    // If it looks like JSON (has braces and quoted properties), try to parse it
+    bool looksLikeJson = response.contains("{") && 
+                        (response.contains("\"tempo\"") || response.contains("\"sections\"") || 
+                         response.contains("\"primitives\"") || response.contains("\"bars\"") || 
+                         response.contains("\"patterns\""));
+                        
+    if (looksLikeJson)
+    {
+        var parsedJson;
+        Result parseResult = JSON::parse(response, parsedJson);
+        
+        // If it has braces but fails to parse as JSON, it's malformed
+        if (parseResult.failed())
+            return false;
+        
+        // If JSON parsing succeeds, check if it contains music pattern structure
+        if (parsedJson.isObject())
+        {
+            DynamicObject* obj = parsedJson.getDynamicObject();
+            if (obj)
+            {
+                return obj->hasProperty("tempo") || 
+                       obj->hasProperty("sections") || 
+                       obj->hasProperty("primitives") ||
+                       obj->hasProperty("bars") ||
+                       obj->hasProperty("patterns");
+            }
+        }
+        
+        return false;
+    }
+    
+    // If it doesn't look like JSON but has pattern elements, accept it
+    return true;
 }
 
 } // namespace covertracks
