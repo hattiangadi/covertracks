@@ -241,6 +241,9 @@ void PerformanceEditorComponent::loadPerformance(Performance* performance)
     
     if (currentPerformance)
     {
+        // Clean up any stale status messages from older format versions
+        currentPerformance->cleanupStaleStatusMessages();
+        
         // Load existing performance
         nameEditor.setText(currentPerformance->getName());
         descriptionEditor.setText(currentPerformance->getDescription());
@@ -269,6 +272,9 @@ void PerformanceEditorComponent::loadPerformance(Performance* performance)
                 break;
             }
         }
+        
+        // Load ensemble with PlayerManager to get proper player assignments
+        refreshPerformanceEnsembleCache();
     }
     else
     {
@@ -366,49 +372,63 @@ void PerformanceEditorComponent::saveCurrentPerformance()
 
 void PerformanceEditorComponent::generateChartForPlayer(int playerIndex)
 {
+    DBG("DEBUG: generateChartForPlayer called with playerIndex: " << playerIndex);
+    
     if (!currentPerformance)
     {
+        DBG("DEBUG: No performance available");
         statusDisplay.setText("No performance available");
         return;
     }
     
     if (!playerManager)
     {
+        DBG("DEBUG: No player manager available");
         statusDisplay.setText("No player manager available");
         return;
     }
     
-    auto ensemble = currentPerformance->getEnsemble();
+    auto ensemble = getPerformanceEnsemble();
+    DBG("DEBUG: Ensemble size: " << ensemble.size());
     if (playerIndex < 0 || playerIndex >= ensemble.size())
     {
+        DBG("DEBUG: Invalid player index: " << playerIndex << " (ensemble size: " << ensemble.size() << ")");
         statusDisplay.setText("Invalid player index: " + String(playerIndex));
         return;
     }
     
     const auto role = ensemble[playerIndex];
+    DBG("DEBUG: Role found: " << role.getName() << " with instrument: " << role.getInstrumentName());
     statusDisplay.setText("Generating chart for " + role.getName() + "...");
     
-    // Find the player for this role
+    // Use the player assigned to this role in the ensemble
     Player* player = role.player;
+    DBG("DEBUG: Role " << role.getName() << " (" << role.getInstrumentName() << ") player pointer: " << (player ? "exists" : "null"));
+    
     if (!player)
     {
-        // Try to find a player by name in the PlayerManager
-        auto players = playerManager->getPlayers();
-        for (auto* p : players)
-        {
-            if (p && p->getMetadata().name == role.getName())
-            {
-                player = p;
-                break;
-            }
-        }
-        
-        if (!player)
-        {
-            statusDisplay.setText("No player assigned to role " + role.getName());
-            return;
-        }
+        DBG("DEBUG: No player assigned to role: " << role.getName());
+        statusDisplay.setText("No player assigned to role " + role.getName() + " (" + role.getInstrumentName() + ")");
+        return;
     }
+    
+    // Ensure this player has the LLM client set
+    if (llmClient)
+    {
+        player->setLLMClient(llmClient);
+        DBG("DEBUG: Set LLM client on player: " << player->getMetadata().name);
+    }
+    
+    DBG("DEBUG: Player found, proceeding with chart generation");
+    
+    // Ensure the player is initialized before generating charts
+    if (!player->initialize())
+    {
+        DBG("DEBUG: Failed to initialize player: " << player->getMetadata().name);
+        statusDisplay.setText("Failed to initialize player " + role.getName());
+        return;
+    }
+    DBG("DEBUG: Player initialized successfully");
     
     // Create parameters for chart generation
     var parameters = var(new DynamicObject());
@@ -467,8 +487,16 @@ void PerformanceEditorComponent::generateChartForPlayer(int playerIndex)
     
     // Generate chart using Player interface (delegates to internal Musician)
     String roleName = role.getName();
+    DBG("DEBUG: About to call player->generateChart for role: " << roleName);
+    
+    // Create a counter to track callback calls
+    static std::atomic<int> callbackCounter{0};
+    int thisCallbackId = ++callbackCounter;
+    
     player->generateChart(parameters, [this, roleName](bool success, var chart)
     {
+        DBG("DEBUG: generateChart callback received for " << roleName << " - success: " << (success ? "true" : "false"));
+        
         if (success)
         {
             // Store the generated chart in the performance
@@ -502,7 +530,7 @@ void PerformanceEditorComponent::loadChartForPlayer(int playerIndex)
         return;
     }
     
-    auto ensemble = currentPerformance->getEnsemble();
+    auto ensemble = getPerformanceEnsemble();
     if (playerIndex < 0 || playerIndex >= ensemble.size())
     {
         statusDisplay.setText("Invalid player index: " + String(playerIndex));
@@ -512,8 +540,24 @@ void PerformanceEditorComponent::loadChartForPlayer(int playerIndex)
     const auto role = ensemble[playerIndex];
     statusDisplay.setText("Loading chart for " + role.getName() + "...");
     
+    // Debug: Let's see what role names are actually stored
+    auto storedRoleNames = currentPerformance->getGeneratedChartRoleNames();
+    DBG("DEBUG: All stored charts in performance (" << storedRoleNames.size() << " total):");
+    for (int i = 0; i < storedRoleNames.size(); ++i) {
+        DBG("DEBUG:   - '" << storedRoleNames[i] << "'");
+    }
+    
     // Get the generated chart for this role
     var chart = currentPerformance->getGeneratedChart(role.getName());
+    
+    // Debug: Let's see what's actually stored
+    DBG("DEBUG: Looking for chart for role: " << role.getName());
+    DBG("DEBUG: Chart isVoid: " << (chart.isVoid() ? "true" : "false"));
+    DBG("DEBUG: Chart isObject: " << (chart.isObject() ? "true" : "false"));
+    if (!chart.isVoid()) {
+        DBG("DEBUG: Chart type: " << chart.toString());
+    }
+    
     if (chart.isVoid())
     {
         statusDisplay.setText("No chart generated for " + role.getName() + " - generate first");
@@ -527,26 +571,12 @@ void PerformanceEditorComponent::loadChartForPlayer(int playerIndex)
         return;
     }
     
-    // Find an existing player for this role or use the one assigned to the role
+    // Use the player assigned to this role in the ensemble
     Player* player = role.player;
     if (!player)
     {
-        // Try to find a player by name in the PlayerManager
-        auto players = playerManager->getPlayers();
-        for (auto* p : players)
-        {
-            if (p && p->getMetadata().name == role.getName())
-            {
-                player = p;
-                break;
-            }
-        }
-        
-        if (!player)
-        {
-            statusDisplay.setText("No player assigned to role " + role.getName());
-            return;
-        }
+        statusDisplay.setText("No player assigned to role " + role.getName() + " (" + role.getInstrumentName() + ")");
+        return;
     }
     
     // The chart is already in the correct format from Musician
@@ -571,7 +601,7 @@ void PerformanceEditorComponent::playPlayer(int playerIndex)
         return;
     }
     
-    auto ensemble = currentPerformance->getEnsemble();
+    auto ensemble = getPerformanceEnsemble();
     if (playerIndex < 0 || playerIndex >= ensemble.size())
     {
         statusDisplay.setText("Invalid player index: " + String(playerIndex));
@@ -580,26 +610,12 @@ void PerformanceEditorComponent::playPlayer(int playerIndex)
     
     const auto role = ensemble[playerIndex];
     
-    // Get the player for this role
+    // Use the player assigned to this role in the ensemble
     Player* player = role.player;
     if (!player)
     {
-        // Try to find a player by name in the PlayerManager
-        auto players = playerManager->getPlayers();
-        for (auto* p : players)
-        {
-            if (p && p->getMetadata().name == role.getName())
-            {
-                player = p;
-                break;
-            }
-        }
-        
-        if (!player)
-        {
-            statusDisplay.setText("No player found for " + role.getName() + " - load chart first");
-            return;
-        }
+        statusDisplay.setText("No player assigned to role " + role.getName() + " (" + role.getInstrumentName() + ") - load chart first");
+        return;
     }
     
     // Start playing - Player::play() returns bool
@@ -623,7 +639,7 @@ void PerformanceEditorComponent::loadAllCharts()
         return;
     }
     
-    auto ensemble = currentPerformance->getEnsemble();
+    auto ensemble = getPerformanceEnsemble();
     if (ensemble.isEmpty())
     {
         statusDisplay.setText("No ensemble selected");
@@ -670,7 +686,7 @@ void PerformanceEditorComponent::playAllPlayers()
         return;
     }
     
-    auto ensemble = currentPerformance->getEnsemble();
+    auto ensemble = getPerformanceEnsemble();
     if (ensemble.isEmpty())
     {
         statusDisplay.setText("No ensemble selected");
@@ -688,19 +704,6 @@ void PerformanceEditorComponent::playAllPlayers()
         const auto role = ensemble[i];
         
         Player* player = role.player;
-        if (!player)
-        {
-            // Try to find a player by name in the PlayerManager
-            auto players = playerManager->getPlayers();
-            for (auto* p : players)
-            {
-                if (p && p->getMetadata().name == role.getName())
-                {
-                    player = p;
-                    break;
-                }
-            }
-        }
         
         if (player)
         {
@@ -735,7 +738,7 @@ void PerformanceEditorComponent::stopAllPlayers()
         return;
     }
     
-    auto ensemble = currentPerformance->getEnsemble();
+    auto ensemble = getPerformanceEnsemble();
     if (ensemble.isEmpty())
     {
         statusDisplay.setText("No ensemble selected");
@@ -752,19 +755,6 @@ void PerformanceEditorComponent::stopAllPlayers()
         const auto role = ensemble[i];
         
         Player* player = role.player;
-        if (!player)
-        {
-            // Try to find a player by name in the PlayerManager
-            auto players = playerManager->getPlayers();
-            for (auto* p : players)
-            {
-                if (p && p->getMetadata().name == role.getName())
-                {
-                    player = p;
-                    break;
-                }
-            }
-        }
         
         if (player)
         {
@@ -924,8 +914,8 @@ void PerformanceEditorComponent::ensembleSelectionChanged()
         if (currentPerformance)
         {
             currentPerformance->setEnsembleName(selectedEnsemble);
-            // Refresh the ensemble cache since we changed ensembles
-            currentPerformance->refreshEnsembleCache();
+            // Refresh the ensemble cache since we changed ensembles, but do it here with PlayerManager
+            refreshPerformanceEnsembleCache();
         }
         else
         {
@@ -1007,17 +997,18 @@ void PerformanceEditorComponent::PlayerTable::paintCell(Graphics& g, int rowNumb
             if (columnId == 2) text = role.getInstrumentName();
             if (columnId == 3) 
             {
-                // Show the actual status from the performance
-                String status = parent->currentPerformance->getStatusMessage(role.getName());
-                if (status.isEmpty())
+                // Check if chart actually exists first
+                auto chart = parent->currentPerformance->getGeneratedChart(role.getName());
+                if (!chart.isVoid())
                 {
-                    // Check if chart exists
-                    auto chart = parent->currentPerformance->getGeneratedChart(role.getName());
-                    text = !chart.isVoid() ? "Chart Generated" : "No Chart";
+                    // Chart exists, show the stored status or default to "Chart Generated"
+                    String status = parent->currentPerformance->getStatusMessage(role.getName());
+                    text = status.isEmpty() ? "Chart Generated" : status;
                 }
                 else
                 {
-                    text = status;
+                    // No chart exists, always show "No Chart" regardless of stored status
+                    text = "No Chart";
                 }
             }
         }
@@ -1160,6 +1151,44 @@ Array<MusicianRole> PerformanceEditorComponent::PlayerTable::getEnsembleRolesFro
     }
     
     return roles;
+}
+
+void PerformanceEditorComponent::refreshPerformanceEnsembleCache()
+{
+    // Cache ensemble roles with proper player assignments using PlayerManager
+    cachedEnsembleRoles.clear();
+    
+    if (!currentPerformance || !playerManager)
+        return;
+    
+    String ensembleName = currentPerformance->getEnsembleName();
+    if (ensembleName.isEmpty())
+        return;
+    
+    // Load the ensemble with PlayerManager to get proper player assignments
+    Array<File> ensembleFiles = EnsembleManager::getEnsembleFiles();
+    
+    for (const auto& file : ensembleFiles)
+    {
+        auto ensemble = EnsembleManager::loadFromFile(file, playerManager); // Pass PlayerManager!
+        if (ensemble && ensemble->getName() == ensembleName)
+        {
+            cachedEnsembleRoles = ensemble->getMusicianRoles();
+            DBG("PerformanceEditorComponent: Loaded ensemble '" << ensembleName << "' with " << cachedEnsembleRoles.size() << " roles");
+            
+            // Debug player assignments
+            for (const auto& role : cachedEnsembleRoles)
+            {
+                DBG("Role: " << role.getName() << " (" << role.getInstrumentName() << ") - Player: " << (role.player ? role.player->getMetadata().name : "null"));
+            }
+            break;
+        }
+    }
+}
+
+juce::Array<MusicianRole> PerformanceEditorComponent::getPerformanceEnsemble() const
+{
+    return cachedEnsembleRoles;
 }
 
 } // namespace covertracks

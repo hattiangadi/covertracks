@@ -83,6 +83,9 @@ private:
     String pendingEnsembleName;
     std::shared_ptr<Song> pendingSong;
     
+    // Cached ensemble roles with proper player assignments
+    mutable juce::Array<MusicianRole> cachedEnsembleRoles;
+    
     // UI components - Header
     Label titleLabel;
     TextEditor nameEditor;
@@ -168,6 +171,10 @@ private:
     // Ensemble selection
     void updateEnsembleSelector();
     void ensembleSelectionChanged();
+    
+    // Ensemble caching with PlayerManager
+    void refreshPerformanceEnsembleCache();
+    juce::Array<MusicianRole> getPerformanceEnsemble() const;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PerformanceEditorComponent)
 };

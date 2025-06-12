@@ -413,14 +413,25 @@ std::unique_ptr<EnsembleManager> EnsembleManager::fromVar(const juce::var& v, Pl
                 if (roleObj->hasProperty("playerId") && playerManager)
                 {
                     juce::String playerId = roleObj->getProperty("playerId").toString();
+                    DBG("EnsembleManager: Looking for player with ID: " << playerId);
                     for (auto* p : playerManager->getPlayers())
                     {
+                        DBG("EnsembleManager: Found player with ID: " << p->getId() << " (name: " << p->getMetadata().name << ")");
                         if (p->getId() == playerId)
                         {
                             player = p;
+                            DBG("EnsembleManager: Matched player '" << p->getMetadata().name << "' to role '" << roleName << "'");
                             break;
                         }
                     }
+                    if (!player)
+                    {
+                        DBG("EnsembleManager: No player found with ID: " << playerId << " for role: " << roleName);
+                    }
+                }
+                else
+                {
+                    DBG("EnsembleManager: No playerId property for role: " << roleName << " or no playerManager");
                 }
                 
                 // Add the role
