@@ -54,6 +54,7 @@ AudioProcessorGraph* getProcessorGraph() { return processorGraph.get(); }
 
 // MIDI pattern playback (existing methods)
 bool playMIDIPattern(const var& pattern, double tempo = 120.0);
+bool playMIDISequence(const MidiMessageSequence& sequence, double tempo = 120.0);
 void stopPlayback();
 void pausePlayback();
 void resumePlayback();

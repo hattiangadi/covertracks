@@ -515,7 +515,7 @@ String PatternParser::extractBarNotation(const String& text)
 
 int PatternParser::findMidiNoteForPrimitive(const String& primitiveName, const std::map<String, std::map<String, int>>& primitives)
 {
-    // Find the primitive in any instrument
+    // First, try to find the primitive in any instrument mapping
     for (const auto& instrumentPair : primitives)
     {
         auto primitiveIt = instrumentPair.second.find(primitiveName);
@@ -524,6 +524,16 @@ int PatternParser::findMidiNoteForPrimitive(const String& primitiveName, const s
             return primitiveIt->second;
         }
     }
+    
+    // If not found in primitives, try to parse as standard musical note name (e.g., "C4", "G#5", "Bb3")
+    int midiNote = parseMusicalNoteName(primitiveName);
+    if (midiNote >= 0)
+    {
+        DBG("Converted musical note '" + primitiveName + "' to MIDI " + String(midiNote));
+        return midiNote;
+    }
+    
+    DBG("Note '" + primitiveName + "' not found in primitives, using default 60");
     return 60; // Default middle C
 }
 
@@ -542,6 +552,71 @@ int PatternParser::getChannelForPrimitive(const String& primitiveName, const std
         }
     }
     return 0; // Default channel
+}
+
+int PatternParser::parseMusicalNoteName(const String& noteName)
+{
+    // Parse standard musical note names like "C4", "F#5", "Bb3"
+    if (noteName.length() < 2)
+        return -1; // Invalid note name
+    
+    String noteStr = noteName.trim().toUpperCase();
+    
+    // Extract note name (C, D, E, F, G, A, B)
+    char noteLetter = noteStr[0];
+    int noteIndex = -1;
+    
+    switch (noteLetter)
+    {
+        case 'C': noteIndex = 0; break;
+        case 'D': noteIndex = 2; break;
+        case 'E': noteIndex = 4; break;
+        case 'F': noteIndex = 5; break;
+        case 'G': noteIndex = 7; break;
+        case 'A': noteIndex = 9; break;
+        case 'B': noteIndex = 11; break;
+        default: return -1; // Invalid note
+    }
+    
+    // Check for sharp or flat
+    int accidentalOffset = 0;
+    int octaveStartIndex = 1;
+    
+    if (noteStr.length() > 1)
+    {
+        if (noteStr[1] == '#' || noteStr[1] == 'S') // Sharp
+        {
+            accidentalOffset = 1;
+            octaveStartIndex = 2;
+        }
+        else if (noteStr[1] == 'B' && noteStr.length() > 2 && noteStr[2] != '0') // Flat (but not B0)
+        {
+            accidentalOffset = -1;
+            octaveStartIndex = 2;
+        }
+    }
+    
+    // Extract octave number
+    if (noteStr.length() <= octaveStartIndex)
+        return -1; // No octave specified
+    
+    String octaveStr = noteStr.substring(octaveStartIndex);
+    int octave = octaveStr.getIntValue();
+    
+    // Validate octave range (MIDI supports 0-10, but typically we use 0-8)
+    if (octave < 0 || octave > 10)
+        return -1;
+    
+    // Calculate MIDI note number
+    // MIDI note 60 = C4 (Middle C)
+    // Each octave spans 12 semitones
+    int midiNote = (octave * 12) + noteIndex + accidentalOffset;
+    
+    // Ensure MIDI note is in valid range (0-127)
+    if (midiNote < 0 || midiNote > 127)
+        return -1;
+    
+    return midiNote;
 }
 
 } // namespace covertracks

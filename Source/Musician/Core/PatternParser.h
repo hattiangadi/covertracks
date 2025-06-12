@@ -86,6 +86,7 @@ private:
     // Helper methods for compact format parsing
     int findMidiNoteForPrimitive(const String& primitiveName, const std::map<String, std::map<String, int>>& primitives);
     int getChannelForPrimitive(const String& primitiveName, const std::map<String, std::map<String, int>>& primitives);
+    int parseMusicalNoteName(const String& noteName);
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PatternParser)
 };

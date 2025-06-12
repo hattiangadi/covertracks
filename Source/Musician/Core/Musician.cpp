@@ -62,19 +62,27 @@ bool Musician::isGenerating() const
 void Musician::generateChart(const var& parameters, 
                            std::function<void(bool success, const var& chart)> callback)
 {
+    DBG("DEBUG: Musician::generateChart called");
+    DBG("DEBUG: PatternGenerator exists: " << (patternGenerator ? "true" : "false"));
+    DBG("DEBUG: LLM client exists: " << (llmClient ? "true" : "false"));
+    
     if (!patternGenerator || !llmClient)
     {
+        DBG("DEBUG: Missing patternGenerator or llmClient - failing immediately");
         if (callback)
-            callback(false, "No LLM client connected");
+            callback(false, var("No LLM client connected"));
         return;
     }
     
     if (generating.load())
     {
+        DBG("DEBUG: Generation already in progress - failing immediately");
         if (callback)
-            callback(false, "Pattern generation already in progress");
+            callback(false, var("Pattern generation already in progress"));
         return;
     }
+    
+    DBG("DEBUG: Musician proceeding with chart generation");
     
     // Extract parameters
     String styleToUse = parameters.hasProperty("style") ? parameters["style"].toString() : this->style;
@@ -237,9 +245,16 @@ void Musician::run()
                     // Parse the response using PatternGenerator utility
                     std::shared_ptr<Chart> chart;
                     
+                    DBG("DEBUG: About to validate LLM response");
                     if (success && patternGenerator->validateResponse(response))
                     {
+                        DBG("DEBUG: Response validation successful, about to parse");
                         chart = patternGenerator->parseResponse(response);
+                        DBG("DEBUG: Parse completed, chart: " << (chart ? "valid" : "null"));
+                    }
+                    else
+                    {
+                        DBG("DEBUG: Response validation failed or LLM call unsuccessful");
                     }
                     
                     // Store the response
@@ -251,12 +266,35 @@ void Musician::run()
                     
                     if (success && chart)
                     {
+                        DBG("DEBUG: Chart is valid, about to convert to MIDI");
                         // Set default tempo if not set
                         if (chart->getTempo() <= 0)
                             chart->setTempo(120.0);
                         
+                        DBG("DEBUG: About to call chart->toMidiSequence()");
                         // Convert chart to MIDI events
-                        var midiEvents = midiMessageSequenceToVar(*chart->toMidiSequence(), chart->getTempo());
+                        auto midiSequence = chart->toMidiSequence();
+                        DBG("DEBUG: toMidiSequence() completed, about to convert to var");
+                        DBG("DEBUG: MidiSequence has " << midiSequence->getNumEvents() << " events");
+                        
+                        // Debug first few events in the sequence
+                        for (int i = 0; i < std::min(5, midiSequence->getNumEvents()); ++i)
+                        {
+                            auto event = midiSequence->getEventPointer(i);
+                            if (event->message.isNoteOn())
+                            {
+                                DBG("DEBUG: MidiSequence event " << i << " - note_on: note=" << event->message.getNoteNumber() 
+                                    << ", velocity=" << event->message.getVelocity() << ", timestamp=" << event->message.getTimeStamp());
+                            }
+                            else if (event->message.isNoteOff())
+                            {
+                                DBG("DEBUG: MidiSequence event " << i << " - note_off: note=" << event->message.getNoteNumber() 
+                                    << ", timestamp=" << event->message.getTimeStamp());
+                            }
+                        }
+                        
+                        var midiEvents = midiMessageSequenceToVar(*midiSequence, chart->getTempo());
+                        DBG("DEBUG: midiMessageSequenceToVar completed");
                         
                         DynamicObject* responseObj = new DynamicObject();
                         responseObj->setProperty("success", true);
@@ -279,9 +317,11 @@ void Musician::run()
                     
                     // Call the callback on the message thread
                     auto callback = currentCallback;
-                    MessageManager::callAsync([this, callback, success, resultChart]() {
+                    bool actualSuccess = (success && chart != nullptr);
+                    DBG("DEBUG: Calling callback with actualSuccess: " << (actualSuccess ? "true" : "false"));
+                    MessageManager::callAsync([this, callback, actualSuccess, resultChart]() {
                         if (callback)
-                            callback(success, resultChart);
+                            callback(actualSuccess, resultChart);
                         
                         // Notify listeners of the change
                         sendChangeMessage();
@@ -298,10 +338,12 @@ void Musician::run()
             auto callback = currentCallback;
             MessageManager::callAsync([callback]() {
                 if (callback)
-                    callback(false, "LLM client not available");
+                    callback(false, var("LLM client not available"));
             });
             
             generating = false;
+            // Reset the wait event to prevent infinite loop
+            waitEvent.reset();
         }
     }
 }
@@ -366,10 +408,22 @@ var Musician::midiMessageSequenceToVar(const MidiMessageSequence& sequence, doub
 {
     Array<var> events;
     
+    // Define the ticks per quarter note used in Chart generation (from MusicPatternComponents.cpp)
+    const double TICKS_PER_QUARTER_NOTE = 960.0;
+    
     for (int i = 0; i < sequence.getNumEvents(); ++i)
     {
         auto event = sequence.getEventPointer(i);
         DynamicObject* eventObj = new DynamicObject();
+        
+        // Convert MIDI tick timestamp to normalized beats (quarter notes)
+        double originalTimestamp = event->message.getTimeStamp();
+        double normalizedTimestamp = originalTimestamp / TICKS_PER_QUARTER_NOTE;
+        
+        // Debug logging for timestamp conversion
+        if (i < 5 && event->message.isNoteOn()) {
+            DBG("DEBUG: Converting timestamp - original: " << originalTimestamp << " ticks, normalized: " << normalizedTimestamp << " beats");
+        }
         
         if (event->message.isNoteOn())
         {
@@ -377,7 +431,7 @@ var Musician::midiMessageSequenceToVar(const MidiMessageSequence& sequence, doub
             eventObj->setProperty("channel", event->message.getChannel());
             eventObj->setProperty("note", event->message.getNoteNumber());
             eventObj->setProperty("velocity", event->message.getFloatVelocity());
-            eventObj->setProperty("timestamp", event->message.getTimeStamp());
+            eventObj->setProperty("timestamp", normalizedTimestamp);
             
             events.add(var(eventObj));
         }
@@ -387,7 +441,7 @@ var Musician::midiMessageSequenceToVar(const MidiMessageSequence& sequence, doub
             eventObj->setProperty("channel", event->message.getChannel());
             eventObj->setProperty("note", event->message.getNoteNumber());
             eventObj->setProperty("velocity", 0.0f);
-            eventObj->setProperty("timestamp", event->message.getTimeStamp());
+            eventObj->setProperty("timestamp", normalizedTimestamp);
             
             events.add(var(eventObj));
         }
@@ -397,7 +451,7 @@ var Musician::midiMessageSequenceToVar(const MidiMessageSequence& sequence, doub
             eventObj->setProperty("channel", event->message.getChannel());
             eventObj->setProperty("controller", event->message.getControllerNumber());
             eventObj->setProperty("value", event->message.getControllerValue());
-            eventObj->setProperty("timestamp", event->message.getTimeStamp());
+            eventObj->setProperty("timestamp", normalizedTimestamp);
             
             events.add(var(eventObj));
         }
@@ -406,7 +460,7 @@ var Musician::midiMessageSequenceToVar(const MidiMessageSequence& sequence, doub
             eventObj->setProperty("type", "program_change");
             eventObj->setProperty("channel", event->message.getChannel());
             eventObj->setProperty("program", event->message.getProgramChangeNumber());
-            eventObj->setProperty("timestamp", event->message.getTimeStamp());
+            eventObj->setProperty("timestamp", normalizedTimestamp);
             
             events.add(var(eventObj));
         }

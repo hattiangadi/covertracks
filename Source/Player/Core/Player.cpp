@@ -721,14 +721,17 @@ void Player::generateNewChart(const var& parameters, std::function<void(bool suc
 void Player::generateChart(const var& parameters, 
                           std::function<void(bool success, const var& midiEventChart)> callback)
 {
+    DBG("DEBUG: Player::generateChart called for player: " << getMetadata().name);
     if (!musician)
     {
+        DBG("DEBUG: Player::generateChart - No musician available for player: " << getMetadata().name);
         std::cerr << "Player::generateChart - No musician available" << std::endl;
         if (callback)
             callback(false, var());
         return;
     }
     
+    DBG("DEBUG: Player delegating to musician->generateChart");
     // Delegate to the internal musician
     musician->generateChart(parameters, callback);
 }
@@ -818,6 +821,14 @@ bool Player::convertChartToMidi(const var& chart)
         
         if (!eventsVar.isArray())
         {
+            DBG("DEBUG: Player::convertChartToMidi - events is not an array");
+            DBG("DEBUG: eventsVar type: " << (eventsVar.isVoid() ? "void" : 
+                                           eventsVar.isString() ? "string" : 
+                                           eventsVar.isObject() ? "object" : 
+                                           eventsVar.isInt() ? "int" : "unknown"));
+            if (eventsVar.isObject()) {
+                DBG("DEBUG: eventsVar as object: " << eventsVar.toString());
+            }
             std::cerr << "Player::convertChartToMidi - Invalid chart format (events not an array)" << std::endl;
             return false;
         }
@@ -842,14 +853,26 @@ bool Player::convertChartToMidi(const var& chart)
             {
                 // Extract note-specific properties
                 int note = event.hasProperty("note") ? static_cast<int>(static_cast<double>(event["note"])) : 60;
-                int velocity = event.hasProperty("velocity") ? static_cast<int>(static_cast<double>(event["velocity"])) : 100;
+                
+                // Handle velocity - Performance Mode uses float (0.0-1.0), Player Mode might use int (0-127)
+                float velocity = 0.5f; // Default velocity
+                if (event.hasProperty("velocity")) {
+                    double velocityValue = static_cast<double>(event["velocity"]);
+                    if (velocityValue <= 1.0) {
+                        // Performance Mode format: float between 0.0 and 1.0
+                        velocity = static_cast<float>(velocityValue);
+                    } else {
+                        // Player Mode format: int between 0 and 127, convert to float
+                        velocity = static_cast<float>(velocityValue) / 127.0f;
+                    }
+                }
                 
                 // Ensure note and velocity are in valid ranges
                 note = juce::jlimit(0, 127, note);
-                velocity = juce::jlimit(0, 127, velocity);
+                velocity = juce::jlimit(0.0f, 1.0f, velocity);
                 
                 // Create note on message
-                juce::MidiMessage noteOn = juce::MidiMessage::noteOn(channel, note, static_cast<float>(velocity) / 127.0f);
+                juce::MidiMessage noteOn = juce::MidiMessage::noteOn(channel, note, velocity);
                 noteOn.setTimeStamp(timestamp);
                 sequence->addEvent(noteOn);
             }
@@ -957,59 +980,8 @@ bool Player::play()
         prepareForPlayback();
     }
     
-    // Convert the MIDI message sequence to a var for the instrument
-    DynamicObject* chartObj = new DynamicObject();
-    Array<var> events;
-    
-    for (int i = 0; i < currentMidiSequence->getNumEvents(); ++i)
-    {
-        auto event = currentMidiSequence->getEventPointer(i);
-        if (event->message.isNoteOn())
-        {
-            DynamicObject* noteOn = new DynamicObject();
-            noteOn->setProperty("type", "note_on");
-            noteOn->setProperty("channel", event->message.getChannel());
-            noteOn->setProperty("note", event->message.getNoteNumber());
-            noteOn->setProperty("velocity", (int)(event->message.getVelocity() * 127));
-            noteOn->setProperty("timestamp", event->message.getTimeStamp());
-            events.add(var(noteOn));
-        }
-        else if (event->message.isNoteOff())
-        {
-            DynamicObject* noteOff = new DynamicObject();
-            noteOff->setProperty("type", "note_off");
-            noteOff->setProperty("channel", event->message.getChannel());
-            noteOff->setProperty("note", event->message.getNoteNumber());
-            noteOff->setProperty("velocity", 0);
-            noteOff->setProperty("timestamp", event->message.getTimeStamp());
-            events.add(var(noteOff));
-        }
-        else if (event->message.isController())
-        {
-            DynamicObject* cc = new DynamicObject();
-            cc->setProperty("type", "controller");
-            cc->setProperty("channel", event->message.getChannel());
-            cc->setProperty("controller", event->message.getControllerNumber());
-            cc->setProperty("value", event->message.getControllerValue());
-            cc->setProperty("timestamp", event->message.getTimeStamp());
-            events.add(var(cc));
-        }
-        else if (event->message.isProgramChange())
-        {
-            DynamicObject* pc = new DynamicObject();
-            pc->setProperty("type", "program_change");
-            pc->setProperty("channel", event->message.getChannel());
-            pc->setProperty("program", event->message.getProgramChangeNumber());
-            pc->setProperty("timestamp", event->message.getTimeStamp());
-            events.add(var(pc));
-        }
-    }
-    
-    chartObj->setProperty("events", events);
-    var chartVar(chartObj);
-    
-    // Play the chart using the instrument
-    bool result = instrument->playMIDIPattern(chartVar);
+    // Use the efficient direct MIDI sequence method instead of converting to var/JSON
+    bool result = instrument->playMIDISequence(*currentMidiSequence, chartTempo);
     
     if (result)
     {

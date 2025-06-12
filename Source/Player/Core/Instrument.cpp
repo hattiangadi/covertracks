@@ -795,6 +795,158 @@ std::unique_ptr<XmlElement> Instrument::getPluginGraphState()
 
 // The detailed implementation is already defined above
 
+bool Instrument::playMIDISequence(const MidiMessageSequence& sequence, double newTempo)
+{
+    // Stop any current playback
+    stopPlayback();
+    
+    // Set the new tempo if provided
+    if (newTempo > 0)
+    {
+        tempo = newTempo;
+    }
+    
+    // Make sure we're prepared for playback
+    if (resourceState != ResourceState::PlaybackReady)
+    {
+        std::cout << "Preparing instrument for playback before playing sequence" << std::endl;
+        if (!prepareForPlayback())
+        {
+            std::cerr << "Failed to prepare for playback" << std::endl;
+            return false;
+        }
+    }
+    
+    // Ensure we have a valid processor graph
+    if (processorGraph == nullptr)
+    {
+        std::cerr << "Cannot play sequence: processor graph is null" << std::endl;
+        return false;
+    }
+    
+    // Make sure the processor is registered with the AudioEngine
+    if (audioEngine == nullptr)
+    {
+        std::cerr << "No audio engine available for playback" << std::endl;
+        return false;
+    }
+    
+    // Set master gain to a very low level to avoid distortion
+    audioEngine->setMasterGain(0.3f);
+    
+    // Use the provided MIDI sequence directly
+    currentSequence = std::make_unique<MidiMessageSequence>(sequence);
+    
+    if (currentSequence == nullptr || currentSequence->getNumEvents() == 0)
+    {
+        std::cerr << "Failed to use MIDI sequence (empty or null)" << std::endl;
+        return false;
+    }
+    
+    // Calculate the total duration of the sequence
+    totalDuration = 0.0;
+    
+    for (int i = 0; i < currentSequence->getNumEvents(); ++i)
+    {
+        auto event = currentSequence->getEventPointer(i);
+        if (event->message.isNoteOff())
+        {
+            totalDuration = std::max(totalDuration, event->message.getTimeStamp());
+        }
+    }
+    
+    // Sort the MIDI sequence by timestamp to ensure proper ordering
+    currentSequence->sort();
+    
+    // Get the current sample rate from the audio device
+    double currentSampleRate = 44100.0; // Default fallback
+    int bufferSize = 512; // Default buffer size
+    auto& deviceManager = audioEngine->getDeviceManager();
+    auto* currentDevice = deviceManager.getCurrentAudioDevice();
+    if (currentDevice != nullptr)
+    {
+        currentSampleRate = currentDevice->getCurrentSampleRate();
+        bufferSize = currentDevice->getCurrentBufferSizeSamples();
+    }
+    
+    // IMPORTANT CHANGE: Bypass AudioProcessorPlayer completely
+    // Instead, we'll directly process MIDI events through the processor graph
+    
+    // If we have an AudioProcessorPlayer, remove it from the audio callbacks
+    if (audioProcessorPlayer != nullptr)
+    {
+        deviceManager.removeAudioCallback(audioProcessorPlayer.get());
+        audioProcessorPlayer = nullptr; // We won't be using it
+    }
+    
+    // Make sure the processor graph is prepared for playback
+    processorGraph->setPlayConfigDetails(2, 2, currentSampleRate, bufferSize);
+    processorGraph->prepareToPlay(currentSampleRate, bufferSize);
+    
+    // Create a temporary buffer for audio processing
+    AudioBuffer<float> tempBuffer(2, bufferSize);
+    
+    // Process all MIDI events directly
+    std::cout << "Processing MIDI events directly through processor graph" << std::endl;
+    std::cout << "Total events: " << currentSequence->getNumEvents() << std::endl;
+    
+    // Create a map to store note-on/note-off pairs to ensure proper note durations
+    std::map<int, MidiMessage> activeNotes; // note number -> note-off message
+    
+    // First pass: Reduce velocities of all note-on events to minimize distortion
+    // and ensure all events have proper timestamps
+    std::cout << "Preparing MIDI events for playback:" << std::endl;
+    for (int i = 0; i < currentSequence->getNumEvents(); ++i)
+    {
+        auto event = currentSequence->getEventPointer(i);
+        double originalTimestamp = event->message.getTimeStamp();
+        
+        if (event->message.isNoteOn())
+        {
+            // Reduce velocity to 50% of original for better audio quality
+            uint8 newVelocity = static_cast<uint8>(event->message.getVelocity() * 0.5f);
+            
+            // Create a fresh note-on message
+            event->message = MidiMessage::noteOn(
+                event->message.getChannel(),
+                event->message.getNoteNumber(),
+                newVelocity);
+                
+            // Preserve the original timestamp
+            event->message.setTimeStamp(originalTimestamp);
+            
+            std::cout << "Prepared note on: channel=" << event->message.getChannel() 
+                      << ", note=" << event->message.getNoteNumber() 
+                      << ", velocity=" << newVelocity 
+                      << ", timestamp=" << originalTimestamp << std::endl;
+        }
+        else if (event->message.isNoteOff())
+        {
+            std::cout << "Prepared note off: channel=" << event->message.getChannel() 
+                      << ", note=" << event->message.getNoteNumber() 
+                      << ", timestamp=" << originalTimestamp << std::endl;
+        }
+    }
+    
+    // Register the processor with the AudioEngine to ensure it's in the audio chain
+    audioEngine->registerProcessor(processorGraph.get());
+    
+    // Reset playback state
+    nextEventIndex = 0;
+    currentTime = 0.0;
+    playing = true;
+    paused = false;
+    
+    // Start a timer to process MIDI events from the sequence
+    // We'll use a slightly longer interval to reduce CPU usage
+    startTimer(5); // Check every 5ms for responsive playback
+    
+    std::cout << "Started MIDI sequence playback on " << instrumentName 
+              << " (tempo: " << tempo << " BPM, duration: " << totalDuration << " ticks)" << std::endl;
+    
+    return true;
+}
+
 bool Instrument::playMIDIPattern(const var& pattern, double newTempo)
 {
     // Stop any current playback
@@ -1345,6 +1497,7 @@ std::unique_ptr<MidiMessageSequence> Instrument::convertJSONToMIDISequence(const
             int note = static_cast<int>(static_cast<double>(event.getProperty("note", 60)));
             float velocity = static_cast<float>(static_cast<double>(event.getProperty("velocity", 0.5)));
             double timestamp = static_cast<double>(event.getProperty("timestamp", 0.0));
+            
             
             // Ensure channel is in valid range (1-16)
             channel = jlimit(1, 16, channel);
