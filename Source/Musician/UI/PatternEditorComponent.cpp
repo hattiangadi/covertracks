@@ -10,6 +10,7 @@ PatternEditorComponent::PatternEditorComponent(Musician* musicianPtr, PlayerMana
       parseButton("Parse"),
       loadButton("Load"),
       playButton("Play"),
+      stopButton("Stop"),
       musician(musicianPtr),
       playerManager(playerMgr),
       selectedPlayer(nullptr)
@@ -47,11 +48,12 @@ PatternEditorComponent::PatternEditorComponent(Musician* musicianPtr, PlayerMana
     playButton.addListener(this);
     addAndMakeVisible(playButton);
     
-    // Set up MIDI keyboard visualization
-    keyboardState = std::make_unique<MidiKeyboardState>();
-    midiKeyboard = std::make_unique<MidiKeyboardComponent>(*keyboardState, MidiKeyboardComponent::horizontalKeyboard);
-    midiKeyboard->setAvailableRange(36, 96); // C2 to C7
-    addAndMakeVisible(*midiKeyboard);
+    stopButton.addListener(this);
+    addAndMakeVisible(stopButton);
+    
+    // Set up piano roll visualization
+    pianoRoll = std::make_unique<PianoRollComponent>();
+    addAndMakeVisible(*pianoRoll);
     
     // Parse the initial pattern
     parseCurrentPattern();
@@ -67,14 +69,14 @@ PatternEditorComponent::~PatternEditorComponent()
     parseButton.removeListener(this);
     loadButton.removeListener(this);
     playButton.removeListener(this);
+    stopButton.removeListener(this);
     playerSelector.removeListener(this);
     
     if (musician)
         musician->removeChangeListener(this);
     
-    // Clean up MIDI keyboard
-    keyboardState.reset();
-    midiKeyboard.reset();
+    // Clean up piano roll
+    pianoRoll.reset();
 }
 
 void PatternEditorComponent::paint(Graphics& g)
@@ -101,18 +103,19 @@ void PatternEditorComponent::resized()
     
     // Buttons at the bottom
     auto buttonArea = area.removeFromBottom(40);
-    int buttonWidth = buttonArea.getWidth() / 3;
+    int buttonWidth = buttonArea.getWidth() / 4;
     
     parseButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(5));
     loadButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(5));
-    playButton.setBounds(buttonArea.reduced(5));
+    playButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(5));
+    stopButton.setBounds(buttonArea.reduced(5));
     
-    // Split remaining area between the editor and MIDI keyboard
+    // Split remaining area between the editor and piano roll
     auto editorArea = area.withWidth(area.getWidth() / 2);
-    auto keyboardArea = area.withX(editorArea.getRight());
+    auto pianoRollArea = area.withX(editorArea.getRight());
     
     patternEditor.setBounds(editorArea.reduced(5));
-    midiKeyboard->setBounds(keyboardArea.reduced(5));
+    pianoRoll->setBounds(pianoRollArea.reduced(5));
 }
 
 void PatternEditorComponent::buttonClicked(Button* button)
@@ -134,6 +137,11 @@ void PatternEditorComponent::buttonClicked(Button* button)
         // Play the loaded pattern
         playLoadedPattern();
         listeners.call(&Listener::patternPlayRequested, this);
+    }
+    else if (button == &stopButton)
+    {
+        // Stop the current playback
+        stopCurrentPlayback();
     }
 }
 
@@ -188,8 +196,8 @@ void PatternEditorComponent::parseCurrentPattern()
             currentParsedChart = result;
             std::cout << "Pattern parsed successfully. Events: " << result["events"].size() << std::endl;
             
-            // Update MIDI visualization
-            updateMidiVisualization();
+            // Update piano roll visualization
+            updatePianoRollVisualization();
         }
         else
         {
@@ -295,46 +303,25 @@ void PatternEditorComponent::playLoadedPattern()
     }
 }
 
-void PatternEditorComponent::updateMidiVisualization()
+void PatternEditorComponent::stopCurrentPlayback()
 {
-    if (!keyboardState || currentParsedChart.isVoid())
-        return;
-    
-    // Clear current state
-    keyboardState->allNotesOff(1);
-    
-    // Extract events and show note activity on the keyboard
-    if (currentParsedChart.hasProperty("events"))
+    if (selectedPlayer)
     {
-        var events = currentParsedChart["events"];
-        
-        if (events.isArray())
-        {
-            // Show which notes are used in the pattern (briefly highlight them)
-            for (int i = 0; i < events.size(); ++i)
-            {
-                var event = events[i];
-                
-                if (event.hasProperty("type") && event.hasProperty("note"))
-                {
-                    String type = event["type"].toString();
-                    int note = static_cast<int>(static_cast<double>(event["note"]));
-                    
-                    if (type == "note_on" && note >= 0 && note <= 127)
-                    {
-                        // Briefly show the note as active
-                        keyboardState->noteOn(1, note, 0.5f);
-                        
-                        // Schedule note off after a short delay
-                        Timer::callAfterDelay(200, [this, note]()
-                        {
-                            if (keyboardState)
-                                keyboardState->noteOff(1, note, 0.0f);
-                        });
-                    }
-                }
-            }
-        }
+        selectedPlayer->stop();
+        std::cout << "Stopped playback on " << selectedPlayer->getMetadata().name << std::endl;
+    }
+    else
+    {
+        std::cout << "No player selected to stop" << std::endl;
+    }
+}
+
+void PatternEditorComponent::updatePianoRollVisualization()
+{
+    if (pianoRoll)
+    {
+        pianoRoll->setMidiEvents(currentParsedChart);
+        pianoRoll->repaint();
     }
 }
 
@@ -347,5 +334,149 @@ void PatternEditorComponent::removeListener(Listener* listener)
 {
     listeners.remove(listener);
 }
+
+// Piano Roll Visualization Component
+class PatternEditorComponent::PianoRollComponent : public Component
+{
+public:
+    PianoRollComponent() = default;
+    
+    void setMidiEvents(const var& chart)
+    {
+        events.clear();
+        
+        if (chart.hasProperty("events") && chart["events"].isArray())
+        {
+            var eventsArray = chart["events"];
+            
+            for (int i = 0; i < eventsArray.size(); ++i)
+            {
+                var event = eventsArray[i];
+                
+                if (event.hasProperty("type") && event.hasProperty("note") && event.hasProperty("timestamp"))
+                {
+                    String type = event["type"].toString();
+                    int note = static_cast<int>(static_cast<double>(event["note"]));
+                    double timestamp = static_cast<double>(event["timestamp"]);
+                    double duration = event.hasProperty("duration") ? static_cast<double>(event["duration"]) : 0.25;
+                    
+                    if (type == "note_on")
+                    {
+                        events.add({note, timestamp, duration});
+                    }
+                }
+            }
+        }
+        
+        repaint();
+    }
+    
+    void paint(Graphics& g) override
+    {
+        g.fillAll(Colours::white);
+        
+        // Draw background grid
+        g.setColour(Colours::lightgrey);
+        
+        auto bounds = getLocalBounds();
+        int width = bounds.getWidth();
+        int height = bounds.getHeight();
+        
+        // Time grid - vertical lines every beat
+        double beatsToShow = 8.0; // Show 8 beats
+        double pixelsPerBeat = width / beatsToShow;
+        
+        for (double beat = 0; beat <= beatsToShow; beat += 0.25) // Quarter note grid
+        {
+            int x = static_cast<int>(beat * pixelsPerBeat);
+            bool isDownbeat = (static_cast<int>(beat * 4) % 4 == 0);
+            g.setColour(isDownbeat ? Colours::grey : Colours::lightgrey);
+            g.drawVerticalLine(x, 0.0f, static_cast<float>(height));
+        }
+        
+        // Note grid - horizontal lines for piano keys
+        int minNote = 36; // C2
+        int maxNote = 96; // C7
+        int noteRange = maxNote - minNote;
+        double pixelsPerNote = static_cast<double>(height) / noteRange;
+        
+        for (int note = minNote; note <= maxNote; ++note)
+        {
+            int y = static_cast<int>((maxNote - note) * pixelsPerNote);
+            bool isWhiteKey = isWhiteKeyNote(note);
+            g.setColour(isWhiteKey ? Colours::lightgrey : Colours::darkgrey.withAlpha(0.3f));
+            g.drawHorizontalLine(y, 0.0f, static_cast<float>(width));
+        }
+        
+        // Draw notes
+        g.setColour(Colours::blue.withAlpha(0.7f));
+        
+        for (const auto& event : events)
+        {
+            int note = event.note;
+            double timestamp = event.timestamp;
+            double duration = event.duration;
+            
+            if (note >= minNote && note <= maxNote)
+            {
+                int x = static_cast<int>(timestamp * pixelsPerBeat);
+                int y = static_cast<int>((maxNote - note) * pixelsPerNote);
+                int noteWidth = static_cast<int>(duration * pixelsPerBeat);
+                int noteHeight = static_cast<int>(pixelsPerNote * 0.8); // 80% of note space
+                
+                Rectangle<int> noteRect(x, y, noteWidth, noteHeight);
+                g.fillRect(noteRect);
+                
+                // Draw note border
+                g.setColour(Colours::darkblue);
+                g.drawRect(noteRect, 1);
+                g.setColour(Colours::blue.withAlpha(0.7f));
+            }
+        }
+        
+        // Draw time labels
+        g.setColour(Colours::black);
+        g.setFont(Font(FontOptions().withHeight(12.0f)));
+        
+        for (double beat = 0; beat <= beatsToShow; beat += 1.0)
+        {
+            int x = static_cast<int>(beat * pixelsPerBeat);
+            g.drawText(String(beat, 1), x + 2, 2, 50, 20, Justification::centredLeft);
+        }
+        
+        // Draw note labels on the left
+        for (int note = minNote; note <= maxNote; note += 12) // Every octave
+        {
+            int y = static_cast<int>((maxNote - note) * pixelsPerNote);
+            String noteName = getMidiNoteName(note);
+            g.drawText(noteName, 2, y - 10, 30, 20, Justification::centredLeft);
+        }
+    }
+    
+private:
+    struct NoteEvent
+    {
+        int note;
+        double timestamp;
+        double duration;
+    };
+    
+    Array<NoteEvent> events;
+    
+    bool isWhiteKeyNote(int midiNote)
+    {
+        int noteInOctave = midiNote % 12;
+        return (noteInOctave == 0 || noteInOctave == 2 || noteInOctave == 4 || 
+                noteInOctave == 5 || noteInOctave == 7 || noteInOctave == 9 || noteInOctave == 11);
+    }
+    
+    String getMidiNoteName(int midiNote)
+    {
+        const char* noteNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+        int octave = (midiNote / 12) - 1;
+        int noteInOctave = midiNote % 12;
+        return String(noteNames[noteInOctave]) + String(octave);
+    }
+};
 
 } // namespace covertracks

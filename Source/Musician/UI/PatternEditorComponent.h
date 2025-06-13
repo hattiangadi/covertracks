@@ -79,10 +79,11 @@ private:
     TextButton parseButton;
     TextButton loadButton;
     TextButton playButton;
+    TextButton stopButton;
     
-    // MIDI visualization
-    std::unique_ptr<MidiKeyboardState> keyboardState;
-    std::unique_ptr<MidiKeyboardComponent> midiKeyboard;
+    // Piano roll visualization
+    class PianoRollComponent;
+    std::unique_ptr<PianoRollComponent> pianoRoll;
     
     // References
     Musician* musician;
@@ -98,7 +99,8 @@ private:
     void parseCurrentPattern();
     void loadParsedPattern();
     void playLoadedPattern();
-    void updateMidiVisualization();
+    void updatePianoRollVisualization();
+    void stopCurrentPlayback();
     void onPlayerSelectionChanged();
     
     // Listeners
