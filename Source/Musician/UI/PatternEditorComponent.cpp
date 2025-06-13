@@ -111,8 +111,8 @@ void PatternEditorComponent::resized()
     stopButton.setBounds(buttonArea.reduced(5));
     
     // Split remaining area between the editor and piano roll
-    auto editorArea = area.withWidth(area.getWidth() / 2);
-    auto pianoRollArea = area.withX(editorArea.getRight());
+    auto editorArea = area.removeFromLeft(area.getWidth() / 2);
+    auto pianoRollArea = area; // Use remaining area
     
     patternEditor.setBounds(editorArea.reduced(5));
     pianoRoll->setBounds(pianoRollArea.reduced(5));
@@ -186,7 +186,7 @@ void PatternEditorComponent::startPlaybackTracking(double tempo)
 {
     playbackTempo = tempo;
     playbackStartTime = Time::getMillisecondCounterHiRes();
-    playbackStartBeat = 0.0; // Start from beginning
+    playbackStartBeat = 1.0; // Start from beat 1 to match 1-based pattern numbering
     isTrackingPlayback = true;
     
     // Start timer at 30 FPS for smooth updates
@@ -250,13 +250,13 @@ void PatternEditorComponent::autoScrollToPlaybackPosition(double currentBeat)
     // Check if playback position is outside visible area
     if (currentBeat < visibleStartBeat || currentBeat >= visibleEndBeat)
     {
-        // Calculate which bar contains the current beat
+        // Calculate which bar contains the current beat (0-based for internal calculation)
         double targetBar = std::floor(currentBeat / 4.0);
         
         // Scroll to show this bar in the first row
         pianoRoll->setScrollOffset(targetBar);
         
-        std::cout << "Auto-scrolled to bar " << targetBar << " (beat " << currentBeat << ")" << std::endl;
+        std::cout << "Auto-scrolled to bar " << (targetBar + 1) << " (beat " << currentBeat << ")" << std::endl;
     }
 }
 
@@ -459,7 +459,9 @@ void PatternEditorComponent::PianoRollComponent::setMidiEvents(const var& chart)
                 
                 if (type == "note_on")
                 {
-                    events.add({note, timestamp, duration, source});
+                    // MIDI charts use 1-based note numbering, so convert to 0-based for internal use
+                    int adjustedNote = note - 1;
+                    events.add({adjustedNote, timestamp, duration, source});
                 }
             }
         }
@@ -518,8 +520,9 @@ void PatternEditorComponent::PianoRollComponent::paint(Graphics& g)
     }
     
     // Note grid - horizontal lines for piano keys within each row (reduced range)
-    int minNote = 36; // C2
-    int maxNote = 72; // C5 (3 octaves total)
+    // Adjust for 0-based internal representation (MIDI charts are 1-based)
+    int minNote = 35; // C2 (36 in MIDI chart becomes 35 internally)
+    int maxNote = 71; // C5 (72 in MIDI chart becomes 71 internally)
     int noteRange = maxNote - minNote;
     double pixelsPerNote = rowHeight / noteRange;
     
@@ -545,8 +548,11 @@ void PatternEditorComponent::PianoRollComponent::paint(Graphics& g)
         
         if (note >= minNote && note <= maxNote)
         {
+            // Convert from 1-based beat numbering to 0-based positioning
+            double zeroBasedTimestamp = timestamp - 1.0;
+            
             // Apply scroll offset to timestamp
-            double adjustedTimestamp = timestamp - (scrollOffset * 4.0); // scrollOffset is in bars (4 beats each)
+            double adjustedTimestamp = zeroBasedTimestamp - (scrollOffset * 4.0); // scrollOffset is in bars (4 beats each)
             
             // Calculate which row this note belongs to based on adjusted timestamp
             int row = static_cast<int>(adjustedTimestamp / beatsPerRow);
@@ -558,7 +564,7 @@ void PatternEditorComponent::PianoRollComponent::paint(Graphics& g)
             double rowY = row * (rowHeight + gapHeight); // Include gap in row positioning
             int x = static_cast<int>(beatInRow * pixelsPerBeat);
             int y = static_cast<int>(rowY + ((maxNote - note) * pixelsPerNote));
-            int noteWidth = jmax(2, static_cast<int>(duration * pixelsPerBeat * 0.8)); // Make notes narrower (80% width) with minimum 2px
+            int noteWidth = jmax(2, static_cast<int>(duration * pixelsPerBeat)); // Full duration width
             int noteHeight = static_cast<int>(pixelsPerNote * 0.8); // Standard note height
             
             Rectangle<int> noteRect(x, y, noteWidth, noteHeight);
@@ -571,6 +577,12 @@ void PatternEditorComponent::PianoRollComponent::paint(Graphics& g)
             // Draw note border
             g.setColour(noteColour.darker());
             g.drawRect(noteRect, 1);
+            
+            // Draw a small end line to show the exact ending point
+            int endLineHeight = static_cast<int>(noteHeight * 0.1); // 10% of note height
+            int endLineY = y + (noteHeight - endLineHeight) / 2; // Center vertically
+            g.setColour(noteColour.darker(0.5f)); // Slightly darker than border
+            g.drawVerticalLine(x + noteWidth - 1, static_cast<float>(endLineY), static_cast<float>(endLineY + endLineHeight));
         }
     }
     
@@ -582,12 +594,13 @@ void PatternEditorComponent::PianoRollComponent::paint(Graphics& g)
     {
         double rowY = row * (rowHeight + gapHeight); // Include gap in row positioning
         
-        // Show bar numbers (every 4 beats)
-        for (double beat = 0; beat <= beatsPerRow; beat += 4.0)
+        // Show bar numbers (every 4 beats) - show exactly 4 bars per row
+        for (int barInRow = 0; barInRow < 4; ++barInRow)
         {
+            double beat = barInRow * 4.0; // Each bar is 4 beats
             int x = static_cast<int>(beat * pixelsPerBeat);
-            double absoluteBar = scrollOffset + (row * 4) + (beat / 4.0);
-            g.drawText("Bar " + String(absoluteBar, 1), x + 2, static_cast<int>(rowY + 2), 60, 20, Justification::centredLeft);
+            int absoluteBar = static_cast<int>(scrollOffset) + (row * 4) + barInRow + 1; // Start from bar 1
+            g.drawText("Bar " + String(absoluteBar), x + 2, static_cast<int>(rowY + 2), 60, 20, Justification::centredLeft);
         }
     }
     
@@ -599,7 +612,8 @@ void PatternEditorComponent::PianoRollComponent::paint(Graphics& g)
         for (int note = minNote; note <= maxNote; note += 12) // Every octave
         {
             double y = rowY + ((maxNote - note) * pixelsPerNote);
-            String noteName = getMidiNoteName(note);
+            // Convert back to 1-based MIDI note number for display
+            String noteName = getMidiNoteName(note + 1);
             g.drawText(noteName, 2, static_cast<int>(y - 6), 30, 12, Justification::centredLeft);
         }
     }
@@ -607,8 +621,11 @@ void PatternEditorComponent::PianoRollComponent::paint(Graphics& g)
     // Draw playback position indicator
     if (playbackPosition >= 0.0)
     {
+        // Convert from 1-based beat numbering to 0-based positioning
+        double zeroBasedPlaybackPosition = playbackPosition - 1.0;
+        
         // Apply scroll offset to playback position
-        double adjustedPlaybackPosition = playbackPosition - (scrollOffset * 4.0);
+        double adjustedPlaybackPosition = zeroBasedPlaybackPosition - (scrollOffset * 4.0);
         
         // Calculate which row the playback position is in
         int playbackRow = static_cast<int>(adjustedPlaybackPosition / beatsPerRow);
@@ -637,7 +654,7 @@ void PatternEditorComponent::PianoRollComponent::paint(Graphics& g)
     g.setColour(Colours::black);
     g.setFont(Font(FontOptions().withHeight(10.0f)));
     double endBar = scrollOffset + (rows * 4); // Each row shows 4 bars
-    g.drawText("Showing bars " + String(scrollOffset, 1) + "-" + String(endBar, 1), 
+    g.drawText("Showing bars " + String(scrollOffset + 1, 1) + "-" + String(endBar, 1), // Start from bar 1 
                5, height - 25, 150, 20, Justification::centredLeft);
     g.drawText("Scroll wheel to navigate", 5, height - 12, 150, 10, Justification::centredLeft);
     
