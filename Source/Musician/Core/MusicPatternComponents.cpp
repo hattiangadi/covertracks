@@ -36,9 +36,9 @@ Bar::~Bar()
     DBG("Bar destroyed: " + String::toHexString((intptr_t)this) + ", remaining instances: " + String(instanceCount));
 }
 
-void Bar::addNote(int beat, int channel, int noteNumber, float velocity, float duration, const String& source)
+void Bar::addNote(float beat, int channel, int noteNumber, float velocity, float duration, const String& source)
 {
-    Event event(Event::Type::Note, static_cast<float>(beat), channel, source);
+    Event event(Event::Type::Note, beat, channel, source);
     event.noteNumber = noteNumber;
     event.velocity = velocity;
     event.duration = duration;

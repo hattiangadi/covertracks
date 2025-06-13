@@ -451,7 +451,20 @@ std::shared_ptr<Bar> PatternParser::parseBarFromJson(const Array<var>& eventsJso
         
         // Optional fourth element for duration  
         if (eventArray->size() >= 4)
-            duration = (*eventArray)[3];
+        {
+            var durationVar = (*eventArray)[3];
+            if (durationVar.isString())
+            {
+                // Handle string durations like ".5", "1.5"
+                String durationStr = durationVar.toString();
+                duration = durationStr.getFloatValue();
+            }
+            else
+            {
+                // Handle numeric durations
+                duration = static_cast<float>(static_cast<double>(durationVar));
+            }
+        }
             
         // Optional fifth element for source metadata
         if (eventArray->size() >= 5)
@@ -464,7 +477,7 @@ std::shared_ptr<Bar> PatternParser::parseBarFromJson(const Array<var>& eventsJso
             String noteName = noteData.toString();
             int midiNote = findMidiNoteForPrimitive(noteName, primitives);
             int channel = getChannelForPrimitive(noteName, primitives);
-            bar->addNote(static_cast<int>(beat), channel, midiNote, velocity, duration, source);
+            bar->addNote(static_cast<float>(beat), channel, midiNote, velocity, duration, source);
             DBG("Added note: " + noteName + " at beat " + String(beat) + " (MIDI " + String(midiNote) + ") from " + source);
         }
         else if (noteData.isObject() && noteData.hasProperty("chord"))
@@ -479,7 +492,7 @@ std::shared_ptr<Bar> PatternParser::parseBarFromJson(const Array<var>& eventsJso
                 {
                     int midiNote = findMidiNoteForPrimitive(noteName, primitives);
                     int channel = getChannelForPrimitive(noteName, primitives);
-                    bar->addNote(static_cast<int>(beat), channel, midiNote, velocity, duration, source);
+                    bar->addNote(static_cast<float>(beat), channel, midiNote, velocity, duration, source);
                 }
                 DBG("Added chord: " + chordName + " at beat " + String(beat));
             }

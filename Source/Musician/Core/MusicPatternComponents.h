@@ -28,7 +28,7 @@ public:
     static void forceCleanupLeakedInstances();
     static void registerStaticInstance(Bar* instance);
     
-    void addNote(int beat, int channel, int noteNumber, float velocity, float duration, const String& source = "pattern");
+    void addNote(float beat, int channel, int noteNumber, float velocity, float duration, const String& source = "pattern");
     void addController(int beat, int channel, int controllerNumber, int value);
     void addProgramChange(int beat, int channel, int programNumber);
     
