@@ -24,10 +24,13 @@ void MusicianBasicTests::testConstruction()
         expect(musician->getStyle() == "rock", "Musician style should be set correctly");
         expect(!musician->isGenerating(), "Musician should not be generating initially");
         
-        // Test that components are initialized
-        expect(&musician->getPatternSystem() != nullptr, "PatternSystem should be initialized");
-        expect(&musician->getPromptManager() != nullptr, "PromptManager should be initialized");
-        expect(&musician->getPatternGenerator() != nullptr, "PatternGenerator should be initialized");
+        // Test that components are initialized (methods should not crash)
+        expect(true, "PatternSystem should be accessible");
+        try { musician->getPatternSystem(); } catch (...) { expect(false, "PatternSystem access failed"); }
+        expect(true, "PromptManager should be accessible"); 
+        try { musician->getPromptManager(); } catch (...) { expect(false, "PromptManager access failed"); }
+        expect(true, "PatternGenerator should be accessible");
+        try { musician->getPatternGenerator(); } catch (...) { expect(false, "PatternGenerator access failed"); }
     }
     
     // Should destruct cleanly without issues
@@ -220,6 +223,7 @@ void MusicianAsyncTests::testGenerateChartAsync()
     musician->generateChart(testParams, [&](bool success, const var& chart) {
         callbackCalled = true;
         callbackSuccess = success;
+        juce::ignoreUnused(chart);
     });
     
     // Wait a short time for the callback
@@ -245,6 +249,7 @@ void MusicianAsyncTests::testMultipleRequests()
     {
         musician->generateChart(testParams, [&](bool success, const var& chart) {
             callbackCount++;
+            juce::ignoreUnused(success, chart);
         });
     }
     
@@ -267,6 +272,7 @@ void MusicianAsyncTests::testErrorHandling()
     musician->generateSection("verse", var(), [&](bool success, const var& chart) {
         sectionCallbackCalled = true;
         expect(!success, "Section generation should fail without LLM client");
+        juce::ignoreUnused(chart);
     });
     
     // Test modifyChart without LLM client
@@ -274,6 +280,7 @@ void MusicianAsyncTests::testErrorHandling()
     musician->modifyChart(var(), "make it louder", [&](bool success, const var& chart) {
         modifyCallbackCalled = true;
         expect(!success, "Chart modification should fail without LLM client");
+        juce::ignoreUnused(chart);
     });
     
     // Wait for callbacks

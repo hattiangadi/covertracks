@@ -182,6 +182,15 @@ public:
     bool loadChartFromMusician();
     
     /**
+     * @brief Convert a pattern string to MIDI events using the same code path as Musician
+     * 
+     * @param patternString The pattern string to convert (JSON or LLM response format)
+     * @param tempo The tempo for conversion (default: 120 BPM)
+     * @return var The converted MIDI events in Player-compatible format
+     */
+    var convertPatternStringToChart(const String& patternString, double tempo = 120.0);
+    
+    /**
      * @brief Generate a chart using the internal Musician
      * 
      * @param parameters Parameters for chart generation (var object)

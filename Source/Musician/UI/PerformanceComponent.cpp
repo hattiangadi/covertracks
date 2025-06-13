@@ -4,7 +4,6 @@
 #include "../Core/PatternParser.h"
 #include "../Core/MusicPatternSystem.h"
 #include "../../Player/Core/PlayerManager.h"
-#include "../../LLM/Core/PromptManager.h"
 
 namespace covertracks {
 
@@ -280,6 +279,21 @@ PerformanceComponent::PerformanceComponent(EnsembleManager* manager, PlayerManag
     moodSelector.addListener(this);
     addAndMakeVisible(moodSelector);
     
+    // Set up description editor
+    descriptionLabel.setText("Description:", juce::dontSendNotification);
+    descriptionLabel.setFont(fontOptions.withHeight(16.0f).withStyle("bold"));
+    addAndMakeVisible(descriptionLabel);
+    
+    descriptionEditor.setMultiLine(true);
+    descriptionEditor.setReturnKeyStartsNewLine(true);
+    descriptionEditor.setReadOnly(false);
+    descriptionEditor.setScrollbarsShown(true);
+    descriptionEditor.setCaretVisible(true);
+    descriptionEditor.setPopupMenuEnabled(true);
+    descriptionEditor.setText("Enter performance description here...");
+    descriptionEditor.addListener(this);
+    addAndMakeVisible(descriptionEditor);
+    
     // Set up instructions editor
     instructionsLabel.setText("Performance Instructions:", juce::dontSendNotification);
     instructionsLabel.setFont(fontOptions.withHeight(16.0f).withStyle("bold"));
@@ -404,6 +418,15 @@ void PerformanceComponent::resized()
     
     bounds.removeFromTop(10); // Spacing
     
+    // Description area
+    auto descriptionLabelArea = bounds.removeFromTop(30);
+    descriptionLabel.setBounds(descriptionLabelArea);
+    
+    auto descriptionArea = bounds.removeFromTop(80);
+    descriptionEditor.setBounds(descriptionArea.reduced(5, 0));
+    
+    bounds.removeFromTop(10); // Spacing
+    
     // Instructions area
     auto instructionsLabelArea = bounds.removeFromTop(30);
     instructionsLabel.setBounds(instructionsLabelArea);
@@ -475,6 +498,18 @@ void PerformanceComponent::buttonClicked(juce::Button* button)
 void PerformanceComponent::textEditorReturnKeyPressed(juce::TextEditor& /*editor*/)
 {
     // Nothing to do for now
+}
+
+void PerformanceComponent::textEditorFocusLost(juce::TextEditor& editor)
+{
+    // Save performance when description or instructions are changed
+    if (&editor == &descriptionEditor || &editor == &instructionsEditor)
+    {
+        if (currentPerformance)
+        {
+            saveCurrentPerformance();
+        }
+    }
 }
 
 void PerformanceComponent::comboBoxChanged(juce::ComboBox* comboBoxThatHasChanged)
@@ -882,11 +917,39 @@ void PerformanceComponent::startGeneration()
             continue;
         }
         
-        // Create generation parameters for the Player
+        // Create generation parameters for the Player - let Player/Musician/PatternGenerator handle prompts
         DynamicObject::Ptr params = new DynamicObject();
         params->setProperty("style", genreSelector.getText());
-        params->setProperty("tempo", 120);
-        params->setProperty("description", generateMusicianPrompt(role, currentSong, currentInstructions));
+        params->setProperty("tempo", currentSong ? static_cast<int>(currentSong->getTempo()) : 120);
+        
+        // Let Player/Musician/PatternGenerator handle prompt creation - just pass raw info
+        String description = descriptionEditor.getText();
+        if (description.isEmpty()) {
+            description = currentInstructions;
+        } else {
+            description += "\n" + currentInstructions;
+        }
+        if (currentSong) {
+            description = "Song: " + currentSong->getTitle() + "\n" + description;
+        }
+        
+        // Add key and mood information
+        String key = (currentPerformance && currentPerformance->getKey().isNotEmpty()) 
+                    ? currentPerformance->getKey() : keySelector.getText();
+        if (key.isNotEmpty()) {
+            description += "\nKey: " + key;
+        }
+        
+        String mood = (currentPerformance && currentPerformance->getMood().isNotEmpty()) 
+                     ? currentPerformance->getMood() : moodSelector.getText();
+        if (mood.isNotEmpty()) {
+            description += "\nMood: " + mood;
+        }
+        
+        // Add role-specific information
+        description += "\nMusician Role: " + role.name + " (" + role.instrument + ")";
+        
+        params->setProperty("description", description);
         
         // Set up instruments array for this role
         Array<var> instruments;
@@ -897,7 +960,7 @@ void PerformanceComponent::startGeneration()
         
         // Use Player->generateChart instead of direct LLM call
         juce::String roleName = role.getName();
-        DBG("DEBUG: About to call player->generateChart for " << roleName << " - MEMORY CHECK POINT 7");
+        DBG("DEBUG: About to call player->generateChart for " << roleName << " via proper architecture");
         player->generateChart(parameters, [this, i, roleName](bool success, const var& midiEventChart)
         {
             DBG("DEBUG: Player callback received for " << roleName << " - success: " << (success ? "true" : "false"));
@@ -960,9 +1023,9 @@ void PerformanceComponent::startGeneration()
                         DynamicObject* chartObj = new DynamicObject();
                         Array<var> events;
                         
-                        for (int i = 0; i < pattern->getNumEvents(); ++i)
+                        for (int eventIndex = 0; eventIndex < pattern->getNumEvents(); ++eventIndex)
                         {
-                            auto event = pattern->getEventPointer(i);
+                            auto event = pattern->getEventPointer(eventIndex);
                             if (event->message.isNoteOn())
                             {
                                 DynamicObject* noteOn = new DynamicObject();
@@ -1081,11 +1144,39 @@ void PerformanceComponent::startGenerationForRole(const MusicianRole& role)
             return;
         }
         
-        // Create generation parameters for the Player
+        // Create generation parameters for the Player - let Player/Musician/PatternGenerator handle prompts
         DynamicObject::Ptr params = new DynamicObject();
         params->setProperty("style", genreSelector.getText());
-        params->setProperty("tempo", 120);
-        params->setProperty("description", generateMusicianPrompt(role, currentSong, currentInstructions));
+        params->setProperty("tempo", currentSong ? static_cast<int>(currentSong->getTempo()) : 120);
+        
+        // Let Player/Musician/PatternGenerator handle prompt creation - just pass raw info
+        String description = descriptionEditor.getText();
+        if (description.isEmpty()) {
+            description = currentInstructions;
+        } else {
+            description += "\n" + currentInstructions;
+        }
+        if (currentSong) {
+            description = "Song: " + currentSong->getTitle() + "\n" + description;
+        }
+        
+        // Add key and mood information
+        String key = (currentPerformance && currentPerformance->getKey().isNotEmpty()) 
+                    ? currentPerformance->getKey() : keySelector.getText();
+        if (key.isNotEmpty()) {
+            description += "\nKey: " + key;
+        }
+        
+        String mood = (currentPerformance && currentPerformance->getMood().isNotEmpty()) 
+                     ? currentPerformance->getMood() : moodSelector.getText();
+        if (mood.isNotEmpty()) {
+            description += "\nMood: " + mood;
+        }
+        
+        // Add role-specific information
+        description += "\nMusician Role: " + role.name + " (" + role.instrument + ")";
+        
+        params->setProperty("description", description);
         
         // Set up instruments array for this role
         Array<var> instruments;
@@ -1096,6 +1187,7 @@ void PerformanceComponent::startGenerationForRole(const MusicianRole& role)
         
         // Use Player->generateChart instead of direct LLM call
         juce::String roleName = role.getName();
+        DBG("DEBUG: About to call player->generateChart for " << roleName << " via proper architecture");
         player->generateChart(parameters, [this, roleIndex, roleName](bool success, const var& midiEventChart)
         {
             DBG("DEBUG: Player callback received for single role " << roleName << " - success: " << (success ? "true" : "false"));
@@ -1158,9 +1250,9 @@ void PerformanceComponent::startGenerationForRole(const MusicianRole& role)
                         DynamicObject* chartObj = new DynamicObject();
                         Array<var> events;
                         
-                        for (int i = 0; i < pattern->getNumEvents(); ++i)
+                        for (int eventIndex = 0; eventIndex < pattern->getNumEvents(); ++eventIndex)
                         {
-                            auto event = pattern->getEventPointer(i);
+                            auto event = pattern->getEventPointer(eventIndex);
                             if (event->message.isNoteOn())
                             {
                                 DynamicObject* noteOn = new DynamicObject();
@@ -1308,6 +1400,7 @@ void PerformanceComponent::saveCurrentPerformance()
         }
     }
     
+    currentPerformance->setDescription(descriptionEditor.getText());
     currentPerformance->setInstructions(instructionsEditor.getText());
     
     // Save the performance
@@ -1359,6 +1452,7 @@ void PerformanceComponent::createNewPerformance()
     }
     
     // Set the current instructions
+    currentPerformance->setDescription(descriptionEditor.getText());
     currentPerformance->setInstructions(instructionsEditor.getText());
     
     // Set the performance attributes
@@ -1412,6 +1506,9 @@ void PerformanceComponent::loadPerformance(std::shared_ptr<Performance> performa
             }
         }
     }
+    
+    // Set the description
+    descriptionEditor.setText(performance->getDescription());
     
     // Set the instructions
     instructionsEditor.setText(performance->getInstructions());
@@ -1514,92 +1611,6 @@ void PerformanceComponent::loadPerformance(std::shared_ptr<Performance> performa
     playButton.setEnabled(hasGeneratedPatterns && !ensembleManager->isPlaying());
 }
 
-juce::String PerformanceComponent::generateMusicianPrompt(const MusicianRole& role, 
-                                                        std::shared_ptr<Song> song,
-                                                        const juce::String& performanceInstructions)
-{
-    DBG("DEBUG: generateMusicianPrompt() called for " << role.getName() << " - MEMORY CHECK POINT A");
-    
-    // Use PromptManager to create a proper music generation prompt
-    PromptManager promptManager;
-    DBG("DEBUG: PromptManager created - MEMORY CHECK POINT B");
-    
-    // Determine the musical style/genre from the performance
-    juce::String style = "Pop"; // Default
-    if (genreSelector.getSelectedId() > 0)
-    {
-        style = genreSelector.getText();
-    }
-    
-    // Get tempo from song or default
-    int tempo = song ? static_cast<int>(song->getTempo()) : 120;
-    
-    // Don't create temporary Player objects - just use lightweight instrument info
-    StringArray instruments;
-    instruments.add(role.instrument);
-    
-    // Build comprehensive description including all performance context
-    juce::String description;
-    
-    // Add song information
-    if (song)
-    {
-        description += "Song: " + song->getTitle() + "\n";
-        
-        // Add song structure if available
-        juce::String songStructure = song->getSourceStructureJson();
-        if (songStructure.isNotEmpty())
-        {
-            description += "Song Structure: " + songStructure + "\n";
-        }
-    }
-    
-    // Add performance attributes
-    juce::String key = (currentPerformance && currentPerformance->getKey().isNotEmpty()) 
-                      ? currentPerformance->getKey() : keySelector.getText();
-    description += "Key: " + key + "\n";
-    
-    juce::String mood = (currentPerformance && currentPerformance->getMood().isNotEmpty()) 
-                       ? currentPerformance->getMood() : moodSelector.getText();
-    description += "Mood: " + mood + "\n";
-    
-    // Add role-specific instructions
-    description += "Musician Role: " + role.name + " (" + role.instrument + ")\n";
-    description += "Musical Style: " + style + "\n";
-    
-    // Add user instructions
-    if (performanceInstructions.isNotEmpty())
-    {
-        description += "Performance Instructions: " + performanceInstructions + "\n";
-    }
-    
-    // Add instrument-specific guidance to description
-    if (role.instrument.containsIgnoreCase("bass"))
-    {
-        description += "\nBass Guidance: Provide solid rhythmic and harmonic foundation with root notes on strong beats, walking lines or riffs as appropriate for " + style + " style.\n";
-    }
-    else if (role.instrument.containsIgnoreCase("drum") || role.instrument.containsIgnoreCase("percussion"))
-    {
-        description += "\nDrum Guidance: Create consistent patterns for each section, use fills for transitions, balance timekeeping with interest for " + style + " style.\n";
-    }
-    else if (role.instrument.containsIgnoreCase("guitar") || role.instrument.containsIgnoreCase("piano") || 
-             role.instrument.containsIgnoreCase("keyboard"))
-    {
-        description += "\nHarmonic Instrument Guidance: Balance chordal accompaniment with melodic elements, use arpeggios and chord voicings appropriate for " + style + " style.\n";
-    }
-    else if (role.instrument.containsIgnoreCase("lead") || 
-             role.instrument.containsIgnoreCase("vocal") || 
-             role.instrument.containsIgnoreCase("melody"))
-    {
-        description += "\nLead/Melody Guidance: Create memorable melodic phrases using appropriate scales/modes for " + style + " style, balance activity with rests.\n";
-    }
-    
-    // Use PromptManager to create the final prompt with lightweight string-based method
-    DBG("DEBUG: About to call promptManager.createMusicGenerationPrompt - MEMORY CHECK POINT C");
-    auto result = promptManager.createMusicGenerationPrompt(style, instruments, tempo, description);
-    DBG("DEBUG: generateMusicianPrompt() completed - MEMORY CHECK POINT D");
-    return result;
-}
 
 
 int PerformanceComponent::getMidiNoteFromName(const juce::String& name)

@@ -5,6 +5,8 @@
 #include "../Core/Musician.h"
 #include "../Core/MusicPatternSystem.h"
 #include "../Core/PatternParser.h"
+#include "../../Player/Core/Player.h"
+#include "../../Player/Core/PlayerManager.h"
 
 namespace covertracks {
 
@@ -16,6 +18,7 @@ namespace covertracks {
  */
 class PatternEditorComponent : public Component,
                               public Button::Listener,
+                              public ComboBox::Listener,
                               private ChangeListener
 {
 public:
@@ -23,8 +26,9 @@ public:
      * @brief Construct a new Pattern Editor Component
      * 
      * @param musician The musician to use for pattern handling
+     * @param playerManager The player manager for player selection
      */
-    PatternEditorComponent(Musician* musician);
+    PatternEditorComponent(Musician* musician, PlayerManager* playerManager = nullptr);
     
     /**
      * @brief Destroy the Pattern Editor Component
@@ -37,6 +41,9 @@ public:
     
     // Button::Listener
     void buttonClicked(Button* button) override;
+    
+    // ComboBox::Listener
+    void comboBoxChanged(ComboBox* comboBoxThatHasChanged) override;
     
     // Pattern access
     void setPattern(const String& patternNotation);
@@ -52,8 +59,8 @@ public:
         virtual ~Listener() = default;
         
         virtual void patternPlayRequested(PatternEditorComponent* editor) = 0;
-        virtual void patternEditRequested(PatternEditorComponent* editor) = 0;
-        virtual void patternGenerateRequested(PatternEditorComponent* editor) = 0;
+        virtual void patternParseRequested(PatternEditorComponent* editor) = 0;
+        virtual void patternLoadRequested(PatternEditorComponent* editor) = 0;
     };
     
     void addListener(Listener* listener);
@@ -67,26 +74,32 @@ private:
     TextEditor patternEditor;
     
     Label headerLabel;
-    TextButton playButton;
-    TextButton editButton;
+    Label playerLabel;
+    ComboBox playerSelector;
     TextButton parseButton;
-    TextButton generateButton;
+    TextButton loadButton;
+    TextButton playButton;
     
-    // Pattern visualization
-    Component visualizationPanel;
+    // MIDI visualization
+    std::unique_ptr<MidiKeyboardState> keyboardState;
+    std::unique_ptr<MidiKeyboardComponent> midiKeyboard;
     
     // References
     Musician* musician;
+    PlayerManager* playerManager;
+    Player* selectedPlayer;
     
     // State
     String currentPatternNotation;
+    var currentParsedChart;
     
     // Helper methods
-    void updateVisualization();
+    void updatePlayerSelector();
     void parseCurrentPattern();
-    
-    // Inner classes
-    class PatternVisualizer;
+    void loadParsedPattern();
+    void playLoadedPattern();
+    void updateMidiVisualization();
+    void onPlayerSelectionChanged();
     
     // Listeners
     ListenerList<Listener> listeners;

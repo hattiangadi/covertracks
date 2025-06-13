@@ -49,9 +49,16 @@ std::shared_ptr<Chart> PatternGenerator::parseResponse(const String& response)
 
 bool PatternGenerator::validateResponse(const String& response)
 {
+    DBG("DEBUG: PatternGenerator::validateResponse called");
+    DBG("DEBUG: Response length: " << response.length());
+    DBG("DEBUG: Response first 200 chars: " << response.substring(0, 200));
+    
     // Basic validation - check if response contains typical pattern notation elements
     if (response.isEmpty())
+    {
+        DBG("DEBUG: Validation failed - response is empty");
         return false;
+    }
     
     // Check for basic pattern elements first
     bool hasPatternElements = response.contains("tempo") || 
@@ -59,6 +66,8 @@ bool PatternGenerator::validateResponse(const String& response)
                              response.contains("primitives") ||
                              response.contains("bars") ||
                              response.contains("patterns");
+    
+    DBG("DEBUG: Has pattern elements: " << (hasPatternElements ? "true" : "false"));
     
     // If no pattern elements, definitely invalid
     if (!hasPatternElements)
@@ -69,11 +78,34 @@ bool PatternGenerator::validateResponse(const String& response)
                         (response.contains("\"tempo\"") || response.contains("\"sections\"") || 
                          response.contains("\"primitives\"") || response.contains("\"bars\"") || 
                          response.contains("\"patterns\""));
+    
+    DBG("DEBUG: Looks like JSON: " << (looksLikeJson ? "true" : "false"));
                         
     if (looksLikeJson)
     {
+        // Extract JSON from markdown code blocks if present
+        String jsonToParse = response;
+        
+        // Check if response is wrapped in markdown code blocks
+        if (response.contains("```json") && response.contains("```"))
+        {
+            int startIndex = response.indexOf("```json") + 7; // Skip "```json"
+            int endIndex = response.lastIndexOf("```");
+            
+            if (startIndex < endIndex)
+            {
+                jsonToParse = response.substring(startIndex, endIndex).trim();
+                DBG("DEBUG: Extracted JSON from markdown, length: " << jsonToParse.length());
+            }
+        }
+        
         var parsedJson;
-        Result parseResult = JSON::parse(response, parsedJson);
+        Result parseResult = JSON::parse(jsonToParse, parsedJson);
+        
+        DBG("DEBUG: JSON parse result: " << (parseResult.wasOk() ? "success" : "failed"));
+        if (parseResult.failed()) {
+            DBG("DEBUG: JSON parse error: " << parseResult.getErrorMessage());
+        }
         
         // If it has braces but fails to parse as JSON, it's malformed
         if (parseResult.failed())
@@ -82,17 +114,38 @@ bool PatternGenerator::validateResponse(const String& response)
         // If JSON parsing succeeds, check if it contains music pattern structure
         if (parsedJson.isObject())
         {
+            DBG("DEBUG: Parsed JSON is an object");
             DynamicObject* obj = parsedJson.getDynamicObject();
             if (obj)
             {
-                return obj->hasProperty("tempo") || 
-                       obj->hasProperty("sections") || 
-                       obj->hasProperty("primitives") ||
-                       obj->hasProperty("bars") ||
-                       obj->hasProperty("patterns");
+                bool hasTempo = obj->hasProperty("tempo");
+                bool hasSections = obj->hasProperty("sections");
+                bool hasPrimitives = obj->hasProperty("primitives");
+                bool hasBars = obj->hasProperty("bars");
+                bool hasPatterns = obj->hasProperty("patterns");
+                
+                DBG("DEBUG: JSON properties - tempo: " << (hasTempo ? "true" : "false") 
+                    << ", sections: " << (hasSections ? "true" : "false")
+                    << ", primitives: " << (hasPrimitives ? "true" : "false")
+                    << ", bars: " << (hasBars ? "true" : "false")
+                    << ", patterns: " << (hasPatterns ? "true" : "false"));
+                
+                bool hasValidStructure = hasTempo || hasSections || hasPrimitives || hasBars || hasPatterns;
+                DBG("DEBUG: Has valid structure: " << (hasValidStructure ? "true" : "false"));
+                
+                return hasValidStructure;
+            }
+            else
+            {
+                DBG("DEBUG: Failed to get DynamicObject from parsed JSON");
             }
         }
+        else
+        {
+            DBG("DEBUG: Parsed JSON is not an object");
+        }
         
+        DBG("DEBUG: Validation failed - returning false");
         return false;
     }
     

@@ -50,6 +50,7 @@ public:
     
     // TextEditor::Listener
     void textEditorReturnKeyPressed(juce::TextEditor& editor) override;
+    void textEditorFocusLost(juce::TextEditor& editor) override;
     
     // ComboBox::Listener
     void comboBoxChanged(juce::ComboBox* comboBoxThatHasChanged) override;
@@ -157,6 +158,9 @@ private:
     juce::Label moodLabel;
     juce::ComboBox moodSelector;
     
+    juce::Label descriptionLabel;
+    juce::TextEditor descriptionEditor;
+    
     juce::Label instructionsLabel;
     juce::TextEditor instructionsEditor;
     
@@ -248,10 +252,6 @@ private:
     void createNewPerformance();
     void loadPerformance(std::shared_ptr<Performance> performance);
     
-    // Generate a prompt for a specific musician
-    juce::String generateMusicianPrompt(const MusicianRole& role, 
-                                      std::shared_ptr<Song> song,
-                                      const juce::String& performanceInstructions);
     
     // Convert a note name to a MIDI note number
     int getMidiNoteFromName(const juce::String& name);

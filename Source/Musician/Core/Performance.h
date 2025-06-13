@@ -214,6 +214,18 @@ public:
     void clearGeneratedCharts();
     
     /**
+     * @brief Get all role names that have generated charts (for debugging)
+     * 
+     * @return juce::StringArray Array of role names with charts
+     */
+    juce::StringArray getGeneratedChartRoleNames() const;
+    
+    /**
+     * @brief Clean up status messages for roles that have no chart data
+     */
+    void cleanupStaleStatusMessages();
+    
+    /**
      * @brief Serialize the performance to a var object
      * 
      * @return juce::var The serialized performance

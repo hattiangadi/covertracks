@@ -458,7 +458,7 @@ MainHostWindow::MainHostWindow()
     
     // Create Pattern Editor component
     std::cout << "[MainHostWindow] Creating PatternEditorComponent" << std::endl;
-    patternEditorWindow = std::make_unique<PatternEditorComponent>(musician.get());
+    patternEditorWindow = std::make_unique<PatternEditorComponent>(musician.get(), playerManager.get());
     std::cout << "[MainHostWindow] PatternEditorComponent created" << std::endl;
     
     // Create Ensemble Main Panel component

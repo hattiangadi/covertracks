@@ -1,10 +1,12 @@
 #include <JuceHeader.h>
+#include "TestRunner.h"
 
 // Include all test files
 #include "PatternParserTests.cpp"
 #include "PatternGeneratorTests.h"
 #include "MusicianTests.cpp"
 #include "MusicianAdvancedTests.cpp"
+#include "PlayerTests.cpp"
 
 namespace covertracks {
 
@@ -37,6 +39,16 @@ void runAllTests()
     // Run the advanced musician tests  
     runner.runTests({&musicianPatternGeneratorTests, &musicianChartFormatTests, 
                      &musicianMemoryLeakTests, &musicianConcurrencyTests});
+    
+    std::cout << "\nRunning Player tests...\n" << std::endl;
+    
+    // Run the player tests
+    runner.runTests({&playerBasicTests, &playerResourceTests, &playerChartTests, &playerPlaybackTests});
+    
+    std::cout << "\nRunning Player advanced tests...\n" << std::endl;
+    
+    // Run the advanced player tests
+    runner.runTests({&playerAsyncTests, &playerPerformanceTests, &playerErrorTests, &playerIntegrationTests});
     
     // Print results
     int numTests = runner.getNumResults();

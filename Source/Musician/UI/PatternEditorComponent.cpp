@@ -4,16 +4,18 @@
 
 namespace covertracks {
 
-PatternEditorComponent::PatternEditorComponent(Musician* musicianPtr)
+PatternEditorComponent::PatternEditorComponent(Musician* musicianPtr, PlayerManager* playerMgr)
     : headerLabel("HeaderLabel", "Pattern Editor"),
-      playButton("Play"),
-      editButton("Edit"),
+      playerLabel("PlayerLabel", "Player:"),
       parseButton("Parse"),
-      generateButton("Generate"),
-      musician(musicianPtr)
+      loadButton("Load"),
+      playButton("Play"),
+      musician(musicianPtr),
+      playerManager(playerMgr),
+      selectedPlayer(nullptr)
 {
     // Set up header label
-    headerLabel.setFont(Font(18.0f, Font::bold));
+    headerLabel.setFont(Font(FontOptions().withHeight(18.0f).withStyle("bold")));
     headerLabel.setJustificationType(Justification::centred);
     addAndMakeVisible(headerLabel);
     
@@ -27,21 +29,29 @@ PatternEditorComponent::PatternEditorComponent(Musician* musicianPtr)
     patternEditor.setText(""); // Start with an empty editor instead of a hardcoded pattern
     addAndMakeVisible(patternEditor);
     
+    // Set up player selection
+    playerLabel.setFont(Font(FontOptions().withHeight(14.0f)));
+    addAndMakeVisible(playerLabel);
+    
+    playerSelector.addListener(this);
+    addAndMakeVisible(playerSelector);
+    updatePlayerSelector();
+    
     // Set up buttons
-    playButton.addListener(this);
-    addAndMakeVisible(playButton);
-    
-    editButton.addListener(this);
-    addAndMakeVisible(editButton);
-    
     parseButton.addListener(this);
     addAndMakeVisible(parseButton);
     
-    generateButton.addListener(this);
-    addAndMakeVisible(generateButton);
+    loadButton.addListener(this);
+    addAndMakeVisible(loadButton);
     
-    // Set up visualization panel
-    addAndMakeVisible(visualizationPanel);
+    playButton.addListener(this);
+    addAndMakeVisible(playButton);
+    
+    // Set up MIDI keyboard visualization
+    keyboardState = std::make_unique<MidiKeyboardState>();
+    midiKeyboard = std::make_unique<MidiKeyboardComponent>(*keyboardState, MidiKeyboardComponent::horizontalKeyboard);
+    midiKeyboard->setAvailableRange(36, 96); // C2 to C7
+    addAndMakeVisible(*midiKeyboard);
     
     // Parse the initial pattern
     parseCurrentPattern();
@@ -54,16 +64,17 @@ PatternEditorComponent::PatternEditorComponent(Musician* musicianPtr)
 PatternEditorComponent::~PatternEditorComponent()
 {
     // Remove listeners
-    playButton.removeListener(this);
-    editButton.removeListener(this);
     parseButton.removeListener(this);
-    generateButton.removeListener(this);
+    loadButton.removeListener(this);
+    playButton.removeListener(this);
+    playerSelector.removeListener(this);
     
     if (musician)
         musician->removeChangeListener(this);
     
-    // Explicitly clear all child components to prevent leaks
-    visualizationPanel.removeAllChildren();
+    // Clean up MIDI keyboard
+    keyboardState.reset();
+    midiKeyboard.reset();
 }
 
 void PatternEditorComponent::paint(Graphics& g)
@@ -74,13 +85,6 @@ void PatternEditorComponent::paint(Graphics& g)
     // Draw a border around the component
     g.setColour(Colours::grey);
     g.drawRect(getLocalBounds(), 1);
-    
-    // Draw the visualization area
-    auto visualizationArea = visualizationPanel.getBounds();
-    g.setColour(Colours::lightgrey);
-    g.fillRect(visualizationArea);
-    g.setColour(Colours::grey);
-    g.drawRect(visualizationArea, 1);
 }
 
 void PatternEditorComponent::resized()
@@ -90,58 +94,46 @@ void PatternEditorComponent::resized()
     // Header at the top
     headerLabel.setBounds(area.removeFromTop(30));
     
+    // Player selection
+    auto playerArea = area.removeFromTop(30);
+    playerLabel.setBounds(playerArea.removeFromLeft(60).reduced(5));
+    playerSelector.setBounds(playerArea.reduced(5));
+    
     // Buttons at the bottom
     auto buttonArea = area.removeFromBottom(40);
-    int buttonWidth = buttonArea.getWidth() / 4;
+    int buttonWidth = buttonArea.getWidth() / 3;
     
-    playButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(5));
-    editButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(5));
     parseButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(5));
-    generateButton.setBounds(buttonArea.reduced(5));
+    loadButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(5));
+    playButton.setBounds(buttonArea.reduced(5));
     
-    // Split remaining area between the editor and visualization
+    // Split remaining area between the editor and MIDI keyboard
     auto editorArea = area.withWidth(area.getWidth() / 2);
-    auto visArea = area.withX(editorArea.getRight());
+    auto keyboardArea = area.withX(editorArea.getRight());
     
     patternEditor.setBounds(editorArea.reduced(5));
-    visualizationPanel.setBounds(visArea.reduced(5));
+    midiKeyboard->setBounds(keyboardArea.reduced(5));
 }
 
 void PatternEditorComponent::buttonClicked(Button* button)
 {
-    if (button == &playButton)
-    {
-        // Notify listeners that playback is requested
-        listeners.call(&Listener::patternPlayRequested, this);
-        
-        // Try to play the pattern via the musician
-        if (musician && !currentPatternNotation.isEmpty())
-        {
-            // Use a default tempo of 120 BPM if not specified in the pattern
-            double tempo = 120.0;
-            
-            // Convert notation to MIDI events for playback
-            // Note: This component needs to be refactored to work with Player instead of Musician
-            var events = musician->convertNotationToMidiEvents(currentPatternNotation, tempo);
-            
-            // For now, just notify listeners - actual playback should be handled by Player
-            std::cout << "Pattern playback requested - events converted: " << events.size() << " events" << std::endl;
-        }
-    }
-    else if (button == &editButton)
-    {
-        // Notify listeners that editing is requested
-        listeners.call(&Listener::patternEditRequested, this);
-    }
-    else if (button == &parseButton)
+    if (button == &parseButton)
     {
         // Parse the current pattern
         parseCurrentPattern();
+        listeners.call(&Listener::patternParseRequested, this);
     }
-    else if (button == &generateButton)
+    else if (button == &loadButton)
     {
-        // Notify listeners that generation is requested
-        listeners.call(&Listener::patternGenerateRequested, this);
+        // Load the parsed pattern into the selected player
+        loadParsedPattern();
+        listeners.call(&Listener::patternLoadRequested, this);
+    }
+    else if (button == &playButton)
+    {
+        // Play the loaded pattern
+        playLoadedPattern();
+        listeners.call(&Listener::patternPlayRequested, this);
     }
 }
 
@@ -178,56 +170,172 @@ void PatternEditorComponent::parseCurrentPattern()
 {
     currentPatternNotation = patternEditor.getText();
     
-    // We don't need to parse the pattern here anymore
-    // Just update the visualization with the current notation
-    updateVisualization();
+    if (!selectedPlayer)
+    {
+        std::cout << "No player selected for parsing. Please select a player first." << std::endl;
+        return;
+    }
+    
+    if (!currentPatternNotation.isEmpty())
+    {
+        // Convert pattern string to chart format using Player's conversion
+        // This uses the same code path as Performance Mode via the Player's internal Musician
+        var result = selectedPlayer->convertPatternStringToChart(currentPatternNotation, 120.0);
+        
+        if (result.hasProperty("success") && static_cast<bool>(result["success"]))
+        {
+            // Store the parsed chart
+            currentParsedChart = result;
+            std::cout << "Pattern parsed successfully. Events: " << result["events"].size() << std::endl;
+            
+            // Update MIDI visualization
+            updateMidiVisualization();
+        }
+        else
+        {
+            std::cout << "Failed to parse pattern" << std::endl;
+            currentParsedChart = var();
+        }
+    }
 }
 
-// Define PatternVisualizer as a member class instead of a local class
-class PatternEditorComponent::PatternVisualizer : public Component 
+void PatternEditorComponent::comboBoxChanged(ComboBox* comboBoxThatHasChanged)
 {
-public:
-    PatternVisualizer(const String& patternText) : patternNotation(patternText) {}
-    
-    void paint(Graphics& g) override 
+    if (comboBoxThatHasChanged == &playerSelector)
     {
-        g.fillAll(Colours::white);
-        
-        // Draw pattern notation directly
-        Font font(14.0f);
-        g.setFont(font);
-        g.setColour(Colours::black);
-        
-        g.drawText("Pattern Notation:", 10, 10, getWidth() - 20, 20, Justification::centredLeft);
-        
-        // Draw the pattern notation with line breaks
-        StringArray lines;
-        lines.addLines(patternNotation);
-        
-        int y = 40;
-        for (int i = 0; i < lines.size(); ++i)
+        onPlayerSelectionChanged();
+    }
+}
+
+void PatternEditorComponent::updatePlayerSelector()
+{
+    playerSelector.clear();
+    playerSelector.addItem("No Player Selected", 1);
+    
+    if (playerManager)
+    {
+        auto players = playerManager->getPlayers();
+        int itemIndex = 2;
+        for (auto* player : players)
         {
-            g.drawText(lines[i], 10, y, getWidth() - 20, 20, Justification::centredLeft);
-            y += 20;
+            if (player)
+            {
+                playerSelector.addItem(player->getMetadata().name, itemIndex++);
+            }
         }
     }
     
-private:
-    String patternNotation;
-};
+    playerSelector.setSelectedItemIndex(0);
+    selectedPlayer = nullptr;
+}
 
-void PatternEditorComponent::updateVisualization()
+void PatternEditorComponent::onPlayerSelectionChanged()
 {
-    // Clear any existing content
-    visualizationPanel.removeAllChildren();
+    int selectedIndex = playerSelector.getSelectedItemIndex();
+    selectedPlayer = nullptr;
     
-    // Create the visualizer - will be owned by visualizationPanel
-    auto visualizer = new PatternVisualizer(currentPatternNotation);
-    visualizer->setBounds(visualizationPanel.getLocalBounds());
-    visualizationPanel.addAndMakeVisible(visualizer);
+    if (selectedIndex > 0 && playerManager)
+    {
+        auto players = playerManager->getPlayers();
+        int playerIndex = selectedIndex - 1; // Adjust for "No Player Selected" option
+        
+        if (playerIndex >= 0 && playerIndex < players.size())
+        {
+            selectedPlayer = players[playerIndex];
+            std::cout << "Selected player: " << selectedPlayer->getMetadata().name << std::endl;
+        }
+    }
+}
+
+void PatternEditorComponent::loadParsedPattern()
+{
+    if (!selectedPlayer)
+    {
+        std::cout << "No player selected for loading pattern" << std::endl;
+        return;
+    }
     
-    // Force a repaint
-    visualizationPanel.repaint();
+    if (currentParsedChart.isVoid() || !currentParsedChart.hasProperty("events"))
+    {
+        std::cout << "No parsed pattern available. Parse first." << std::endl;
+        return;
+    }
+    
+    // Load the parsed chart into the selected player
+    bool loaded = selectedPlayer->loadChart(currentParsedChart);
+    
+    if (loaded)
+    {
+        std::cout << "Pattern loaded successfully into " << selectedPlayer->getMetadata().name << std::endl;
+    }
+    else
+    {
+        std::cout << "Failed to load pattern into " << selectedPlayer->getMetadata().name << std::endl;
+    }
+}
+
+void PatternEditorComponent::playLoadedPattern()
+{
+    if (!selectedPlayer)
+    {
+        std::cout << "No player selected for playback" << std::endl;
+        return;
+    }
+    
+    // Start playback on the selected player
+    bool started = selectedPlayer->play();
+    
+    if (started)
+    {
+        std::cout << "Started playback on " << selectedPlayer->getMetadata().name << std::endl;
+    }
+    else
+    {
+        std::cout << "Failed to start playback on " << selectedPlayer->getMetadata().name << std::endl;
+    }
+}
+
+void PatternEditorComponent::updateMidiVisualization()
+{
+    if (!keyboardState || currentParsedChart.isVoid())
+        return;
+    
+    // Clear current state
+    keyboardState->allNotesOff(1);
+    
+    // Extract events and show note activity on the keyboard
+    if (currentParsedChart.hasProperty("events"))
+    {
+        var events = currentParsedChart["events"];
+        
+        if (events.isArray())
+        {
+            // Show which notes are used in the pattern (briefly highlight them)
+            for (int i = 0; i < events.size(); ++i)
+            {
+                var event = events[i];
+                
+                if (event.hasProperty("type") && event.hasProperty("note"))
+                {
+                    String type = event["type"].toString();
+                    int note = static_cast<int>(static_cast<double>(event["note"]));
+                    
+                    if (type == "note_on" && note >= 0 && note <= 127)
+                    {
+                        // Briefly show the note as active
+                        keyboardState->noteOn(1, note, 0.5f);
+                        
+                        // Schedule note off after a short delay
+                        Timer::callAfterDelay(200, [this, note]()
+                        {
+                            if (keyboardState)
+                                keyboardState->noteOff(1, note, 0.0f);
+                        });
+                    }
+                }
+            }
+        }
+    }
 }
 
 void PatternEditorComponent::addListener(Listener* listener)

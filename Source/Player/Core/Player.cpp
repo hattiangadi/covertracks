@@ -764,6 +764,23 @@ bool Player::loadChartFromMusician()
     return false;
 }
 
+var Player::convertPatternStringToChart(const String& patternString, double tempo)
+{
+    if (musician != nullptr)
+    {
+        // Use the musician's conversion method to convert the pattern string
+        // This uses the same code path as Performance Mode
+        return musician->convertNotationToMidiEvents(patternString, tempo);
+    }
+    
+    // Return empty result if no musician available
+    DynamicObject::Ptr result = new DynamicObject();
+    result->setProperty("success", false);
+    result->setProperty("tempo", tempo);
+    result->setProperty("events", Array<var>());
+    return var(result.get());
+}
+
 const var& Player::getCurrentChart() const
 {
     return currentLoadedChart;

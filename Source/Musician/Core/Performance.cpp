@@ -56,6 +56,37 @@ void Performance::clearGeneratedCharts()
     statusMessages.clear();
 }
 
+juce::StringArray Performance::getGeneratedChartRoleNames() const
+{
+    juce::StringArray roleNames;
+    for (const auto& pair : generatedCharts)
+    {
+        roleNames.add(pair.first);
+    }
+    return roleNames;
+}
+
+void Performance::cleanupStaleStatusMessages()
+{
+    // Remove status messages for roles that have no chart data
+    auto statusIt = statusMessages.begin();
+    while (statusIt != statusMessages.end())
+    {
+        const juce::String& roleName = statusIt->first;
+        auto chartIt = generatedCharts.find(roleName);
+        
+        // If no chart exists for this role, remove the status message
+        if (chartIt == generatedCharts.end() || chartIt->second.isVoid())
+        {
+            statusIt = statusMessages.erase(statusIt);
+        }
+        else
+        {
+            ++statusIt;
+        }
+    }
+}
+
 juce::Array<MusicianRole> Performance::getEnsemble() const
 {
     // Return cached roles if valid
