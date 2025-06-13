@@ -411,10 +411,22 @@ var Musician::midiMessageSequenceToVar(const MidiMessageSequence& sequence, doub
     // Define the ticks per quarter note used in Chart generation (from MusicPatternComponents.cpp)
     const double TICKS_PER_QUARTER_NOTE = 960.0;
     
+    // Track note_on events to match with note_off events for duration calculation
+    struct NoteOnEvent {
+        int note;
+        int channel;
+        double timestamp;
+        float velocity;
+        int eventIndex;
+        String source;
+    };
+    
+    Array<NoteOnEvent> pendingNoteOns;
+    String currentSource = "pattern"; // Track current source from meta events
+    
     for (int i = 0; i < sequence.getNumEvents(); ++i)
     {
         auto event = sequence.getEventPointer(i);
-        DynamicObject* eventObj = new DynamicObject();
         
         // Convert MIDI tick timestamp to normalized beats (quarter notes)
         double originalTimestamp = event->message.getTimeStamp();
@@ -425,28 +437,66 @@ var Musician::midiMessageSequenceToVar(const MidiMessageSequence& sequence, doub
             DBG("DEBUG: Converting timestamp - original: " << originalTimestamp << " ticks, normalized: " << normalizedTimestamp << " beats");
         }
         
-        if (event->message.isNoteOn())
+        if (event->message.isMetaEvent() && event->message.getMetaEventType() == 1)
         {
+            // Text meta event containing source information
+            currentSource = event->message.getTextFromTextMetaEvent();
+        }
+        else if (event->message.isNoteOn())
+        {
+            // Store this note_on event to match with future note_off
+            NoteOnEvent noteOn;
+            noteOn.note = event->message.getNoteNumber();
+            noteOn.channel = event->message.getChannel();
+            noteOn.timestamp = normalizedTimestamp;
+            noteOn.velocity = event->message.getFloatVelocity();
+            noteOn.eventIndex = events.size(); // Index where we'll store this event
+            noteOn.source = currentSource;
+            
+            pendingNoteOns.add(noteOn);
+            
+            // Create the note event with placeholder duration (will be updated when note_off is found)
+            DynamicObject* eventObj = new DynamicObject();
             eventObj->setProperty("type", "note_on");
             eventObj->setProperty("channel", event->message.getChannel());
             eventObj->setProperty("note", event->message.getNoteNumber());
             eventObj->setProperty("velocity", event->message.getFloatVelocity());
             eventObj->setProperty("timestamp", normalizedTimestamp);
+            eventObj->setProperty("duration", 0.25); // Default duration, will be updated
+            eventObj->setProperty("source", currentSource);
             
             events.add(var(eventObj));
         }
         else if (event->message.isNoteOff())
         {
-            eventObj->setProperty("type", "note_off");
-            eventObj->setProperty("channel", event->message.getChannel());
-            eventObj->setProperty("note", event->message.getNoteNumber());
-            eventObj->setProperty("velocity", 0.0f);
-            eventObj->setProperty("timestamp", normalizedTimestamp);
+            // Find the matching note_on event to calculate duration
+            int noteNumber = event->message.getNoteNumber();
+            int channel = event->message.getChannel();
             
-            events.add(var(eventObj));
+            for (int j = pendingNoteOns.size() - 1; j >= 0; --j)
+            {
+                if (pendingNoteOns[j].note == noteNumber && pendingNoteOns[j].channel == channel)
+                {
+                    // Calculate duration
+                    double duration = normalizedTimestamp - pendingNoteOns[j].timestamp;
+                    
+                    // Update the corresponding note_on event with the calculated duration
+                    if (auto* eventObj = events[pendingNoteOns[j].eventIndex].getDynamicObject())
+                    {
+                        eventObj->setProperty("duration", duration);
+                    }
+                    
+                    // Remove this note_on from pending list
+                    pendingNoteOns.remove(j);
+                    break;
+                }
+            }
+            
+            // Note: We don't add note_off events to the output since we now have duration in note_on events
         }
         else if (event->message.isController())
         {
+            DynamicObject* eventObj = new DynamicObject();
             eventObj->setProperty("type", "controller");
             eventObj->setProperty("channel", event->message.getChannel());
             eventObj->setProperty("controller", event->message.getControllerNumber());
@@ -457,12 +507,28 @@ var Musician::midiMessageSequenceToVar(const MidiMessageSequence& sequence, doub
         }
         else if (event->message.isProgramChange())
         {
+            DynamicObject* eventObj = new DynamicObject();
             eventObj->setProperty("type", "program_change");
             eventObj->setProperty("channel", event->message.getChannel());
             eventObj->setProperty("program", event->message.getProgramChangeNumber());
             eventObj->setProperty("timestamp", normalizedTimestamp);
             
             events.add(var(eventObj));
+        }
+    }
+    
+    // Handle any remaining note_on events that didn't get a matching note_off
+    // Give them a default duration of 0.25 beats (quarter note)
+    for (const auto& pendingNoteOn : pendingNoteOns)
+    {
+        if (auto* eventObj = events[pendingNoteOn.eventIndex].getDynamicObject())
+        {
+            double currentDuration = static_cast<double>(eventObj->getProperty("duration"));
+            if (currentDuration == 0.25) // Still has the placeholder duration
+            {
+                eventObj->setProperty("duration", 0.25); // Keep default quarter note duration
+                DBG("DEBUG: Note_on without matching note_off, using default duration: note=" << pendingNoteOn.note);
+            }
         }
     }
     

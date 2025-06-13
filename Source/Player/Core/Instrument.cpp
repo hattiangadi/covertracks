@@ -917,7 +917,7 @@ bool Instrument::playMIDISequence(const MidiMessageSequence& sequence, double ne
             
             std::cout << "Prepared note on: channel=" << event->message.getChannel() 
                       << ", note=" << event->message.getNoteNumber() 
-                      << ", velocity=" << newVelocity 
+                      << ", velocity=" << static_cast<int>(newVelocity) 
                       << ", timestamp=" << originalTimestamp << std::endl;
         }
         else if (event->message.isNoteOff())

@@ -36,9 +36,9 @@ Bar::~Bar()
     DBG("Bar destroyed: " + String::toHexString((intptr_t)this) + ", remaining instances: " + String(instanceCount));
 }
 
-void Bar::addNote(int beat, int channel, int noteNumber, float velocity, float duration)
+void Bar::addNote(int beat, int channel, int noteNumber, float velocity, float duration, const String& source)
 {
-    Event event(Event::Type::Note, static_cast<float>(beat), channel);
+    Event event(Event::Type::Note, static_cast<float>(beat), channel, source);
     event.noteNumber = noteNumber;
     event.velocity = velocity;
     event.duration = duration;
@@ -79,6 +79,11 @@ std::unique_ptr<MidiMessageSequence> Bar::toMidiSequence() const
         {
             case Event::Type::Note:
             {
+                // Note on - use meta event to store source info
+                MidiMessage sourceInfo = MidiMessage::textMetaEvent(1, event.source);
+                sourceInfo.setTimeStamp(tickPosition - 0.001); // Just before the note
+                sequence->addEvent(sourceInfo);
+                
                 // Note on
                 MidiMessage noteOn = MidiMessage::noteOn(event.channel + 1, 
                                                        event.noteNumber, 
@@ -544,7 +549,7 @@ std::unique_ptr<MidiMessageSequence> Chart::toMidiSequence() const
     sequence->sort();
     
     // Set tempo information at the start of the sequence
-    MidiMessage tempoMessage = MidiMessage::tempoMetaEvent(60000000.0 / tempo);
+    MidiMessage tempoMessage = MidiMessage::tempoMetaEvent(static_cast<int>(60000000.0 / tempo));
     tempoMessage.setTimeStamp(0.0);
     sequence->addEvent(tempoMessage);
     

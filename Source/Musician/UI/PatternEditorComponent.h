@@ -19,7 +19,8 @@ namespace covertracks {
 class PatternEditorComponent : public Component,
                               public Button::Listener,
                               public ComboBox::Listener,
-                              private ChangeListener
+                              private ChangeListener,
+                              private Timer
 {
 public:
     /**
@@ -49,6 +50,11 @@ public:
     void setPattern(const String& patternNotation);
     String getPatternNotation() const;
     
+    // Playback position
+    void setPlaybackPosition(double positionInBeats);
+    void startPlaybackTracking(double tempo = 120.0); // Start continuous tracking
+    void stopPlaybackTracking(); // Stop tracking
+    
     // Notification functions
     void patternUpdated();
     
@@ -70,6 +76,9 @@ private:
     // ChangeListener
     void changeListenerCallback(ChangeBroadcaster* source) override;
     
+    // Timer callback for playback tracking
+    void timerCallback() override;
+    
     // UI components
     TextEditor patternEditor;
     
@@ -87,7 +96,11 @@ private:
     public:
         PianoRollComponent();
         void setMidiEvents(const var& chart);
+        void setPlaybackPosition(double positionInBeats); // Set current playback position
+        void setScrollOffset(double offset); // Set scroll position
+        double getScrollOffset() const; // Get current scroll position
         void paint(Graphics& g) override;
+        void mouseWheelMove(const MouseEvent& event, const MouseWheelDetails& wheel) override;
         
     private:
         struct NoteEvent
@@ -95,12 +108,16 @@ private:
             int note;
             double timestamp;
             double duration;
+            String source;
         };
         
         Array<NoteEvent> events;
+        double scrollOffset = 0.0; // Scroll position in bars
+        double playbackPosition = -1.0; // Current playback position in beats (-1 = not playing)
         
         bool isWhiteKeyNote(int midiNote);
         String getMidiNoteName(int midiNote);
+        Colour getSourceColour(const String& source);
     };
     
     std::unique_ptr<PianoRollComponent> pianoRoll;
@@ -114,6 +131,12 @@ private:
     String currentPatternNotation;
     var currentParsedChart;
     
+    // Playback tracking
+    bool isTrackingPlayback = false;
+    double playbackTempo = 120.0;
+    double playbackStartTime = 0.0; // When playback started (in milliseconds)
+    double playbackStartBeat = 0.0; // Beat position when tracking started
+    
     // Helper methods
     void updatePlayerSelector();
     void parseCurrentPattern();
@@ -122,6 +145,7 @@ private:
     void updatePianoRollVisualization();
     void stopCurrentPlayback();
     void onPlayerSelectionChanged();
+    void autoScrollToPlaybackPosition(double currentBeat);
     
     // Listeners
     ListenerList<Listener> listeners;

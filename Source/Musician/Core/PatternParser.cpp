@@ -252,10 +252,25 @@ std::shared_ptr<Section> PatternParser::parseSectionFromJson(const var& sectionJ
                         }
                     }
                     
-                    // Add all events from this layer to the merged collection
+                    // Add all events from this layer to the merged collection with source metadata
                     for (const auto& event : layerEvents)
                     {
-                        allEvents.add(event);
+                        // Add source metadata to track where this event came from
+                        var eventWithSource = event;
+                        if (eventWithSource.isArray() && eventWithSource.size() >= 2)
+                        {
+                            // Create a new array with source metadata
+                            Array<var> eventArray;
+                            for (int i = 0; i < eventWithSource.size(); ++i)
+                            {
+                                eventArray.add(eventWithSource[i]);
+                            }
+                            // Add source as 5th element (after beat, note, velocity, duration)
+                            while (eventArray.size() < 5) eventArray.add(var()); // Fill missing elements
+                            eventArray.set(4, "layer:" + layerName);
+                            eventWithSource = var(eventArray);
+                        }
+                        allEvents.add(eventWithSource);
                     }
                     
                     DBG("Added " + String(layerEvents.size()) + " events from layer '" + layerName + "'");
@@ -301,6 +316,7 @@ std::shared_ptr<Section> PatternParser::parseSectionFromJson(const var& sectionJ
             for (int barIndex = 0; barIndex < numBars; ++barIndex)
             {
                 Array<var> barEvents = basePattern;  // Start with base pattern
+                String sourceType = "base:" + basePatternName;
                 
                 // Check for variation for this bar
                 String barKey = "bar" + String(barIndex + 1);  // bar1, bar2, etc.
@@ -314,13 +330,35 @@ std::shared_ptr<Section> PatternParser::parseSectionFromJson(const var& sectionJ
                         if (variationIt != patterns.end())
                         {
                             barEvents = variationIt->second;  // Use variation pattern instead
+                            sourceType = "variation:" + variationPatternName;
                             DBG("Using variation '" + variationPatternName + "' for " + barKey);
                         }
                     }
                 }
                 
+                // Add source metadata to all events in this bar
+                Array<var> eventsWithSource;
+                for (const auto& event : barEvents)
+                {
+                    var eventWithSource = event;
+                    if (eventWithSource.isArray() && eventWithSource.size() >= 2)
+                    {
+                        // Create a new array with source metadata
+                        Array<var> eventArray;
+                        for (int i = 0; i < eventWithSource.size(); ++i)
+                        {
+                            eventArray.add(eventWithSource[i]);
+                        }
+                        // Add source as 5th element (after beat, note, velocity, duration)
+                        while (eventArray.size() < 5) eventArray.add(var()); // Fill missing elements
+                        eventArray.set(4, sourceType);
+                        eventWithSource = var(eventArray);
+                    }
+                    eventsWithSource.add(eventWithSource);
+                }
+                
                 // Parse the events (base or variation) into the bar
-                auto bar = parseBarFromJson(barEvents, primitives, chords);
+                auto bar = parseBarFromJson(eventsWithSource, primitives, chords);
                 if (bar)
                 {
                     phrase->addBar(bar);
@@ -405,6 +443,7 @@ std::shared_ptr<Bar> PatternParser::parseBarFromJson(const Array<var>& eventsJso
         // Default values
         float velocity = 0.8f;
         float duration = 0.25f;
+        String source = "pattern"; // Default source
         
         // Optional third element for velocity
         if (eventArray->size() >= 3)
@@ -413,6 +452,10 @@ std::shared_ptr<Bar> PatternParser::parseBarFromJson(const Array<var>& eventsJso
         // Optional fourth element for duration  
         if (eventArray->size() >= 4)
             duration = (*eventArray)[3];
+            
+        // Optional fifth element for source metadata
+        if (eventArray->size() >= 5)
+            source = (*eventArray)[4].toString();
         
         // Handle note data
         if (noteData.isString())
@@ -421,8 +464,8 @@ std::shared_ptr<Bar> PatternParser::parseBarFromJson(const Array<var>& eventsJso
             String noteName = noteData.toString();
             int midiNote = findMidiNoteForPrimitive(noteName, primitives);
             int channel = getChannelForPrimitive(noteName, primitives);
-            bar->addNote(static_cast<int>(beat), channel, midiNote, velocity, duration);
-            DBG("Added note: " + noteName + " at beat " + String(beat) + " (MIDI " + String(midiNote) + ")");
+            bar->addNote(static_cast<int>(beat), channel, midiNote, velocity, duration, source);
+            DBG("Added note: " + noteName + " at beat " + String(beat) + " (MIDI " + String(midiNote) + ") from " + source);
         }
         else if (noteData.isObject() && noteData.hasProperty("chord"))
         {
@@ -436,7 +479,7 @@ std::shared_ptr<Bar> PatternParser::parseBarFromJson(const Array<var>& eventsJso
                 {
                     int midiNote = findMidiNoteForPrimitive(noteName, primitives);
                     int channel = getChannelForPrimitive(noteName, primitives);
-                    bar->addNote(static_cast<int>(beat), channel, midiNote, velocity, duration);
+                    bar->addNote(static_cast<int>(beat), channel, midiNote, velocity, duration, source);
                 }
                 DBG("Added chord: " + chordName + " at beat " + String(beat));
             }

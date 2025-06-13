@@ -28,7 +28,7 @@ public:
     static void forceCleanupLeakedInstances();
     static void registerStaticInstance(Bar* instance);
     
-    void addNote(int beat, int channel, int noteNumber, float velocity, float duration);
+    void addNote(int beat, int channel, int noteNumber, float velocity, float duration, const String& source = "pattern");
     void addController(int beat, int channel, int controllerNumber, int value);
     void addProgramChange(int beat, int channel, int programNumber);
     
@@ -53,10 +53,11 @@ private:
         float duration;
         int controllerNumber;
         int value;
+        String source;  // Source metadata (e.g., "layer:drums", "variation:fill", "base:main")
         
-        Event(Type eventType, float beatPos, int channelNum)
+        Event(Type eventType, float beatPos, int channelNum, const String& sourceInfo = "pattern")
             : type(eventType), beat(beatPos), channel(channelNum), noteNumber(0), 
-              velocity(0.0f), duration(0.0f), controllerNumber(0), value(0) {}
+              velocity(0.0f), duration(0.0f), controllerNumber(0), value(0), source(sourceInfo) {}
     };
     
     int timeSignatureNumerator;

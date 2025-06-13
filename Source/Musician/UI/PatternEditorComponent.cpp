@@ -174,6 +174,92 @@ void PatternEditorComponent::patternUpdated()
     parseCurrentPattern();
 }
 
+void PatternEditorComponent::setPlaybackPosition(double positionInBeats)
+{
+    if (pianoRoll)
+    {
+        pianoRoll->setPlaybackPosition(positionInBeats);
+    }
+}
+
+void PatternEditorComponent::startPlaybackTracking(double tempo)
+{
+    playbackTempo = tempo;
+    playbackStartTime = Time::getMillisecondCounterHiRes();
+    playbackStartBeat = 0.0; // Start from beginning
+    isTrackingPlayback = true;
+    
+    // Start timer at 30 FPS for smooth updates
+    startTimer(33); // ~30 FPS (1000ms / 30 = 33ms)
+    
+    std::cout << "Started playback tracking at " << tempo << " BPM" << std::endl;
+}
+
+void PatternEditorComponent::stopPlaybackTracking()
+{
+    isTrackingPlayback = false;
+    stopTimer();
+    
+    // Clear playback position indicator
+    if (pianoRoll)
+    {
+        pianoRoll->setPlaybackPosition(-1.0); // -1 means not playing
+    }
+    
+    std::cout << "Stopped playback tracking" << std::endl;
+}
+
+void PatternEditorComponent::timerCallback()
+{
+    if (isTrackingPlayback)
+    {
+        // Calculate current playback position based on elapsed time
+        double currentTime = Time::getMillisecondCounterHiRes();
+        double elapsedTimeMs = currentTime - playbackStartTime;
+        double elapsedTimeSeconds = elapsedTimeMs / 1000.0;
+        
+        // Convert elapsed time to beats using tempo
+        // BPM = beats per minute, so beats per second = BPM / 60
+        double beatsPerSecond = playbackTempo / 60.0;
+        double currentBeat = playbackStartBeat + (elapsedTimeSeconds * beatsPerSecond);
+        
+        // Update the playback position
+        if (pianoRoll)
+        {
+            pianoRoll->setPlaybackPosition(currentBeat);
+            
+            // Auto-scroll if playback position is outside visible area
+            autoScrollToPlaybackPosition(currentBeat);
+        }
+    }
+}
+
+void PatternEditorComponent::autoScrollToPlaybackPosition(double currentBeat)
+{
+    if (!pianoRoll) return;
+    
+    // Get current scroll parameters
+    int beatsPerRow = 16; // 4 bars per row
+    int rows = 4; // 4 visible rows
+    double currentScrollOffset = pianoRoll->getScrollOffset();
+    
+    // Calculate visible beat range
+    double visibleStartBeat = currentScrollOffset * 4.0; // scrollOffset is in bars
+    double visibleEndBeat = visibleStartBeat + (rows * beatsPerRow);
+    
+    // Check if playback position is outside visible area
+    if (currentBeat < visibleStartBeat || currentBeat >= visibleEndBeat)
+    {
+        // Calculate which bar contains the current beat
+        double targetBar = std::floor(currentBeat / 4.0);
+        
+        // Scroll to show this bar in the first row
+        pianoRoll->setScrollOffset(targetBar);
+        
+        std::cout << "Auto-scrolled to bar " << targetBar << " (beat " << currentBeat << ")" << std::endl;
+    }
+}
+
 void PatternEditorComponent::parseCurrentPattern()
 {
     currentPatternNotation = patternEditor.getText();
@@ -296,6 +382,16 @@ void PatternEditorComponent::playLoadedPattern()
     if (started)
     {
         std::cout << "Started playback on " << selectedPlayer->getMetadata().name << std::endl;
+        
+        // Get tempo from the current chart if available
+        double tempo = 120.0; // Default tempo
+        if (currentParsedChart.hasProperty("tempo"))
+        {
+            tempo = static_cast<double>(currentParsedChart["tempo"]);
+        }
+        
+        // Start visual playback tracking
+        startPlaybackTracking(tempo);
     }
     else
     {
@@ -305,6 +401,9 @@ void PatternEditorComponent::playLoadedPattern()
 
 void PatternEditorComponent::stopCurrentPlayback()
 {
+    // Stop visual tracking first
+    stopPlaybackTracking();
+    
     if (selectedPlayer)
     {
         selectedPlayer->stop();
@@ -356,10 +455,11 @@ void PatternEditorComponent::PianoRollComponent::setMidiEvents(const var& chart)
                 int note = static_cast<int>(static_cast<double>(event["note"]));
                 double timestamp = static_cast<double>(event["timestamp"]);
                 double duration = event.hasProperty("duration") ? static_cast<double>(event["duration"]) : 0.25;
+                String source = event.hasProperty("source") ? event["source"].toString() : "pattern";
                 
                 if (type == "note_on")
                 {
-                    events.add({note, timestamp, duration});
+                    events.add({note, timestamp, duration, source});
                 }
             }
         }
@@ -379,74 +479,189 @@ void PatternEditorComponent::PianoRollComponent::paint(Graphics& g)
     int width = bounds.getWidth();
     int height = bounds.getHeight();
     
-    // Time grid - vertical lines every beat
-    double beatsToShow = 8.0; // Show 8 beats
-    double pixelsPerBeat = width / beatsToShow;
+    // Time grid - vertical lines every beat (each row shows 4 bars = 16 beats)
+    int rows = 4; // 4 rows visible at once
+    int beatsPerRow = 16; // 4 bars per row (4 beats × 4 bars)
+    int gapHeight = 10; // Gap between rows
+    double availableHeight = height - (gapHeight * (rows - 1)); // Subtract gaps
+    double rowHeight = availableHeight / rows;
+    double pixelsPerBeat = width / beatsPerRow;
     
-    for (double beat = 0; beat <= beatsToShow; beat += 0.25) // Quarter note grid
+    // Draw grid for each row
+    for (int row = 0; row < rows; ++row)
     {
-        int x = static_cast<int>(beat * pixelsPerBeat);
-        bool isDownbeat = (static_cast<int>(beat * 4) % 4 == 0);
-        g.setColour(isDownbeat ? Colours::grey : Colours::lightgrey);
-        g.drawVerticalLine(x, 0.0f, static_cast<float>(height));
+        double rowY = row * (rowHeight + gapHeight); // Include gap in row positioning
+        
+        // Draw vertical beat lines for this row
+        for (double beat = 0; beat <= beatsPerRow; beat += 1.0) // Beat lines every beat
+        {
+            int x = static_cast<int>(beat * pixelsPerBeat);
+            bool isBarLine = (static_cast<int>(beat) % 4 == 0);
+            g.setColour(isBarLine ? Colours::darkgrey : Colours::lightgrey);
+            g.drawVerticalLine(x, static_cast<float>(rowY), static_cast<float>(rowY + rowHeight));
+        }
+        
+        // Draw quarter note subdivisions (lighter)
+        for (double beat = 0; beat <= beatsPerRow; beat += 0.25)
+        {
+            int x = static_cast<int>(beat * pixelsPerBeat);
+            if (static_cast<int>(beat * 4) % 4 != 0) // Skip if it's already drawn as a beat line
+            {
+                g.setColour(Colours::lightgrey.withAlpha(0.3f));
+                g.drawVerticalLine(x, static_cast<float>(rowY), static_cast<float>(rowY + rowHeight));
+            }
+        }
+        
+        // Draw horizontal line to separate rows
+        g.setColour(Colours::darkgrey);
+        g.drawHorizontalLine(static_cast<int>(rowY), 0.0f, static_cast<float>(width));
     }
     
-    // Note grid - horizontal lines for piano keys
+    // Note grid - horizontal lines for piano keys within each row (reduced range)
     int minNote = 36; // C2
-    int maxNote = 96; // C7
+    int maxNote = 72; // C5 (3 octaves total)
     int noteRange = maxNote - minNote;
-    double pixelsPerNote = static_cast<double>(height) / noteRange;
+    double pixelsPerNote = rowHeight / noteRange;
     
-    for (int note = minNote; note <= maxNote; ++note)
+    for (int row = 0; row < rows; ++row)
     {
-        int y = static_cast<int>((maxNote - note) * pixelsPerNote);
-        bool isWhiteKey = isWhiteKeyNote(note);
-        g.setColour(isWhiteKey ? Colours::lightgrey : Colours::darkgrey.withAlpha(0.3f));
-        g.drawHorizontalLine(y, 0.0f, static_cast<float>(width));
+        double rowY = row * (rowHeight + gapHeight); // Include gap in row positioning
+        
+        for (int note = minNote; note <= maxNote; note += 12) // Every octave for cleaner grid
+        {
+            double y = rowY + ((maxNote - note) * pixelsPerNote);
+            g.setColour(Colours::lightgrey.withAlpha(0.4f));
+            g.drawHorizontalLine(static_cast<int>(y), 0.0f, static_cast<float>(width));
+        }
     }
     
-    // Draw notes
-    g.setColour(Colours::blue.withAlpha(0.7f));
-    
+    // Draw notes with source-based colors
     for (const auto& event : events)
     {
         int note = event.note;
         double timestamp = event.timestamp;
         double duration = event.duration;
+        String source = event.source;
         
         if (note >= minNote && note <= maxNote)
         {
-            int x = static_cast<int>(timestamp * pixelsPerBeat);
-            int y = static_cast<int>((maxNote - note) * pixelsPerNote);
-            int noteWidth = static_cast<int>(duration * pixelsPerBeat);
-            int noteHeight = static_cast<int>(pixelsPerNote * 0.8); // 80% of note space
+            // Apply scroll offset to timestamp
+            double adjustedTimestamp = timestamp - (scrollOffset * 4.0); // scrollOffset is in bars (4 beats each)
+            
+            // Calculate which row this note belongs to based on adjusted timestamp
+            int row = static_cast<int>(adjustedTimestamp / beatsPerRow);
+            double beatInRow = adjustedTimestamp - (row * beatsPerRow);
+            
+            // Skip if note is outside our visible range
+            if (row < 0 || row >= rows || beatInRow < 0 || beatInRow > beatsPerRow) continue;
+            
+            double rowY = row * (rowHeight + gapHeight); // Include gap in row positioning
+            int x = static_cast<int>(beatInRow * pixelsPerBeat);
+            int y = static_cast<int>(rowY + ((maxNote - note) * pixelsPerNote));
+            int noteWidth = jmax(2, static_cast<int>(duration * pixelsPerBeat * 0.8)); // Make notes narrower (80% width) with minimum 2px
+            int noteHeight = static_cast<int>(pixelsPerNote * 0.8); // Standard note height
             
             Rectangle<int> noteRect(x, y, noteWidth, noteHeight);
+            
+            // Set color based on source
+            Colour noteColour = getSourceColour(source);
+            g.setColour(noteColour.withAlpha(0.8f));
             g.fillRect(noteRect);
             
             // Draw note border
-            g.setColour(Colours::darkblue);
+            g.setColour(noteColour.darker());
             g.drawRect(noteRect, 1);
-            g.setColour(Colours::blue.withAlpha(0.7f));
         }
     }
     
-    // Draw time labels
+    // Draw time labels for each row (show bar numbers)
     g.setColour(Colours::black);
     g.setFont(Font(FontOptions().withHeight(12.0f)));
     
-    for (double beat = 0; beat <= beatsToShow; beat += 1.0)
+    for (int row = 0; row < rows; ++row)
     {
-        int x = static_cast<int>(beat * pixelsPerBeat);
-        g.drawText(String(beat, 1), x + 2, 2, 50, 20, Justification::centredLeft);
+        double rowY = row * (rowHeight + gapHeight); // Include gap in row positioning
+        
+        // Show bar numbers (every 4 beats)
+        for (double beat = 0; beat <= beatsPerRow; beat += 4.0)
+        {
+            int x = static_cast<int>(beat * pixelsPerBeat);
+            double absoluteBar = scrollOffset + (row * 4) + (beat / 4.0);
+            g.drawText("Bar " + String(absoluteBar, 1), x + 2, static_cast<int>(rowY + 2), 60, 20, Justification::centredLeft);
+        }
     }
     
-    // Draw note labels on the left
-    for (int note = minNote; note <= maxNote; note += 12) // Every octave
+    // Draw note labels on the left for each row
+    for (int row = 0; row < rows; ++row)
     {
-        int y = static_cast<int>((maxNote - note) * pixelsPerNote);
-        String noteName = getMidiNoteName(note);
-        g.drawText(noteName, 2, y - 10, 30, 20, Justification::centredLeft);
+        double rowY = row * (rowHeight + gapHeight); // Include gap in row positioning
+        
+        for (int note = minNote; note <= maxNote; note += 12) // Every octave
+        {
+            double y = rowY + ((maxNote - note) * pixelsPerNote);
+            String noteName = getMidiNoteName(note);
+            g.drawText(noteName, 2, static_cast<int>(y - 6), 30, 12, Justification::centredLeft);
+        }
+    }
+    
+    // Draw playback position indicator
+    if (playbackPosition >= 0.0)
+    {
+        // Apply scroll offset to playback position
+        double adjustedPlaybackPosition = playbackPosition - (scrollOffset * 4.0);
+        
+        // Calculate which row the playback position is in
+        int playbackRow = static_cast<int>(adjustedPlaybackPosition / beatsPerRow);
+        double beatInRow = adjustedPlaybackPosition - (playbackRow * beatsPerRow);
+        
+        // Only draw if playback position is visible
+        if (playbackRow >= 0 && playbackRow < rows && beatInRow >= 0 && beatInRow <= beatsPerRow)
+        {
+            double rowY = playbackRow * (rowHeight + gapHeight);
+            int x = static_cast<int>(beatInRow * pixelsPerBeat);
+            
+            // Draw a bright vertical line for playback position
+            g.setColour(Colours::red);
+            g.drawVerticalLine(x, static_cast<float>(rowY), static_cast<float>(rowY + rowHeight));
+            
+            // Draw a small triangle at the top
+            Path triangle;
+            triangle.addTriangle(static_cast<float>(x - 5), static_cast<float>(rowY - 5),
+                               static_cast<float>(x + 5), static_cast<float>(rowY - 5),
+                               static_cast<float>(x), static_cast<float>(rowY + 5));
+            g.fillPath(triangle);
+        }
+    }
+    
+    // Draw scroll position indicator in bottom left
+    g.setColour(Colours::black);
+    g.setFont(Font(FontOptions().withHeight(10.0f)));
+    double endBar = scrollOffset + (rows * 4); // Each row shows 4 bars
+    g.drawText("Showing bars " + String(scrollOffset, 1) + "-" + String(endBar, 1), 
+               5, height - 25, 150, 20, Justification::centredLeft);
+    g.drawText("Scroll wheel to navigate", 5, height - 12, 150, 10, Justification::centredLeft);
+    
+    // Draw color legend in the bottom right
+    int legendX = width - 180;
+    int legendY = height - 120;
+    g.setFont(Font(FontOptions().withHeight(10.0f)));
+    
+    Array<std::pair<String, Colour>> legendItems;
+    legendItems.add({"Layers:", Colours::black});
+    legendItems.add({"Drums", Colours::red});
+    legendItems.add({"Bass", Colours::green});
+    legendItems.add({"Melody", Colours::blue});
+    legendItems.add({"Harmony", Colours::purple});
+    legendItems.add({"Variations:", Colours::black});
+    legendItems.add({"Fill", Colours::orange});
+    legendItems.add({"Break", Colours::yellow});
+    legendItems.add({"Base Pattern", Colours::lightblue});
+    
+    for (int i = 0; i < legendItems.size(); ++i)
+    {
+        int itemY = legendY + (i * 12);
+        g.setColour(legendItems[i].second);
+        g.drawText(legendItems[i].first, legendX, itemY, 120, 12, Justification::centredLeft);
     }
 }
 
@@ -463,6 +678,85 @@ String PatternEditorComponent::PianoRollComponent::getMidiNoteName(int midiNote)
     int octave = (midiNote / 12) - 1;
     int noteInOctave = midiNote % 12;
     return String(noteNames[noteInOctave]) + String(octave);
+}
+
+Colour PatternEditorComponent::PianoRollComponent::getSourceColour(const String& source)
+{
+    // Color-code based on source type
+    if (source.startsWith("layer:"))
+    {
+        String layerName = source.substring(6); // Remove "layer:" prefix
+        
+        // Use different colors for different layers
+        if (layerName == "drums" || layerName.contains("drum"))
+            return Colours::red;
+        else if (layerName == "bass" || layerName.contains("bass"))
+            return Colours::green;
+        else if (layerName == "melody" || layerName.contains("melody"))
+            return Colours::blue;
+        else if (layerName == "harmony" || layerName.contains("harmony"))
+            return Colours::purple;
+        else if (layerName == "rhythm" || layerName.contains("rhythm"))
+            return Colours::orange;
+        else
+            return Colours::cyan; // Default for other layers
+    }
+    else if (source.startsWith("variation:"))
+    {
+        String variationName = source.substring(10); // Remove "variation:" prefix
+        
+        // Use warm colors for variations
+        if (variationName.contains("fill"))
+            return Colours::orange;
+        else if (variationName.contains("break"))
+            return Colours::yellow;
+        else if (variationName.contains("solo"))
+            return Colours::magenta;
+        else
+            return Colours::coral; // Default for variations
+    }
+    else if (source.startsWith("base:"))
+    {
+        // Cool colors for base patterns
+        return Colours::lightblue;
+    }
+    else
+    {
+        // Default pattern color
+        return Colours::blue;
+    }
+}
+
+void PatternEditorComponent::PianoRollComponent::setPlaybackPosition(double positionInBeats)
+{
+    playbackPosition = positionInBeats;
+    repaint(); // Redraw to show new playback position
+}
+
+void PatternEditorComponent::PianoRollComponent::setScrollOffset(double offset)
+{
+    scrollOffset = jmax(0.0, offset); // Prevent negative scroll
+    repaint(); // Redraw with new scroll position
+}
+
+double PatternEditorComponent::PianoRollComponent::getScrollOffset() const
+{
+    return scrollOffset;
+}
+
+void PatternEditorComponent::PianoRollComponent::mouseWheelMove(const MouseEvent& /*event*/, const MouseWheelDetails& wheel)
+{
+    // Scroll discretely by 4 bars (one full row) per wheel notch
+    if (wheel.deltaY > 0.1f) // Scroll up
+    {
+        scrollOffset = jmax(0.0, scrollOffset - 4.0); // Move up by 4 bars
+    }
+    else if (wheel.deltaY < -0.1f) // Scroll down  
+    {
+        scrollOffset += 4.0; // Move down by 4 bars
+    }
+    
+    repaint(); // Redraw with new scroll position
 }
 
 } // namespace covertracks
