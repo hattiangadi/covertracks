@@ -82,7 +82,27 @@ private:
     TextButton stopButton;
     
     // Piano roll visualization
-    class PianoRollComponent;
+    class PianoRollComponent : public Component
+    {
+    public:
+        PianoRollComponent();
+        void setMidiEvents(const var& chart);
+        void paint(Graphics& g) override;
+        
+    private:
+        struct NoteEvent
+        {
+            int note;
+            double timestamp;
+            double duration;
+        };
+        
+        Array<NoteEvent> events;
+        
+        bool isWhiteKeyNote(int midiNote);
+        String getMidiNoteName(int midiNote);
+    };
+    
     std::unique_ptr<PianoRollComponent> pianoRoll;
     
     // References
