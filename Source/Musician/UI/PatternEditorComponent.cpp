@@ -206,7 +206,7 @@ void PatternEditorComponent::startPlaybackTracking(double tempo)
     
     // Start playhead tracking with latency compensation
     playbackStartTime = Time::getMillisecondCounterHiRes() + audioLatencyMs;
-    playbackStartBeat = 1.0; // Start from beat 1 to match 1-based pattern numbering
+    playbackStartBeat = 0.0; // Start from beat 0 to match 0-based MIDI timing
     isTrackingPlayback = true;
     
     // Start timer at 30 FPS for smooth updates
@@ -568,11 +568,9 @@ void PatternEditorComponent::PianoRollComponent::paint(Graphics& g)
         
         if (note >= minNote && note <= maxNote)
         {
-            // Convert from 1-based beat numbering to 0-based positioning
-            double zeroBasedTimestamp = timestamp - 1.0;
-            
+            // Timestamps are now 0-based from MIDI conversion, no adjustment needed
             // Apply scroll offset to timestamp
-            double adjustedTimestamp = zeroBasedTimestamp - (scrollOffset * 4.0); // scrollOffset is in bars (4 beats each)
+            double adjustedTimestamp = timestamp - (scrollOffset * 4.0); // scrollOffset is in bars (4 beats each)
             
             // Calculate which row this note belongs to based on adjusted timestamp
             int row = static_cast<int>(adjustedTimestamp / beatsPerRow);
@@ -641,11 +639,9 @@ void PatternEditorComponent::PianoRollComponent::paint(Graphics& g)
     // Draw playback position indicator
     if (playbackPosition >= 0.0)
     {
-        // Convert from 1-based beat numbering to 0-based positioning
-        double zeroBasedPlaybackPosition = playbackPosition - 1.0;
-        
+        // Playback position is now 0-based to match MIDI timing, no adjustment needed
         // Apply scroll offset to playback position
-        double adjustedPlaybackPosition = zeroBasedPlaybackPosition - (scrollOffset * 4.0);
+        double adjustedPlaybackPosition = playbackPosition - (scrollOffset * 4.0);
         
         // Calculate which row the playback position is in
         int playbackRow = static_cast<int>(adjustedPlaybackPosition / beatsPerRow);
