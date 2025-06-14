@@ -1497,6 +1497,7 @@ std::unique_ptr<MidiMessageSequence> Instrument::convertJSONToMIDISequence(const
             int note = static_cast<int>(static_cast<double>(event.getProperty("note", 60)));
             float velocity = static_cast<float>(static_cast<double>(event.getProperty("velocity", 0.5)));
             double timestamp = static_cast<double>(event.getProperty("timestamp", 0.0));
+            double duration = static_cast<double>(event.getProperty("duration", 0.25)); // Default quarter note duration
             
             
             // Ensure channel is in valid range (1-16)
@@ -1519,6 +1520,18 @@ std::unique_ptr<MidiMessageSequence> Instrument::convertJSONToMIDISequence(const
                           << ", note=" << note 
                           << ", velocity=" << velocity 
                           << ", timestamp=" << timestamp << std::endl;
+                
+                // Create corresponding note off message based on duration
+                double noteOffTimestamp = timestamp + duration;
+                MidiMessage noteOff = MidiMessage::noteOff(channel, note, velocity);
+                noteOff.setTimeStamp(noteOffTimestamp);
+                sequence->addEvent(noteOff);
+                
+                std::cout << "Added note_off event: channel=" << channel 
+                          << ", note=" << note 
+                          << ", velocity=" << velocity 
+                          << ", timestamp=" << noteOffTimestamp 
+                          << ", duration=" << duration << std::endl;
             }
             else if (type == "note_off")
             {
