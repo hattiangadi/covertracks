@@ -93,8 +93,27 @@ std::unique_ptr<MidiMessageSequence> Bar::toMidiSequence() const
                 noteOn.setTimeStamp(tickPosition);
                 sequence->addEvent(noteOn);
                 
-                // Note off
-                double noteOffPosition = tickPosition + (event.duration * beatsPerQuarterNote * TICKS_PER_QUARTER_NOTE);
+                // Note off with bar boundary guardrail
+                double requestedNoteOffPosition = tickPosition + (event.duration * beatsPerQuarterNote * TICKS_PER_QUARTER_NOTE);
+                
+                // Calculate the end of this bar in ticks
+                // For 4/4 time: 4 beats * 960 ticks = 3840 ticks (beats 1.0-4.99)
+                double barEndTick = (timeSignatureNumerator * (4.0 / timeSignatureDenominator)) * TICKS_PER_QUARTER_NOTE;
+                
+                // Clamp note-off to not extend beyond the bar boundary  
+                // Use a tiny buffer (0.1 ticks) instead of a full tick to prevent timing gaps
+                double noteOffPosition = jmin(requestedNoteOffPosition, barEndTick - 0.1);
+                
+                // Debug warning if note was clamped (check against the actual bar end, not our buffer)
+                if (requestedNoteOffPosition > barEndTick)
+                {
+                    double requestedBeats = event.duration;
+                    double clampedBeats = (noteOffPosition - tickPosition) / (beatsPerQuarterNote * TICKS_PER_QUARTER_NOTE);
+                    DBG("WARNING: Note duration clamped from " + String(requestedBeats, 2) + " beats to " + 
+                        String(clampedBeats, 2) + " beats to stay within bar boundary. " + 
+                        "Note: " + String(event.noteNumber) + ", Beat: " + String(event.beat, 2));
+                }
+                
                 MidiMessage noteOff = MidiMessage::noteOff(event.channel + 1, 
                                                          event.noteNumber);
                 noteOff.setTimeStamp(noteOffPosition);
@@ -188,37 +207,38 @@ std::unique_ptr<MidiMessageSequence> Phrase::toMidiSequence() const
     
     // Note: We use 960 ticks per quarter note in the MIDI sequence
     
-    // Calculate the current position in ticks
-    double currentTick = 0.0;
-    
-    // Process each bar
-    for (const auto& bar : bars)
+    // Process each bar with absolute timing (independent of previous bars)
+    for (int barIndex = 0; barIndex < bars.size(); ++barIndex)
     {
+        auto bar = bars[barIndex];
         if (!bar)
             continue;
+        
+        // Calculate absolute start time for this bar based on its index
+        // Each bar starts at its musical position, not dependent on previous bar end times
+        double beatsInBar = bar->getTimeSignatureNumerator() * (4.0 / bar->getTimeSignatureDenominator());
+        double absoluteBarStartTick = barIndex * beatsInBar * TICKS_PER_QUARTER_NOTE;
         
         // Get the MIDI sequence for this bar
         auto barSequence = bar->toMidiSequence();
         if (!barSequence)
             continue;
         
-        // Add the bar's events to the phrase sequence with the current offset
+        // Add the bar's events to the phrase sequence with the absolute offset
         for (int i = 0; i < barSequence->getNumEvents(); ++i)
         {
             auto event = barSequence->getEventPointer(i);
             if (event)
             {
-                // Clone the event and adjust its timestamp
+                // Clone the event and adjust its timestamp to absolute time
                 auto newEvent = event->message;
-                newEvent.setTimeStamp(newEvent.getTimeStamp() + currentTick);
+                newEvent.setTimeStamp(newEvent.getTimeStamp() + absoluteBarStartTick);
                 sequence->addEvent(newEvent);
             }
         }
         
-        // Update the current position based on the bar's time signature
-        // Calculate how many quarter notes are in this bar
-        double beatsInBar = bar->getTimeSignatureNumerator() * (4.0 / bar->getTimeSignatureDenominator());
-        currentTick += beatsInBar * TICKS_PER_QUARTER_NOTE;
+        DBG("Bar " + String(barIndex + 1) + " starts at absolute tick " + String(absoluteBarStartTick) + 
+            " (" + String(absoluteBarStartTick / TICKS_PER_QUARTER_NOTE, 1) + " beats)");
     }
     
     // Sort the sequence by timestamp
@@ -280,37 +300,37 @@ std::unique_ptr<MidiMessageSequence> Section::toMidiSequence() const
     
     // Note: We use 960 ticks per quarter note in the MIDI sequence
     
-    // Calculate the current position in ticks
-    double currentTick = 0.0;
-    
-    // Process each phrase
-    for (const auto& phrase : phrases)
+    // Process each phrase with absolute timing (independent of previous phrases)
+    // Note: In most music patterns, sections contain just one merged phrase from all layers
+    for (int phraseIndex = 0; phraseIndex < phrases.size(); ++phraseIndex)
     {
+        auto phrase = phrases[phraseIndex];
         if (!phrase)
             continue;
+        
+        // Calculate absolute start time for this phrase based on its index
+        // Assuming each phrase represents the full section duration (typical case)
+        double absolutePhraseStartTick = 0.0; // Phrases within a section typically start at the same time
         
         // Get the MIDI sequence for this phrase
         auto phraseSequence = phrase->toMidiSequence();
         if (!phraseSequence)
             continue;
         
-        // Add the phrase's events to the section sequence with the current offset
+        // Add the phrase's events to the section sequence with the absolute offset
         for (int i = 0; i < phraseSequence->getNumEvents(); ++i)
         {
             auto event = phraseSequence->getEventPointer(i);
             if (event)
             {
-                // Clone the event and adjust its timestamp
+                // Clone the event and adjust its timestamp to absolute time
                 auto newEvent = event->message;
-                newEvent.setTimeStamp(newEvent.getTimeStamp() + currentTick);
+                newEvent.setTimeStamp(newEvent.getTimeStamp() + absolutePhraseStartTick);
                 sequence->addEvent(newEvent);
             }
         }
         
-        // Update the current position based on the phrase's length
-        // This is a simplified approach; in a real implementation, you would
-        // calculate the actual length of the phrase based on its bars
-        currentTick += phraseSequence->getEndTime();
+        DBG("Section phrase " + String(phraseIndex + 1) + " starts at absolute tick " + String(absolutePhraseStartTick));
     }
     
     // Sort the sequence by timestamp
@@ -517,12 +537,12 @@ std::unique_ptr<MidiMessageSequence> Chart::toMidiSequence() const
     
     // Note: We use 960 ticks per quarter note in the MIDI sequence
     
-    // Calculate the current position in ticks
-    double currentTick = 0.0;
+    // Process each section with absolute timing (independent of previous sections)
+    double absoluteSectionStartTick = 0.0;
     
-    // Process each section
-    for (const auto& section : sections)
+    for (int sectionIndex = 0; sectionIndex < sections.size(); ++sectionIndex)
     {
+        auto section = sections[sectionIndex];
         if (!section)
             continue;
         
@@ -530,21 +550,40 @@ std::unique_ptr<MidiMessageSequence> Chart::toMidiSequence() const
         auto sectionSequence = section->toMidiSequence();
         
         // Add all events from the section sequence to the song sequence
-        // adjusting their timestamps to account for the current position
+        // adjusting their timestamps to the absolute section start time
         for (int i = 0; i < sectionSequence->getNumEvents(); ++i)
         {
             auto* event = sectionSequence->getEventPointer(i);
             
             // Create a copy of the event with an adjusted timestamp
             MidiMessage newEvent(event->message);
-            newEvent.setTimeStamp(event->message.getTimeStamp() + currentTick);
+            newEvent.setTimeStamp(event->message.getTimeStamp() + absoluteSectionStartTick);
             
             // Add the event to the sequence
             sequence->addEvent(newEvent);
         }
         
-        // Update the current position based on the section's length
-        currentTick += sectionSequence->getEndTime();
+        // Calculate the predetermined length of this section for the next section's start time
+        // Assume 4/4 time signature and count bars in the section
+        int barsInSection = 0;
+        for (int phraseIdx = 0; phraseIdx < section->getNumPhrases(); ++phraseIdx)
+        {
+            auto phrase = section->getPhrase(phraseIdx);
+            if (phrase)
+            {
+                barsInSection = jmax(barsInSection, phrase->getNumBars()); // Take the longest phrase
+            }
+        }
+        
+        // Default to 8 bars if we can't determine (common for most patterns)
+        if (barsInSection == 0) barsInSection = 8;
+        
+        DBG("Section " + String(sectionIndex + 1) + " starts at absolute tick " + String(absoluteSectionStartTick) + 
+            " (" + String(absoluteSectionStartTick / TICKS_PER_QUARTER_NOTE, 1) + " beats), " +
+            String(barsInSection) + " bars");
+        
+        // Move to the next section's predetermined start time (4 beats per bar in 4/4 time)
+        absoluteSectionStartTick += barsInSection * 4.0 * TICKS_PER_QUARTER_NOTE;
     }
     
     // Sort the sequence by timestamp

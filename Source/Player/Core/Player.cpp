@@ -903,6 +903,7 @@ bool Player::convertChartToMidi(const var& chart)
             {
                 // Extract note-specific properties
                 int note = event.hasProperty("note") ? static_cast<int>(static_cast<double>(event["note"])) : 60;
+                double duration = event.hasProperty("duration") ? static_cast<double>(event["duration"]) : 0.25; // Default quarter note duration
                 
                 // Handle velocity - Performance Mode uses float (0.0-1.0), Player Mode might use int (0-127)
                 float velocity = 0.5f; // Default velocity
@@ -925,6 +926,23 @@ bool Player::convertChartToMidi(const var& chart)
                 juce::MidiMessage noteOn = juce::MidiMessage::noteOn(channel, note, velocity);
                 noteOn.setTimeStamp(timestamp);
                 sequence->addEvent(noteOn);
+                
+                std::cout << "Added note_on event: channel=" << channel 
+                          << ", note=" << note 
+                          << ", velocity=" << velocity 
+                          << ", timestamp=" << timestamp << std::endl;
+                
+                // Create corresponding note off message based on duration
+                double noteOffTimestamp = timestamp + duration;
+                juce::MidiMessage noteOff = juce::MidiMessage::noteOff(channel, note, velocity);
+                noteOff.setTimeStamp(noteOffTimestamp);
+                sequence->addEvent(noteOff);
+                
+                std::cout << "Added note_off event: channel=" << channel 
+                          << ", note=" << note 
+                          << ", velocity=" << velocity 
+                          << ", timestamp=" << noteOffTimestamp 
+                          << ", duration=" << duration << std::endl;
             }
             else if (type == "note_off")
             {

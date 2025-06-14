@@ -366,13 +366,29 @@ std::shared_ptr<covertracks::Section> covertracks::PatternParser::parseSectionFr
                     var variationVar = variationsJson.getProperty(barKey, var());
                     if (!variationVar.isVoid())
                     {
-                        String variationPatternName = variationVar.toString();
-                        auto variationIt = patterns.find(variationPatternName);
-                        if (variationIt != patterns.end())
+                        if (variationVar.isString())
                         {
-                            barEvents = variationIt->second;  // Use variation pattern instead
-                            sourceType = "variation:" + variationPatternName;
-                            DBG("Using variation '" + variationPatternName + "' for " + barKey);
+                            // Variation is a pattern name reference
+                            String variationPatternName = variationVar.toString();
+                            auto variationIt = patterns.find(variationPatternName);
+                            if (variationIt != patterns.end())
+                            {
+                                barEvents = variationIt->second;  // Use variation pattern instead
+                                sourceType = "variation:" + variationPatternName;
+                                DBG("Using variation pattern '" + variationPatternName + "' for " + barKey);
+                            }
+                        }
+                        else if (variationVar.isArray())
+                        {
+                            // Variation is a direct array of events
+                            Array<var> variationEvents;
+                            for (const auto& event : *variationVar.getArray())
+                            {
+                                variationEvents.add(event);
+                            }
+                            barEvents = variationEvents;  // Use variation events instead
+                            sourceType = "variation:direct";
+                            DBG("Using direct variation events for " + barKey + " (" + String(variationEvents.size()) + " events)");
                         }
                     }
                 }
@@ -511,6 +527,23 @@ std::shared_ptr<covertracks::Bar> covertracks::PatternParser::parseBarFromJson(c
         if (eventArray->size() >= 5)
             source = (*eventArray)[4].toString();
         
+        // Validate timing before adding notes
+        // Check if note starts outside the bar boundary (assuming 4/4 time signature: beats 1.0 to just before 5.0)
+        if (beat < 1.0 || beat >= 5.0)
+        {
+            DBG("WARNING: Note at beat " + String(beat, 2) + " is outside bar boundary (1.0-4.99) - skipping note");
+            continue; // Skip this note entirely
+        }
+        
+        double noteEndBeat = beat + duration;
+        if (noteEndBeat > 5.0) // Check if note extends beyond bar boundary
+        {
+            double originalDuration = duration;
+            duration = jmax(0.1f, 5.0f - static_cast<float>(beat)); // Clamp to bar boundary, minimum 0.1 beats
+            DBG("WARNING: Note duration at beat " + String(beat, 2) + " clamped from " + 
+                String(originalDuration, 2) + " to " + String(duration, 2) + " beats to stay within bar boundary");
+        }
+        
         // Handle note data
         if (noteData.isString())
         {
@@ -535,7 +568,7 @@ std::shared_ptr<covertracks::Bar> covertracks::PatternParser::parseBarFromJson(c
                     int channel = getChannelForPrimitive(noteName, primitives);
                     bar->addNote(static_cast<float>(beat), channel, midiNote, velocity, duration, source);
                 }
-                DBG("Added chord: " + chordName + " at beat " + String(beat));
+                DBG("Added chord: " + chordName + " at beat " + String(beat) + " (duration already validated)");
             }
         }
     }
@@ -612,27 +645,12 @@ String covertracks::PatternParser::extractBarNotation(const String& text)
 
 int covertracks::PatternParser::findMidiNoteForPrimitive(const String& primitiveName, const std::map<String, std::map<String, int>>& primitives)
 {
-    DBG("Looking for primitive: '" + primitiveName + "'");
-    
-    // First, try to find the primitive in any instrument mapping
+    // First check all instrument primitives
     for (const auto& instrumentPair : primitives)
-    {
-        DBG("  Checking instrument: " + instrumentPair.first);
-        
-        // Debug output all primitives for this instrument
-        if (instrumentPair.first == "drums")
-        {
-            DBG("  Available drum primitives:");
-            for (const auto& p : instrumentPair.second)
-            {
-                DBG("    " + p.first + " = " + String(p.second));
-            }
-        }
-        
+    {        
         auto primitiveIt = instrumentPair.second.find(primitiveName);
         if (primitiveIt != instrumentPair.second.end())
         {
-            DBG("  FOUND '" + primitiveName + "' in " + instrumentPair.first + " with MIDI note " + String(primitiveIt->second));
             return primitiveIt->second;
         }
         
@@ -640,8 +658,6 @@ int covertracks::PatternParser::findMidiNoteForPrimitive(const String& primitive
         int noteFromCapabilities = findNoteFromCapabilities(instrumentPair.first, primitiveName);
         if (noteFromCapabilities >= 0)
         {
-            DBG("  FOUND '" + primitiveName + "' in registered capabilities for " + instrumentPair.first + 
-                " with MIDI note " + String(noteFromCapabilities));
             return noteFromCapabilities;
         }
     }
@@ -650,7 +666,6 @@ int covertracks::PatternParser::findMidiNoteForPrimitive(const String& primitive
     int midiNote = parseMusicalNoteName(primitiveName);
     if (midiNote >= 0)
     {
-        DBG("Converted musical note '" + primitiveName + "' to MIDI " + String(midiNote));
         return midiNote;
     }
     
@@ -660,14 +675,11 @@ int covertracks::PatternParser::findMidiNoteForPrimitive(const String& primitive
         int noteFromCapabilities = findNoteFromCapabilities(capPair.first, primitiveName);
         if (noteFromCapabilities >= 0)
         {
-            DBG("  FOUND '" + primitiveName + "' in registered capabilities for " + capPair.first + 
-                " with MIDI note " + String(noteFromCapabilities));
             return noteFromCapabilities;
         }
     }
     
-    DBG("Note '" + primitiveName + "' not found in primitives or capabilities, using default 60");
-    return 60; // Default middle C
+    return 60; // Default middle C (not found in primitives or capabilities)
 }
 
 int covertracks::PatternParser::getChannelForPrimitive(const String& primitiveName, const std::map<String, std::map<String, int>>& primitives)

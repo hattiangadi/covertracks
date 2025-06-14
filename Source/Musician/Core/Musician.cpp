@@ -4,6 +4,7 @@
 #include "PatternGenerator.h"
 #include "PatternParser.h"
 #include "../../LLM/Core/PromptManager.h"
+#include "../../Player/Core/Player.h"
 #include <iostream>
 
 namespace covertracks {
@@ -429,6 +430,11 @@ var Musician::convertNotationToMidiEvents(const String& notation, double tempo)
     
     // Parse the notation to create a chart
     auto parser = PatternParser(*patternSystem);
+    
+    // Register standard instrument capabilities with the parser for better note mapping
+    auto drumCapabilities = Player::createDrumCapabilities();
+    parser.registerInstrumentCapabilities("drums", drumCapabilities);
+    
     auto chart = parser.parseLLMResponse(notation);
     
     if (chart)
