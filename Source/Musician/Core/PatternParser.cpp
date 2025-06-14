@@ -741,9 +741,10 @@ int covertracks::PatternParser::parseMusicalNoteName(const String& noteName)
         return -1;
     
     // Calculate MIDI note number
-    // MIDI note 60 = C4 (Middle C)
+    // MIDI note 60 = C4 (Middle C), which means octave 4 starts at MIDI note 60
+    // In scientific pitch notation: C0=12, C1=24, C2=36, C3=48, C4=60, etc.
     // Each octave spans 12 semitones
-    int midiNote = (octave * 12) + noteIndex + accidentalOffset;
+    int midiNote = ((octave + 1) * 12) + noteIndex + accidentalOffset;
     
     // Ensure MIDI note is in valid range (0-127)
     if (midiNote < 0 || midiNote > 127)
