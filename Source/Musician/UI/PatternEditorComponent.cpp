@@ -185,14 +185,34 @@ void PatternEditorComponent::setPlaybackPosition(double positionInBeats)
 void PatternEditorComponent::startPlaybackTracking(double tempo)
 {
     playbackTempo = tempo;
-    playbackStartTime = Time::getMillisecondCounterHiRes();
+    
+    // Calculate audio latency compensation
+    double audioLatencyMs = 0.0;
+    if (playerManager && playerManager->getAudioEngine())
+    {
+        auto* audioEngine = playerManager->getAudioEngine();
+        double sampleRate = audioEngine->getSampleRate();
+        int outputLatencySamples = audioEngine->getOutputLatencySamples();
+        int bufferSize = audioEngine->getBufferSize();
+        
+        // Total latency = output latency + buffer latency
+        double outputLatencyMs = (outputLatencySamples / sampleRate) * 1000.0;
+        double bufferLatencyMs = (bufferSize / sampleRate) * 1000.0;
+        audioLatencyMs = outputLatencyMs + bufferLatencyMs;
+        
+        std::cout << "Audio latency compensation: " << audioLatencyMs << "ms "
+                  << "(output: " << outputLatencyMs << "ms + buffer: " << bufferLatencyMs << "ms)" << std::endl;
+    }
+    
+    // Start playhead tracking with latency compensation
+    playbackStartTime = Time::getMillisecondCounterHiRes() + audioLatencyMs;
     playbackStartBeat = 1.0; // Start from beat 1 to match 1-based pattern numbering
     isTrackingPlayback = true;
     
     // Start timer at 30 FPS for smooth updates
     startTimer(33); // ~30 FPS (1000ms / 30 = 33ms)
     
-    std::cout << "Started playback tracking at " << tempo << " BPM" << std::endl;
+    std::cout << "Started playback tracking at " << tempo << " BPM with " << audioLatencyMs << "ms latency compensation" << std::endl;
 }
 
 void PatternEditorComponent::stopPlaybackTracking()
