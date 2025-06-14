@@ -1255,8 +1255,10 @@ void Instrument::timerCallback()
         // Calculate the current time in seconds
         double currentTimeInSeconds = currentTime;
         
-        // Calculate the time for the next block (5ms from now)
-        double blockEndTime = currentTimeInSeconds + 0.005; // 5ms in seconds
+        // Calculate the time for the next block (using proper audio buffer timing)
+        // Use a reasonable buffer size equivalent for timer-based processing
+        double bufferTime = 512.0 / 44100.0; // ~11.6ms at 44.1kHz, more realistic than 5ms
+        double blockEndTime = currentTimeInSeconds + bufferTime;
         
         // Create a MIDI buffer for this time window
         MidiBuffer midiBuffer;
@@ -1374,7 +1376,7 @@ void Instrument::processMIDIEvents(MidiBuffer& midiBuffer, int numSamples)
     
     // Calculate the time range for this block
     double blockStartTime = currentTime;
-    double blockEndTime = blockStartTime + (numSamples / sampleRate) * (60.0 / tempo); // Convert to seconds
+    double blockEndTime = blockStartTime + (numSamples / sampleRate); // Real-time seconds (no tempo scaling for playback speed)
     
     // Add all events that fall within this time range
     bool addedEvents = false;
@@ -1445,8 +1447,8 @@ void Instrument::updateCurrentTime(int numSamples)
     if (playing && !paused)
     {
         // Update the current time based on the number of samples processed
-        // Convert to seconds based on sample rate and tempo
-        double blockDuration = (numSamples / sampleRate) * (60.0 / tempo);
+        // Convert to real-time seconds (tempo affects beat interpretation, not playback speed)
+        double blockDuration = (numSamples / sampleRate);
         currentTime += blockDuration;
         
         // Log the current time periodically
