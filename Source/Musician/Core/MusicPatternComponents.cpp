@@ -70,10 +70,12 @@ std::unique_ptr<MidiMessageSequence> Bar::toMidiSequence() const
     for (const auto& event : events)
     {
         // Convert beat position to ticks
+        // Note: Pattern beats are 1-based (1.0, 2.0, 3.0, 4.0), but MIDI timing should be 0-based
         // In a 4/4 time signature, 1 beat = 1 quarter note
         // In other time signatures, we need to adjust accordingly
         double beatsPerQuarterNote = 4.0 / timeSignatureDenominator;
-        double tickPosition = event.beat * beatsPerQuarterNote * TICKS_PER_QUARTER_NOTE;
+        double zeroBasedBeat = event.beat - 1.0; // Convert from 1-based to 0-based
+        double tickPosition = zeroBasedBeat * beatsPerQuarterNote * TICKS_PER_QUARTER_NOTE;
         
         switch (event.type)
         {
