@@ -1,18 +1,38 @@
 // Source/Musician/Core/PatternParser.cpp
 #include "PatternParser.h"
 #include "MusicPatternSystem.h"
+#include "../../Player/Core/Player.h"
 #include <iostream>
 #include <sstream>
 #include <regex>
 
 namespace covertracks {
 
-PatternParser::PatternParser(MusicPatternSystem& system)
-    : patternSystem(system)
+// Store registered instrument capabilities
+static std::map<String, InstrumentCapabilities> registeredCapabilities;
+
+void covertracks::PatternParser::registerInstrumentCapabilities(const String& instrumentName, const InstrumentCapabilities& capabilities)
+{
+    registeredCapabilities[instrumentName] = capabilities;
+}
+
+int covertracks::PatternParser::findNoteFromCapabilities(const String& instrumentName, const String& noteName)
+{
+    auto it = registeredCapabilities.find(instrumentName);
+    if (it != registeredCapabilities.end())
+    {
+        const InstrumentCapabilities& capabilities = it->second;
+        return capabilities.findNote(noteName);
+    }
+    return -1; // Note not found
+}
+
+covertracks::PatternParser::PatternParser(MusicPatternSystem& patternSystem)
+    : patternSystem(patternSystem)
 {
 }
 
-std::shared_ptr<Chart> PatternParser::parseChart(const String& jsonText)
+std::shared_ptr<covertracks::Chart> covertracks::PatternParser::parseChart(const String& jsonText)
 {
     DBG("Parsing JSON chart: " + jsonText);
     
@@ -27,7 +47,7 @@ std::shared_ptr<Chart> PatternParser::parseChart(const String& jsonText)
     return parseChartFromJson(json);
 }
 
-std::shared_ptr<Chart> PatternParser::parseChartFromJson(const var& json)
+std::shared_ptr<covertracks::Chart> covertracks::PatternParser::parseChartFromJson(const var& json)
 {
     auto chart = std::make_shared<Chart>();
     
@@ -40,8 +60,29 @@ std::shared_ptr<Chart> PatternParser::parseChartFromJson(const var& json)
     
     DBG("Chart title: " + chart->getTitle() + ", tempo: " + String(chart->getTempo()));
     
-    // Extract primitives
+    // First, get all primitives from the MusicPatternSystem
     std::map<String, std::map<String, int>> primitives;
+    
+    // Get all instrument definitions from the pattern system
+    auto instrumentDefinitions = patternSystem.getAllInstrumentDefinitions();
+    for (const auto& instrumentPair : instrumentDefinitions)
+    {
+        const String& instrumentName = instrumentPair.first;
+        const InstrumentDefinition& instrumentDef = instrumentPair.second;
+        
+        // Get all primitives for this instrument
+        auto instrumentPrimitives = instrumentDef.getPrimitives();
+        for (const auto& primitivePair : instrumentPrimitives)
+        {
+            const String& primitiveName = primitivePair.first;
+            const Primitive& primitive = primitivePair.second;
+            
+            primitives[instrumentName][primitiveName] = primitive.midiNote;
+            DBG("System Primitive: " + instrumentName + "." + primitiveName + " = " + String(primitive.midiNote));
+        }
+    }
+    
+    // Now add any primitives defined in the JSON (these will override system primitives if there are conflicts)
     if (json.hasProperty("primitives"))
     {
         var primitivesJson = json["primitives"];
@@ -59,7 +100,7 @@ std::shared_ptr<Chart> PatternParser::parseChartFromJson(const var& json)
                         String primitiveName = primitiveProp.name.toString();
                         int midiNote = primitiveProp.value;
                         primitives[instrumentName][primitiveName] = midiNote;
-                        DBG("Primitive: " + instrumentName + "." + primitiveName + " = " + String(midiNote));
+                        DBG("JSON Primitive: " + instrumentName + "." + primitiveName + " = " + String(midiNote));
                     }
                 }
             }
@@ -187,7 +228,7 @@ std::shared_ptr<Chart> PatternParser::parseChartFromJson(const var& json)
     return chart;
 }
 
-std::shared_ptr<Section> PatternParser::parseSectionFromJson(const var& sectionJson,
+std::shared_ptr<covertracks::Section> covertracks::PatternParser::parseSectionFromJson(const var& sectionJson,
                                                             const std::map<String, std::map<String, int>>& primitives,
                                                             const std::map<String, Array<String>>& chords,
                                                             const std::map<String, Array<var>>& patterns)
@@ -424,7 +465,7 @@ std::shared_ptr<Section> PatternParser::parseSectionFromJson(const var& sectionJ
     return section;
 }
 
-std::shared_ptr<Bar> PatternParser::parseBarFromJson(const Array<var>& eventsJson,
+std::shared_ptr<covertracks::Bar> covertracks::PatternParser::parseBarFromJson(const Array<var>& eventsJson,
                                                      const std::map<String, std::map<String, int>>& primitives,
                                                      const std::map<String, Array<String>>& chords)
 {
@@ -502,7 +543,7 @@ std::shared_ptr<Bar> PatternParser::parseBarFromJson(const Array<var>& eventsJso
     return bar;
 }
 
-std::shared_ptr<Chart> PatternParser::parseLLMResponse(const String& response)
+std::shared_ptr<covertracks::Chart> covertracks::PatternParser::parseLLMResponse(const String& response)
 {
     // Try to extract JSON from LLM response
     String jsonText = response.trim();
@@ -521,7 +562,7 @@ std::shared_ptr<Chart> PatternParser::parseLLMResponse(const String& response)
     return parseChart(jsonText);
 }
 
-String PatternParser::extractSongNotation(const String& text)
+String covertracks::PatternParser::extractSongNotation(const String& text)
 {
     // Look for JSON objects in the text
     int startPos = text.indexOf("{");
@@ -551,33 +592,57 @@ String PatternParser::extractSongNotation(const String& text)
     return String();
 }
 
-String PatternParser::extractSectionNotation(const String& text)
+String covertracks::PatternParser::extractSectionNotation(const String& text)
 {
     // For JSON format, sections are part of the main chart
     return extractSongNotation(text);
 }
 
-String PatternParser::extractPhraseNotation(const String& text)
+String covertracks::PatternParser::extractPhraseNotation(const String& text)
 {
     // For JSON format, phrases are part of sections
     return extractSongNotation(text);
 }
 
-String PatternParser::extractBarNotation(const String& text)
+String covertracks::PatternParser::extractBarNotation(const String& text)
 {
     // For JSON format, bars are part of phrases
     return extractSongNotation(text);
 }
 
-int PatternParser::findMidiNoteForPrimitive(const String& primitiveName, const std::map<String, std::map<String, int>>& primitives)
+int covertracks::PatternParser::findMidiNoteForPrimitive(const String& primitiveName, const std::map<String, std::map<String, int>>& primitives)
 {
+    DBG("Looking for primitive: '" + primitiveName + "'");
+    
     // First, try to find the primitive in any instrument mapping
     for (const auto& instrumentPair : primitives)
     {
+        DBG("  Checking instrument: " + instrumentPair.first);
+        
+        // Debug output all primitives for this instrument
+        if (instrumentPair.first == "drums")
+        {
+            DBG("  Available drum primitives:");
+            for (const auto& p : instrumentPair.second)
+            {
+                DBG("    " + p.first + " = " + String(p.second));
+            }
+        }
+        
         auto primitiveIt = instrumentPair.second.find(primitiveName);
         if (primitiveIt != instrumentPair.second.end())
         {
+            DBG("  FOUND '" + primitiveName + "' in " + instrumentPair.first + " with MIDI note " + String(primitiveIt->second));
             return primitiveIt->second;
+        }
+        
+        // If not found directly, check if we have registered capabilities for this instrument
+        int noteFromCapabilities = findNoteFromCapabilities(instrumentPair.first, primitiveName);
+        if (noteFromCapabilities >= 0)
+        {
+            DBG("  FOUND '" + primitiveName + "' in registered capabilities for " + instrumentPair.first + 
+                " with MIDI note " + String(noteFromCapabilities));
+            return noteFromCapabilities;
         }
     }
     
@@ -589,11 +654,23 @@ int PatternParser::findMidiNoteForPrimitive(const String& primitiveName, const s
         return midiNote;
     }
     
-    DBG("Note '" + primitiveName + "' not found in primitives, using default 60");
+    // As a last resort, check all registered capabilities regardless of instrument
+    for (const auto& capPair : registeredCapabilities)
+    {
+        int noteFromCapabilities = findNoteFromCapabilities(capPair.first, primitiveName);
+        if (noteFromCapabilities >= 0)
+        {
+            DBG("  FOUND '" + primitiveName + "' in registered capabilities for " + capPair.first + 
+                " with MIDI note " + String(noteFromCapabilities));
+            return noteFromCapabilities;
+        }
+    }
+    
+    DBG("Note '" + primitiveName + "' not found in primitives or capabilities, using default 60");
     return 60; // Default middle C
 }
 
-int PatternParser::getChannelForPrimitive(const String& primitiveName, const std::map<String, std::map<String, int>>& primitives)
+int covertracks::PatternParser::getChannelForPrimitive(const String& primitiveName, const std::map<String, std::map<String, int>>& primitives)
 {
     // Find which instrument this primitive belongs to
     for (const auto& instrumentPair : primitives)
@@ -610,7 +687,7 @@ int PatternParser::getChannelForPrimitive(const String& primitiveName, const std
     return 0; // Default channel
 }
 
-int PatternParser::parseMusicalNoteName(const String& noteName)
+int covertracks::PatternParser::parseMusicalNoteName(const String& noteName)
 {
     // Parse standard musical note names like "C4", "F#5", "Bb3"
     if (noteName.length() < 2)

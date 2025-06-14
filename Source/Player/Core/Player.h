@@ -32,6 +32,17 @@ struct InstrumentCapabilities {
     // Serialize to/from var
     var toVar() const;
     void fromVar(const var& v);
+    
+    /**
+     * @brief Find a MIDI note for the given note name using the capabilities
+     * 
+     * For mapping type, looks up the note name in soundMappings
+     * For range type, checks if the parsed note is within range
+     * 
+     * @param noteName The name of the note to find
+     * @return int The MIDI note number, or -1 if not found
+     */
+    int findNote(const String& noteName) const;
 };
 
 /**

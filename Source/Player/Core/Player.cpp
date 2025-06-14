@@ -4,6 +4,39 @@
 namespace covertracks {
 
 // InstrumentCapabilities implementation
+int InstrumentCapabilities::findNote(const String& noteName) const
+{
+    if (type == InstrumentCapabilityType::Mapping)
+    {
+        // For drums, look up the note name in the sound mappings
+        auto it = soundMappings.find(noteName);
+        if (it != soundMappings.end())
+            return it->second;
+            
+        // Also try some common aliases
+        static std::map<String, String> aliases = {
+            {"bassDrum", "kick"},
+            {"rideCymbal", "ride"},
+            {"hiHat", "hihat"},
+            {"closedHiHat", "hihat"},
+            {"openHiHat", "openHihat"},
+            {"crashCymbal", "crash"}
+            // Add more aliases as needed
+        };
+        
+        auto aliasIt = aliases.find(noteName);
+        if (aliasIt != aliases.end())
+        {
+            auto mappingIt = soundMappings.find(aliasIt->second);
+            if (mappingIt != soundMappings.end())
+                return mappingIt->second;
+        }
+    }
+    
+    // Not found
+    return -1;
+}
+
 var InstrumentCapabilities::toVar() const
 {
     DynamicObject* obj = new DynamicObject();
@@ -731,9 +764,9 @@ void Player::generateChart(const var& parameters,
         return;
     }
     
-    DBG("DEBUG: Player delegating to musician->generateChart");
-    // Delegate to the internal musician
-    musician->generateChart(parameters, callback);
+    DBG("DEBUG: Player delegating to musician->generateChartWithPlayer using Player capabilities");
+    // Delegate to the internal musician using Player capabilities
+    musician->generateChartWithPlayer(parameters, this, callback);
 }
 
 bool Player::loadChart(const var& chart)

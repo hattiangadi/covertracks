@@ -11,6 +11,7 @@ namespace covertracks {
 // Forward declarations
 class MusicPatternSystem;
 class PatternParser;
+class Player;
 
 /**
  * @brief Pure utility class for pattern generation and parsing
@@ -47,6 +48,20 @@ public:
                            const StringArray& instruments,
                            int tempo,
                            const String& description);
+    
+    /**
+     * @brief Create a song generation prompt using Player capabilities
+     * 
+     * @param style The musical style (e.g., "jazz", "rock")
+     * @param players Vector of Player pointers to use their capabilities
+     * @param tempo The tempo in BPM
+     * @param description Additional description or constraints
+     * @return String The formatted prompt for the LLM
+     */
+    String createSongPromptWithPlayers(const String& style,
+                                     const std::vector<Player*>& players,
+                                     int tempo,
+                                     const String& description);
     
     /**
      * @brief Create a pattern modification prompt

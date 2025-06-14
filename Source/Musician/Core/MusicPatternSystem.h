@@ -64,6 +64,9 @@ public:
     Primitive getPrimitive(const String& name) const;
     std::shared_ptr<Bar> getPattern(const String& name) const;
     
+    // Get all primitives
+    const std::map<String, Primitive>& getPrimitives() const { return primitives; }
+    
     // Serialization
     var toVar() const;
     static InstrumentDefinition fromVar(const var& v);
@@ -79,7 +82,8 @@ private:
  */
 class MusicPatternSystem {
 public:
-    MusicPatternSystem();
+    // Added a parameter to optionally skip default instrument initialization
+    MusicPatternSystem(bool initializeDefaults = true);
     ~MusicPatternSystem();
     
     // Instrument management

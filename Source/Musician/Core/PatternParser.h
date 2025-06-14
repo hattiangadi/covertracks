@@ -15,6 +15,9 @@ class MusicPatternSystem;
  * This class provides functionality for parsing the pattern notation
  * described in the Music Pattern System specification.
  */
+// Forward declaration
+struct InstrumentCapabilities;
+
 class PatternParser {
 public:
     /**
@@ -74,6 +77,14 @@ public:
      */
     std::shared_ptr<Chart> parseLLMResponse(const String& response);
     
+    /**
+     * @brief Register instrument capabilities from the Player
+     * 
+     * @param instrumentName The name of the instrument (e.g., "drums", "piano")
+     * @param capabilities The instrument capabilities to register
+     */
+    void registerInstrumentCapabilities(const String& instrumentName, const InstrumentCapabilities& capabilities);
+    
 private:
     MusicPatternSystem& patternSystem;
     
@@ -87,6 +98,9 @@ private:
     int findMidiNoteForPrimitive(const String& primitiveName, const std::map<String, std::map<String, int>>& primitives);
     int getChannelForPrimitive(const String& primitiveName, const std::map<String, std::map<String, int>>& primitives);
     int parseMusicalNoteName(const String& noteName);
+    
+    // Helper to find a note mapping from registered capabilities
+    int findNoteFromCapabilities(const String& instrumentName, const String& noteName);
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PatternParser)
 };

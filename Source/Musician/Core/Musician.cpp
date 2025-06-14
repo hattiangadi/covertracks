@@ -121,6 +121,58 @@ void Musician::generateChart(const var& parameters,
     waitEvent.signal();
 }
 
+void Musician::generateChartWithPlayer(const var& parameters,
+                                      Player* player,
+                                      std::function<void(bool success, const var& midiEventChart)> callback)
+{
+    DBG("DEBUG: Musician::generateChartWithPlayer called with Player capabilities");
+    
+    if (!patternGenerator || !llmClient)
+    {
+        DBG("DEBUG: Missing patternGenerator or llmClient - failing immediately");
+        if (callback)
+            callback(false, var("No LLM client connected"));
+        return;
+    }
+    
+    if (generating.load())
+    {
+        DBG("DEBUG: Generation already in progress - failing immediately");
+        if (callback)
+            callback(false, var("Pattern generation already in progress"));
+        return;
+    }
+    
+    if (!player)
+    {
+        DBG("DEBUG: No Player provided, falling back to standard generateChart");
+        generateChart(parameters, callback);
+        return;
+    }
+    
+    DBG("DEBUG: Musician proceeding with Player-capabilities-based chart generation");
+    
+    // Extract parameters
+    String styleToUse = parameters.hasProperty("style") ? parameters["style"].toString() : this->style;
+    
+    // Create a vector with the single Player
+    std::vector<Player*> players = { player };
+    
+    int tempo = 120;
+    if (parameters.hasProperty("tempo") && parameters["tempo"].isInt())
+        tempo = parameters["tempo"];
+    
+    String description = parameters.hasProperty("description") ? parameters["description"].toString() : "";
+    
+    // Create the prompt using the NEW PatternGenerator method with Player capabilities
+    currentPrompt = patternGenerator->createSongPromptWithPlayers(styleToUse, players, tempo, description);
+    currentCallback = std::move(callback);
+    
+    // Set generating flag and signal the thread
+    generating = true;
+    waitEvent.signal();
+}
+
 void Musician::generateSection(const String& section, const var& parameters,
                              std::function<void(bool success, const var& chart)> callback)
 {

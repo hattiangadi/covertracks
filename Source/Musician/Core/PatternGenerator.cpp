@@ -1,6 +1,7 @@
 // Source/Musician/Core/PatternGenerator.cpp
 #include "PatternGenerator.h"
 #include "PatternParser.h"
+#include "../../Player/Core/Player.h"
 #include <iostream>
 
 namespace covertracks {
@@ -26,6 +27,14 @@ String PatternGenerator::createSongPrompt(const String& style,
                                          const String& description)
 {
     return promptManager.createMusicGenerationPrompt(style, instruments, tempo, description);
+}
+
+String PatternGenerator::createSongPromptWithPlayers(const String& style,
+                                                   const std::vector<Player*>& players,
+                                                   int tempo,
+                                                   const String& description)
+{
+    return promptManager.createMusicGenerationPrompt(style, players, tempo, description);
 }
 
 String PatternGenerator::createModificationPrompt(const String& currentPattern,

@@ -334,14 +334,22 @@ InstrumentDefinition InstrumentDefinition::fromVar(const var& v)
 // MusicPatternSystem implementation
 //==============================================================================
 
-MusicPatternSystem::MusicPatternSystem()
+MusicPatternSystem::MusicPatternSystem(bool initializeDefaults)
 {
     DBG("[MusicPatternSystem] Created, Bar instances: " + String(Bar::getInstanceCount()));
     
     // Register any static Bar instances that might be created during initialization
     Bar::printInstanceCount();
     
-    initializeDefaultInstruments();
+    if (initializeDefaults)
+    {
+        DBG("[MusicPatternSystem] Initializing default instruments");
+        initializeDefaultInstruments();
+    }
+    else
+    {
+        DBG("[MusicPatternSystem] Skipping default instrument initialization");
+    }
     
     // Check for any new Bar instances after initialization
     Bar::printInstanceCount();
