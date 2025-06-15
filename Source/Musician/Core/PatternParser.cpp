@@ -252,11 +252,15 @@ std::shared_ptr<covertracks::Section> covertracks::PatternParser::parseSectionFr
     if (sectionJson.hasProperty("layers"))
     {
         var layersJson = sectionJson["layers"];
-        if (layersJson.isObject())
+        DBG("Parsing layers. Type: " << (layersJson.isObject() ? "Object" : (layersJson.isArray() ? "Array" : "Other")));
+        if (layersJson.isObject() && layersJson.getDynamicObject() != nullptr)
         {
             // Create a single merged phrase for all layers
             auto mergedPhrase = std::make_shared<Phrase>();
             mergedPhrase->setName("MergedLayers");
+            
+            // Get the layers object once before the loop
+            auto* layersObj = layersJson.getDynamicObject();
             
             // Create merged bars for each bar index
             for (int barIndex = 0; barIndex < numBars; ++barIndex)
@@ -266,7 +270,7 @@ std::shared_ptr<covertracks::Section> covertracks::PatternParser::parseSectionFr
                 // Collect all events from all layers for this bar
                 Array<var> allEvents;
                 
-                for (auto& layerProp : layersJson.getDynamicObject()->getProperties())
+                for (auto& layerProp : layersObj->getProperties())
                 {
                     String layerName = layerProp.name.toString();
                     var layerJson = layerProp.value;

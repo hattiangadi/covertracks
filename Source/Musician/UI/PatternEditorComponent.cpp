@@ -6,6 +6,7 @@ namespace covertracks {
 
 PatternEditorComponent::PatternEditorComponent(Musician* musicianPtr, PlayerManager* playerMgr)
     : headerLabel("HeaderLabel", "Pattern Editor"),
+      performanceContextLabel("PerformanceContextLabel", ""),
       playerLabel("PlayerLabel", "Player:"),
       parseButton("Parse"),
       loadButton("Load"),
@@ -19,6 +20,13 @@ PatternEditorComponent::PatternEditorComponent(Musician* musicianPtr, PlayerMana
     headerLabel.setFont(Font(FontOptions().withHeight(18.0f).withStyle("bold")));
     headerLabel.setJustificationType(Justification::centred);
     addAndMakeVisible(headerLabel);
+    
+    // Set up performance context label (initially hidden)
+    performanceContextLabel.setFont(Font(FontOptions().withHeight(14.0f)));
+    performanceContextLabel.setJustificationType(Justification::centred);
+    performanceContextLabel.setColour(Label::textColourId, Colours::darkgrey);
+    performanceContextLabel.setVisible(false);
+    addAndMakeVisible(performanceContextLabel);
     
     // Set up pattern editor
     patternEditor.setMultiLine(true);
@@ -51,6 +59,17 @@ PatternEditorComponent::PatternEditorComponent(Musician* musicianPtr, PlayerMana
     stopButton.addListener(this);
     addAndMakeVisible(stopButton);
     
+    // Set up performance mode buttons (initially hidden)
+    saveButton.setButtonText("Save");
+    saveButton.addListener(this);
+    saveButton.setVisible(false);
+    addAndMakeVisible(saveButton);
+    
+    cancelButton.setButtonText("Cancel");
+    cancelButton.addListener(this);
+    cancelButton.setVisible(false);
+    addAndMakeVisible(cancelButton);
+    
     // Set up piano roll visualization
     pianoRoll = std::make_unique<PianoRollComponent>();
     addAndMakeVisible(*pianoRoll);
@@ -70,6 +89,8 @@ PatternEditorComponent::~PatternEditorComponent()
     loadButton.removeListener(this);
     playButton.removeListener(this);
     stopButton.removeListener(this);
+    saveButton.removeListener(this);
+    cancelButton.removeListener(this);
     playerSelector.removeListener(this);
     
     if (musician)
@@ -96,19 +117,47 @@ void PatternEditorComponent::resized()
     // Header at the top
     headerLabel.setBounds(area.removeFromTop(30));
     
+    // Performance context (song/role info) if in performance mode
+    if (performanceEditMode && performanceContextLabel.isVisible())
+    {
+        performanceContextLabel.setBounds(area.removeFromTop(25));
+        area.removeFromTop(5); // Small gap
+    }
+    
     // Player selection
     auto playerArea = area.removeFromTop(30);
     playerLabel.setBounds(playerArea.removeFromLeft(60).reduced(5));
     playerSelector.setBounds(playerArea.reduced(5));
     
     // Buttons at the bottom
-    auto buttonArea = area.removeFromBottom(40);
-    int buttonWidth = buttonArea.getWidth() / 4;
-    
-    parseButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(5));
-    loadButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(5));
-    playButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(5));
-    stopButton.setBounds(buttonArea.reduced(5));
+    if (performanceEditMode)
+    {
+        // Performance mode: Show all buttons (parse/load/play/stop + save/cancel)
+        auto normalButtonArea = area.removeFromBottom(40);
+        auto performanceButtonArea = area.removeFromBottom(40);
+        
+        // First row: Parse, Load, Play, Stop buttons
+        int normalButtonWidth = normalButtonArea.getWidth() / 4;
+        parseButton.setBounds(normalButtonArea.removeFromLeft(normalButtonWidth).reduced(5));
+        loadButton.setBounds(normalButtonArea.removeFromLeft(normalButtonWidth).reduced(5));
+        playButton.setBounds(normalButtonArea.removeFromLeft(normalButtonWidth).reduced(5));
+        stopButton.setBounds(normalButtonArea.reduced(5));
+        
+        // Second row: Save and Cancel buttons
+        int performanceButtonWidth = performanceButtonArea.getWidth() / 2;
+        saveButton.setBounds(performanceButtonArea.removeFromLeft(performanceButtonWidth).reduced(5));
+        cancelButton.setBounds(performanceButtonArea.reduced(5));
+    }
+    else
+    {
+        // Normal mode: Show only Parse, Load, Play, Stop buttons
+        auto buttonArea = area.removeFromBottom(40);
+        int buttonWidth = buttonArea.getWidth() / 4;
+        parseButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(5));
+        loadButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(5));
+        playButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(5));
+        stopButton.setBounds(buttonArea.reduced(5));
+    }
     
     // Split remaining area between the editor and piano roll
     auto editorArea = area.removeFromLeft(area.getWidth() / 2);
@@ -142,6 +191,16 @@ void PatternEditorComponent::buttonClicked(Button* button)
     {
         // Stop the current playback
         stopCurrentPlayback();
+    }
+    else if (button == &saveButton)
+    {
+        // Save the pattern in performance mode
+        listeners.call(&Listener::performancePatternSaveRequested, this);
+    }
+    else if (button == &cancelButton)
+    {
+        // Cancel editing in performance mode
+        listeners.call(&Listener::performancePatternCancelRequested, this);
     }
 }
 
@@ -790,6 +849,69 @@ void PatternEditorComponent::PianoRollComponent::mouseWheelMove(const MouseEvent
     }
     
     repaint(); // Redraw with new scroll position
+}
+
+void PatternEditorComponent::setPerformanceEditMode(bool enabled)
+{
+    performanceEditMode = enabled;
+    
+    // Keep all buttons visible - parse/load/play/stop are still needed
+    // Just add save/cancel buttons in performance mode
+    saveButton.setVisible(enabled);
+    cancelButton.setVisible(enabled);
+    
+    // Set player selector read-only in performance mode
+    playerSelector.setEnabled(!enabled);
+    
+    // Show/hide performance context label
+    performanceContextLabel.setVisible(enabled);
+    
+    // Update layout
+    resized();
+}
+
+void PatternEditorComponent::setSelectedPlayer(Player* player)
+{
+    selectedPlayer = player;
+    
+    if (player && playerManager)
+    {
+        // Find the player in the selector and select it
+        auto players = playerManager->getPlayers();
+        for (int i = 0; i < players.size(); ++i)
+        {
+            if (players[i] == player)
+            {
+                // Index + 1 because item 0 is "No Player Selected"
+                playerSelector.setSelectedItemIndex(i + 1, dontSendNotification);
+                break;
+            }
+        }
+    }
+    else
+    {
+        // No player selected
+        playerSelector.setSelectedItemIndex(0, dontSendNotification);
+    }
+}
+
+void PatternEditorComponent::setPerformanceContext(const String& songName, const String& roleName)
+{
+    String contextText;
+    if (songName.isNotEmpty() && roleName.isNotEmpty())
+    {
+        contextText = "Song: " + songName + " | Role: " + roleName;
+    }
+    else if (roleName.isNotEmpty())
+    {
+        contextText = "Role: " + roleName;
+    }
+    else if (songName.isNotEmpty())
+    {
+        contextText = "Song: " + songName;
+    }
+    
+    performanceContextLabel.setText(contextText, dontSendNotification);
 }
 
 } // namespace covertracks

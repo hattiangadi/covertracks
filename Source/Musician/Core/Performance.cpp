@@ -35,6 +35,36 @@ void Performance::setGeneratedChart(const juce::String& roleName, const juce::va
     generatedCharts[roleName] = generatedChart;
 }
 
+juce::String Performance::getLLMPattern(const juce::String& roleName) const
+{
+    auto it = llmPatterns.find(roleName);
+    if (it != llmPatterns.end())
+    {
+        return it->second;
+    }
+    return "";
+}
+
+void Performance::setLLMPattern(const juce::String& roleName, const juce::String& pattern)
+{
+    llmPatterns[roleName] = pattern;
+}
+
+juce::var Performance::getMIDIChart(const juce::String& roleName) const
+{
+    auto it = midiCharts.find(roleName);
+    if (it != midiCharts.end())
+    {
+        return it->second;
+    }
+    return juce::var();
+}
+
+void Performance::setMIDIChart(const juce::String& roleName, const juce::var& midiChart)
+{
+    midiCharts[roleName] = midiChart;
+}
+
 juce::String Performance::getStatusMessage(const juce::String& roleName) const
 {
     auto it = statusMessages.find(roleName);
@@ -53,6 +83,8 @@ void Performance::setStatusMessage(const juce::String& roleName, const juce::Str
 void Performance::clearGeneratedCharts()
 {
     generatedCharts.clear();
+    llmPatterns.clear();
+    midiCharts.clear();
     statusMessages.clear();
 }
 
@@ -167,7 +199,7 @@ juce::var Performance::toVar() const
     obj->setProperty("genre", genre);
     obj->setProperty("mood", mood);
     
-    // Save generated charts
+    // Save generated charts (legacy support)
     juce::DynamicObject* chartsObj = new juce::DynamicObject();
     for (const auto& pair : generatedCharts)
     {
@@ -178,6 +210,28 @@ juce::var Performance::toVar() const
         }
     }
     obj->setProperty("charts", var(chartsObj));
+    
+    // Save LLM patterns
+    juce::DynamicObject* llmPatternsObj = new juce::DynamicObject();
+    for (const auto& pair : llmPatterns)
+    {
+        if (!pair.second.isEmpty())
+        {
+            llmPatternsObj->setProperty(pair.first, pair.second);
+        }
+    }
+    obj->setProperty("llmPatterns", var(llmPatternsObj));
+    
+    // Save MIDI charts
+    juce::DynamicObject* midiChartsObj = new juce::DynamicObject();
+    for (const auto& pair : midiCharts)
+    {
+        if (!pair.second.isVoid())
+        {
+            midiChartsObj->setProperty(pair.first, pair.second);
+        }
+    }
+    obj->setProperty("midiCharts", var(midiChartsObj));
     
     // Save status messages
     juce::DynamicObject* statusObj = new juce::DynamicObject();
@@ -241,13 +295,33 @@ std::shared_ptr<Performance> Performance::fromVar(const juce::var& v)
             performance->mood = obj->getProperty("mood").toString();
         }
         
-        // Load generated charts
+        // Load generated charts (legacy support)
         if (auto* chartsObj = obj->getProperty("charts").getDynamicObject())
         {
             for (auto& prop : chartsObj->getProperties())
             {
                 juce::String roleName = prop.name.toString();
                 performance->generatedCharts[roleName] = prop.value;
+            }
+        }
+        
+        // Load LLM patterns
+        if (auto* llmPatternsObj = obj->getProperty("llmPatterns").getDynamicObject())
+        {
+            for (auto& prop : llmPatternsObj->getProperties())
+            {
+                juce::String roleName = prop.name.toString();
+                performance->llmPatterns[roleName] = prop.value.toString();
+            }
+        }
+        
+        // Load MIDI charts
+        if (auto* midiChartsObj = obj->getProperty("midiCharts").getDynamicObject())
+        {
+            for (auto& prop : midiChartsObj->getProperties())
+            {
+                juce::String roleName = prop.name.toString();
+                performance->midiCharts[roleName] = prop.value;
             }
         }
         

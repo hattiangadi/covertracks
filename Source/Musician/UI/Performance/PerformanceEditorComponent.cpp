@@ -14,6 +14,8 @@ PerformanceEditorComponent::PerformanceEditorComponent(PerformanceManager* pm,
       songLabel("songLabel", "Song"),
       ensembleLabel("ensembleLabel", "Ensemble"),
       coordinationLabel("coordinationLabel", "Coordination"),
+      generateAllButton("Generate All"),
+      prepAllButton("Prep All"),
       loadAllButton("Load All Charts"),
       playAllButton("Play All"),
       stopAllButton("Stop All"),
@@ -60,6 +62,12 @@ PerformanceEditorComponent::PerformanceEditorComponent(PerformanceManager* pm,
     coordinationLabel.setFont(Font(FontOptions().withHeight(16.0f).withStyle("bold")));
     addAndMakeVisible(coordinationLabel);
     
+    generateAllButton.addListener(this);
+    addAndMakeVisible(generateAllButton);
+    
+    prepAllButton.addListener(this);
+    addAndMakeVisible(prepAllButton);
+    
     loadAllButton.addListener(this);
     addAndMakeVisible(loadAllButton);
     
@@ -81,6 +89,12 @@ PerformanceEditorComponent::PerformanceEditorComponent(PerformanceManager* pm,
     statusDisplay.setReadOnly(true);
     statusDisplay.setColour(TextEditor::backgroundColourId, Colours::black.withAlpha(0.1f));
     addAndMakeVisible(statusDisplay);
+    
+    // Set up pattern editor (initially hidden)
+    patternEditor = std::make_unique<PatternEditorComponent>(nullptr, playerManager);
+    patternEditor->addListener(this);
+    patternEditor->setVisible(false);
+    addAndMakeVisible(*patternEditor);
     
     // Set up LLM client for all players in the PlayerManager
     if (llmClient && playerManager)
@@ -105,6 +119,9 @@ PerformanceEditorComponent::PerformanceEditorComponent(PerformanceManager* pm,
 
 PerformanceEditorComponent::~PerformanceEditorComponent()
 {
+    // Clear any pending generations to prevent callbacks on destroyed object
+    generatingRoles.clear();
+    
     nameEditor.removeListener(this);
     descriptionEditor.removeListener(this);
     
@@ -126,63 +143,83 @@ void PerformanceEditorComponent::resized()
 {
     auto bounds = getLocalBounds().reduced(10);
     
-    // Title at top
-    titleLabel.setBounds(bounds.removeFromTop(30));
-    bounds.removeFromTop(10);
-    
-    // Name and description
-    auto nameArea = bounds.removeFromTop(25);
-    nameEditor.setBounds(nameArea);
-    bounds.removeFromTop(5);
-    
-    auto descArea = bounds.removeFromTop(60);
-    descriptionEditor.setBounds(descArea);
-    bounds.removeFromTop(10);
-    
-    // Song section
-    songLabel.setBounds(bounds.removeFromTop(25));
-    bounds.removeFromTop(5);
-    
-    songSelector.setBounds(bounds.removeFromTop(30));
-    bounds.removeFromTop(5);
-    
-    // Ensemble section
-    ensembleLabel.setBounds(bounds.removeFromTop(25));
-    bounds.removeFromTop(5);
-    
-    ensembleSelector.setBounds(bounds.removeFromTop(30));
-    bounds.removeFromTop(5);
-    
-    // Player table takes most of the space
-    auto tableHeight = static_cast<int>(bounds.getHeight() * 0.4f);
-    playerTable->setBounds(bounds.removeFromTop(tableHeight));
-    bounds.removeFromTop(10);
-    
-    // Coordination section
-    coordinationLabel.setBounds(bounds.removeFromTop(25));
-    bounds.removeFromTop(5);
-    
-    auto coordButtons = bounds.removeFromTop(30);
-    int buttonWidth = coordButtons.getWidth() / 3;
-    loadAllButton.setBounds(coordButtons.removeFromLeft(buttonWidth).reduced(2));
-    playAllButton.setBounds(coordButtons.removeFromLeft(buttonWidth).reduced(2));
-    stopAllButton.setBounds(coordButtons.reduced(2));
-    bounds.removeFromTop(10);
-    
-    // Status display
-    auto statusHeight = static_cast<int>(bounds.getHeight() * 0.3f);
-    statusDisplay.setBounds(bounds.removeFromTop(statusHeight));
-    bounds.removeFromTop(5);
-    
-    // Action buttons at bottom
-    auto actionButtons = bounds.removeFromTop(30);
-    saveButton.setBounds(actionButtons.removeFromLeft(actionButtons.getWidth() / 2).reduced(2));
-    backButton.setBounds(actionButtons.reduced(2));
+    if (isInPatternEditMode)
+    {
+        // In pattern edit mode, pattern editor takes the entire space
+        patternEditor->setBounds(bounds);
+    }
+    else
+    {
+        // Normal performance editor layout
+        
+        // Title at top
+        titleLabel.setBounds(bounds.removeFromTop(30));
+        bounds.removeFromTop(10);
+        
+        // Name and description
+        auto nameArea = bounds.removeFromTop(25);
+        nameEditor.setBounds(nameArea);
+        bounds.removeFromTop(5);
+        
+        auto descArea = bounds.removeFromTop(60);
+        descriptionEditor.setBounds(descArea);
+        bounds.removeFromTop(10);
+        
+        // Song section
+        songLabel.setBounds(bounds.removeFromTop(25));
+        bounds.removeFromTop(5);
+        
+        songSelector.setBounds(bounds.removeFromTop(30));
+        bounds.removeFromTop(5);
+        
+        // Ensemble section
+        ensembleLabel.setBounds(bounds.removeFromTop(25));
+        bounds.removeFromTop(5);
+        
+        ensembleSelector.setBounds(bounds.removeFromTop(30));
+        bounds.removeFromTop(5);
+        
+        // Player table takes most of the space
+        auto tableHeight = static_cast<int>(bounds.getHeight() * 0.4f);
+        playerTable->setBounds(bounds.removeFromTop(tableHeight));
+        bounds.removeFromTop(10);
+        
+        // Coordination section
+        coordinationLabel.setBounds(bounds.removeFromTop(25));
+        bounds.removeFromTop(5);
+        
+        auto coordButtons = bounds.removeFromTop(30);
+        int buttonWidth = coordButtons.getWidth() / 5;
+        generateAllButton.setBounds(coordButtons.removeFromLeft(buttonWidth).reduced(2));
+        prepAllButton.setBounds(coordButtons.removeFromLeft(buttonWidth).reduced(2));
+        loadAllButton.setBounds(coordButtons.removeFromLeft(buttonWidth).reduced(2));
+        playAllButton.setBounds(coordButtons.removeFromLeft(buttonWidth).reduced(2));
+        stopAllButton.setBounds(coordButtons.reduced(2));
+        bounds.removeFromTop(10);
+        
+        // Status display
+        auto statusHeight = static_cast<int>(bounds.getHeight() * 0.3f);
+        statusDisplay.setBounds(bounds.removeFromTop(statusHeight));
+        bounds.removeFromTop(5);
+        
+        // Action buttons at bottom
+        auto actionButtons = bounds.removeFromTop(30);
+        saveButton.setBounds(actionButtons.removeFromLeft(actionButtons.getWidth() / 2).reduced(2));
+        backButton.setBounds(actionButtons.reduced(2));
+    }
 }
 
 void PerformanceEditorComponent::buttonClicked(Button* button)
 {
-    if (button == &loadAllButton)
+    if (button == &generateAllButton)
+    {
+        generateAllCharts();
+    }
+    else if (button == &prepAllButton)
+    {
+        prepAllCharts();
+    }
+    else if (button == &loadAllButton)
     {
         loadAllCharts();
     }
@@ -485,40 +522,141 @@ void PerformanceEditorComponent::generateChartForPlayer(int playerIndex)
     
     parameters.getDynamicObject()->setProperty("description", description);
     
-    // Generate chart using Player interface (delegates to internal Musician)
+    // Generate LLM pattern directly using LLM client
     String roleName = role.getName();
-    DBG("DEBUG: About to call player->generateChart for role: " << roleName);
+    DBG("DEBUG: About to generate LLM pattern for role: " << roleName);
     
-    // Create a counter to track callback calls
-    static std::atomic<int> callbackCounter{0};
-    int thisCallbackId = ++callbackCounter;
-    
-    player->generateChart(parameters, [this, roleName](bool success, var chart)
+    // Check if already generating for this role
+    if (generatingRoles.count(roleName) > 0)
     {
-        DBG("DEBUG: generateChart callback received for " << roleName << " - success: " << (success ? "true" : "false"));
+        statusDisplay.setText("Already generating pattern for " + roleName);
+        DBG("DEBUG: Already generating for " << roleName << ", skipping request");
+        return;
+    }
+    
+    if (!llmClient)
+    {
+        statusDisplay.setText("No LLM client available");
+        currentPerformance->setStatusMessage(roleName, "No LLM client");
+        return;
+    }
+    
+    // Mark as generating
+    generatingRoles.insert(roleName);
+    
+    // Create a prompt for pattern generation using the same approach as PatternGenerator
+    String promptStyle = parameters.getDynamicObject()->getProperty("style").toString();
+    int promptTempo = static_cast<int>(parameters.getDynamicObject()->getProperty("tempo"));
+    
+    String prompt = "You are a professional musician and music pattern generator. Create a " + promptStyle + " piece for " + role.getInstrumentName() + " (" + roleName + ").\n\n";
+    prompt += "Target tempo: " + String(promptTempo) + " BPM\n\n";
+    prompt += "Additional instructions: " + description + "\n\n";
+    prompt += "IMPORTANT: Create a COMPACT JSON chart using our hierarchical pattern language. Use advanced features for both musical effect AND compactness:\n";
+    prompt += "- Pattern references (reuse patterns instead of repeating)\n";
+    prompt += "- Variations (base pattern + bar-specific changes)\n";
+    prompt += "- Layers (combine multiple parts efficiently)\n";
+    prompt += "- Chord references (define once, reference everywhere)\n";
+    prompt += "- basePattern + variations (avoid repetitive barPatterns)\n\n";
+    prompt += "COMPACT JSON Format (DO NOT include primitives section):\n";
+    prompt += "{\n";
+    prompt += "  \"title\": \"" + roleName + " Pattern\",\n";
+    prompt += "  \"tempo\": " + String(promptTempo) + ",\n";
+    prompt += "  \"chords\": {\n";
+    prompt += "    \"C\": [\"C3\", \"E3\", \"G3\"]\n";
+    prompt += "  },\n";
+    prompt += "  \"patterns\": {\n";
+    prompt += "    \"main_pattern\": [\n";
+    prompt += "      [1.0, \"C4\", 0.8, 0.5],\n";
+    prompt += "      [1.5, \"D4\", 0.7, 0.25],\n";
+    prompt += "      [2.0, \"E4\", 0.9, 0.75],\n";
+    prompt += "      [3.0, {\"chord\": \"C\"}, 0.6, 1.0]\n";
+    prompt += "    ]\n";
+    prompt += "  },\n";
+    prompt += "  \"sections\": {\n";
+    prompt += "    \"main\": {\n";
+    prompt += "      \"bars\": 4,\n";
+    prompt += "      \"basePattern\": \"main_pattern\",\n";
+    prompt += "      \"variations\": {\n";
+    prompt += "        \"bar4\": [[4.0, \"E4\"]]\n";
+    prompt += "      }\n";
+    prompt += "    }\n";
+    prompt += "  },\n";
+    prompt += "  \"arrangement\": [\"main\"]\n";
+    prompt += "}\n\n";
+    prompt += "NOTE FORMAT: [beat, note, velocity, duration]\n";
+    prompt += "- beat: when to play (1.0 = downbeat, 1.5 = eighth note, 2.0 = beat 2)\n";
+    prompt += "- note: note name (\"C4\", \"F#3\") or chord reference ({\"chord\": \"C\"})\n";
+    prompt += "- velocity: how loud (0.0-1.0, optional, defaults to 0.8)\n";
+    prompt += "- duration: how long in beats (0.25=sixteenth, 0.5=eighth, 1.0=quarter, 2.0=half)\n\n";
+    prompt += "Focus on creating appropriate patterns for the " + role.getInstrumentName() + " that fit the " + promptStyle + " style. ";
+    prompt += "Respond only with the JSON chart, no explanations or comments.";
+    
+    // Store that we're generating for this role
+    currentPerformance->setStatusMessage(roleName, "Generating LLM pattern...");
+    if (playerTable)
+        playerTable->updateContent();
+    
+    DBG("DEBUG: Sending LLM request for " << roleName << " - prompt length: " << prompt.length());
+    
+    llmClient->sendMessage(prompt, [this, roleName](bool success, const String& response)
+    {
+        DBG("DEBUG: LLM response received for " << roleName << " - success: " << (success ? "true" : "false") << " - response length: " << response.length());
         
-        if (success)
+        // Ensure we're on the message thread for UI updates
+        MessageManager::callAsync([this, roleName, success, response]()
         {
-            // Store the generated chart in the performance
-            if (currentPerformance)
+            DBG("DEBUG: Processing LLM response on message thread for " << roleName);
+            
+            // Clear the generating flag
+            generatingRoles.erase(roleName);
+            
+            if (success && currentPerformance)
             {
-                currentPerformance->setGeneratedChart(roleName, chart);
-                currentPerformance->setStatusMessage(roleName, "Chart Generated");
+                // Validate response isn't too large (potential infinite generation)
+                if (response.length() > 100000) // 100KB limit
+                {
+                    DBG("WARNING: LLM response too large (" << response.length() << " chars) for " << roleName);
+                    statusDisplay.setText("LLM response too large for " + roleName);
+                    if (currentPerformance)
+                        currentPerformance->setStatusMessage(roleName, "Response too large");
+                    return;
+                }
+                
+                // Check if response looks like JSON
+                String trimmed = response.trim();
+                if (!trimmed.startsWith("{") || !trimmed.endsWith("}"))
+                {
+                    DBG("WARNING: LLM response doesn't look like JSON for " << roleName);
+                    DBG("Response preview: " << response.substring(0, 200));
+                    statusDisplay.setText("Invalid JSON response for " + roleName);
+                    if (currentPerformance)
+                        currentPerformance->setStatusMessage(roleName, "Invalid JSON");
+                    return;
+                }
+                
+                // Store the LLM pattern
+                currentPerformance->setLLMPattern(roleName, response);
+                currentPerformance->setStatusMessage(roleName, "LLM pattern ready");
+                statusDisplay.setText("LLM pattern generated for " + roleName + " - ready to prep");
+                DBG("DEBUG: Successfully stored LLM pattern for " << roleName << " (" << response.length() << " chars)");
             }
-            statusDisplay.setText("Chart generated for " + roleName + " - ready to load");
-        }
-        else
-        {
-            statusDisplay.setText("Failed to generate chart for " + roleName);
-            if (currentPerformance)
+            else
             {
-                currentPerformance->setStatusMessage(roleName, "Generation Failed");
+                statusDisplay.setText("Failed to generate LLM pattern for " + roleName);
+                if (currentPerformance)
+                {
+                    currentPerformance->setStatusMessage(roleName, "Generation Failed");
+                }
+                DBG("DEBUG: Generation failed for " << roleName);
             }
-        }
-        
-        // Update the player table to show new status
-        if (playerTable)
-            playerTable->updateContent();
+            
+            // Update the player table to show new status
+            if (playerTable)
+            {
+                DBG("DEBUG: Updating player table after LLM response for " << roleName);
+                playerTable->updateContent();
+            }
+        });
     });
 }
 
@@ -547,8 +685,14 @@ void PerformanceEditorComponent::loadChartForPlayer(int playerIndex)
         DBG("DEBUG:   - '" << storedRoleNames[i] << "'");
     }
     
-    // Get the generated chart for this role
-    var chart = currentPerformance->getGeneratedChart(role.getName());
+    // Get the MIDI chart for this role (created by prep step)
+    var chart = currentPerformance->getMIDIChart(role.getName());
+    
+    // Fallback to old generated chart if no MIDI chart exists
+    if (chart.isVoid())
+    {
+        chart = currentPerformance->getGeneratedChart(role.getName());
+    }
     
     // Debug: Let's see what's actually stored
     DBG("DEBUG: Looking for chart for role: " << role.getName());
@@ -629,6 +773,208 @@ void PerformanceEditorComponent::playPlayer(int playerIndex)
         statusDisplay.setText("Failed to start playing " + role.getName());
         currentPerformance->setStatusMessage(role.getName(), "Play Failed");
     }
+}
+
+void PerformanceEditorComponent::prepChartForPlayer(int playerIndex)
+{
+    if (!currentPerformance || !playerManager)
+    {
+        statusDisplay.setText("No performance or player manager available");
+        return;
+    }
+    
+    auto ensemble = getPerformanceEnsemble();
+    if (playerIndex < 0 || playerIndex >= ensemble.size())
+    {
+        statusDisplay.setText("Invalid player index: " + String(playerIndex));
+        return;
+    }
+    
+    const auto role = ensemble[playerIndex];
+    statusDisplay.setText("Prepping pattern for " + role.getName() + "...");
+    
+    // Check if LLM pattern exists
+    String llmPattern = currentPerformance->getLLMPattern(role.getName());
+    if (llmPattern.isEmpty())
+    {
+        statusDisplay.setText("No LLM pattern to prep for " + role.getName());
+        currentPerformance->setStatusMessage(role.getName(), "No LLM pattern to prep");
+        return;
+    }
+    
+    // Convert LLM pattern to MIDI chart
+    Player* player = role.player;
+    if (!player)
+    {
+        statusDisplay.setText("No player assigned to role " + role.getName());
+        currentPerformance->setStatusMessage(role.getName(), "No player available");
+        return;
+    }
+    
+    DBG("DEBUG: About to prep pattern for " << role.getName());
+    DBG("DEBUG: LLM pattern length: " << llmPattern.length());
+    DBG("DEBUG: LLM pattern preview: " << llmPattern.substring(0, 200) << "...");
+    
+    auto midiChart = player->convertPatternStringToChart(llmPattern, 120.0);
+    
+    if (midiChart.hasProperty("success") && static_cast<bool>(midiChart["success"]))
+    {
+        currentPerformance->setMIDIChart(role.getName(), midiChart);
+        currentPerformance->setStatusMessage(role.getName(), "MIDI chart ready");
+        statusDisplay.setText("Successfully prepped pattern for " + role.getName());
+        DBG("DEBUG: Successfully prepped pattern for " << role.getName());
+    }
+    else
+    {
+        currentPerformance->setStatusMessage(role.getName(), "Prep failed");
+        statusDisplay.setText("Failed to prep pattern for " + role.getName());
+        DBG("DEBUG: Prep failed for " << role.getName() << ". MIDI chart: " << JSON::toString(midiChart, true));
+    }
+    
+    // Update the player table to reflect new status
+    if (playerTable)
+        playerTable->updateContent();
+}
+
+void PerformanceEditorComponent::editPatternForPlayer(int playerIndex)
+{
+    if (!currentPerformance)
+    {
+        statusDisplay.setText("No performance available");
+        return;
+    }
+    
+    auto ensemble = getPerformanceEnsemble();
+    if (playerIndex < 0 || playerIndex >= ensemble.size())
+    {
+        statusDisplay.setText("Invalid player index: " + String(playerIndex));
+        return;
+    }
+    
+    const auto role = ensemble[playerIndex];
+    
+    // Get existing LLM pattern if available, otherwise start with empty pattern
+    String llmPattern = currentPerformance->getLLMPattern(role.getName());
+    if (llmPattern.isEmpty())
+    {
+        // Create a basic template pattern for the role
+        llmPattern = "{\n";
+        llmPattern += "  \"title\": \"" + role.getName() + " Pattern\",\n";
+        llmPattern += "  \"tempo\": 120,\n";
+        llmPattern += "  \"patterns\": {\n";
+        llmPattern += "    \"main_pattern\": [\n";
+        llmPattern += "      [1.0, \"C4\", 0.8, 0.5]\n";
+        llmPattern += "    ]\n";
+        llmPattern += "  },\n";
+        llmPattern += "  \"sections\": {\n";
+        llmPattern += "    \"main\": {\n";
+        llmPattern += "      \"bars\": 4,\n";
+        llmPattern += "      \"basePattern\": \"main_pattern\"\n";
+        llmPattern += "    }\n";
+        llmPattern += "  },\n";
+        llmPattern += "  \"arrangement\": [\"main\"]\n";
+        llmPattern += "}";
+        
+        statusDisplay.setText("Creating new pattern for " + role.getName());
+    }
+    else
+    {
+        statusDisplay.setText("Editing existing pattern for " + role.getName());
+    }
+    
+    // Switch to pattern editor mode
+    enterPatternEditMode(role.getName(), role.player, llmPattern);
+}
+
+void PerformanceEditorComponent::generateAllCharts()
+{
+    if (!currentPerformance)
+    {
+        statusDisplay.setText("No performance available");
+        return;
+    }
+    
+    auto ensemble = getPerformanceEnsemble();
+    if (ensemble.isEmpty())
+    {
+        statusDisplay.setText("No ensemble selected");
+        return;
+    }
+    
+    statusDisplay.setText("Generating all LLM patterns...");
+    
+    int generated = 0;
+    int total = ensemble.size();
+    
+    for (int i = 0; i < ensemble.size(); ++i)
+    {
+        generateChartForPlayer(i);
+        generated++;
+    }
+    
+    statusDisplay.setText("Started generation for " + String(generated) + " of " + String(total) + " players");
+    
+    // Update the player table to reflect new status
+    if (playerTable)
+        playerTable->updateContent();
+}
+
+void PerformanceEditorComponent::prepAllCharts()
+{
+    if (!currentPerformance)
+    {
+        statusDisplay.setText("No performance available");
+        return;
+    }
+    
+    auto ensemble = getPerformanceEnsemble();
+    if (ensemble.isEmpty())
+    {
+        statusDisplay.setText("No ensemble selected");
+        return;
+    }
+    
+    statusDisplay.setText("Prepping all LLM patterns to MIDI charts...");
+    
+    int prepped = 0;
+    int total = ensemble.size();
+    
+    for (int i = 0; i < ensemble.size(); ++i)
+    {
+        const auto role = ensemble[i];
+        
+        // Check if LLM pattern exists
+        String llmPattern = currentPerformance->getLLMPattern(role.getName());
+        if (!llmPattern.isEmpty())
+        {
+            // Convert LLM pattern to MIDI chart
+            if (role.player)
+            {
+                auto midiChart = role.player->convertPatternStringToChart(llmPattern, 120.0);
+                
+                if (midiChart.hasProperty("success") && static_cast<bool>(midiChart["success"]))
+                {
+                    currentPerformance->setMIDIChart(role.getName(), midiChart);
+                    currentPerformance->setStatusMessage(role.getName(), "MIDI chart ready");
+                    prepped++;
+                }
+                else
+                {
+                    currentPerformance->setStatusMessage(role.getName(), "Prep failed");
+                }
+            }
+        }
+        else
+        {
+            currentPerformance->setStatusMessage(role.getName(), "No LLM pattern to prep");
+        }
+    }
+    
+    statusDisplay.setText("Prepped " + String(prepped) + " of " + String(total) + " patterns");
+    
+    // Update the player table to reflect new status
+    if (playerTable)
+        playerTable->updateContent();
 }
 
 void PerformanceEditorComponent::loadAllCharts()
@@ -1051,6 +1397,16 @@ Component* PerformanceEditorComponent::PlayerTable::refreshComponentForCell(int 
                 generateBtn.addListener(parent);
                 addAndMakeVisible(generateBtn);
                 
+                prepBtn.setButtonText("Prep");
+                prepBtn.setComponentID("prep_" + String(row));
+                prepBtn.addListener(parent);
+                addAndMakeVisible(prepBtn);
+                
+                editBtn.setButtonText("Edit");
+                editBtn.setComponentID("edit_" + String(row));
+                editBtn.addListener(parent);
+                addAndMakeVisible(editBtn);
+                
                 loadBtn.setButtonText("Load");
                 loadBtn.setComponentID("load_" + String(row));
                 loadBtn.addListener(parent);
@@ -1065,8 +1421,10 @@ Component* PerformanceEditorComponent::PlayerTable::refreshComponentForCell(int 
             void resized() override
             {
                 auto bounds = getLocalBounds();
-                int buttonWidth = bounds.getWidth() / 3;
+                int buttonWidth = bounds.getWidth() / 5;
                 generateBtn.setBounds(bounds.removeFromLeft(buttonWidth).reduced(1));
+                prepBtn.setBounds(bounds.removeFromLeft(buttonWidth).reduced(1));
+                editBtn.setBounds(bounds.removeFromLeft(buttonWidth).reduced(1));
                 loadBtn.setBounds(bounds.removeFromLeft(buttonWidth).reduced(1));
                 playBtn.setBounds(bounds.reduced(1));
             }
@@ -1075,6 +1433,8 @@ Component* PerformanceEditorComponent::PlayerTable::refreshComponentForCell(int 
             PlayerTable* parent;
             int rowIndex;
             TextButton generateBtn;
+            TextButton prepBtn;
+            TextButton editBtn;
             TextButton loadBtn;
             TextButton playBtn;
         };
@@ -1098,6 +1458,18 @@ void PerformanceEditorComponent::PlayerTable::buttonClicked(Button* button)
         int playerIndex = buttonId.substring(9).getIntValue();
         if (parent)
             parent->generateChartForPlayer(playerIndex);
+    }
+    else if (buttonId.startsWith("prep_"))
+    {
+        int playerIndex = buttonId.substring(5).getIntValue();
+        if (parent)
+            parent->prepChartForPlayer(playerIndex);
+    }
+    else if (buttonId.startsWith("edit_"))
+    {
+        int playerIndex = buttonId.substring(5).getIntValue();
+        if (parent)
+            parent->editPatternForPlayer(playerIndex);
     }
     else if (buttonId.startsWith("load_"))
     {
@@ -1189,6 +1561,168 @@ void PerformanceEditorComponent::refreshPerformanceEnsembleCache()
 juce::Array<MusicianRole> PerformanceEditorComponent::getPerformanceEnsemble() const
 {
     return cachedEnsembleRoles;
+}
+
+void PerformanceEditorComponent::enterPatternEditMode(const String& roleName, Player* player, const String& llmPattern)
+{
+    if (!patternEditor || !player)
+        return;
+    
+    // Store edit state
+    isInPatternEditMode = true;
+    editingRoleName = roleName;
+    editingPlayer = player;
+    
+    // Set up pattern editor with the LLM pattern and player
+    patternEditor->setPattern(llmPattern);
+    patternEditor->setSelectedPlayer(player);
+    
+    // Set performance context (song name and role)
+    String songName = "";
+    if (currentPerformance && currentPerformance->getSong())
+    {
+        songName = currentPerformance->getSong()->getTitle();
+    }
+    patternEditor->setPerformanceContext(songName, roleName);
+    
+    patternEditor->setPerformanceEditMode(true);
+    
+    // Hide all performance editor UI components
+    titleLabel.setVisible(false);
+    nameEditor.setVisible(false);
+    descriptionEditor.setVisible(false);
+    songLabel.setVisible(false);
+    songSelector.setVisible(false);
+    ensembleLabel.setVisible(false);
+    ensembleSelector.setVisible(false);
+    playerTable->setVisible(false);
+    coordinationLabel.setVisible(false);
+    generateAllButton.setVisible(false);
+    prepAllButton.setVisible(false);
+    loadAllButton.setVisible(false);
+    playAllButton.setVisible(false);
+    stopAllButton.setVisible(false);
+    statusDisplay.setVisible(false);
+    saveButton.setVisible(false);
+    backButton.setVisible(false);
+    
+    // Show pattern editor
+    patternEditor->setVisible(true);
+    
+    // Update layout
+    resized();
+    
+    // Update status
+    if (currentPerformance)
+    {
+        currentPerformance->setStatusMessage(roleName, "Editing pattern...");
+    }
+}
+
+void PerformanceEditorComponent::exitPatternEditMode(bool saveChanges)
+{
+    if (!isInPatternEditMode || !patternEditor)
+        return;
+    
+    if (saveChanges && currentPerformance && !editingRoleName.isEmpty())
+    {
+        // Get the edited pattern from the pattern editor
+        String editedPattern = patternEditor->getPatternNotation();
+        
+        // Validate that we have some content
+        if (editedPattern.trim().isEmpty())
+        {
+            // Don't exit edit mode if pattern is empty - just show error
+            // Note: we can't show statusDisplay since it's hidden in edit mode
+            return;
+        }
+        
+        // Save it back to the performance as an LLM pattern
+        currentPerformance->setLLMPattern(editingRoleName, editedPattern);
+        currentPerformance->setStatusMessage(editingRoleName, "Pattern saved (manual)");
+        
+        // Clear any existing MIDI chart since the pattern was modified
+        currentPerformance->setMIDIChart(editingRoleName, var());
+        
+        DBG("DEBUG: Saved manually edited pattern for " << editingRoleName << " (" << editedPattern.length() << " chars)");
+    }
+    else if (currentPerformance && !editingRoleName.isEmpty())
+    {
+        currentPerformance->setStatusMessage(editingRoleName, "Edit cancelled");
+    }
+    
+    // Reset edit state
+    isInPatternEditMode = false;
+    editingRoleName = "";
+    editingPlayer = nullptr;
+    
+    // Hide pattern editor
+    patternEditor->setPerformanceEditMode(false);
+    patternEditor->setVisible(false);
+    
+    // Show all performance editor UI components
+    titleLabel.setVisible(true);
+    nameEditor.setVisible(true);
+    descriptionEditor.setVisible(true);
+    songLabel.setVisible(true);
+    songSelector.setVisible(true);
+    ensembleLabel.setVisible(true);
+    ensembleSelector.setVisible(true);
+    playerTable->setVisible(true);
+    coordinationLabel.setVisible(true);
+    generateAllButton.setVisible(true);
+    prepAllButton.setVisible(true);
+    loadAllButton.setVisible(true);
+    playAllButton.setVisible(true);
+    stopAllButton.setVisible(true);
+    statusDisplay.setVisible(true);
+    saveButton.setVisible(true);
+    backButton.setVisible(true);
+    
+    // Update layout
+    resized();
+    
+    // Update status and player table
+    if (saveChanges && currentPerformance && !editingRoleName.isEmpty())
+    {
+        statusDisplay.setText("Pattern saved for " + editingRoleName + " - use Prep to generate MIDI chart");
+    }
+    else if (currentPerformance && !editingRoleName.isEmpty())
+    {
+        statusDisplay.setText("Pattern editing cancelled for " + editingRoleName);
+    }
+    
+    // Update the player table
+    if (playerTable)
+        playerTable->updateContent();
+}
+
+// PatternEditorComponent::Listener implementations
+void PerformanceEditorComponent::patternPlayRequested(PatternEditorComponent* /*editor*/)
+{
+    // Not used in performance mode - play is handled by the main interface
+}
+
+void PerformanceEditorComponent::patternParseRequested(PatternEditorComponent* /*editor*/)
+{
+    // Not used in performance mode - parsing is handled by prep step
+}
+
+void PerformanceEditorComponent::patternLoadRequested(PatternEditorComponent* /*editor*/)
+{
+    // Not used in performance mode - loading is handled by main interface
+}
+
+void PerformanceEditorComponent::performancePatternSaveRequested(PatternEditorComponent* /*editor*/)
+{
+    // Save the edited pattern and exit edit mode
+    exitPatternEditMode(true);
+}
+
+void PerformanceEditorComponent::performancePatternCancelRequested(PatternEditorComponent* /*editor*/)
+{
+    // Cancel editing and exit edit mode
+    exitPatternEditMode(false);
 }
 
 } // namespace covertracks

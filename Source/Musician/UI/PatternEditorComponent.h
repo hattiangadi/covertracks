@@ -58,6 +58,16 @@ public:
     // Notification functions
     void patternUpdated();
     
+    // Performance editing mode
+    void setPerformanceEditMode(bool enabled);
+    bool isInPerformanceEditMode() const { return performanceEditMode; }
+    
+    // Player selection
+    void setSelectedPlayer(Player* player);
+    
+    // Performance context
+    void setPerformanceContext(const String& songName, const String& roleName);
+    
     // Listener interface for receiving events from the PatternEditorComponent
     class Listener
     {
@@ -67,6 +77,8 @@ public:
         virtual void patternPlayRequested(PatternEditorComponent* editor) = 0;
         virtual void patternParseRequested(PatternEditorComponent* editor) = 0;
         virtual void patternLoadRequested(PatternEditorComponent* editor) = 0;
+        virtual void performancePatternSaveRequested(PatternEditorComponent* editor) {}
+        virtual void performancePatternCancelRequested(PatternEditorComponent* editor) {}
     };
     
     void addListener(Listener* listener);
@@ -83,12 +95,17 @@ private:
     TextEditor patternEditor;
     
     Label headerLabel;
+    Label performanceContextLabel;  // Song and role info for performance mode
     Label playerLabel;
     ComboBox playerSelector;
     TextButton parseButton;
     TextButton loadButton;
     TextButton playButton;
     TextButton stopButton;
+    
+    // Performance mode buttons
+    TextButton saveButton;
+    TextButton cancelButton;
     
     // Piano roll visualization
     class PianoRollComponent : public Component
@@ -136,6 +153,9 @@ private:
     double playbackTempo = 120.0;
     double playbackStartTime = 0.0; // When playback started (in milliseconds)
     double playbackStartBeat = 0.0; // Beat position when tracking started
+    
+    // Performance editing mode
+    bool performanceEditMode = false;
     
     // Helper methods
     void updatePlayerSelector();

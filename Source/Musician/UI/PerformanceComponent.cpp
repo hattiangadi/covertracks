@@ -17,10 +17,13 @@ PerformanceComponent::MusicianStatusTable::MusicianStatusTable()
     table.setModel(this);
     table.setMultipleSelectionEnabled(false);
     table.setHeaderHeight(24);
-    table.getHeader().addColumn("Role", 1, 150, 100, -1, juce::TableHeaderComponent::defaultFlags);
-    table.getHeader().addColumn("Instrument", 2, 150, 100, -1, juce::TableHeaderComponent::defaultFlags);
-    table.getHeader().addColumn("Status", 3, 200, 100, -1, juce::TableHeaderComponent::defaultFlags);
-    table.getHeader().addColumn("Generate", 4, 100, 80, -1, juce::TableHeaderComponent::defaultFlags);
+    table.getHeader().addColumn("Role", 1, 100, 80, -1, juce::TableHeaderComponent::defaultFlags);
+    table.getHeader().addColumn("Instrument", 2, 100, 80, -1, juce::TableHeaderComponent::defaultFlags);
+    table.getHeader().addColumn("Status", 3, 150, 100, -1, juce::TableHeaderComponent::defaultFlags);
+    table.getHeader().addColumn("Gen", 4, 80, 70, -1, juce::TableHeaderComponent::defaultFlags);
+    table.getHeader().addColumn("Prep", 5, 80, 70, -1, juce::TableHeaderComponent::defaultFlags);
+    table.getHeader().addColumn("Edit", 6, 80, 70, -1, juce::TableHeaderComponent::defaultFlags);
+    table.getHeader().addColumn("Load", 7, 80, 70, -1, juce::TableHeaderComponent::defaultFlags);
     addAndMakeVisible(table);
 }
 
@@ -92,19 +95,42 @@ void PerformanceComponent::MusicianStatusTable::paintCell(juce::Graphics& g, int
 
 juce::Component* PerformanceComponent::MusicianStatusTable::refreshComponentForCell(int rowNumber, int columnId, bool /*isRowSelected*/, juce::Component* existingComponentToUpdate)
 {
-    // Only create components for the "Generate" column
-    if (columnId == 4)
+    // Create components for button columns (4-7)
+    if (columnId >= 4 && columnId <= 7)
     {
-        // Create a generate button for this row
-        auto* genButton = static_cast<juce::TextButton*>(existingComponentToUpdate);
+        auto* button = static_cast<juce::TextButton*>(existingComponentToUpdate);
         
-        if (genButton == nullptr)
+        if (button == nullptr)
         {
-            genButton = new juce::TextButton("Generate");
-            genButton->setComponentID("generate_" + juce::String(rowNumber));
+            button = new juce::TextButton();
+            
+            // Set button text and component ID based on column
+            switch (columnId)
+            {
+                case 4: // Gen
+                    button->setButtonText("Gen");
+                    button->setComponentID("gen_" + juce::String(rowNumber));
+                    DBG("Created Gen button for row " << rowNumber);
+                    break;
+                case 5: // Prep
+                    button->setButtonText("Prep");
+                    button->setComponentID("prep_" + juce::String(rowNumber));
+                    DBG("Created Prep button for row " << rowNumber);
+                    break;
+                case 6: // Edit
+                    button->setButtonText("Edit");
+                    button->setComponentID("edit_" + juce::String(rowNumber));
+                    DBG("Created Edit button for row " << rowNumber);
+                    break;
+                case 7: // Load
+                    button->setButtonText("Load");
+                    button->setComponentID("load_" + juce::String(rowNumber));
+                    DBG("Created Load button for row " << rowNumber);
+                    break;
+            }
         }
         
-        return genButton;
+        return button;
     }
     
     return nullptr;
@@ -114,14 +140,19 @@ void PerformanceComponent::MusicianStatusTable::updateMusicianRoles(const juce::
 {
     musicianRoles = roles;
     statuses.clear();
-    statuses.clear();
     for (int i = 0; i < roles.size(); ++i)
     {
         statuses.add("");
     }
     
+    DBG("updateMusicianRoles: Setting " << roles.size() << " roles");
+    
+    // Force complete table refresh
     table.updateContent();
     table.repaint();
+    
+    // Also trigger a layout update
+    resized();
 }
 
 void PerformanceComponent::MusicianStatusTable::updateMusicianStatus(int index, const juce::String& status)
@@ -154,9 +185,19 @@ juce::String PerformanceComponent::MusicianStatusTable::getStatusMessage(int ind
 
 void PerformanceComponent::MusicianStatusTable::addGenerateButton(int rowNumber, juce::Button::Listener* listener)
 {
-    if (auto* button = dynamic_cast<juce::TextButton*>(table.getCellComponent(4, rowNumber)))
+    DBG("Adding button listeners for row " << rowNumber);
+    // Add listener to all buttons for this row
+    for (int col = 4; col <= 7; ++col)
     {
-        button->addListener(listener);
+        if (auto* button = dynamic_cast<juce::TextButton*>(table.getCellComponent(col, rowNumber)))
+        {
+            button->addListener(listener);
+            DBG("Added listener to button in row " << rowNumber << ", col " << col << " - " << button->getButtonText());
+        }
+        else
+        {
+            DBG("No button found in row " << rowNumber << ", col " << col);
+        }
     }
 }
 
@@ -315,6 +356,10 @@ PerformanceComponent::PerformanceComponent(EnsembleManager* manager, PlayerManag
     generateButton.addListener(this);
     addAndMakeVisible(generateButton);
     
+    prepAllButton.setButtonText("Prep All");
+    prepAllButton.addListener(this);
+    addAndMakeVisible(prepAllButton);
+    
     playButton.setButtonText("Play");
     playButton.addListener(this);
     playButton.setEnabled(false);
@@ -327,6 +372,12 @@ PerformanceComponent::PerformanceComponent(EnsembleManager* manager, PlayerManag
     
     // Set up musician status table
     addAndMakeVisible(musicianStatusTable);
+    
+    // Set up pattern editor (initially hidden)
+    patternEditor = std::make_unique<PatternEditorComponent>(nullptr, playerManager);
+    patternEditor->addListener(this);
+    patternEditor->setVisible(false);
+    addAndMakeVisible(*patternEditor);
     
     // Set up status label
     statusLabel.setText("Ready", juce::dontSendNotification);
@@ -438,9 +489,10 @@ void PerformanceComponent::resized()
     
     // Buttons area
     auto buttonsArea = bounds.removeFromTop(30);
-    auto buttonsWidth = buttonsArea.getWidth() / 3;
+    auto buttonsWidth = buttonsArea.getWidth() / 4;
     
     generateButton.setBounds(buttonsArea.removeFromLeft(buttonsWidth).reduced(5, 0));
+    prepAllButton.setBounds(buttonsArea.removeFromLeft(buttonsWidth).reduced(5, 0));
     playButton.setBounds(buttonsArea.removeFromLeft(buttonsWidth).reduced(5, 0));
     stopButton.setBounds(buttonsArea.reduced(5, 0));
     
@@ -450,8 +502,15 @@ void PerformanceComponent::resized()
     
     bounds.removeFromTop(10); // Spacing
     
-    // Musician status table
-    musicianStatusTable.setBounds(bounds);
+    // Musician status table or pattern editor
+    if (isInPatternEditMode)
+    {
+        patternEditor->setBounds(bounds);
+    }
+    else
+    {
+        musicianStatusTable.setBounds(bounds);
+    }
 }
 
 void PerformanceComponent::buttonClicked(juce::Button* button)
@@ -462,6 +521,11 @@ void PerformanceComponent::buttonClicked(juce::Button* button)
     {
         DBG("DEBUG: Generate button clicked - MEMORY CHECK POINT GENERATE_BUTTON");
         startGeneration();
+    }
+    else if (button == &prepAllButton)
+    {
+        // Prep all LLM patterns to MIDI charts
+        prepAllPatterns();
     }
     else if (button == &playButton)
     {
@@ -481,15 +545,42 @@ void PerformanceComponent::buttonClicked(juce::Button* button)
     }
     else
     {
-        // Check if this is a generate button for a specific musician
+        // Check if this is a button for a specific musician
         juce::String buttonId = button->getComponentID();
-        if (buttonId.startsWith("generate_"))
+        if (buttonId.startsWith("gen_"))
         {
-            int rowNumber = buttonId.substring(9).getIntValue();
+            int rowNumber = buttonId.substring(4).getIntValue();
             if (rowNumber >= 0 && rowNumber < musicianStatusTable.getMusicianRoles().size())
             {
-                // Generate pattern for this specific musician
+                // Generate LLM pattern for this specific musician
                 startGenerationForRole(musicianStatusTable.getMusicianRoles()[rowNumber]);
+            }
+        }
+        else if (buttonId.startsWith("prep_"))
+        {
+            int rowNumber = buttonId.substring(5).getIntValue();
+            if (rowNumber >= 0 && rowNumber < musicianStatusTable.getMusicianRoles().size())
+            {
+                // Prep MIDI chart for this specific musician
+                prepPatternForRole(musicianStatusTable.getMusicianRoles()[rowNumber]);
+            }
+        }
+        else if (buttonId.startsWith("edit_"))
+        {
+            int rowNumber = buttonId.substring(5).getIntValue();
+            if (rowNumber >= 0 && rowNumber < musicianStatusTable.getMusicianRoles().size())
+            {
+                // Edit LLM pattern for this specific musician
+                editPatternForRole(musicianStatusTable.getMusicianRoles()[rowNumber]);
+            }
+        }
+        else if (buttonId.startsWith("load_"))
+        {
+            int rowNumber = buttonId.substring(5).getIntValue();
+            if (rowNumber >= 0 && rowNumber < musicianStatusTable.getMusicianRoles().size())
+            {
+                // Load MIDI chart for this specific musician
+                loadPatternForRole(musicianStatusTable.getMusicianRoles()[rowNumber]);
             }
         }
     }
@@ -830,6 +921,7 @@ void covertracks::PerformanceComponent::updateSongSelector()
 
 void PerformanceComponent::updateMusicianStatusTable()
 {
+    DBG("updateMusicianStatusTable called");
     if (ensembleManager)
     {
         juce::Array<MusicianRole> roles;
@@ -859,13 +951,23 @@ void PerformanceComponent::updateMusicianStatusTable()
         }
         
         // Update the musician status table with the roles
+        DBG("Updating table with " << roles.size() << " roles");
         musicianStatusTable.updateMusicianRoles(roles);
         
-        // Add listeners to the generate buttons
+        // Add listeners to the generate buttons immediately
         for (int i = 0; i < roles.size(); ++i)
         {
-            musicianStatusTable.addGenerateButton(i, this);
+            // Use a timer to add button listeners after the table has been updated
+            juce::Timer::callAfterDelay(50 * (i + 1), [this, i]() {
+                DBG("Timer callback - adding button listeners for row " << i);
+                musicianStatusTable.addGenerateButton(i, this);
+            });
         }
+        
+        // Force table refresh
+        juce::Timer::callAfterDelay(200, [this]() {
+            musicianStatusTable.repaint();
+        });
     }
 }
 
@@ -1063,7 +1165,7 @@ void PerformanceComponent::startGeneration()
                         
                         // Store the MIDI_EVENT_CHART in the performance
                         currentPerformance->setGeneratedChart(roleName, var(chartObj));
-                        currentPerformance->setStatusMessage(roleName, "Generated");
+                        currentPerformance->setStatusMessage(roleName, "LLM pattern ready");
                         
                         // Save the performance
                         saveCurrentPerformance();
@@ -1199,6 +1301,16 @@ void PerformanceComponent::startGenerationForRole(const MusicianRole& role)
                 
                 if (success && midiEventChart.isObject())
                 {
+                    // First, store the LLM pattern if available
+                    if (midiEventChart.hasProperty("notation"))
+                    {
+                        String llmPattern = midiEventChart["notation"].toString();
+                        if (currentPerformance && !llmPattern.isEmpty())
+                        {
+                            currentPerformance->setLLMPattern(roleName, llmPattern);
+                        }
+                    }
+                    
                     // Extract MIDI events from the Player's response
                     if (midiEventChart.hasProperty("events"))
                     {
@@ -1238,7 +1350,7 @@ void PerformanceComponent::startGenerationForRole(const MusicianRole& role)
                 if (pattern && pattern->getNumEvents() > 0)
                 {
                     // Update status
-                    musicianStatusTable.updateMusicianStatus(roleIndex, "Generated");
+                    musicianStatusTable.updateMusicianStatus(roleIndex, "LLM pattern ready");
                     
                     // Store the pattern in the ensemble manager
                     ensembleManager->setMIDIPatternForRole(roleName, pattern);
@@ -1290,7 +1402,7 @@ void PerformanceComponent::startGenerationForRole(const MusicianRole& role)
                         
                         // Store the MIDI_EVENT_CHART in the performance
                         currentPerformance->setGeneratedChart(roleName, var(chartObj));
-                        currentPerformance->setStatusMessage(roleName, "Generated");
+                        currentPerformance->setStatusMessage(roleName, "LLM pattern ready");
                         
                         // Save the performance
                         saveCurrentPerformance();
@@ -1643,6 +1755,223 @@ int PerformanceComponent::getMidiNoteFromName(const juce::String& name)
     
     // Calculate MIDI note number: 12 * octave + baseNote + 12 (to start from C0 = 12)
     return 12 * octave + baseNote + 12;
+}
+
+void PerformanceComponent::prepAllPatterns()
+{
+    if (!currentPerformance)
+        return;
+    
+    // Prep all roles that have LLM patterns but no MIDI charts
+    for (int i = 0; i < musicianStatusTable.getMusicianRoles().size(); ++i)
+    {
+        const auto& role = musicianStatusTable.getMusicianRoles()[i];
+        juce::String pattern = currentPerformance->getLLMPattern(role.name);
+        
+        if (!pattern.isEmpty())
+        {
+            prepPatternForRole(role);
+        }
+    }
+}
+
+void PerformanceComponent::prepPatternForRole(const MusicianRole& role)
+{
+    if (!currentPerformance)
+        return;
+    
+    juce::String llmPattern = currentPerformance->getLLMPattern(role.name);
+    if (llmPattern.isEmpty())
+    {
+        currentPerformance->setStatusMessage(role.name, "No LLM pattern to prep");
+        updateMusicianStatusTable();
+        return;
+    }
+    
+    // Find the player for this role
+    Player* player = role.player;
+    if (!player)
+    {
+        currentPerformance->setStatusMessage(role.name, "No player available");
+        updateMusicianStatusTable();
+        return;
+    }
+    
+    currentPerformance->setStatusMessage(role.name, "Prepping...");
+    updateMusicianStatusTable();
+    
+    // Convert LLM pattern to MIDI chart using Player's conversion
+    auto midiChart = player->convertPatternStringToChart(llmPattern, 120.0);
+    
+    if (midiChart.hasProperty("success") && static_cast<bool>(midiChart["success"]))
+    {
+        currentPerformance->setMIDIChart(role.name, midiChart);
+        currentPerformance->setStatusMessage(role.name, "MIDI chart ready");
+    }
+    else
+    {
+        currentPerformance->setStatusMessage(role.name, "Prep failed");
+    }
+    
+    updateMusicianStatusTable();
+}
+
+void PerformanceComponent::editPatternForRole(const MusicianRole& role)
+{
+    if (!currentPerformance)
+        return;
+    
+    juce::String llmPattern = currentPerformance->getLLMPattern(role.name);
+    if (llmPattern.isEmpty())
+    {
+        currentPerformance->setStatusMessage(role.name, "No LLM pattern to edit");
+        updateMusicianStatusTable();
+        return;
+    }
+    
+    // Switch to pattern editor mode
+    enterPatternEditMode(role.name, role.player, llmPattern);
+}
+
+void PerformanceComponent::loadPatternForRole(const MusicianRole& role)
+{
+    if (!currentPerformance)
+        return;
+    
+    juce::var midiChart = currentPerformance->getMIDIChart(role.name);
+    if (midiChart.isVoid())
+    {
+        currentPerformance->setStatusMessage(role.name, "No MIDI chart to load");
+        updateMusicianStatusTable();
+        return;
+    }
+    
+    // Find the player for this role
+    Player* player = role.player;
+    if (!player)
+    {
+        currentPerformance->setStatusMessage(role.name, "No player available");
+        updateMusicianStatusTable();
+        return;
+    }
+    
+    currentPerformance->setStatusMessage(role.name, "Loading...");
+    updateMusicianStatusTable();
+    
+    // Load the MIDI chart into the player
+    bool loaded = player->loadChart(midiChart);
+    
+    if (loaded)
+    {
+        currentPerformance->setStatusMessage(role.name, "Loaded and ready");
+    }
+    else
+    {
+        currentPerformance->setStatusMessage(role.name, "Load failed");
+    }
+    
+    updateMusicianStatusTable();
+}
+
+void PerformanceComponent::enterPatternEditMode(const juce::String& roleName, Player* player, const juce::String& llmPattern)
+{
+    if (!patternEditor || !player)
+        return;
+    
+    // Store edit state
+    isInPatternEditMode = true;
+    editingRoleName = roleName;
+    editingPlayer = player;
+    
+    // Set up pattern editor with the LLM pattern and player
+    patternEditor->setPattern(llmPattern);
+    patternEditor->setPerformanceEditMode(true);
+    
+    // TODO: Set the selected player in pattern editor
+    // This would require adding a method to PatternEditorComponent
+    
+    // Hide musician table and show pattern editor
+    musicianStatusTable.setVisible(false);
+    patternEditor->setVisible(true);
+    
+    // Update layout
+    resized();
+    
+    // Update status
+    if (currentPerformance)
+    {
+        currentPerformance->setStatusMessage(roleName, "Editing pattern...");
+    }
+}
+
+void PerformanceComponent::exitPatternEditMode(bool saveChanges)
+{
+    if (!isInPatternEditMode || !patternEditor)
+        return;
+    
+    if (saveChanges && currentPerformance && !editingRoleName.isEmpty())
+    {
+        // Get the edited pattern from the pattern editor
+        juce::String editedPattern = patternEditor->getPatternNotation();
+        
+        // Save it back to the performance
+        currentPerformance->setLLMPattern(editingRoleName, editedPattern);
+        currentPerformance->setStatusMessage(editingRoleName, "Pattern saved");
+        
+        // Clear any existing MIDI chart since the pattern was modified
+        currentPerformance->setMIDIChart(editingRoleName, var());
+        
+        // Save the performance
+        saveCurrentPerformance();
+    }
+    else if (currentPerformance && !editingRoleName.isEmpty())
+    {
+        currentPerformance->setStatusMessage(editingRoleName, "Edit cancelled");
+    }
+    
+    // Reset edit state
+    isInPatternEditMode = false;
+    editingRoleName = "";
+    editingPlayer = nullptr;
+    
+    // Hide pattern editor and show musician table
+    patternEditor->setPerformanceEditMode(false);
+    patternEditor->setVisible(false);
+    musicianStatusTable.setVisible(true);
+    
+    // Update layout
+    resized();
+    
+    // Update the musician status table
+    updateMusicianStatusTable();
+}
+
+// PatternEditorComponent::Listener implementations
+void PerformanceComponent::patternPlayRequested(PatternEditorComponent* /*editor*/)
+{
+    // Not used in performance mode
+}
+
+void PerformanceComponent::patternParseRequested(PatternEditorComponent* /*editor*/)
+{
+    // Not used in performance mode
+}
+
+void PerformanceComponent::patternLoadRequested(PatternEditorComponent* /*editor*/)
+{
+    // Not used in performance mode
+}
+
+void PerformanceComponent::performancePatternSaveRequested(PatternEditorComponent* /*editor*/)
+{
+    // Save the edited pattern and exit edit mode
+    exitPatternEditMode(true);
+}
+
+void PerformanceComponent::performancePatternCancelRequested(PatternEditorComponent* /*editor*/)
+{
+    // Cancel editing and exit edit mode
+    exitPatternEditMode(false);
 }
 
 } // namespace covertracks

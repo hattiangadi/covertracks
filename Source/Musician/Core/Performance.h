@@ -193,6 +193,38 @@ public:
     void setGeneratedChart(const juce::String& roleName, const juce::var& generatedChart);
     
     /**
+     * @brief Get the LLM-generated pattern for a specific musician role
+     * 
+     * @param roleName The name of the musician role
+     * @return juce::String The LLM pattern, or empty string if not found
+     */
+    juce::String getLLMPattern(const juce::String& roleName) const;
+    
+    /**
+     * @brief Set the LLM-generated pattern for a specific musician role
+     * 
+     * @param roleName The name of the musician role
+     * @param pattern The LLM-generated pattern
+     */
+    void setLLMPattern(const juce::String& roleName, const juce::String& pattern);
+    
+    /**
+     * @brief Get the MIDI chart for a specific musician role
+     * 
+     * @param roleName The name of the musician role
+     * @return juce::var The MIDI chart, or empty var if not found
+     */
+    juce::var getMIDIChart(const juce::String& roleName) const;
+    
+    /**
+     * @brief Set the MIDI chart for a specific musician role
+     * 
+     * @param roleName The name of the musician role
+     * @param midiChart The MIDI chart
+     */
+    void setMIDIChart(const juce::String& roleName, const juce::var& midiChart);
+    
+    /**
      * @brief Get the status message for a specific musician role
      * 
      * @param roleName The name of the musician role
@@ -261,8 +293,14 @@ private:
     juce::String genre;
     juce::String mood;
     
-    // Maps musician role names to their generated charts
+    // Maps musician role names to their generated charts (legacy support)
     std::map<juce::String, juce::var> generatedCharts;
+    
+    // Maps musician role names to their LLM-generated patterns
+    std::map<juce::String, juce::String> llmPatterns;
+    
+    // Maps musician role names to their MIDI charts
+    std::map<juce::String, juce::var> midiCharts;
     
     // Maps musician role names to their status messages
     std::map<juce::String, juce::String> statusMessages;

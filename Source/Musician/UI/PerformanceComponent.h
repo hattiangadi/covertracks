@@ -10,6 +10,7 @@
 #include "../Core/PerformanceManager.h"
 #include "../Core/MusicPatternSystem.h"
 #include "../Core/PatternParser.h"
+#include "PatternEditorComponent.h"
 
 namespace covertracks {
 
@@ -25,7 +26,8 @@ class PerformanceComponent : public juce::Component,
                             public juce::TextEditor::Listener,
                             public juce::ComboBox::Listener,
                             public SongListComponent::Listener,
-                            private juce::Timer
+                            private juce::Timer,
+                            public PatternEditorComponent::Listener
 {
 public:
     /**
@@ -61,6 +63,13 @@ public:
     // SongListComponent::Listener
     void songSelectionChanged(SongListComponent* source, std::shared_ptr<Song> song) override;
     void songListChanged(SongListComponent* source) override;
+    
+    // PatternEditorComponent::Listener
+    void patternPlayRequested(PatternEditorComponent* editor) override;
+    void patternParseRequested(PatternEditorComponent* editor) override;
+    void patternLoadRequested(PatternEditorComponent* editor) override;
+    void performancePatternSaveRequested(PatternEditorComponent* editor) override;
+    void performancePatternCancelRequested(PatternEditorComponent* editor) override;
     
     /**
      * @brief Set the current song for performance
@@ -165,6 +174,7 @@ private:
     juce::TextEditor instructionsEditor;
     
     juce::TextButton generateButton;
+    juce::TextButton prepAllButton;
     juce::TextButton playButton;
     juce::TextButton stopButton;
     
@@ -215,6 +225,9 @@ private:
     
     MusicianStatusTable musicianStatusTable;
     
+    // Pattern editor for editing LLM patterns
+    std::unique_ptr<PatternEditorComponent> patternEditor;
+    
     // References
     EnsembleManager* ensembleManager;
     PlayerManager* playerManager;
@@ -226,6 +239,11 @@ private:
     std::shared_ptr<Performance> currentPerformance;
     juce::String currentInstructions;
     bool isGenerating = false;
+    
+    // Pattern editing mode
+    bool isInPatternEditMode = false;
+    juce::String editingRoleName;
+    Player* editingPlayer = nullptr;
     
     // Performance manager for saving/loading performances
     juce::Array<std::shared_ptr<Performance>> loadedPerformances;
@@ -240,6 +258,12 @@ private:
     void updateMusicianStatusTable();
     void startGeneration();
     void startGenerationForRole(const MusicianRole& role);
+    void prepAllPatterns();
+    void prepPatternForRole(const MusicianRole& role);
+    void editPatternForRole(const MusicianRole& role);
+    void loadPatternForRole(const MusicianRole& role);
+    void enterPatternEditMode(const juce::String& roleName, Player* player, const juce::String& llmPattern);
+    void exitPatternEditMode(bool saveChanges);
     
     // Playback methods
     void playPerformance();

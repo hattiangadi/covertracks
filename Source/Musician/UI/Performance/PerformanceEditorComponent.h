@@ -1,12 +1,14 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include <set>
 #include "../../Core/Performance.h"
 #include "../../Core/PerformanceManager.h"
 #include "../../Core/EnsembleManager.h"
 #include "../../Core/Song.h"
 #include "../../../Player/Core/PlayerManager.h"
 #include "../../../LLM/Core/LLMClient.h"
+#include "../PatternEditorComponent.h"
 
 namespace covertracks {
 
@@ -19,7 +21,8 @@ namespace covertracks {
 class PerformanceEditorComponent : public Component,
                                   public Button::Listener,
                                   public TextEditor::Listener,
-                                  public ComboBox::Listener
+                                  public ComboBox::Listener,
+                                  public PatternEditorComponent::Listener
 {
 public:
     /**
@@ -53,6 +56,13 @@ public:
     // ComboBox::Listener implementation
     void comboBoxChanged(ComboBox* comboBoxThatHasChanged) override;
     
+    // PatternEditorComponent::Listener implementation
+    void patternPlayRequested(PatternEditorComponent* editor) override;
+    void patternParseRequested(PatternEditorComponent* editor) override;
+    void patternLoadRequested(PatternEditorComponent* editor) override;
+    void performancePatternSaveRequested(PatternEditorComponent* editor) override;
+    void performancePatternCancelRequested(PatternEditorComponent* editor) override;
+    
     /**
      * @brief Load a performance for editing
      * 
@@ -78,6 +88,12 @@ private:
     Performance* currentPerformance = nullptr;
     bool isNewPerformance = false;
     std::function<void()> backCallback;
+    std::set<String> generatingRoles; // Track which roles are currently generating
+    
+    // Pattern editing mode
+    bool isInPatternEditMode = false;
+    String editingRoleName;
+    Player* editingPlayer = nullptr;
     
     // Temporary storage for new performance data
     String pendingEnsembleName;
@@ -137,6 +153,8 @@ private:
     
     // UI components - Coordination
     Label coordinationLabel;
+    TextButton generateAllButton;
+    TextButton prepAllButton;
     TextButton loadAllButton;
     TextButton playAllButton;
     TextButton stopAllButton;
@@ -148,6 +166,9 @@ private:
     // Status display
     TextEditor statusDisplay;
     
+    // Pattern editor for editing LLM patterns
+    std::unique_ptr<PatternEditorComponent> patternEditor;
+    
     // Helper methods
     void createNewPerformance();
     void updateUI();
@@ -156,10 +177,14 @@ private:
     
     // Player actions
     void generateChartForPlayer(int playerIndex);
+    void prepChartForPlayer(int playerIndex);
+    void editPatternForPlayer(int playerIndex);
     void loadChartForPlayer(int playerIndex);
     void playPlayer(int playerIndex);
     
     // Coordination actions
+    void generateAllCharts();
+    void prepAllCharts();
     void loadAllCharts();
     void playAllPlayers();
     void stopAllPlayers();
@@ -175,6 +200,10 @@ private:
     // Ensemble caching with PlayerManager
     void refreshPerformanceEnsembleCache();
     juce::Array<MusicianRole> getPerformanceEnsemble() const;
+    
+    // Pattern editing mode
+    void enterPatternEditMode(const String& roleName, Player* player, const String& llmPattern);
+    void exitPatternEditMode(bool saveChanges);
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PerformanceEditorComponent)
 };
