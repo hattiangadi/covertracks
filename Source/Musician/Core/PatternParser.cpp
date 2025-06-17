@@ -262,79 +262,135 @@ std::shared_ptr<covertracks::Section> covertracks::PatternParser::parseSectionFr
             // Get the layers object once before the loop
             auto* layersObj = layersJson.getDynamicObject();
             
-            // Create merged bars for each bar index
-            for (int barIndex = 0; barIndex < numBars; ++barIndex)
+            // First, collect all events from all layers with their absolute beat positions
+            Array<var> allEventsAllLayers;
+            
+            for (auto& layerProp : layersObj->getProperties())
             {
-                auto mergedBar = std::make_shared<Bar>();
+                String layerName = layerProp.name.toString();
+                var layerJson = layerProp.value;
                 
-                // Collect all events from all layers for this bar
-                Array<var> allEvents;
+                Array<var> layerEvents;
                 
-                for (auto& layerProp : layersObj->getProperties())
+                // Check if layer uses a pattern reference
+                if (layerJson.hasProperty("pattern"))
                 {
-                    String layerName = layerProp.name.toString();
-                    var layerJson = layerProp.value;
-                    
-                    Array<var> layerEvents;
-                    
-                    // Check if layer uses a pattern reference
-                    if (layerJson.hasProperty("pattern"))
+                    String patternName = layerJson["pattern"].toString();
+                    auto patternIt = patterns.find(patternName);
+                    if (patternIt != patterns.end())
                     {
-                        String patternName = layerJson["pattern"].toString();
-                        auto patternIt = patterns.find(patternName);
-                        if (patternIt != patterns.end())
+                        // For multi-bar sections, repeat the pattern for each bar with offset beats
+                        for (int barOffset = 0; barOffset < numBars; ++barOffset)
                         {
-                            layerEvents = patternIt->second;
-                            DBG("Merging pattern '" + patternName + "' from layer '" + layerName + "'");
-                        }
-                    }
-                    // Check if layer has direct events
-                    else if (layerJson.isArray())
-                    {
-                        for (const auto& event : *layerJson.getArray())
-                        {
-                            layerEvents.add(event);
-                        }
-                    }
-                    
-                    // Add all events from this layer to the merged collection with source metadata
-                    for (const auto& event : layerEvents)
-                    {
-                        // Add source metadata to track where this event came from
-                        var eventWithSource = event;
-                        if (eventWithSource.isArray() && eventWithSource.size() >= 2)
-                        {
-                            // Create a new array with source metadata
-                            Array<var> eventArray;
-                            for (int i = 0; i < eventWithSource.size(); ++i)
+                            double beatOffset = barOffset * 4.0; // Each bar is 4 beats
+                            
+                            for (const auto& patternEvent : patternIt->second)
                             {
-                                eventArray.add(eventWithSource[i]);
+                                if (patternEvent.isArray() && patternEvent.size() >= 2)
+                                {
+                                    // Create new event with offset beat position
+                                    Array<var> offsetEventArray;
+                                    double originalBeat = static_cast<double>(patternEvent[0]);
+                                    double offsetBeat = originalBeat + beatOffset;
+                                    offsetEventArray.add(var(offsetBeat));
+                                    
+                                    // Copy other event properties (note, velocity, duration)
+                                    for (int i = 1; i < patternEvent.size(); ++i)
+                                    {
+                                        offsetEventArray.add(patternEvent[i]);
+                                    }
+                                    
+                                    layerEvents.add(var(offsetEventArray));
+                                }
                             }
-                            // Add source as 5th element (after beat, note, velocity, duration)
-                            while (eventArray.size() < 5) eventArray.add(var()); // Fill missing elements
-                            eventArray.set(4, "layer:" + layerName);
-                            eventWithSource = var(eventArray);
                         }
-                        allEvents.add(eventWithSource);
+                        DBG("Repeated pattern '" + patternName + "' " + String(numBars) + " times for layer '" + layerName + "'");
                     }
-                    
-                    DBG("Added " + String(layerEvents.size()) + " events from layer '" + layerName + "'");
+                }
+                // Check if layer has direct events
+                else if (layerJson.isArray())
+                {
+                    for (const auto& event : *layerJson.getArray())
+                    {
+                        layerEvents.add(event);
+                    }
                 }
                 
-                // Parse the merged events into a single bar
-                if (allEvents.size() > 0)
+                // Add all events from this layer with source metadata
+                for (const auto& event : layerEvents)
                 {
-                    auto parsedBar = parseBarFromJson(allEvents, primitives, chords);
+                    // Add source metadata to track where this event came from
+                    var eventWithSource = event;
+                    if (eventWithSource.isArray() && eventWithSource.size() >= 2)
+                    {
+                        // Create a new array with source metadata
+                        Array<var> eventArray;
+                        for (int i = 0; i < eventWithSource.size(); ++i)
+                        {
+                            eventArray.add(eventWithSource[i]);
+                        }
+                        // Add source as 5th element (after beat, note, velocity, duration)
+                        while (eventArray.size() < 5) eventArray.add(var()); // Fill missing elements
+                        eventArray.set(4, "layer:" + layerName);
+                        eventWithSource = var(eventArray);
+                    }
+                    allEventsAllLayers.add(eventWithSource);
+                }
+                
+                DBG("Added " + String(layerEvents.size()) + " events from layer '" + layerName + "'");
+            }
+            
+            // Now distribute events to the correct bars based on beat position
+            for (int barIndex = 0; barIndex < numBars; ++barIndex)
+            {
+                // Calculate beat range for this bar (1-based beats)
+                double barStartBeat = (barIndex * 4) + 1.0;  // Bar 0: beats 1-4, Bar 1: beats 5-8, etc.
+                double barEndBeat = barStartBeat + 4.0;      // Exclusive end
+                
+                // Collect events that belong to this bar
+                Array<var> barEvents;
+                
+                for (const auto& event : allEventsAllLayers)
+                {
+                    if (event.isArray() && event.size() >= 2)
+                    {
+                        double eventBeat = static_cast<double>(event[0]);
+                        
+                        // Check if this event belongs to the current bar
+                        if (eventBeat >= barStartBeat && eventBeat < barEndBeat)
+                        {
+                            // Adjust beat position to be relative to this bar (1-4 range)
+                            double relativeBeat = eventBeat - barStartBeat + 1.0;
+                            
+                            // Create new event with adjusted beat
+                            Array<var> adjustedEventArray;
+                            adjustedEventArray.add(var(relativeBeat));
+                            for (int i = 1; i < event.size(); ++i)
+                            {
+                                adjustedEventArray.add(event[i]);
+                            }
+                            
+                            barEvents.add(var(adjustedEventArray));
+                        }
+                    }
+                }
+                
+                // Parse the events for this bar
+                if (barEvents.size() > 0)
+                {
+                    auto parsedBar = parseBarFromJson(barEvents, primitives, chords);
                     if (parsedBar)
                     {
                         mergedPhrase->addBar(parsedBar);
-                        DBG("Created merged bar " + String(barIndex) + " with " + String(allEvents.size()) + " total events");
+                        DBG("Created bar " + String(barIndex) + " with " + String(barEvents.size()) + " events (beats " + String(barStartBeat) + "-" + String(barEndBeat - 0.01) + ")");
                     }
                 }
                 else
                 {
                     // Add empty bar if no events
-                    mergedPhrase->addBar(mergedBar);
+                    auto emptyBar = std::make_shared<Bar>();
+                    mergedPhrase->addBar(emptyBar);
+                    DBG("Created empty bar " + String(barIndex) + " (no events in beat range " + String(barStartBeat) + "-" + String(barEndBeat - 0.01) + ")");
                 }
             }
             
