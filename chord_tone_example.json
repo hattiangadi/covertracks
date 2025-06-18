@@ -1,0 +1,126 @@
+{
+  "_comment": "Example demonstrating chord tone references for relative positioning - walking bass using harmonic relationships instead of fixed notes",
+  "title": "Chord Tone Reference Demo - Walking Bass",
+  "tempo": 120,
+  
+  "chords": {
+    "C": ["C3", "E3", "G3"],
+    "F": ["F3", "A3", "C4"],
+    "G": ["G3", "B3", "D4"],
+    "Am": ["A3", "C4", "E4"],
+    "Dm": ["D3", "F3", "A3"],
+    "Em": ["E3", "G3", "B3"]
+  },
+  
+  "patterns": {
+    "relativeBassLine": [
+      [1.0, {"tone": 1, "octave": 2}, 0.8, 0.5],
+      [1.5, {"tone": 3, "octave": 2}, 0.6, 0.5],
+      [2.0, {"tone": 5, "octave": 2}, 0.8, 0.5],
+      [2.5, {"tone": 3, "octave": 2}, 0.6, 0.5],
+      [3.0, {"tone": 1, "octave": 3}, 0.8, 0.5],
+      [3.5, {"tone": 5, "octave": 2}, 0.6, 0.5],
+      [4.0, {"tone": 3, "octave": 2}, 0.8, 0.5],
+      [4.5, {"tone": 1, "octave": 2}, 0.6, 0.5]
+    ],
+    
+    "chordProgression": [
+      [1.0, {"chord": "C"}, 0.7, 4.0],
+      [5.0, {"chord": "F"}, 0.7, 4.0],
+      [9.0, {"chord": "G"}, 0.7, 4.0],
+      [13.0, {"chord": "C"}, 0.7, 4.0]
+    ],
+    
+    "melodicLine": [
+      [1.0, "C5", 0.9, 1.0],
+      [2.0, "B4", 0.8, 1.0],
+      [3.0, "C5", 0.9, 1.0],
+      [4.0, "G4", 0.8, 1.0],
+      [5.0, "F4", 0.9, 1.0],
+      [6.0, "G4", 0.8, 1.0],
+      [7.0, "A4", 0.9, 1.0],
+      [8.0, "F4", 0.8, 1.0],
+      [9.0, "G4", 0.9, 1.0],
+      [10.0, "A4", 0.8, 1.0],
+      [11.0, "B4", 0.9, 1.0],
+      [12.0, "C5", 0.8, 1.0],
+      [13.0, "C5", 0.9, 4.0]
+    ]
+  },
+  
+  "sections": {
+    "verse": {
+      "bars": 16,
+      "layers": {
+        "harmony": {"pattern": "chordProgression"},
+        "bass": {"pattern": "relativeBassLine"},
+        "melody": {"pattern": "melodicLine"}
+      }
+    },
+    
+    "demonstration": {
+      "_comment": "Shows how the same bass pattern adapts to different chord progressions",
+      "bars": 8,
+      "layers": {
+        "harmony": [
+          [1.0, {"chord": "Am"}, 0.7, 2.0],
+          [3.0, {"chord": "F"}, 0.7, 2.0],
+          [5.0, {"chord": "C"}, 0.7, 2.0],
+          [7.0, {"chord": "G"}, 0.7, 2.0],
+          [9.0, {"chord": "Am"}, 0.7, 8.0]
+        ],
+        "bass": [
+          [1.0, {"tone": 1, "octave": 2}, 0.8, 0.5],
+          [1.5, {"tone": 5, "octave": 2}, 0.6, 0.5],
+          [2.0, {"tone": 3, "octave": 2}, 0.8, 0.5],
+          [2.5, {"tone": 1, "octave": 2}, 0.6, 0.5],
+          [3.0, {"tone": 1, "octave": 2}, 0.8, 0.5],
+          [3.5, {"tone": 3, "octave": 2}, 0.6, 0.5],
+          [4.0, {"tone": 5, "octave": 2}, 0.8, 0.5],
+          [4.5, {"tone": 3, "octave": 2}, 0.6, 0.5],
+          [5.0, {"tone": 1, "octave": 2}, 0.8, 0.5],
+          [5.5, {"tone": 3, "octave": 2}, 0.6, 0.5],
+          [6.0, {"tone": 5, "octave": 2}, 0.8, 0.5],
+          [6.5, {"tone": 1, "octave": 3}, 0.6, 0.5],
+          [7.0, {"tone": 1, "octave": 2}, 0.8, 0.5],
+          [7.5, {"tone": 5, "octave": 2}, 0.6, 0.5],
+          [8.0, {"tone": 3, "octave": 2}, 0.8, 0.5],
+          [8.5, {"tone": 1, "octave": 2}, 0.6, 0.5],
+          [9.0, {"tone": 1, "octave": 2}, 0.8, 2.0],
+          [11.0, {"tone": 3, "octave": 2}, 0.8, 2.0],
+          [13.0, {"tone": 5, "octave": 2}, 0.8, 2.0],
+          [15.0, {"tone": 1, "octave": 3}, 0.8, 2.0]
+        ]
+      }
+    },
+    
+    "jazzWalking": {
+      "_comment": "Jazz-style walking bass using chord tones and approach notes",
+      "bars": 4,
+      "layers": {
+        "harmony": [
+          [1.0, {"chord": "C"}, 0.6, 3.0],
+          [4.0, {"chord": "Am"}, 0.6, 3.0],
+          [7.0, {"chord": "F"}, 0.6, 3.0],
+          [10.0, {"chord": "G"}, 0.6, 3.0]
+        ],
+        "walkingBass": [
+          [1.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+          [2.0, {"tone": 3, "octave": 2}, 0.8, 1.0],
+          [3.0, {"tone": 5, "octave": 2}, 0.8, 1.0],
+          [4.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+          [5.0, {"tone": 3, "octave": 2}, 0.8, 1.0],
+          [6.0, {"tone": 5, "octave": 2}, 0.8, 1.0],
+          [7.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+          [8.0, {"tone": 3, "octave": 2}, 0.8, 1.0],
+          [9.0, {"tone": 5, "octave": 2}, 0.8, 1.0],
+          [10.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+          [11.0, {"tone": 3, "octave": 2}, 0.8, 1.0],
+          [12.0, {"tone": 5, "octave": 2}, 0.8, 1.0]
+        ]
+      }
+    }
+  },
+  
+  "arrangement": ["verse", "demonstration", "jazzWalking"]
+}

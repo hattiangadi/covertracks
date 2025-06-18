@@ -78,6 +78,13 @@ bool Instrument::prepareForPlayback()
         return false;
     }
     
+    // Check if we have an audio engine available
+    if (audioEngine == nullptr)
+    {
+        std::cerr << "No audio engine available for playback" << std::endl;
+        return false;
+    }
+    
     // First, ensure we have the full graph state loaded from the PluginGraph
     if (pluginGraph != nullptr)
     {
@@ -143,15 +150,14 @@ bool Instrument::prepareForPlayback()
     }
     
     // Get the current audio device settings
-    if (audioEngine != nullptr)
+    
+    auto& deviceManager = audioEngine->getDeviceManager();
+    auto* currentDevice = deviceManager.getCurrentAudioDevice();
+    
+    if (currentDevice != nullptr)
     {
-        auto& deviceManager = audioEngine->getDeviceManager();
-        auto* currentDevice = deviceManager.getCurrentAudioDevice();
-        
-        if (currentDevice != nullptr)
-        {
-            double currentSampleRate = currentDevice->getCurrentSampleRate();
-            int blockSize = currentDevice->getCurrentBufferSizeSamples();
+        double currentSampleRate = currentDevice->getCurrentSampleRate();
+        int blockSize = currentDevice->getCurrentBufferSizeSamples();
             
             // Update the member variable
             sampleRate = currentSampleRate;
@@ -321,20 +327,13 @@ bool Instrument::prepareForPlayback()
             // Ensure the processor is registered with the AudioEngine
             audioEngine->registerProcessor(processorGraph.get());
             
-            // Set the master gain to ensure audio output is active
-            audioEngine->setMasterGain(0.8f);
+            // Audio output is now active - no automatic volume scaling
         }
         else
         {
             std::cerr << "No audio device available for playback" << std::endl;
             return false;
         }
-    }
-    else
-    {
-        std::cerr << "No audio engine available for playback" << std::endl;
-        return false;
-    }
     
     return true;
 }
@@ -403,12 +402,13 @@ void Instrument::disconnectFromAudioEngine()
     }
 }
 // Static method to notify all Instruments that the AudioEngine is being destroyed
-void Instrument::notifyAudioEngineDestroyed()
+void covertracks::Instrument::notifyAudioEngineDestroyed()
 {
     std::cout << "[Instrument] Static notification: AudioEngine is being destroyed" << std::endl;
 }
 
-Instrument::~Instrument()
+// Find the Player that owns this Instrument
+covertracks::Instrument::~Instrument()
 {
     // Stop any ongoing playback
     stopPlayback();
@@ -831,8 +831,7 @@ bool Instrument::playMIDISequence(const MidiMessageSequence& sequence, double ne
         return false;
     }
     
-    // Set master gain to a very low level to avoid distortion
-    audioEngine->setMasterGain(0.3f);
+    // Note: Volume control now handled via ensemble/performance level settings
     
     // Use the provided MIDI sequence directly
     currentSequence = std::make_unique<MidiMessageSequence>(sequence);
@@ -983,8 +982,7 @@ bool Instrument::playMIDIPattern(const var& pattern, double newTempo)
         return false;
     }
     
-    // Set master gain to a very low level to avoid distortion
-    audioEngine->setMasterGain(0.3f);
+    // Note: Volume control now handled via ensemble/performance level settings
     
     // Convert the pattern to a MIDI sequence
     currentSequence = convertJSONToMIDISequence(pattern);

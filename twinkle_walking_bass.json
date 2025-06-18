@@ -1,0 +1,197 @@
+{
+  "title": "Twinkle Twinkle Little Star - Walking Bass Companion",
+  "tempo": 100,
+  
+  "chords": {
+    "C": ["C3", "E3", "G3"],
+    "F": ["F3", "A3", "C4"],
+    "G": ["G3", "B3", "D4"],
+    "Am": ["A3", "C4", "E4"],
+    "Dm": ["D3", "F3", "A3"]
+  },
+  
+  "patterns": {
+    "compactWalkingBass": [
+      [1.0, {"tone": 1, "octave": 2}, 0.8, 0.5],
+      [1.5, {"tone": 5, "octave": 2}, 0.6, 0.5], 
+      [2.0, {"tone": 3, "octave": 2}, 0.8, 0.5],
+      [2.5, {"tone": 1, "octave": 2}, 0.6, 0.5],
+      [3.0, {"tone": 5, "octave": 2}, 0.8, 0.5],
+      [3.5, {"tone": 3, "octave": 2}, 0.6, 0.5],
+      [4.0, {"tone": 1, "octave": 2}, 0.8, 0.5],
+      [4.5, {"tone": 5, "octave": 1}, 0.6, 0.5]
+    ],
+    
+    "jazzWalkingBass": [
+      [1.0, {"tone": 1, "octave": 2}, 0.8, 0.5],
+      [1.75, {"tone": 3, "octave": 2}, 0.6, 0.25],
+      [2.0, {"tone": 5, "octave": 2}, 0.8, 0.5],
+      [2.75, {"tone": 1, "octave": 3}, 0.6, 0.25],
+      [3.25, {"tone": 5, "octave": 2}, 0.7, 0.75],
+      [4.0, {"tone": 3, "octave": 2}, 0.8, 1.0]
+    ],
+    
+    "simpleChordBass": [
+      [1.0, {"tone": 1, "octave": 2}, 0.8, 2.0],
+      [3.0, {"tone": 5, "octave": 2}, 0.7, 2.0]
+    ]
+  },
+  
+  "sections": {
+    "introBass": {
+      "_comment": "Bass intro to match drum count-in - simple root note",
+      "bars": 1,
+      "layers": {
+        "chords": [
+          [4.0, {"chord": "C"}, 0.6, 1.0]
+        ],
+        "bass": [
+          [4.0, {"tone": 1, "octave": 2}, 0.8, 1.0]
+        ]
+      }
+    },
+    
+    "verseAWalking": {
+      "_comment": "Walking bass version of the original verseA - works with any chord progression",
+      "bars": 4,
+      "layers": {
+        "chords": [
+          [1.0, {"chord": "C"}, 0.7, 2.0],
+          [3.0, {"chord": "F"}, 0.7, 2.0],
+          [5.0, {"chord": "F"}, 0.7, 2.0], 
+          [7.0, {"chord": "C"}, 0.7, 2.0],
+          [9.0, {"chord": "C"}, 0.7, 2.0],
+          [11.0, {"chord": "F"}, 0.7, 2.0],
+          [13.0, {"chord": "F"}, 0.7, 2.0],
+          [15.0, {"chord": "C"}, 0.7, 2.0]
+        ],
+        "bass": {"pattern": "compactWalkingBass"}
+      }
+    },
+    
+    "verseBWalking": {
+      "_comment": "Simple bass for the B section melody",
+      "bars": 4, 
+      "layers": {
+        "chords": [
+          [1.0, {"chord": "F"}, 0.7, 2.0],
+          [3.0, {"chord": "C"}, 0.7, 2.0],
+          [5.0, {"chord": "F"}, 0.7, 2.0],
+          [7.0, {"chord": "C"}, 0.7, 2.0],
+          [9.0, {"chord": "F"}, 0.7, 2.0],
+          [11.0, {"chord": "C"}, 0.7, 2.0],
+          [13.0, {"chord": "F"}, 0.7, 2.0],
+          [15.0, {"chord": "C"}, 0.7, 2.0]
+        ],
+        "bass": {"pattern": "simpleChordBass"}
+      }
+    },
+    
+    "verseSyncopatedWalking": {
+      "_comment": "Jazz walking bass to complement syncopated melody",
+      "bars": 4,
+      "layers": {
+        "chords": [
+          [1.0, {"chord": "C"}, 0.6, 0.75],
+          [2.0, {"chord": "G"}, 0.7, 0.5],
+          [2.75, {"chord": "Am"}, 0.6, 0.25],
+          [3.25, {"chord": "F"}, 0.7, 0.75],
+          [4.0, {"chord": "C"}, 0.8, 1.0],
+          [5.0, {"chord": "F"}, 0.6, 0.75],
+          [6.0, {"chord": "C"}, 0.7, 0.5],
+          [6.75, {"chord": "Am"}, 0.6, 0.25],
+          [7.25, {"chord": "G"}, 0.7, 0.75],
+          [8.0, {"chord": "C"}, 0.8, 1.0],
+          [9.0, {"chord": "C"}, 0.6, 0.75],
+          [10.0, {"chord": "G"}, 0.7, 0.5],
+          [10.75, {"chord": "Am"}, 0.6, 0.25],
+          [11.25, {"chord": "F"}, 0.7, 0.75],
+          [12.0, {"chord": "C"}, 0.8, 1.0],
+          [13.0, {"chord": "F"}, 0.6, 0.75],
+          [14.0, {"chord": "C"}, 0.7, 0.5],
+          [14.75, {"chord": "Am"}, 0.6, 0.25],
+          [15.25, {"chord": "G"}, 0.7, 0.75],
+          [16.0, {"chord": "C"}, 0.8, 1.0]
+        ],
+        "bass": {"pattern": "jazzWalkingBass"}
+      }
+    },
+    
+    "verseBJazzyWalking": {
+      "_comment": "Jazz walking bass to complement the complex jazzy B section",
+      "bars": 4,
+      "layers": {
+        "chords": [
+          [1.0, {"chord": "F"}, 0.6, 0.75],
+          [2.0, {"chord": "C"}, 0.7, 0.5],
+          [2.75, {"chord": "Am"}, 0.6, 0.25],
+          [3.25, {"chord": "G"}, 0.7, 0.75],
+          [4.0, {"chord": "C"}, 0.8, 1.0],
+          [5.0, {"chord": "F"}, 0.6, 0.75],
+          [6.0, {"chord": "C"}, 0.7, 0.5],
+          [6.75, {"chord": "Am"}, 0.6, 0.25],
+          [7.25, {"chord": "G"}, 0.7, 0.75],
+          [8.0, {"chord": "C"}, 0.8, 1.0],
+          [9.0, {"chord": "F"}, 0.6, 0.75],
+          [10.0, {"chord": "C"}, 0.7, 0.5],
+          [10.75, {"chord": "Am"}, 0.6, 0.25],
+          [11.25, {"chord": "G"}, 0.7, 0.75],
+          [12.0, {"chord": "C"}, 0.8, 1.0],
+          [13.0, {"chord": "F"}, 0.6, 0.75],
+          [14.0, {"chord": "C"}, 0.7, 0.5],
+          [14.75, {"chord": "Am"}, 0.6, 0.25],
+          [15.25, {"chord": "G"}, 0.7, 0.75],
+          [16.0, {"chord": "C"}, 0.8, 1.0]
+        ],
+        "bass": {"pattern": "jazzWalkingBass"}
+      }
+    },
+    
+    "bridgeWalking": {
+      "_comment": "Walking bass for the bridge section",
+      "bars": 2,
+      "layers": {
+        "chords": [
+          [1.0, {"chord": "G"}, 0.7, 1.0],
+          [2.0, {"chord": "F"}, 0.7, 1.0],
+          [3.0, {"chord": "Am"}, 0.7, 1.0],
+          [4.0, {"chord": "Dm"}, 0.7, 1.0],
+          [5.0, {"chord": "G"}, 0.7, 1.0],
+          [6.0, {"chord": "F"}, 0.7, 1.0],
+          [7.0, {"chord": "Am"}, 0.7, 1.0],
+          [8.0, {"chord": "C"}, 0.7, 1.0]
+        ],
+        "bass": [
+          [1.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+          [2.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+          [3.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+          [4.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+          [5.0, {"tone": 5, "octave": 2}, 0.8, 1.0],
+          [6.0, {"tone": 3, "octave": 2}, 0.8, 1.0],
+          [7.0, {"tone": 5, "octave": 2}, 0.8, 1.0],
+          [8.0, {"tone": 1, "octave": 2}, 0.8, 1.0]
+        ]
+      }
+    },
+    
+    "outroWalking": {
+      "_comment": "Simple ending with walking bass resolution",
+      "bars": 2,
+      "layers": {
+        "chords": [
+          [1.0, {"chord": "C"}, 0.8, 2.0],
+          [3.0, {"chord": "G"}, 0.8, 2.0],
+          [5.0, {"chord": "C"}, 0.8, 4.0]
+        ],
+        "bass": [
+          [1.0, {"tone": 1, "octave": 2}, 0.8, 2.0],
+          [3.0, {"tone": 5, "octave": 2}, 0.8, 1.0],
+          [4.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+          [5.0, {"tone": 1, "octave": 2}, 0.8, 4.0]
+        ]
+      }
+    }
+  },
+  
+  "arrangement": ["introBass", "verseAWalking", "verseBWalking", "verseSyncopatedWalking", "verseBJazzyWalking", "bridgeWalking", "outroWalking"]
+}

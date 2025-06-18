@@ -67,7 +67,7 @@ EnsembleEditPanel::EnsembleEditPanel(PlayerManager* playerManagerPtr, EnsembleMa
 {
     // If no ensemble manager was provided, create a new one
     if (ensembleManagerPtr == nullptr) {
-        ownedEnsembleManager = std::make_unique<EnsembleManager>(playerManager);
+        ownedEnsembleManager = std::make_unique<EnsembleManager>(playerManager, nullptr);
         ensembleManager = ownedEnsembleManager.get();
     } else {
         ensembleManager = ensembleManagerPtr;

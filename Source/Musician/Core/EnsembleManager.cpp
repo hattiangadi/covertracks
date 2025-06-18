@@ -4,8 +4,9 @@
 
 namespace covertracks {
 
-EnsembleManager::EnsembleManager(PlayerManager* playerManagerPtr, const juce::String& id)
+EnsembleManager::EnsembleManager(PlayerManager* playerManagerPtr, AudioEngine* audioEnginePtr, const juce::String& id)
     : playerManager(playerManagerPtr),
+      audioEngine(audioEnginePtr),
       playing(false),
       pendingPatternRequests(0),
       ensembleId(id.isNotEmpty() ? id : juce::Uuid().toString())
@@ -139,6 +140,16 @@ bool EnsembleManager::startPlaying()
     // Start playing all players
     for (auto& role : musicianRoles) {
         if (role.player) {
+            // Ensure the player is connected to the audio engine if we have one
+            if (audioEngine != nullptr && !role.player->isConnectedToAudioEngine()) {
+                std::cout << "[EnsembleManager] Connecting player '" << role.player->getMetadata().name 
+                          << "' to the ensemble audio engine" << std::endl;
+                if (!role.player->connectToAudioEngine(audioEngine)) {
+                    std::cout << "[EnsembleManager] Failed to connect player '" << role.player->getMetadata().name 
+                              << "' to the audio engine" << std::endl;
+                }
+            }
+            
             // TODO: Parse the pattern and set it for the player
             // We need a MusicPatternSystem instance to create a PatternParser
             // For now, just log that we would parse the pattern
@@ -357,6 +368,7 @@ juce::var EnsembleManager::toVar() const
         roleObj->setProperty("name", role.name);
         roleObj->setProperty("instrument", role.instrument);
         roleObj->setProperty("pattern", role.pattern);
+        roleObj->setProperty("level", role.level);
         
         // Store player ID if available
         if (role.player)
@@ -385,7 +397,7 @@ std::unique_ptr<EnsembleManager> EnsembleManager::fromVar(const juce::var& v, Pl
     juce::String id = obj->getProperty("id").toString();
     
     // Create the ensemble
-    std::unique_ptr<EnsembleManager> ensemble = std::make_unique<EnsembleManager>(playerManager, id);
+    std::unique_ptr<EnsembleManager> ensemble = std::make_unique<EnsembleManager>(playerManager, nullptr, id);
     
     // Set metadata
     ensemble->setName(obj->getProperty("name").toString());
@@ -407,6 +419,11 @@ std::unique_ptr<EnsembleManager> EnsembleManager::fromVar(const juce::var& v, Pl
                 juce::String roleName = roleObj->getProperty("name").toString();
                 juce::String instrument = roleObj->getProperty("instrument").toString();
                 juce::String pattern = roleObj->getProperty("pattern").toString();
+                // Get level property with default value of 1.0f if not present
+                float level = 1.0f;
+                if (roleObj->hasProperty("level")) {
+                    level = static_cast<float>(static_cast<double>(roleObj->getProperty("level")));
+                }
                 
                 // Find the player if available
                 Player* player = nullptr;
@@ -437,12 +454,13 @@ std::unique_ptr<EnsembleManager> EnsembleManager::fromVar(const juce::var& v, Pl
                 // Add the role
                 if (ensemble->addMusicianRole(roleName, instrument, player))
                 {
-                    // Set the pattern
+                    // Set the pattern and level
                     for (auto& role : ensemble->musicianRoles)
                     {
                         if (role.name == roleName)
                         {
                             role.pattern = pattern;
+                            role.level = level;
                             break;
                         }
                     }

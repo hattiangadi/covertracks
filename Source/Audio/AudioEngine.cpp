@@ -94,8 +94,7 @@ bool AudioEngine::registerProcessor(AudioProcessor* processor)
                     player->getMidiMessageCollector().reset(sampleRate);
                 }
                 
-                // Force the audio output to be active
-                setMasterGain(0.8f);
+                // Audio output is now active - no automatic volume scaling
             }
             
             return true; // Already registered and updated
@@ -168,8 +167,7 @@ bool AudioEngine::registerProcessor(AudioProcessor* processor)
         // Set the processor after initialization
         player->setProcessor(processor);
         
-        // Force the audio output to be active by setting the master gain
-        setMasterGain(0.8f);
+        // Audio output is now active - no automatic volume scaling
         
         std::cout << "Set processor for player and activated audio output" << std::endl;
         

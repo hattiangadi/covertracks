@@ -77,8 +77,8 @@ public:
         virtual void patternPlayRequested(PatternEditorComponent* editor) = 0;
         virtual void patternParseRequested(PatternEditorComponent* editor) = 0;
         virtual void patternLoadRequested(PatternEditorComponent* editor) = 0;
-        virtual void performancePatternSaveRequested(PatternEditorComponent* editor) {}
-        virtual void performancePatternCancelRequested(PatternEditorComponent* editor) {}
+        virtual void performancePatternSaveRequested(PatternEditorComponent*) {}
+        virtual void performancePatternCancelRequested(PatternEditorComponent*) {}
     };
     
     void addListener(Listener* listener);

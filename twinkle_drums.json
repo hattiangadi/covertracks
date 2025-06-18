@@ -1,0 +1,211 @@
+{
+  "title": "Twinkle Twinkle Little Star - Swing Drums",
+  "tempo": 100,
+
+  "patterns": {
+    "swingBasic": [
+      [1.0, "kick", 0.9, 0.25],
+      [1.67, "hihat", 0.4, 0.16],
+      [2.0, "snare", 0.8, 0.25],
+      [2.67, "hihat", 0.4, 0.16],
+      [3.0, "kick", 0.9, 0.25],
+      [3.67, "hihat", 0.4, 0.16],
+      [4.0, "snare", 0.8, 0.25],
+      [4.33, "hihat", 0.3, 0.16],
+      [4.67, "hihat", 0.4, 0.16]
+    ],
+    
+    "swingWalking": [
+      [1.0, "kick", 0.9, 0.25],
+      [1.5, "hihat", 0.3, 0.16],
+      [1.75, "hihat", 0.2, 0.16],
+      [2.0, "snare", 0.7, 0.25],
+      [2.5, "hihat", 0.3, 0.16],
+      [2.75, "hihat", 0.2, 0.16],
+      [3.0, "kick", 0.8, 0.25],
+      [3.5, "hihat", 0.3, 0.16],
+      [3.75, "hihat", 0.2, 0.16],
+      [4.0, "snare", 0.7, 0.25],
+      [4.25, "hihat", 0.2, 0.16],
+      [4.5, "kick", 0.6, 0.16],
+      [4.75, "hihat", 0.3, 0.16]
+    ],
+    
+    "jazzComping": [
+      [1.0, "kick", 0.8, 0.25],
+      [1.75, "snare", 0.4, 0.16],
+      [2.0, "hihat", 0.5, 0.16],
+      [2.33, "kick", 0.6, 0.16],
+      [2.75, "snare", 0.5, 0.16],
+      [3.0, "hihat", 0.4, 0.16],
+      [3.25, "hihat", 0.3, 0.16],
+      [3.75, "snare", 0.6, 0.16],
+      [4.0, "kick", 0.7, 0.25],
+      [4.5, "hihat", 0.4, 0.16],
+      [4.75, "snare", 0.3, 0.16]
+    ],
+    
+    "brushes": [
+      [1.0, "snare", 0.3, 0.5],
+      [1.5, "snare", 0.2, 0.25],
+      [2.0, "snare", 0.4, 0.5],
+      [2.5, "snare", 0.2, 0.25],
+      [3.0, "snare", 0.3, 0.5],
+      [3.5, "snare", 0.2, 0.25],
+      [4.0, "snare", 0.4, 0.5],
+      [4.5, "snare", 0.2, 0.25]
+    ],
+    
+    "ridePattern": [
+      [1.0, "ride", 0.6, 0.25],
+      [1.67, "ride", 0.4, 0.16],
+      [2.0, "ride", 0.6, 0.25],
+      [2.67, "ride", 0.4, 0.16],
+      [3.0, "ride", 0.6, 0.25],
+      [3.67, "ride", 0.4, 0.16],
+      [4.0, "ride", 0.6, 0.25],
+      [4.67, "ride", 0.4, 0.16]
+    ],
+    
+    "fillSimple": [
+      [3.5, "snare", 0.6, 0.25],
+      [3.75, "snare", 0.5, 0.25],
+      [4.0, "snare", 0.7, 0.25],
+      [4.25, "kick", 0.8, 0.25],
+      [4.5, "snare", 0.6, 0.25],
+      [4.75, "kick", 0.7, 0.25]
+    ],
+    
+    "intro": [
+      [1.0, "rimshot", 0.8, 0.25],
+      [2.0, "rimshot", 0.8, 0.25],
+      [3.0, "rimshot", 0.8, 0.25],
+      [4.0, "crash", 0.9, 2.0]
+    ]
+  },
+  
+  "sections": {
+    "verseADrums": {
+      "_comment": "Basic swing pattern for the A section with piano melody",
+      "bars": 4,
+      "layers": {
+        "drums": {"pattern": "swingBasic"},
+        "cymbals": {"pattern": "ridePattern"}
+      }
+    },
+    
+    "verseBDrums": {
+      "_comment": "Lighter brush pattern for the B section",
+      "bars": 4,
+      "layers": {
+        "brushwork": {"pattern": "brushes"},
+        "kicks": [
+          [1.0, "kick", 0.6, 0.25],
+          [3.0, "kick", 0.6, 0.25],
+          [5.0, "kick", 0.6, 0.25],
+          [7.0, "kick", 0.6, 0.25],
+          [9.0, "kick", 0.6, 0.25],
+          [11.0, "kick", 0.6, 0.25],
+          [13.0, "kick", 0.6, 0.25],
+          [15.0, "kick", 0.6, 0.25]
+        ]
+      }
+    },
+    
+    "verseSyncopatedDrums": {
+      "_comment": "Jazz comping for syncopated section",
+      "bars": 4,
+      "layers": {
+        "drums": {"pattern": "jazzComping"},
+        "accents": [
+          [1.75, "openhat", 0.5, 0.16],
+          [2.75, "openhat", 0.4, 0.16],
+          [3.25, "cowbell", 0.3, 0.16],
+          [4.0, "crash", 0.6, 0.5],
+          [5.75, "openhat", 0.5, 0.16],
+          [6.75, "openhat", 0.4, 0.16],
+          [7.25, "cowbell", 0.3, 0.16],
+          [8.0, "crash", 0.6, 0.5],
+          [9.75, "openhat", 0.5, 0.16],
+          [10.75, "openhat", 0.4, 0.16],
+          [11.25, "cowbell", 0.3, 0.16],
+          [12.0, "crash", 0.6, 0.5],
+          [13.75, "openhat", 0.5, 0.16],
+          [14.75, "openhat", 0.4, 0.16],
+          [15.25, "cowbell", 0.3, 0.16],
+          [16.0, "crash", 0.7, 1.0]
+        ]
+      }
+    },
+    
+    "verseBJazzyDrums": {
+      "_comment": "More complex drumming for the jazzy B section with multi-bar melody",
+      "bars": 4,
+      "layers": {
+        "drums": {"pattern": "swingWalking"},
+        "ride": {"pattern": "ridePattern"},
+        "fills": [
+          [7.5, "snare", 0.5, 0.16],
+          [7.75, "snare", 0.6, 0.16],
+          [8.0, "kick", 0.8, 0.25],
+          [15.5, "snare", 0.5, 0.16],
+          [15.75, "snare", 0.6, 0.16],
+          [16.0, "crash", 0.8, 1.0]
+        ]
+      }
+    },
+    
+    "bridgeDrums": {
+      "_comment": "Driving rhythm for the bridge section",
+      "bars": 2,
+      "layers": {
+        "drums": [
+          [1.0, "kick", 0.9, 0.25],
+          [1.5, "hihat", 0.4, 0.16],
+          [2.0, "snare", 0.8, 0.25],
+          [2.5, "hihat", 0.4, 0.16],
+          [3.0, "kick", 0.8, 0.25],
+          [3.5, "hihat", 0.4, 0.16],
+          [4.0, "snare", 0.8, 0.25],
+          [4.5, "kick", 0.6, 0.16],
+          [4.75, "hihat", 0.4, 0.16],
+          [5.0, "kick", 0.9, 0.25],
+          [5.5, "hihat", 0.4, 0.16],
+          [6.0, "snare", 0.8, 0.25],
+          [6.5, "hihat", 0.4, 0.16],
+          [7.0, "kick", 0.8, 0.25],
+          [7.5, "snare", 0.5, 0.16],
+          [7.75, "snare", 0.6, 0.16],
+          [8.0, "crash", 0.8, 1.0]
+        ],
+        "ride": {"pattern": "ridePattern"}
+      }
+    },
+    
+    "outroDrums": {
+      "_comment": "Simple ending with final crash",
+      "bars": 2,
+      "layers": {
+        "drums": [
+          [1.0, "kick", 0.8, 1.0],
+          [2.0, "snare", 0.6, 1.0],
+          [3.0, "kick", 0.8, 1.0],
+          [4.0, "snare", 0.6, 1.0],
+          [5.0, "kick", 0.9, 2.0],
+          [7.0, "snare", 0.7, 1.0],
+          [8.0, "crash", 0.9, 2.0]
+        ]
+      }
+    },
+    
+    "introDrums": {
+      "_comment": "Optional intro with rimshots and crash",
+      "bars": 1,
+      "layers": {
+        "intro": {"pattern": "intro"}
+      }
+    }
+  },
+  
+  "arrangement": ["introDrums", "verseADrums", "verseBDrums", "verseSyncopatedDrums", "verseBJazzyDrums", "bridgeDrums", "outroDrums"]
+}

@@ -194,8 +194,7 @@ void PlayerEditorComponent::loadPlayerForEditing()
                     // Enable MIDI input for the graph
                     audioEngine->enableMidiInput(true);
                     
-                    // Set the audio output volume to a reasonable level
-                    audioEngine->setMasterGain(0.8f);
+                    // Note: Volume control now handled via ensemble/performance level settings
                     
                     // Connect the keyboard to the graph
                     connectMidiKeyboardToGraph();

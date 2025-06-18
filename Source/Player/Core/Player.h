@@ -351,6 +351,13 @@ public:
      */
     Instrument* getInstrument() { return instrument.get(); }
     
+    /**
+     * @brief Get the audio engine
+     * 
+     * @return AudioEngine* Pointer to the audio engine (not owned)
+     */
+    AudioEngine* getAudioEngine() { return audioEngine; }
+    
        /**
      * @brief Set the musician component
      * 
@@ -371,6 +378,20 @@ public:
       * @param client Shared pointer to an LLM client
       */
      void setLLMClient(std::shared_ptr<LLMClient> client);
+     
+     /**
+      * @brief Set the output level for this player
+      * 
+      * @param level Volume level (0.0 to 2.0, default 1.0)
+      */
+     void setLevel(float level) { outputLevel = jlimit(0.0f, 2.0f, level); }
+     
+     /**
+      * @brief Get the current output level
+      * 
+      * @return float Current level (0.0 to 2.0)
+      */
+     float getLevel() const { return outputLevel; }
  
     
 private:
@@ -394,6 +415,9 @@ private:
     bool readyForEditing = false;
     bool readyForPlayback = false;
     bool graphLoaded = false;      // Whether the graph has been loaded
+    
+    // Audio processing
+    float outputLevel = 1.0f;     // Output level multiplier (0.0 to 2.0)
     
     // Deferred loading data
     String graphFileName;         // Name of the graph file to load when needed

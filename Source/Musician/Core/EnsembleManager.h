@@ -4,6 +4,7 @@
 #include "../../Player/Core/Player.h"
 #include "../../Player/Core/PlayerManager.h"
 #include "../../LLM/Core/LLMManager.h"
+#include "../../Audio/AudioEngine.h"
 #include "MusicPatternSystem.h"
 
 namespace covertracks {
@@ -16,13 +17,14 @@ struct MusicianRole {
     juce::String instrument; // Instrument type
     Player* player;          // Associated player
     juce::String pattern;    // Generated pattern for this role
+    float level;             // Volume level for this role (0.0 to 2.0, default 1.0)
     
     // Default constructor required for Array<MusicianRole>
     MusicianRole()
-        : name(""), instrument(""), player(nullptr), pattern("") {}
+        : name(""), instrument(""), player(nullptr), pattern(""), level(1.0f) {}
     
     MusicianRole(const juce::String& roleName, const juce::String& instrumentType, Player* playerPtr)
-        : name(roleName), instrument(instrumentType), player(playerPtr), pattern("") {}
+        : name(roleName), instrument(instrumentType), player(playerPtr), pattern(""), level(1.0f) {}
         
     // Temporary methods to support PerformanceComponent
     juce::String getName() const { return name; }
@@ -41,8 +43,10 @@ public:
      * @brief Construct a new Ensemble Manager
      * 
      * @param playerManager The player manager to use
+     * @param audioEngine The audio engine to use for all players in the ensemble
+     * @param id Optional unique identifier for this ensemble
      */
-    EnsembleManager(PlayerManager* playerManager, const juce::String& id = juce::String());
+    EnsembleManager(PlayerManager* playerManager, AudioEngine* audioEngine = nullptr, const juce::String& id = juce::String());
     
     /**
      * @brief Destroy the Ensemble Manager
@@ -272,12 +276,12 @@ private:
     // Helper method to use playerManager
     void ensurePlayerManagerIsUsed() { if (playerManager) { /* This ensures playerManager is used */ } }
     
-
-    
+private:
     // The musician roles in the ensemble
     juce::Array<MusicianRole> musicianRoles;
     
-    // Ensemble metadata
+    // Core properties
+    AudioEngine* audioEngine;
     juce::String ensembleName;
     juce::String ensembleDescription;
     juce::String currentSongDescription;

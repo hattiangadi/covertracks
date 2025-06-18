@@ -172,7 +172,7 @@ void Player::loadMinimalResources()
         // Create instrument if needed (but don't initialize)
         if (instrument == nullptr)
         {
-            instrument = std::make_unique<Instrument>(metadata.name, formatManager, knownPluginList);
+            instrument = std::make_unique<Instrument>(metadata.name, formatManager, knownPluginList, audioEngine);
             
             // Set up chart finished callback
             instrument->setPatternFinishedCallback([this]() {
@@ -302,9 +302,10 @@ void Player::disconnectFromAudioEngine()
     }
 }
 
+
 bool Player::isConnectedToAudioEngine() const
 {
-    return audioEngine != nullptr && instrument && instrument->isConnectedToAudioEngine();
+    return audioEngine != nullptr;
 }
 
 bool Player::isFullyLoaded() const
@@ -921,6 +922,10 @@ bool Player::convertChartToMidi(const var& chart)
                 // Ensure note and velocity are in valid ranges
                 note = juce::jlimit(0, 127, note);
                 velocity = juce::jlimit(0.0f, 1.0f, velocity);
+                
+                // Apply player level scaling
+                velocity = velocity * outputLevel;
+                velocity = juce::jlimit(0.0f, 1.0f, velocity); // Re-clamp after scaling
                 
                 // Create note on message
                 juce::MidiMessage noteOn = juce::MidiMessage::noteOn(channel, note, velocity);

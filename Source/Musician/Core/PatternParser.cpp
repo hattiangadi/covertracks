@@ -545,6 +545,15 @@ std::shared_ptr<covertracks::Bar> covertracks::PatternParser::parseBarFromJson(c
                                                      const std::map<String, std::map<String, int>>& primitives,
                                                      const std::map<String, Array<String>>& chords)
 {
+    // Use the enhanced version with chord context tracking
+    return parseBarFromJsonWithChordContext(eventsJson, primitives, chords);
+}
+
+std::shared_ptr<covertracks::Bar> covertracks::PatternParser::parseBarFromJsonWithChordContext(const Array<var>& eventsJson,
+                                                     const std::map<String, std::map<String, int>>& primitives,
+                                                     const std::map<String, Array<String>>& chords,
+                                                     const String& defaultChord)
+{
     auto bar = std::make_shared<Bar>();
     
     for (const auto& eventJson : eventsJson)
@@ -629,6 +638,42 @@ std::shared_ptr<covertracks::Bar> covertracks::PatternParser::parseBarFromJson(c
                     bar->addNote(static_cast<float>(beat), channel, midiNote, velocity, duration, source);
                 }
                 DBG("Added chord: " + chordName + " at beat " + String(beat) + " (duration already validated)");
+            }
+        }
+        else if (noteData.isObject() && noteData.hasProperty("tone"))
+        {
+            // Chord tone reference: [1.0, {tone: 1}]
+            int toneNumber = static_cast<int>(static_cast<double>(noteData["tone"]));
+            
+            // Determine chord context at this beat
+            String currentChord = inferCurrentChord(beat, eventsJson, chords);
+            if (currentChord.isEmpty())
+                currentChord = defaultChord;
+            
+            if (!currentChord.isEmpty())
+            {
+                // Optional octave specification (default to 4)
+                int octave = 4;
+                if (noteData.hasProperty("octave"))
+                {
+                    octave = static_cast<int>(static_cast<double>(noteData["octave"]));
+                }
+                
+                int midiNote = resolveChordTone(toneNumber, currentChord, chords, octave);
+                if (midiNote >= 0)
+                {
+                    int channel = 0; // Default channel for chord tones
+                    bar->addNote(static_cast<float>(beat), channel, midiNote, velocity, duration, source);
+                    DBG("Added chord tone " + String(toneNumber) + " of " + currentChord + " at beat " + String(beat) + " (MIDI " + String(midiNote) + ")");
+                }
+                else
+                {
+                    DBG("WARNING: Could not resolve tone " + String(toneNumber) + " for chord " + currentChord);
+                }
+            }
+            else
+            {
+                DBG("WARNING: No chord context for tone reference at beat " + String(beat));
             }
         }
     }
@@ -823,6 +868,95 @@ int covertracks::PatternParser::parseMusicalNoteName(const String& noteName)
         return -1;
     
     return midiNote;
+}
+
+int covertracks::PatternParser::resolveChordTone(int toneNumber, const String& chordName, const std::map<String, Array<String>>& chords, int octave)
+{
+    auto chordIt = chords.find(chordName);
+    if (chordIt == chords.end() || chordIt->second.isEmpty())
+    {
+        DBG("WARNING: Chord '" + chordName + "' not found or empty");
+        return -1;
+    }
+    
+    const Array<String>& chordNotes = chordIt->second;
+    
+    // Tone numbers are 1-based (1=root, 3=third, 5=fifth, etc.)
+    // Convert to 0-based index, but handle extensions beyond the basic chord
+    int toneIndex = (toneNumber - 1) % chordNotes.size();
+    
+    // For extensions beyond the chord (e.g., tone 7 in a triad), cycle through the chord notes
+    if (toneIndex < 0 || toneIndex >= chordNotes.size())
+    {
+        toneIndex = 0; // Default to root
+    }
+    
+    String noteName = chordNotes[toneIndex];
+    
+    // Parse the note to get its MIDI number
+    int baseMidiNote = parseMusicalNoteName(noteName);
+    if (baseMidiNote < 0)
+    {
+        DBG("WARNING: Could not parse note '" + noteName + "' from chord " + chordName);
+        return 60; // Default to middle C
+    }
+    
+    // Adjust for desired octave
+    // parseMusicalNoteName returns the note in its specified octave,
+    // so we need to transpose to the requested octave
+    int noteOctave = (baseMidiNote / 12) - 1; // Convert MIDI to octave number
+    int octaveDifference = octave - noteOctave;
+    int targetMidiNote = baseMidiNote + (octaveDifference * 12);
+    
+    // Handle higher tone numbers by going up octaves
+    if (toneNumber > chordNotes.size())
+    {
+        int extraOctaves = (toneNumber - 1) / chordNotes.size();
+        targetMidiNote += extraOctaves * 12;
+    }
+    
+    // Ensure result is in valid MIDI range
+    targetMidiNote = jlimit(0, 127, targetMidiNote);
+    
+    DBG("Resolved tone " + String(toneNumber) + " of chord " + chordName + " (" + noteName + ") to MIDI " + String(targetMidiNote));
+    return targetMidiNote;
+}
+
+String covertracks::PatternParser::inferCurrentChord(double beat, const Array<var>& eventsJson, const std::map<String, Array<String>>& chords)
+{
+    String currentChord = "";
+    double latestChordBeat = -1.0;
+    
+    // Look for the most recent chord event at or before this beat
+    for (const auto& eventJson : eventsJson)
+    {
+        if (!eventJson.isArray() || eventJson.size() < 2)
+            continue;
+            
+        Array<var>* eventArray = eventJson.getArray();
+        double eventBeat = (*eventArray)[0];
+        var noteData = (*eventArray)[1];
+        
+        // Check if this is a chord reference and it's at or before our target beat
+        if (eventBeat <= beat && eventBeat > latestChordBeat && 
+            noteData.isObject() && noteData.hasProperty("chord"))
+        {
+            String chordName = noteData["chord"].toString();
+            // Verify this chord exists in our chord definitions
+            if (chords.find(chordName) != chords.end())
+            {
+                currentChord = chordName;
+                latestChordBeat = eventBeat;
+            }
+        }
+    }
+    
+    if (!currentChord.isEmpty())
+    {
+        DBG("Inferred chord context at beat " + String(beat) + ": " + currentChord + " (from beat " + String(latestChordBeat) + ")");
+    }
+    
+    return currentChord;
 }
 
 } // namespace covertracks

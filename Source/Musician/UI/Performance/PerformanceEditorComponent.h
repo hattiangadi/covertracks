@@ -115,6 +115,12 @@ private:
     Label ensembleLabel;
     ComboBox ensembleSelector;
     
+    // UI components - Style and Character
+    Label styleLabel;
+    ComboBox styleSelector;
+    Label characterLabel;
+    TextEditor characterEditor;
+    
     // UI components - Player Table
     class PlayerTable : public Component,
                        public TableListBoxModel,
@@ -204,6 +210,12 @@ private:
     // Pattern editing mode
     void enterPatternEditMode(const String& roleName, Player* player, const String& llmPattern);
     void exitPatternEditMode(bool saveChanges);
+    
+    // Level control
+    void updateRoleLevel(int roleIndex, float level);
+    
+    // JSON continuation handling
+    void requestJsonContinuation(const String& roleName, const String& incompleteJson);
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PerformanceEditorComponent)
 };

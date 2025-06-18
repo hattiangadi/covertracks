@@ -102,6 +102,14 @@ private:
     // Helper to find a note mapping from registered capabilities
     int findNoteFromCapabilities(const String& instrumentName, const String& noteName);
     
+    // Chord tone resolution methods
+    int resolveChordTone(int toneNumber, const String& chordName, const std::map<String, Array<String>>& chords, int octave = 4);
+    String inferCurrentChord(double beat, const Array<var>& eventsJson, const std::map<String, Array<String>>& chords);
+    std::shared_ptr<Bar> parseBarFromJsonWithChordContext(const Array<var>& eventsJson,
+                                                          const std::map<String, std::map<String, int>>& primitives,
+                                                          const std::map<String, Array<String>>& chords,
+                                                          const String& defaultChord = "");
+    
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PatternParser)
 };
 

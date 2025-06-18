@@ -1,4 +1,5 @@
 #include "PerformanceEditorComponent.h"
+#include "../../../LLM/Core/PromptManager.h"
 
 namespace covertracks {
 
@@ -13,6 +14,8 @@ PerformanceEditorComponent::PerformanceEditorComponent(PerformanceManager* pm,
       descriptionEditor("descriptionEditor"),
       songLabel("songLabel", "Song"),
       ensembleLabel("ensembleLabel", "Ensemble"),
+      styleLabel("styleLabel", "Style"),
+      characterLabel("characterLabel", "Character"),
       coordinationLabel("coordinationLabel", "Coordination"),
       generateAllButton("Generate All"),
       prepAllButton("Prep All"),
@@ -53,6 +56,27 @@ PerformanceEditorComponent::PerformanceEditorComponent(PerformanceManager* pm,
     
     ensembleSelector.addListener(this);
     addAndMakeVisible(ensembleSelector);
+    
+    // Set up style section
+    styleLabel.setFont(Font(FontOptions().withHeight(16.0f).withStyle("bold")));
+    addAndMakeVisible(styleLabel);
+    
+    styleSelector.addItem("Jazz", 1);
+    styleSelector.addItem("Pop", 2);
+    styleSelector.addItem("Rock", 3);
+    styleSelector.addItem("Classical", 4);
+    styleSelector.setSelectedItemIndex(0);
+    styleSelector.addListener(this);
+    addAndMakeVisible(styleSelector);
+    
+    // Set up character section
+    characterLabel.setFont(Font(FontOptions().withHeight(16.0f).withStyle("bold")));
+    addAndMakeVisible(characterLabel);
+    
+    characterEditor.setMultiLine(false);
+    characterEditor.setReturnKeyStartsNewLine(false);
+    characterEditor.addListener(this);
+    addAndMakeVisible(characterEditor);
     
     // Set up player table
     playerTable = std::make_unique<PlayerTable>(this);
@@ -127,6 +151,8 @@ PerformanceEditorComponent::~PerformanceEditorComponent()
     
     songSelector.removeListener(this);
     ensembleSelector.removeListener(this);
+    styleSelector.removeListener(this);
+    characterEditor.removeListener(this);
     loadAllButton.removeListener(this);
     playAllButton.removeListener(this);
     stopAllButton.removeListener(this);
@@ -177,6 +203,20 @@ void PerformanceEditorComponent::resized()
         bounds.removeFromTop(5);
         
         ensembleSelector.setBounds(bounds.removeFromTop(30));
+        bounds.removeFromTop(5);
+        
+        // Style section
+        styleLabel.setBounds(bounds.removeFromTop(25));
+        bounds.removeFromTop(5);
+        
+        styleSelector.setBounds(bounds.removeFromTop(30));
+        bounds.removeFromTop(5);
+        
+        // Character section
+        characterLabel.setBounds(bounds.removeFromTop(25));
+        bounds.removeFromTop(5);
+        
+        characterEditor.setBounds(bounds.removeFromTop(30));
         bounds.removeFromTop(5);
         
         // Player table takes most of the space
@@ -268,6 +308,11 @@ void PerformanceEditorComponent::comboBoxChanged(ComboBox* comboBoxThatHasChange
     else if (comboBoxThatHasChanged == &ensembleSelector)
     {
         ensembleSelectionChanged();
+    }
+    else if (comboBoxThatHasChanged == &styleSelector)
+    {
+        // Style selection changed - no immediate action needed
+        // Style will be used during pattern generation
     }
 }
 
@@ -475,9 +520,9 @@ void PerformanceEditorComponent::generateChartForPlayer(int playerIndex)
     instrumentsArray.append(var(role.getInstrumentName()));
     parameters.getDynamicObject()->setProperty("instruments", instrumentsArray);
     
-    // Set style/genre
-    String style = currentPerformance->getGenre();
-    if (style.isEmpty()) style = "default";
+    // Set style from selector
+    String style = styleSelector.getText();
+    if (style.isEmpty()) style = "jazz";
     parameters.getDynamicObject()->setProperty("style", style);
     
     // Set tempo
@@ -544,52 +589,23 @@ void PerformanceEditorComponent::generateChartForPlayer(int playerIndex)
     // Mark as generating
     generatingRoles.insert(roleName);
     
-    // Create a prompt for pattern generation using the same approach as PatternGenerator
+    // Use PromptManager to create the prompt with new format
     String promptStyle = parameters.getDynamicObject()->getProperty("style").toString();
     int promptTempo = static_cast<int>(parameters.getDynamicObject()->getProperty("tempo"));
+    String character = characterEditor.getText();
+    String instrumentRoleDefinition = roleName; // Use role name as role definition for now
     
-    String prompt = "You are a professional musician and music pattern generator. Create a " + promptStyle + " piece for " + role.getInstrumentName() + " (" + roleName + ").\n\n";
-    prompt += "Target tempo: " + String(promptTempo) + " BPM\n\n";
-    prompt += "Additional instructions: " + description + "\n\n";
-    prompt += "IMPORTANT: Create a COMPACT JSON chart using our hierarchical pattern language. Use advanced features for both musical effect AND compactness:\n";
-    prompt += "- Pattern references (reuse patterns instead of repeating)\n";
-    prompt += "- Variations (base pattern + bar-specific changes)\n";
-    prompt += "- Layers (combine multiple parts efficiently)\n";
-    prompt += "- Chord references (define once, reference everywhere)\n";
-    prompt += "- basePattern + variations (avoid repetitive barPatterns)\n\n";
-    prompt += "COMPACT JSON Format (DO NOT include primitives section):\n";
-    prompt += "{\n";
-    prompt += "  \"title\": \"" + roleName + " Pattern\",\n";
-    prompt += "  \"tempo\": " + String(promptTempo) + ",\n";
-    prompt += "  \"chords\": {\n";
-    prompt += "    \"C\": [\"C3\", \"E3\", \"G3\"]\n";
-    prompt += "  },\n";
-    prompt += "  \"patterns\": {\n";
-    prompt += "    \"main_pattern\": [\n";
-    prompt += "      [1.0, \"C4\", 0.8, 0.5],\n";
-    prompt += "      [1.5, \"D4\", 0.7, 0.25],\n";
-    prompt += "      [2.0, \"E4\", 0.9, 0.75],\n";
-    prompt += "      [3.0, {\"chord\": \"C\"}, 0.6, 1.0]\n";
-    prompt += "    ]\n";
-    prompt += "  },\n";
-    prompt += "  \"sections\": {\n";
-    prompt += "    \"main\": {\n";
-    prompt += "      \"bars\": 4,\n";
-    prompt += "      \"basePattern\": \"main_pattern\",\n";
-    prompt += "      \"variations\": {\n";
-    prompt += "        \"bar4\": [[4.0, \"E4\"]]\n";
-    prompt += "      }\n";
-    prompt += "    }\n";
-    prompt += "  },\n";
-    prompt += "  \"arrangement\": [\"main\"]\n";
-    prompt += "}\n\n";
-    prompt += "NOTE FORMAT: [beat, note, velocity, duration]\n";
-    prompt += "- beat: when to play (1.0 = downbeat, 1.5 = eighth note, 2.0 = beat 2)\n";
-    prompt += "- note: note name (\"C4\", \"F#3\") or chord reference ({\"chord\": \"C\"})\n";
-    prompt += "- velocity: how loud (0.0-1.0, optional, defaults to 0.8)\n";
-    prompt += "- duration: how long in beats (0.25=sixteenth, 0.5=eighth, 1.0=quarter, 2.0=half)\n\n";
-    prompt += "Focus on creating appropriate patterns for the " + role.getInstrumentName() + " that fit the " + promptStyle + " style. ";
-    prompt += "Respond only with the JSON chart, no explanations or comments.";
+    // Create PromptManager instance to use the new method
+    PromptManager promptManager;
+    
+    String prompt = promptManager.createMusicGenerationPrompt(
+        promptStyle,
+        character,
+        player,  // Pass the player object instead of instrument name
+        instrumentRoleDefinition,
+        promptTempo,
+        description
+    );
     
     // Store that we're generating for this role
     currentPerformance->setStatusMessage(roleName, "Generating LLM pattern...");
@@ -622,23 +638,87 @@ void PerformanceEditorComponent::generateChartForPlayer(int playerIndex)
                     return;
                 }
                 
-                // Check if response looks like JSON
-                String trimmed = response.trim();
-                if (!trimmed.startsWith("{") || !trimmed.endsWith("}"))
+                // Extract JSON from response (handle markdown formatting)
+                String jsonContent = response.trim();
+                
+                // Check for markdown code block
+                if (jsonContent.startsWith("```json"))
                 {
-                    DBG("WARNING: LLM response doesn't look like JSON for " << roleName);
-                    DBG("Response preview: " << response.substring(0, 200));
+                    int startIndex = jsonContent.indexOf("\n");
+                    if (startIndex >= 0)
+                    {
+                        jsonContent = jsonContent.substring(startIndex + 1);
+                        int endIndex = jsonContent.lastIndexOf("```");
+                        if (endIndex >= 0)
+                        {
+                            jsonContent = jsonContent.substring(0, endIndex);
+                        }
+                    }
+                    jsonContent = jsonContent.trim();
+                }
+                else if (jsonContent.startsWith("```"))
+                {
+                    int startIndex = jsonContent.indexOf("\n");
+                    if (startIndex >= 0)
+                    {
+                        jsonContent = jsonContent.substring(startIndex + 1);
+                        int endIndex = jsonContent.lastIndexOf("```");
+                        if (endIndex >= 0)
+                        {
+                            jsonContent = jsonContent.substring(0, endIndex);
+                        }
+                    }
+                    jsonContent = jsonContent.trim();
+                }
+                
+                // Find JSON object boundaries if not markdown
+                if (!jsonContent.startsWith("{"))
+                {
+                    int jsonStart = jsonContent.indexOf("{");
+                    if (jsonStart >= 0)
+                    {
+                        jsonContent = jsonContent.substring(jsonStart);
+                    }
+                }
+                
+                if (!jsonContent.endsWith("}"))
+                {
+                    int jsonEnd = jsonContent.lastIndexOf("}");
+                    if (jsonEnd >= 0)
+                    {
+                        jsonContent = jsonContent.substring(0, jsonEnd + 1);
+                    }
+                }
+                
+                // Check if JSON is incomplete (likely due to token limit)
+                if (jsonContent.startsWith("{") && !jsonContent.endsWith("}"))
+                {
+                    // JSON started but didn't finish - likely hit token limit
+                    DBG("INFO: Incomplete JSON detected for " << roleName << " - requesting continuation");
+                    statusDisplay.setText("JSON incomplete for " + roleName + " - requesting continuation...");
+                    
+                    // Request continuation
+                    requestJsonContinuation(roleName, jsonContent);
+                    return;
+                }
+                
+                // Final validation
+                if (!jsonContent.startsWith("{") || !jsonContent.endsWith("}"))
+                {
+                    DBG("WARNING: Could not extract valid JSON for " << roleName);
+                    DBG("Original response preview: " << response.substring(0, 200));
+                    DBG("Extracted content preview: " << jsonContent.substring(0, 200));
                     statusDisplay.setText("Invalid JSON response for " + roleName);
                     if (currentPerformance)
                         currentPerformance->setStatusMessage(roleName, "Invalid JSON");
                     return;
                 }
                 
-                // Store the LLM pattern
-                currentPerformance->setLLMPattern(roleName, response);
+                // Store the extracted JSON pattern
+                currentPerformance->setLLMPattern(roleName, jsonContent);
                 currentPerformance->setStatusMessage(roleName, "LLM pattern ready");
                 statusDisplay.setText("LLM pattern generated for " + roleName + " - ready to prep");
-                DBG("DEBUG: Successfully stored LLM pattern for " << roleName << " (" << response.length() << " chars)");
+                DBG("DEBUG: Successfully stored LLM pattern for " << roleName << " (" << jsonContent.length() << " chars)");
             }
             else
             {
@@ -723,11 +803,14 @@ void PerformanceEditorComponent::loadChartForPlayer(int playerIndex)
         return;
     }
     
+    // Apply the role's level setting to the player
+    player->setLevel(role.level);
+    
     // The chart is already in the correct format from Musician
     // Load the chart into the player
     if (player->loadChart(chart))
     {
-        statusDisplay.setText("Chart loaded for " + role.getName());
+        statusDisplay.setText("Chart loaded for " + role.getName() + " (level: " + String(role.level, 1) + "x)");
         currentPerformance->setStatusMessage(role.getName(), "Chart Loaded");
     }
     else
@@ -814,6 +897,9 @@ void PerformanceEditorComponent::prepChartForPlayer(int playerIndex)
     DBG("DEBUG: About to prep pattern for " << role.getName());
     DBG("DEBUG: LLM pattern length: " << llmPattern.length());
     DBG("DEBUG: LLM pattern preview: " << llmPattern.substring(0, 200) << "...");
+    
+    // Apply the role's level setting to the player
+    player->setLevel(role.level);
     
     auto midiChart = player->convertPatternStringToChart(llmPattern, 120.0);
     
@@ -950,6 +1036,9 @@ void PerformanceEditorComponent::prepAllCharts()
             // Convert LLM pattern to MIDI chart
             if (role.player)
             {
+                // Apply the role's level setting to the player
+                role.player->setLevel(role.level);
+                
                 auto midiChart = role.player->convertPatternStringToChart(llmPattern, 120.0);
                 
                 if (midiChart.hasProperty("success") && static_cast<bool>(midiChart["success"]))
@@ -1283,7 +1372,8 @@ PerformanceEditorComponent::PlayerTable::PlayerTable(PerformanceEditorComponent*
     table.getHeader().addColumn("Player", 1, 100);
     table.getHeader().addColumn("Instrument", 2, 100);
     table.getHeader().addColumn("Chart Status", 3, 100);
-    table.getHeader().addColumn("Actions", 4, 200);
+    table.getHeader().addColumn("Level", 4, 80);
+    table.getHeader().addColumn("Actions", 5, 200);
     addAndMakeVisible(table);
 }
 
@@ -1357,6 +1447,7 @@ void PerformanceEditorComponent::PlayerTable::paintCell(Graphics& g, int rowNumb
                     text = "No Chart";
                 }
             }
+            if (columnId == 4) text = String(role.level, 1) + "x"; // Show level as "1.0x", "1.5x", etc.
         }
     }
     else if (parent && parent->isNewPerformance && parent->pendingEnsembleName.isNotEmpty())
@@ -1369,6 +1460,7 @@ void PerformanceEditorComponent::PlayerTable::paintCell(Graphics& g, int rowNumb
             if (columnId == 1) text = role.getName();
             if (columnId == 2) text = role.getInstrumentName();
             if (columnId == 3) text = "No Chart"; // New performance has no charts yet
+            if (columnId == 4) text = String(role.level, 1) + "x"; // Show level
         }
     }
     else
@@ -1376,6 +1468,7 @@ void PerformanceEditorComponent::PlayerTable::paintCell(Graphics& g, int rowNumb
         // Fallback for when no performance is loaded
         if (columnId == 2) text = "Piano"; // Default instrument
         if (columnId == 3) text = "No Chart";
+        if (columnId == 4) text = "1.0x"; // Default level
     }
     
     g.drawText(text, Rectangle<int>(2, 0, width - 4, height), Justification::centredLeft, true);
@@ -1383,14 +1476,85 @@ void PerformanceEditorComponent::PlayerTable::paintCell(Graphics& g, int rowNumb
 
 Component* PerformanceEditorComponent::PlayerTable::refreshComponentForCell(int rowNumber, int columnId, bool /*isRowSelected*/, Component* existingComponentToUpdate)
 {
-    if (columnId == 4) // Actions column
+    if (columnId == 4) // Level column
+    {
+        // Create a level slider component
+        class LevelSliderComponent : public Component, public Slider::Listener
+        {
+        public:
+            LevelSliderComponent(PlayerTable* parentTable, int row)
+                : parent(parentTable), rowIndex(row)
+            {
+                levelSlider.setRange(0.0, 2.0, 0.1);
+                levelSlider.setValue(1.0);
+                levelSlider.setSliderStyle(Slider::LinearHorizontal);
+                levelSlider.setTextBoxStyle(Slider::NoTextBox, false, 0, 0);
+                levelSlider.addListener(this);
+                addAndMakeVisible(levelSlider);
+                
+                // Load current level from ensemble
+                updateSliderFromEnsemble();
+            }
+            
+            void resized() override
+            {
+                levelSlider.setBounds(getLocalBounds().reduced(2));
+            }
+            
+            void sliderValueChanged(Slider* slider) override
+            {
+                if (slider == &levelSlider && parent && parent->parent)
+                {
+                    // Update the ensemble role level
+                    auto ensemble = parent->parent->getPerformanceEnsemble();
+                    if (rowIndex >= 0 && rowIndex < ensemble.size())
+                    {
+                        // Note: We need to update the cached ensemble in PerformanceEditorComponent
+                        // This is a bit tricky since the ensemble is cached. We'll need to
+                        // add a method to update individual role levels.
+                        parent->parent->updateRoleLevel(rowIndex, static_cast<float>(levelSlider.getValue()));
+                    }
+                }
+            }
+            
+            void updateSliderFromEnsemble()
+            {
+                if (parent && parent->parent)
+                {
+                    auto ensemble = parent->parent->getPerformanceEnsemble();
+                    if (rowIndex >= 0 && rowIndex < ensemble.size())
+                    {
+                        const auto& role = ensemble[rowIndex];
+                        levelSlider.setValue(role.level, dontSendNotification);
+                    }
+                }
+            }
+            
+        private:
+            PlayerTable* parent;
+            int rowIndex;
+            Slider levelSlider;
+        };
+        
+        auto* levelComponent = dynamic_cast<LevelSliderComponent*>(existingComponentToUpdate);
+        if (levelComponent == nullptr)
+        {
+            levelComponent = new LevelSliderComponent(this, rowNumber);
+        }
+        else
+        {
+            levelComponent->updateSliderFromEnsemble();
+        }
+        return levelComponent;
+    }
+    else if (columnId == 5) // Actions column
     {
         // Create a custom component that layouts buttons properly
         class ActionButtonsComponent : public Component
         {
         public:
             ActionButtonsComponent(PlayerTable* parentTable, int row)
-                : parent(parentTable), rowIndex(row)
+                : parent(parentTable)
             {
                 generateBtn.setButtonText("Gen");
                 generateBtn.setComponentID("generate_" + String(row));
@@ -1431,7 +1595,6 @@ Component* PerformanceEditorComponent::PlayerTable::refreshComponentForCell(int 
             
         private:
             PlayerTable* parent;
-            int rowIndex;
             TextButton generateBtn;
             TextButton prepBtn;
             TextButton editBtn;
@@ -1595,6 +1758,10 @@ void PerformanceEditorComponent::enterPatternEditMode(const String& roleName, Pl
     songSelector.setVisible(false);
     ensembleLabel.setVisible(false);
     ensembleSelector.setVisible(false);
+    styleLabel.setVisible(false);
+    styleSelector.setVisible(false);
+    characterLabel.setVisible(false);
+    characterEditor.setVisible(false);
     playerTable->setVisible(false);
     coordinationLabel.setVisible(false);
     generateAllButton.setVisible(false);
@@ -1668,6 +1835,10 @@ void PerformanceEditorComponent::exitPatternEditMode(bool saveChanges)
     songSelector.setVisible(true);
     ensembleLabel.setVisible(true);
     ensembleSelector.setVisible(true);
+    styleLabel.setVisible(true);
+    styleSelector.setVisible(true);
+    characterLabel.setVisible(true);
+    characterEditor.setVisible(true);
     playerTable->setVisible(true);
     coordinationLabel.setVisible(true);
     generateAllButton.setVisible(true);
@@ -1723,6 +1894,126 @@ void PerformanceEditorComponent::performancePatternCancelRequested(PatternEditor
 {
     // Cancel editing and exit edit mode
     exitPatternEditMode(false);
+}
+
+void PerformanceEditorComponent::updateRoleLevel(int roleIndex, float level)
+{
+    // Update the cached ensemble roles
+    if (roleIndex >= 0 && roleIndex < cachedEnsembleRoles.size())
+    {
+        cachedEnsembleRoles.getReference(roleIndex).level = level;
+        
+        // Also update the actual performance ensemble if it exists
+        if (currentPerformance)
+        {
+            // Get the current ensemble from the performance
+            auto ensemble = currentPerformance->getEnsemble();
+            if (roleIndex < ensemble.size())
+            {
+                String roleName = ensemble[roleIndex].getName();
+                
+                // We need to update the performance's ensemble
+                // This requires updating the saved ensemble file
+                String ensembleName = currentPerformance->getEnsembleName();
+                if (ensembleName.isNotEmpty())
+                {
+                    // Find and update the ensemble file
+                    Array<File> ensembleFiles = EnsembleManager::getEnsembleFiles();
+                    for (const auto& file : ensembleFiles)
+                    {
+                        auto loadedEnsembleManager = EnsembleManager::loadFromFile(file, playerManager);
+                        if (loadedEnsembleManager && loadedEnsembleManager->getName() == ensembleName)
+                        {
+                            // Update the role level in the ensemble
+                            auto& roles = loadedEnsembleManager->getMusicianRoles();
+                            for (auto& role : roles)
+                            {
+                                if (role.getName() == roleName)
+                                {
+                                    // Use a non-const reference to modify the role
+                                    auto& mutableRole = const_cast<MusicianRole&>(role);
+                                    mutableRole.level = level;
+                                    break;
+                                }
+                            }
+                            
+                            // Save the updated ensemble
+                            loadedEnsembleManager->saveToFile(file);
+                            
+                            // Refresh our cache
+                            refreshPerformanceEnsembleCache();
+                            
+                            statusDisplay.setText("Updated level for " + roleName + " to " + String(level, 1) + "x");
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+void PerformanceEditorComponent::requestJsonContinuation(const String& roleName, const String& incompleteJson)
+{
+    if (!llmClient)
+    {
+        statusDisplay.setText("No LLM client available for continuation");
+        return;
+    }
+    
+    // Create a continuation prompt
+    String continuationPrompt = "Continue this JSON exactly where it left off. Do not repeat any part, just continue from where it stopped. Complete the JSON to make it valid:\n\n";
+    continuationPrompt += incompleteJson;
+    continuationPrompt += "\n\nContinue from exactly where this JSON stopped. Make sure the final result is valid JSON that ends with }";
+    
+    // Update status
+    currentPerformance->setStatusMessage(roleName, "Requesting continuation...");
+    if (playerTable)
+        playerTable->updateContent();
+    
+    llmClient->sendMessage(continuationPrompt, [this, roleName, incompleteJson](bool success, const String& continuationResponse)
+    {
+        MessageManager::callAsync([this, roleName, incompleteJson, success, continuationResponse]()
+        {
+            if (success)
+            {
+                // Combine the incomplete JSON with the continuation
+                String continuationPart = continuationResponse.trim();
+                
+                // Remove any leading { or opening that might be repeated
+                if (continuationPart.startsWith("{"))
+                {
+                    continuationPart = continuationPart.substring(1);
+                }
+                
+                String completeJson = incompleteJson + continuationPart;
+                
+                // Validate the completed JSON
+                if (completeJson.startsWith("{") && completeJson.endsWith("}"))
+                {
+                    currentPerformance->setLLMPattern(roleName, completeJson);
+                    currentPerformance->setStatusMessage(roleName, "LLM pattern ready (continued)");
+                    statusDisplay.setText("Completed JSON for " + roleName + " with continuation");
+                    DBG("DEBUG: Successfully completed JSON for " << roleName << " with continuation");
+                }
+                else
+                {
+                    statusDisplay.setText("Continuation failed for " + roleName + " - JSON still invalid");
+                    currentPerformance->setStatusMessage(roleName, "Continuation failed");
+                    DBG("WARNING: Continuation still resulted in invalid JSON for " << roleName);
+                }
+            }
+            else
+            {
+                statusDisplay.setText("Failed to get continuation for " + roleName);
+                currentPerformance->setStatusMessage(roleName, "Continuation failed");
+            }
+            
+            // Update the player table
+            if (playerTable)
+                playerTable->updateContent();
+        });
+    });
 }
 
 } // namespace covertracks

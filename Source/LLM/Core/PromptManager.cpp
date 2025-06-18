@@ -21,62 +21,73 @@ String PromptManager::createMusicGenerationPrompt(const String& style,
     // Create variables map
     std::map<String, String> variables;
     variables["style"] = style;
+    variables["instrument"] = instruments.size() > 0 ? instruments[0] : "instrument";
     variables["instruments"] = instruments.joinIntoString(", ");
     variables["tempo"] = String(tempo);
     variables["description"] = description;
-    
-    // Add instrument definitions
-    String instrumentDefs;
-    for (const auto& instrument : instruments)
-    {
-        // Get the definitions for this instrument
-        String lowerInstrument = instrument.toLowerCase();
-        const char* lowerInstrumentStr = lowerInstrument.toUTF8();
-        if (instrumentDefinitions.hasProperty(lowerInstrumentStr))
-        {
-            var def = instrumentDefinitions[lowerInstrumentStr];
-            instrumentDefs += "- " + instrument + ":\n";
-            
-            // Add primitives
-            if (def.hasProperty("primitives") && def["primitives"].isObject())
-            {
-                auto* primitives = def["primitives"].getDynamicObject();
-                instrumentDefs += "  Primitives: ";
-                
-                StringArray primitiveNames;
-                for (auto& key : primitives->getProperties())
-                    primitiveNames.add(key.name.toString());
-                
-                instrumentDefs += primitiveNames.joinIntoString(", ") + "\n";
-            }
-            
-            // Add patterns
-            if (def.hasProperty("patterns") && def["patterns"].isObject())
-            {
-                auto* patterns = def["patterns"].getDynamicObject();
-                instrumentDefs += "  Patterns: ";
-                
-                StringArray patternInfos;
-                for (auto& key : patterns->getProperties())
-                {
-                    var pattern = patterns->getProperty(key.name);
-                    if (pattern.isObject() && pattern.hasProperty("id") && pattern.hasProperty("description"))
-                    {
-                        patternInfos.add(pattern["id"].toString() + " (" + pattern["description"].toString() + ")");
-                    }
-                }
-                
-                instrumentDefs += patternInfos.joinIntoString(", ") + "\n";
-            }
-            
-            instrumentDefs += "\n";
-        }
-    }
-    
-    variables["instrument_definitions"] = instrumentDefs;
+    variables["character"] = ""; // Default empty
+    variables["instrument_role_definition"] = ""; // Default empty
     
     // Process the template
     return processTemplate(templateText, variables);
+}
+
+String PromptManager::createMusicGenerationPrompt(const String& style,
+                                                const String& character, 
+                                                const String& instrument,
+                                                const String& instrumentRoleDefinition,
+                                                int /*tempo*/, 
+                                                const String& description)
+{
+    // Get the user prompt template
+    String userTemplate = getPromptTemplate("music_generation");
+    
+    // Get instrument definition - note: this needs to be passed a Player object
+    // For now using fallback, will be updated when Player is available
+    String instrumentDefinition = getInstrumentDefinition(instrument);
+    
+    // Create variables map
+    std::map<String, String> variables;
+    variables["style"] = style;
+    variables["character"] = character;
+    variables["instrument"] = instrument;
+    variables["instrument_role_definition"] = instrumentRoleDefinition;
+    variables["instrument_definition"] = instrumentDefinition;
+    variables["instrument_list"] = ""; // TODO: Get from ensemble context
+    variables["other_instrument_roles"] = ""; // TODO: Get from ensemble context  
+    variables["song_to_compose"] = description; // Use description as song content for now
+    
+    // Process the template
+    return processTemplate(userTemplate, variables);
+}
+
+String PromptManager::createMusicGenerationPrompt(const String& style,
+                                                const String& character, 
+                                                Player* player,
+                                                const String& instrumentRoleDefinition,
+                                                int /*tempo*/, 
+                                                const String& description)
+{
+    // Use compact template to avoid token limits
+    String userTemplate = getPromptTemplate("music_generation_compact");
+    
+    // Get instrument definition from player capabilities
+    String instrumentDefinition = getInstrumentDefinitionFromPlayer(player);
+    String instrument = player ? player->getInstrumentCapabilities().instrumentType : "unknown";
+    
+    // Create variables map
+    std::map<String, String> variables;
+    variables["style"] = style;
+    variables["character"] = character;
+    variables["instrument"] = instrument;
+    variables["instrument_role_definition"] = instrumentRoleDefinition;
+    variables["instrument_definition"] = instrumentDefinition;
+    variables["instrument_list"] = ""; // TODO: Get from ensemble context
+    variables["other_instrument_roles"] = ""; // TODO: Get from ensemble context  
+    variables["song_to_compose"] = description; // Use description as song content for now
+    
+    // Process the template
+    return processTemplate(userTemplate, variables);
 }
 
 String PromptManager::createMusicGenerationPrompt(const String& style,
@@ -196,66 +207,183 @@ bool PromptManager::loadPromptTemplates(const File& file)
 
 void PromptManager::initializeDefaultTemplates()
 {
-    // Template for general music generation using JSON format
-    promptTemplates["music_generation"] = 
-        "You are a professional musician and music pattern generator. Create a {{style}} piece using these instruments: {{instruments}}.\n\n"
-        "Target tempo: {{tempo}} BPM\n\n"
-        "{{instrument_definitions}}\n\n"
-        "Additional instructions: {{description}}\n\n"
-        "IMPORTANT: Create a COMPACT JSON chart using our hierarchical pattern language. Use advanced features for both musical effect AND compactness:\n"
-        "- Pattern references (reuse patterns instead of repeating)\n"
-        "- Variations (base pattern + bar-specific changes)\n"
-        "- Layers (combine multiple parts efficiently)\n"
-        "- Chord references (define once, reference everywhere)\n"
-        "- basePattern + variations (avoid repetitive barPatterns)\n\n"
-        "COMPACT JSON Format (DO NOT include primitives section):\n"
+    // System prompt template (note: actual system prompt comes from LLM client)
+    promptTemplates["music_generation_system"] = 
+        "You are a professional musician and music pattern generator. You have in depth knowledge of modern western music theory and practice and are capable of creating in genre and cross genre pieces with both catchy licks and sophisticated harmonies and complex rhythms as needed.\n"
+        "Use the Instrument definition and the compact musical json spec below to generate music in the style specified for the role specified to play the song specified.";
+    
+    // Compact user prompt template (shorter version to avoid token limits)
+    promptTemplates["music_generation_compact"] = 
+        "Create a {{style}} piece for {{instrument}}.\n"
+        "{{instrument_definition}}\n"
+        "Role: {{instrument_role_definition}} in ensemble with {{instrument_list}}.\n"
+        "Style: {{style}}. {{character}}\n\n"
+        "Use this JSON format with chord tone references:\n"
+        "```json\n"
         "{\n"
-        "  \"title\": \"Song Title\",\n"
-        "  \"tempo\": {{tempo}},\n"
-        "  \"chords\": {\n"
-        "    \"C\": [\"C3\", \"E3\", \"G3\"]\n"
-        "  },\n"
+        "  \"title\": \"Pattern Name\",\n"
+        "  \"tempo\": 120,\n"
+        "  \"chords\": {\"C\": [\"C3\", \"E3\", \"G3\"]},\n"
         "  \"patterns\": {\n"
-        "    \"verse_melody\": [\n"
-        "      [1.0, \"C4\", 0.8, 0.5],\n"
-        "      [1.5, \"D4\", 0.7, 0.25],\n"
-        "      [2.0, \"E4\", 0.9, 0.75],\n"
-        "      [3.0, {\"chord\": \"C\"}, 0.6, 1.0]\n"
+        "    \"main\": [\n"
+        "      [1.0, {\"t\": 1, \"o\": 2}, 0.8, 0.5],\n"
+        "      [2.0, {\"t\": 5, \"o\": 2}, 0.7, 0.5]\n"
         "    ]\n"
         "  },\n"
         "  \"sections\": {\n"
         "    \"verse\": {\n"
         "      \"bars\": 4,\n"
-        "      \"basePattern\": \"verse_melody\",\n"
-        "      \"variations\": {\n"
-        "        \"bar4\": [[4.0, \"E4\"]]\n"
-        "      },\n"
+        "      \"layers\": {\"melody\": {\"pattern\": \"main\"}}\n"
+        "    }\n"
+        "  },\n"
+        "  \"arrangement\": [\"verse\"]\n"
+        "}\n"
+        "```\n\n"
+        "Chord tones: t=1(root),3(third),5(fifth),7(seventh), o=octave. Use [beat, note, velocity, duration] format.\n"
+        "Song: {{song_to_compose}}\n\n"
+        "Respond with JSON only:";
+        
+    
+    // Full user prompt template  
+    promptTemplates["music_generation"] = 
+        "Create a {{style}} piece for {{instrument}}.\n"
+        "Instrument definition:\n"
+        "{{instrument_definition}}\n"
+        "Ensemble role: You're arranging for the {{instrument}} in an ensemble consisting of {{instrument_list}}. {{instrument_role_definition}} {{other_instrument_roles}}.\n"
+        "Keep it interesting, including complexity, variation and sycopation, and in line with the style, below.\n\n"
+        "Style: {{style}}. {{character}}\n\n"
+        "Requirements: There should be exactly the same number of bars as the song. Output must be in the Compact json format as described below. Respond with only JSON chart, no explanations or comments.\n\n"
+        "# Music Pattern Language - Compact Specification\n\n"
+        "## Core Structure\n\n"
+        "```json\n"
+        "{\n"
+        "  \"title\": \"Song Title\",\n"
+        "  \"tempo\": 120,\n"
+        "  \"chords\": { \"C\": [\"C3\", \"E3\", \"G3\"] },\n"
+        "  \"patterns\": { \"name\": [[beat, note, velocity, duration]] },\n"
+        "  \"sections\": { \"name\": { \"bars\": 4, \"layers\": {...} } },\n"
+        "  \"arrangement\": [\"section1\", \"section2\"]\n"
+        "}\n"
+        "```\n\n"
+        "## Note Format\n\n"
+        "**Basic**: `[beat, note, velocity, duration]`\n"
+        "- `beat`: 1.0=downbeat, 1.5=eighth, 2.0=beat 2\n"
+        "- `note`: \"C4\", \"F#3\", {\"chord\": \"C\"}, {\"tone\": 1}\n"
+        "- `velocity`: 0.0-1.0 (optional, default: 0.8)\n"
+        "- `duration`: beats (0.25=sixteenth, 0.5=eighth, 1.0=quarter)\n\n"
+        "## Note Types\n\n"
+        "### Fixed Notes\n"
+        "```json\n"
+        "[1.0, \"C4\", 0.9, 0.5]\n"
+        "```\n\n"
+        "### Chord References\n"
+        "```json\n"
+        "[1.0, {\"chord\": \"C\"}, 0.7, 2.0]\n"
+        "```\n\n"
+        "### **NEW: Chord Tone References**\n"
+        "```json\n"
+        "[1.0, {\"tone\": 1, \"octave\": 2}, 0.8, 0.5]\n"
+        "```\n"
+        "- `tone`: 1=root, 3=third, 5=fifth, 7=seventh, etc.\n"
+        "- `octave`: target octave (optional, default: 4)\n"
+        "- **Automatically adapts to chord context**\n\n"
+        "## Section Types\n\n"
+        "### Layers (Recommended)\n"
+        "```json\n"
+        "\"section\": {\n"
+        "  \"bars\": 4,\n"
+        "  \"layers\": {\n"
+        "    \"harmony\": [chord events],\n"
+        "    \"melody\": [note events],\n"
+        "    \"bass\": {\"pattern\": \"bassLine\"}\n"
+        "  }\n"
+        "}\n"
+        "```\n\n"
+        "### Pattern References\n"
+        "```json\n"
+        "\"layers\": {\n"
+        "  \"bass\": {\"pattern\": \"walkingBass\"}\n"
+        "}\n"
+        "```\n\n"
+        "### Multi-bar Direct Arrays\n"
+        "```json\n"
+        "\"layers\": {\n"
+        "  \"melody\": [\n"
+        "    [1.0, \"C4\", 0.9, 1.0],  // Bar 1\n"
+        "    [5.0, \"F4\", 0.9, 1.0]   // Bar 2 (beat 5 = bar 2, beat 1)\n"
+        "  ]\n"
+        "}\n"
+        "```\n\n"
+        "## Chord Tone Examples\n\n"
+        "### Adaptive Walking Bass\n"
+        "```json\n"
+        "\"patterns\": {\n"
+        "  \"walkingBass\": [\n"
+        "    [1.0, {\"tone\": 1, \"octave\": 2}, 0.8, 0.5],  // Root\n"
+        "    [1.5, {\"tone\": 5, \"octave\": 2}, 0.6, 0.5],  // Fifth\n"
+        "    [2.0, {\"tone\": 3, \"octave\": 2}, 0.8, 0.5],  // Third\n"
+        "    [2.5, {\"tone\": 1, \"octave\": 2}, 0.6, 0.5]   // Root\n"
+        "  ]\n"
+        "}\n"
+        "```\n\n"
+        "**This pattern automatically becomes:**\n"
+        "- Over C: C2, G2, E2, C2\n"
+        "- Over F: F2, C3, A2, F2\n"
+        "- Over Am: A2, E3, C3, A2\n\n"
+        "### Harmonic Comping\n"
+        "```json\n"
+        "\"patterns\": {\n"
+        "  \"comping\": [\n"
+        "    [1.0, {\"tone\": 1, \"octave\": 4}, 0.7, 0.5],\n"
+        "    [1.75, {\"tone\": 3, \"octave\": 4}, 0.6, 0.25],\n"
+        "    [2.25, {\"tone\": 5, \"octave\": 4}, 0.7, 0.5]\n"
+        "  ]\n"
+        "}\n"
+        "```\n\n"
+        "## Complete Example\n\n"
+        "```json\n"
+        "{\n"
+        "  \"title\": \"Jazz Standard\",\n"
+        "  \"tempo\": 120,\n"
+        "  \"chords\": {\n"
+        "    \"C\": [\"C3\", \"E3\", \"G3\"],\n"
+        "    \"F\": [\"F3\", \"A3\", \"C4\"],\n"
+        "    \"G\": [\"G3\", \"B3\", \"D4\"]\n"
+        "  },\n"
+        "  \"patterns\": {\n"
+        "    \"walkingBass\": [\n"
+        "      [1.0, {\"tone\": 1, \"octave\": 2}, 0.8, 0.5],\n"
+        "      [1.5, {\"tone\": 3, \"octave\": 2}, 0.6, 0.5],\n"
+        "      [2.0, {\"tone\": 5, \"octave\": 2}, 0.8, 0.5],\n"
+        "      [2.5, {\"tone\": 3, \"octave\": 2}, 0.6, 0.5]\n"
+        "    ]\n"
+        "  },\n"
+        "  \"sections\": {\n"
+        "    \"verse\": {\n"
+        "      \"bars\": 4,\n"
         "      \"layers\": {\n"
-        "        \"bass\": {\"pattern\": \"bass_line\"},\n"
-        "        \"harmony\": [[1.0, {\"chord\": \"C\"}], [3.0, {\"chord\": \"F\"}]]\n"
+        "        \"chords\": [\n"
+        "          [1.0, {\"chord\": \"C\"}, 0.7, 4.0],\n"
+        "          [5.0, {\"chord\": \"F\"}, 0.7, 4.0],\n"
+        "          [9.0, {\"chord\": \"G\"}, 0.7, 4.0],\n"
+        "          [13.0, {\"chord\": \"C\"}, 0.7, 4.0]\n"
+        "        ],\n"
+        "        \"bass\": {\"pattern\": \"walkingBass\"}\n"
         "      }\n"
         "    }\n"
         "  },\n"
-        "  \"arrangement\": [\"verse\", \"chorus\"]\n"
-        "}\n\n"
-        "NOTE FORMAT: [beat, note, velocity, duration]\n"
-        "- beat: when to play (1.0 = downbeat, 1.5 = eighth note, 2.0 = beat 2)\n"
-        "- note: note name (\"C4\", \"F#3\") or chord reference ({\"chord\": \"C\"})\n"
-        "- velocity: how loud (0.0-1.0, optional, defaults to 0.8)\n"
-        "- duration: how long in beats (0.25=sixteenth, 0.5=eighth, 1.0=quarter, 2.0=half)\n\n"
-        "RHYTHMIC VARIETY: Use different durations for musical interest:\n"
-        "- Short notes: 0.125 (32nd), 0.25 (16th)\n"
-        "- Medium notes: 0.5 (8th), 0.75 (dotted 8th)\n"
-        "- Long notes: 1.0 (quarter), 1.5 (dotted quarter), 2.0 (half)\n\n"
-        "COMPACTNESS RULES:\n"
-        "- Use [beat, note, velocity, duration] format for rhythmic variety\n"
-        "- Create patterns once, reference them multiple times\n"
-        "- Use basePattern + variations instead of barPatterns when possible\n"
-        "- Define chords once, reference with {\"chord\": \"name\"}\n"
-        "- Layer different parts efficiently\n"
-        "- Keep it musical but CONCISE\n\n"
-        "Use ONLY the provided primitive names. DO NOT create primitives section.\n"
-        "ONLY respond with valid JSON. DO NOT add explanations.";
+        "  \"arrangement\": [\"verse\"]\n"
+        "}\n"
+        "```\n\n"
+        "## Key Benefits\n\n"
+        "- **Chord Tones**: One pattern works with any chord progression\n"
+        "- **Compactness**: Minimal JSON for maximum musical expression\n"
+        "- **Flexibility**: Mix fixed notes, chords, and harmonic references\n"
+        "- **Legibility**: Clear musical relationships and structure\n\n"
+        "## Chord Context Resolution\n\n"
+        "Chord tone references automatically find the most recent `{\"chord\": \"name\"}` event at or before the current beat to resolve tone numbers to actual pitches.\n\n"
+        "Song to compose:\n\n"
+        "{{song_to_compose}}";
     
     // Template for pattern modification using JSON format
     promptTemplates["pattern_modification"] = 
@@ -267,10 +395,9 @@ void PromptManager::initializeDefaultTemplates()
         "Please make the following modifications: {{modification}}\n\n"
         "Modification guidelines:\n"
         "- Maintain the JSON structure and all existing sections unless specifically asked to change them\n"
-        "- Use our hierarchical pattern language features (T1-T8) as appropriate\n"
+        "- Use chord tone references {\"tone\": 1-7, \"octave\": 2-5} for adaptive harmony\n"
         "- Keep patterns consistent with the instrument capabilities shown in the original chart\n"
-        "- Preserve tempo and arrangement unless specifically requested to change\n"
-        "- DO NOT add or modify any primitives section - work with existing primitive names\n\n"
+        "- Preserve tempo and arrangement unless specifically requested to change\n\n"
         "Return the ENTIRE modified JSON chart, not just the changes.\n"
         "ONLY respond with valid JSON. DO NOT add explanations or comments outside the JSON.";
     
@@ -278,9 +405,8 @@ void PromptManager::initializeDefaultTemplates()
     promptTemplates["section_generation"] = 
         "You are a professional musician and music pattern generator. Create a {{section}} section for a {{style}} piece using these instruments: {{instruments}}.\n\n"
         "Additional instructions: {{description}}\n\n"
-        "{{instrument_definitions}}\n\n"
-        "Create a COMPACT JSON chart with ONLY the {{section}} section. Use advanced features for compactness:\n\n"
-        "COMPACT JSON Format (DO NOT include primitives section):\n"
+        "Create a COMPACT JSON chart with ONLY the {{section}} section using chord tone references:\n\n"
+        "COMPACT JSON Format:\n"
         "{\n"
         "  \"title\": \"{{section|title_case}}_Section\",\n"
         "  \"tempo\": 120,\n"
@@ -289,22 +415,20 @@ void PromptManager::initializeDefaultTemplates()
         "  },\n"
         "  \"patterns\": {\n"
         "    \"main\": [\n"
-        "      [1.0, \"note\"],\n"
-        "      [3.0, {\"chord\": \"I\"}]\n"
+        "      [1.0, {\"tone\": 1}, 0.8, 0.5],\n"
+        "      [2.0, {\"tone\": 5}, 0.7, 0.5]\n"
         "    ]\n"
         "  },\n"
         "  \"sections\": {\n"
         "    \"{{section}}\": {\n"
         "      \"bars\": 4,\n"
-        "      \"basePattern\": \"main\",\n"
         "      \"layers\": {\n"
-        "        \"harmony\": {\"pattern\": \"chord_pattern\"}\n"
+        "        \"harmony\": {\"pattern\": \"main\"}\n"
         "      }\n"
         "    }\n"
         "  }\n"
         "}\n\n"
-        "Use [beat, note] format. Reference patterns and chords. Keep it CONCISE.\n"
-        "Use ONLY provided primitive names. DO NOT create primitives section.\n"
+        "Use chord tone references for adaptive patterns. Keep it CONCISE.\n"
         "ONLY respond with valid JSON. DO NOT add explanations.";
 }
 
@@ -585,6 +709,105 @@ String PromptManager::createInstrumentDefinitionsFromPlayers(const std::vector<P
     }
     
     return instrumentDefs;
+}
+
+String PromptManager::getCompactMusicalJsonSpec()
+{
+    // This method is no longer used since the spec is embedded directly in the prompt template
+    // Keeping for backward compatibility
+    return "Compact Musical JSON Specification embedded in prompt template";
+}
+
+String PromptManager::getInstrumentDefinition(const String& instrument)
+{
+    String lowerInstrument = instrument.toLowerCase();
+    
+    if (instrumentDefinitions.hasProperty(Identifier(lowerInstrument)))
+    {
+        var def = instrumentDefinitions[Identifier(lowerInstrument)];
+        String instrumentDef = instrument + ":\n";
+        
+        // Add primitives
+        if (def.hasProperty("primitives") && def["primitives"].isObject())
+        {
+            auto* primitives = def["primitives"].getDynamicObject();
+            instrumentDef += "Available notes/sounds: ";
+            
+            StringArray primitiveNames;
+            for (auto& key : primitives->getProperties())
+                primitiveNames.add(key.name.toString());
+            
+            instrumentDef += primitiveNames.joinIntoString(", ") + "\n";
+        }
+        
+        // Add patterns
+        if (def.hasProperty("patterns") && def["patterns"].isObject())
+        {
+            auto* patterns = def["patterns"].getDynamicObject();
+            instrumentDef += "Common patterns: ";
+            
+            StringArray patternInfos;
+            for (auto& key : patterns->getProperties())
+            {
+                var pattern = patterns->getProperty(key.name);
+                if (pattern.isObject() && pattern.hasProperty("description"))
+                {
+                    patternInfos.add(pattern["description"].toString());
+                }
+            }
+            
+            instrumentDef += patternInfos.joinIntoString(", ") + "\n";
+        }
+        
+        return instrumentDef;
+    }
+    
+    // Fallback for unknown instruments
+    return instrument + ": Standard instrument capabilities";
+}
+
+String PromptManager::getInstrumentDefinitionFromPlayer(Player* player)
+{
+    if (!player)
+        return "Unknown instrument: No player provided";
+    
+    const auto& capabilities = player->getInstrumentCapabilities();
+    String instrumentDef = capabilities.instrumentType + " capabilities:\n";
+    
+    if (capabilities.type == InstrumentCapabilityType::NoteRange)
+    {
+        // For note range instruments (piano, guitar, bass, etc.)
+        instrumentDef += "Note range: MIDI " + String(capabilities.minNote) + " to " + String(capabilities.maxNote) + "\n";
+        instrumentDef += "Use standard MIDI note names (e.g., \"C4\", \"F#3\", \"Bb2\") - the system will convert these to MIDI numbers automatically.\n";
+        
+        // Add some example notes for context
+        if (capabilities.instrumentType == "piano")
+        {
+            instrumentDef += "Example notes: C2, C3, C4 (middle C), C5, C6\n";
+        }
+        else if (capabilities.instrumentType == "bass")
+        {
+            instrumentDef += "Example notes: E1, A1, D2, G2, C3, F3\n";
+        }
+        else if (capabilities.instrumentType == "guitar")
+        {
+            instrumentDef += "Example notes: E2, A2, D3, G3, B3, E4\n";
+        }
+    }
+    else if (capabilities.type == InstrumentCapabilityType::Mapping)
+    {
+        // For mapped instruments (drums, percussion, etc.)
+        instrumentDef += "Available sounds (use these exact names in your patterns):\n";
+        
+        for (const auto& mapping : capabilities.soundMappings)
+        {
+            instrumentDef += "- \"" + mapping.first + "\" (MIDI " + String(mapping.second) + ")\n";
+        }
+        
+        instrumentDef += "\nIMPORTANT: Use the sound names (like \"kick\", \"snare\", \"hihat\") NOT the MIDI numbers in your JSON patterns.\n";
+    }
+    
+    return instrumentDef;
 }
 
 } //namespace covertracks
