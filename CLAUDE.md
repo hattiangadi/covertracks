@@ -12,8 +12,19 @@
 - [x] Define component boundaries for cleanup
 - [x] Sprint planning structure
 - [x] Remove obvious dead code (Temp/, backup files)
+- [x] **BONUS**: Set up complete CMake build for testing/analysis (parallel to Xcode)
+- [x] **BONUS**: Set up clang-tidy configuration with CMake compilation database
+- [ ] **BONUS**: Install clang-tidy and run first analysis
 
-**Next: STAGE 2 - Audio Engine Rearchitecture**
+**STAGE 2: Audio Engine Rearchitecture** 🎵 *IN PROGRESS*
+- [ ] Document new single AudioEngine design  
+- [ ] Create AudioEngine tests (TDD approach)
+- [ ] Implement centralized AudioEngine
+- [ ] Migrate Players to shared AudioEngine
+- [ ] Remove old per-Player AudioEngine code  
+- [ ] **CRITICAL**: Fix performance mode clicking issues
+
+**Next: STAGE 3 - Component Consolidation**
 
 ## Architecture Quick Reference
 - **[Audio System](docs/audio-architecture.md)**: AudioEngine singleton, Player/Instrument chain

@@ -6,53 +6,46 @@ namespace covertracks {
 
 PlayerManager::PlayerManager()
 {
-    std::cout << "[PlayerManager] Constructor starting..." << std::endl;
+    // std::cout << "[PlayerManager] Constructor starting..." << std::endl;
     
-    // Create and own the plugin format manager
-    std::cout << "[PlayerManager] Creating plugin format manager" << std::endl;
-    formatManager = std::make_unique<AudioPluginFormatManager>();
-    formatManager->addDefaultFormats();
+    // Get singleton AudioEngine which owns the formatManager and knownPluginList
+    // std::cout << "[PlayerManager] Getting AudioEngine singleton for plugin setup" << std::endl;
+    auto& audioEngine = AudioEngine::getInstance();
+    auto& formatManager = audioEngine.getFormatManager();
+    auto& knownPluginList = audioEngine.getKnownPluginList();
     
     // Create a single internal plugin format that will be owned by the formatManager
-    std::cout << "[PlayerManager] Creating internal plugin format" << std::endl;
+    // std::cout << "[PlayerManager] Creating internal plugin format" << std::endl;
     auto* internalFormat = new InternalPluginFormat();
-    formatManager->addFormat(internalFormat); // formatManager takes ownership
+    formatManager.addFormat(internalFormat); // formatManager takes ownership
     
     // Store a non-owning pointer to the internal format for our use
     internalPluginFormat = internalFormat;
     
     // Get the internal plugin types but don't store them as copies
     // This avoids the PluginDescription leak
-    std::cout << "[PlayerManager] Getting internal plugin types" << std::endl;
+    // std::cout << "[PlayerManager] Getting internal plugin types" << std::endl;
     auto types = internalPluginFormat->getAllTypes();
-    std::cout << "[PlayerManager] Got " << types.size() << " internal plugin types" << std::endl;
-    
-    // Create and own the plugin list
-    std::cout << "[PlayerManager] Creating known plugin list" << std::endl;
-    knownPluginList = std::make_unique<KnownPluginList>();
+    // std::cout << "[PlayerManager] Got " << types.size() << " internal plugin types" << std::endl;
     
     // Add internal plugin types to the known plugin list
     // Use the types directly from the format to avoid creating copies
-    std::cout << "[PlayerManager] Adding internal plugin types to known plugin list" << std::endl;
+    // std::cout << "[PlayerManager] Adding internal plugin types to known plugin list" << std::endl;
     for (auto& type : types)
     {
         // Add the type by reference to avoid creating a copy
-        knownPluginList->addType(type);
+        knownPluginList.addType(type);
     }
     
-    // Create our own AudioEngine instance with enhanced capabilities
-    std::cout << "[PlayerManager] Creating AudioEngine" << std::endl;
-    audioEngine = std::make_unique<AudioEngine>(*formatManager, *knownPluginList);
+    // std::cout << "[PlayerManager] AudioEngine singleton ready with sample rate: " 
+              // << audioEngine.getSampleRate() << "Hz, buffer size: "
+              // << audioEngine.getBufferSize() << " samples" << std::endl;
     
-    std::cout << "[PlayerManager] AudioEngine created with sample rate: " 
-              << audioEngine->getSampleRate() << "Hz, buffer size: "
-              << audioEngine->getBufferSize() << " samples" << std::endl;
-    
-    std::cout << "[PlayerManager] Loading all players" << std::endl;
+    // std::cout << "[PlayerManager] Loading all players" << std::endl;
     loadAllPlayers();
     llmApiKey = String();
 
-    std::cout << "[PlayerManager] Constructor complete" << std::endl;
+    // std::cout << "[PlayerManager] Constructor complete" << std::endl;
 }
 
 PlayerManager::~PlayerManager()
@@ -60,53 +53,30 @@ PlayerManager::~PlayerManager()
     try
     {
         // Log the start of cleanup with detailed address information
-        std::cout << "PlayerManager destructor: Starting cleanup of " << players.size() << " players" << std::endl;
-        std::cout << "  audioEngine address: " << audioEngine.get() << std::endl;
-        std::cout << "  knownPluginList address: " << knownPluginList.get() << std::endl;
-        std::cout << "  formatManager address: " << formatManager.get() << std::endl;
-        std::cout << "  internalPluginFormat address: " << internalPluginFormat << std::endl;
+        // std::cout << "PlayerManager destructor: Starting cleanup of " << players.size() << " players" << std::endl;
+        // std::cout << "  AudioEngine singleton in use (not owned by PlayerManager)" << std::endl;
+        // std::cout << "  internalPluginFormat address: " << internalPluginFormat << std::endl;
         
         // Deactivate any active player
-        std::cout << "PlayerManager destructor: Deactivating active player" << std::endl;
+        // std::cout << "PlayerManager destructor: Deactivating active player" << std::endl;
         if (activePlayer != nullptr)
             deactivatePlayer(activePlayer);
         
         // Clear all players - this will call each Player's destructor
         // which in turn will clean up their Instruments
-        std::cout << "PlayerManager destructor: Clearing players array" << std::endl;
+        // std::cout << "PlayerManager destructor: Clearing players array" << std::endl;
         players.clear();
-        std::cout << "PlayerManager destructor: Players cleared" << std::endl;
+        // std::cout << "PlayerManager destructor: Players cleared" << std::endl;
         
-        // Explicitly destroy each member in a controlled order with detailed logging
-        std::cout << "PlayerManager destructor: Explicitly destroying audioEngine" << std::endl;
-        audioEngine.reset();
-        std::cout << "PlayerManager destructor: audioEngine destroyed" << std::endl;
-        
-        std::cout << "PlayerManager destructor: Explicitly destroying knownPluginList" << std::endl;
-        knownPluginList.reset();
-        std::cout << "PlayerManager destructor: knownPluginList destroyed" << std::endl;
-        
-        // Before destroying formatManager, log its state
-        if (formatManager)
-        {
-            std::cout << "PlayerManager destructor: formatManager has " << formatManager->getNumFormats() << " formats" << std::endl;
-            for (int i = 0; i < formatManager->getNumFormats(); ++i)
-            {
-                auto* format = formatManager->getFormat(i);
-                std::cout << "  Format " << i << ": " << format->getName() << " (address: " << format << ")" << std::endl;
-            }
-        }
-        
-        std::cout << "PlayerManager destructor: Explicitly destroying formatManager" << std::endl;
-        formatManager.reset();
-        std::cout << "PlayerManager destructor: formatManager destroyed" << std::endl;
+        // AudioEngine, formatManager, and knownPluginList are now owned by singleton
+        // No explicit cleanup needed for these resources
         
         // We don't reset the static plugin format here, as it should persist
         // Just set our pointer to null
-        std::cout << "PlayerManager destructor: Setting internalPluginFormat to nullptr" << std::endl;
+        // std::cout << "PlayerManager destructor: Setting internalPluginFormat to nullptr" << std::endl;
         internalPluginFormat = nullptr;
         
-        std::cout << "PlayerManager destructor: All resources cleaned up successfully" << std::endl;
+        // std::cout << "PlayerManager destructor: All resources cleaned up successfully" << std::endl;
     }
     catch (const std::exception& e)
     {
@@ -129,8 +99,8 @@ void PlayerManager::activatePlayer(Player* player)
     // Prepare player for playback
     player->prepareForPlayback();
     
-    // Connect to AudioEngine
-    if (!player->connectToAudioEngine(audioEngine.get()))
+    // Connect to AudioEngine singleton
+    if (!player->connectToAudioEngine(&AudioEngine::getInstance()))
     {
         std::cerr << "Failed to connect player to AudioEngine" << std::endl;
         player->releaseResources();
@@ -142,13 +112,14 @@ void PlayerManager::activatePlayer(Player* player)
     {
         if (auto* processorGraph = instrument->getProcessorGraph())
         {
-            audioEngine->addPlayerGraph(*processorGraph);
+            // Note: addPlayerGraph method not yet implemented in new AudioEngine
+            // TODO: Implement player graph integration when ready
         }
     }
     
     // Set as active player
     activePlayer = player;
-    std::cout << "Player " << player->getMetadata().name << " activated" << std::endl;
+    // std::cout << "Player " << player->getMetadata().name << " activated" << std::endl;
 }
 
 void PlayerManager::deactivatePlayer(Player* player)
@@ -161,10 +132,8 @@ void PlayerManager::deactivatePlayer(Player* player)
     {
         if (auto* processorGraph = instrument->getProcessorGraph())
         {
-            // Get the node ID of the player graph in the main processor graph
-            auto nodeId = audioEngine->getPlayerGraphNodeId(processorGraph);
-            if (nodeId.uid != 0) // Valid node ID
-                audioEngine->removePlayerGraph(nodeId);
+            // Note: Player graph removal not yet implemented in new AudioEngine
+            // TODO: Implement player graph removal when ready
         }
     }
     
@@ -176,7 +145,7 @@ void PlayerManager::deactivatePlayer(Player* player)
     
     // Clear active player
     activePlayer = nullptr;
-    std::cout << "Player " << player->getMetadata().name << " deactivated" << std::endl;
+    // std::cout << "Player " << player->getMetadata().name << " deactivated" << std::endl;
 }
 
 bool PlayerManager::isPlayerActive(Player* player) const
@@ -240,7 +209,7 @@ bool PlayerManager::savePlayer(Player* player)
     // If the player isn't in our list, add it
     if (!playerInList)
     {
-        std::cout << "Adding player to manager: " << metadata.name << std::endl;
+        // std::cout << "Adding player to manager: " << metadata.name << std::endl;
         players.add(player);
         
         // Notify listeners that a player was added
@@ -251,7 +220,7 @@ bool PlayerManager::savePlayer(Player* player)
     bool graphSaved = player->saveGraphState();
     if (graphSaved)
     {
-        std::cout << "Graph state saved successfully for player: " << metadata.name << std::endl;
+        // std::cout << "Graph state saved successfully for player: " << metadata.name << std::endl;
     }
     
     // Convert to JSON
@@ -265,13 +234,13 @@ bool PlayerManager::savePlayer(Player* player)
     bool success = playerFile.replaceWithText(jsonStr);
     
     if (success) {
-        std::cout << "Saved player to file: " << playerFile.getFullPathName() << std::endl;
+        // std::cout << "Saved player to file: " << playerFile.getFullPathName() << std::endl;
         
         // Notify listeners that a player was saved
         sendChangeMessage();
     }
     else {
-        std::cout << "Failed to save player to file: " << playerFile.getFullPathName() << std::endl;
+        // std::cout << "Failed to save player to file: " << playerFile.getFullPathName() << std::endl;
     }
         
     return success;
@@ -295,7 +264,7 @@ bool PlayerManager::savePlayerAndTakeOwnership(std::unique_ptr<Player> player)
     bool graphSaved = playerPtr->saveGraphState();
     if (graphSaved)
     {
-        std::cout << "Graph state saved successfully for player: " << metadata.name << std::endl;
+        // std::cout << "Graph state saved successfully for player: " << metadata.name << std::endl;
     }
     
     // Convert to JSON
@@ -310,7 +279,7 @@ bool PlayerManager::savePlayerAndTakeOwnership(std::unique_ptr<Player> player)
     
     if (success)
     {
-        std::cout << "Saved player to file: " << playerFile.getFullPathName() << std::endl;
+        // std::cout << "Saved player to file: " << playerFile.getFullPathName() << std::endl;
         
         // Take ownership of the player and add it to our list
         // This will replace any existing player with the same pointer
@@ -325,11 +294,11 @@ bool PlayerManager::savePlayerAndTakeOwnership(std::unique_ptr<Player> player)
         
         // Now add the player we own
         players.add(player.release());
-        std::cout << "Player ownership transferred to PlayerManager" << std::endl;
+        // std::cout << "Player ownership transferred to PlayerManager" << std::endl;
     }
     else
     {
-        std::cout << "Failed to save player to file: " << playerFile.getFullPathName() << std::endl;
+        // std::cout << "Failed to save player to file: " << playerFile.getFullPathName() << std::endl;
     }
     
     return success;
@@ -340,8 +309,9 @@ std::unique_ptr<Player> PlayerManager::createPlayer()
     // Generate a unique ID
     String id = String::toHexString(Random::getSystemRandom().nextInt());
     
-    // Create a new player with default settings, passing the AudioEngine as a raw pointer
-    auto player = std::make_unique<Player>(id, "New Player", *formatManager, *knownPluginList, audioEngine.get());
+    // Create a new player with default settings, using singleton AudioEngine
+    auto& audioEngine = AudioEngine::getInstance();
+    auto player = std::make_unique<Player>(id, "New Player", audioEngine.getFormatManager(), audioEngine.getKnownPluginList(), &audioEngine);
     player->initialize();
     
     // Set default metadata
@@ -354,7 +324,7 @@ std::unique_ptr<Player> PlayerManager::createPlayer()
     // Ensure the player is fully prepared for playback
     if (!player->isReadyForPlayback())
     {
-        std::cout << "Preparing new player for playback" << std::endl;
+        // std::cout << "Preparing new player for playback" << std::endl;
         player->prepareForPlayback();
     }
     
@@ -373,8 +343,9 @@ std::unique_ptr<Player> PlayerManager::loadPlayer(const File& file)
     
     if (result.wasOk() && json.isObject())
     {
-        // Use the fromVar method to create a player with the shared format manager and plugin list
-        return Player::fromVar(json, *formatManager, *knownPluginList, audioEngine.get());
+        // Use the fromVar method to create a player with the singleton AudioEngine
+        auto& audioEngine = AudioEngine::getInstance();
+        return Player::fromVar(json, audioEngine.getFormatManager(), audioEngine.getKnownPluginList(), &audioEngine);
     }
     
     return nullptr;
@@ -397,23 +368,23 @@ bool PlayerManager::deletePlayer(Player* player)
                       .getChildFile("Graphs")
                       .getChildFile(player->getId() + ".filtergraph");
     
-    std::cout << "Deleting player: " << metadata.name << " (ID: " << player->getId() << ")" << std::endl;
-    std::cout << "Player file: " << playerFile.getFullPathName() << std::endl;
-    std::cout << "Graph file: " << graphFile.getFullPathName() << std::endl;
+    // std::cout << "Deleting player: " << metadata.name << " (ID: " << player->getId() << ")" << std::endl;
+    // std::cout << "Player file: " << playerFile.getFullPathName() << std::endl;
+    // std::cout << "Graph file: " << graphFile.getFullPathName() << std::endl;
     
     // Delete the files
     bool playerFileDeleted = true;
     if (playerFile.existsAsFile())
     {
         playerFileDeleted = playerFile.deleteFile();
-        std::cout << "Player file deleted: " << (playerFileDeleted ? "yes" : "no") << std::endl;
+        // std::cout << "Player file deleted: " << (playerFileDeleted ? "yes" : "no") << std::endl;
     }
     
     bool graphFileDeleted = true;
     if (graphFile.existsAsFile())
     {
         graphFileDeleted = graphFile.deleteFile();
-        std::cout << "Graph file deleted: " << (graphFileDeleted ? "yes" : "no") << std::endl;
+        // std::cout << "Graph file deleted: " << (graphFileDeleted ? "yes" : "no") << std::endl;
     }
     
     // Remove from the list
@@ -439,12 +410,12 @@ void PlayerManager::loadAllPlayers()
     
     // Get the players directory
     File playersDir = getPlayersDirectory();
-    std::cout << "Loading players with minimal resources from directory: " << playersDir.getFullPathName() << std::endl;
+    // std::cout << "Loading players with minimal resources from directory: " << playersDir.getFullPathName() << std::endl;
     
     // Create the directory if it doesn't exist
     if (!playersDir.exists())
     {
-        std::cout << "Players directory doesn't exist, creating it." << std::endl;
+        // std::cout << "Players directory doesn't exist, creating it." << std::endl;
         playersDir.createDirectory();
         return;
     }
@@ -454,39 +425,39 @@ void PlayerManager::loadAllPlayers()
     
     // Try both .player and .json extensions since we might have old files
     playersDir.findChildFiles(playerFiles, File::findFiles, false, "*.player");
-    std::cout << "Found " << playerFiles.size() << " .player files" << std::endl;
+    // std::cout << "Found " << playerFiles.size() << " .player files" << std::endl;
     
     // Also look for .json files and add them to the array
     Array<File> jsonFiles;
     playersDir.findChildFiles(jsonFiles, File::findFiles, false, "*.json");
-    std::cout << "Found " << jsonFiles.size() << " .json files" << std::endl;
+    // std::cout << "Found " << jsonFiles.size() << " .json files" << std::endl;
     
     // Add json files to player files
     playerFiles.addArray(jsonFiles);
     
     if (playerFiles.isEmpty())
     {
-        std::cout << "No player files found in directory" << std::endl;
+        // std::cout << "No player files found in directory" << std::endl;
         return;
     }
     
     // Load each player file with minimal resources
     for (auto& file : playerFiles)
     {
-        std::cout << "Loading player with minimal resources from file: " << file.getFileName() << std::endl;
+        // std::cout << "Loading player with minimal resources from file: " << file.getFileName() << std::endl;
         auto player = loadPlayer(file);
         if (player != nullptr)
         {
-            std::cout << "Successfully loaded player with minimal resources: " << player->getMetadata().name << std::endl;
+            // std::cout << "Successfully loaded player with minimal resources: " << player->getMetadata().name << std::endl;
             addPlayer(std::move(player));
         }
         else
         {
-            std::cout << "Failed to load player from file: " << file.getFileName() << std::endl;
+            // std::cout << "Failed to load player from file: " << file.getFileName() << std::endl;
         }
     }
     
-    std::cout << "Loaded " << players.size() << " players with minimal resources in total" << std::endl;
+    // std::cout << "Loaded " << players.size() << " players with minimal resources in total" << std::endl;
 }
 
 bool PlayerManager::playPattern(Player* player, const var& pattern, double tempo)
@@ -497,20 +468,20 @@ bool PlayerManager::playPattern(Player* player, const var& pattern, double tempo
         return false;
     }
     
-    std::cout << "===== PLAYING PATTERN ON PLAYER: " << player->getMetadata().name << " =====" << std::endl;
+    // std::cout << "===== PLAYING PATTERN ON PLAYER: " << player->getMetadata().name << " =====" << std::endl;
     
     // Make sure the player is prepared for playback
     if (!player->isReadyForPlayback())
     {
-        std::cout << "Preparing player " << player->getMetadata().name << " for playback" << std::endl;
+        // std::cout << "Preparing player " << player->getMetadata().name << " for playback" << std::endl;
         player->prepareForPlayback();
     }
     
     // Connect to AudioEngine if not already connected
     if (!player->isConnectedToAudioEngine())
     {
-        std::cout << "Connecting player " << player->getMetadata().name << " to AudioEngine" << std::endl;
-        if (!player->connectToAudioEngine(audioEngine.get()))
+        // std::cout << "Connecting player " << player->getMetadata().name << " to AudioEngine" << std::endl;
+        if (!player->connectToAudioEngine(&AudioEngine::getInstance()))
         {
             std::cerr << "Failed to connect player to AudioEngine" << std::endl;
             return false;
@@ -520,8 +491,8 @@ bool PlayerManager::playPattern(Player* player, const var& pattern, double tempo
     // Ensure the player is activated in the AudioEngine
     if (player != activePlayer)
     {
-        std::cout << "Activating player " << player->getMetadata().name << " in AudioEngine" << std::endl;
-        audioEngine->activatePlayer(player);
+        // std::cout << "Activating player " << player->getMetadata().name << " in AudioEngine" << std::endl;
+        AudioEngine::getInstance().activatePlayer(player);
     }
     
     // Make sure the player's processor is registered with the AudioEngine
@@ -529,8 +500,9 @@ bool PlayerManager::playPattern(Player* player, const var& pattern, double tempo
     {
         if (auto* processorGraph = instrument->getProcessorGraph())
         {
-            std::cout << "Registering processor for player " << player->getMetadata().name << std::endl;
-            audioEngine->registerProcessor(processorGraph);
+            // std::cout << "Registering processor for player " << player->getMetadata().name << std::endl;
+            // Note: registerProcessor method not available in new AudioEngine
+            // Player registration handles this automatically
         }
         else
         {
@@ -545,7 +517,7 @@ bool PlayerManager::playPattern(Player* player, const var& pattern, double tempo
     }
     
     // Load and play the chart
-    std::cout << "Loading and playing chart on player: " << player->getMetadata().name << std::endl;
+    // std::cout << "Loading and playing chart on player: " << player->getMetadata().name << std::endl;
     
     // Create a chart object with the pattern data
     DynamicObject* chartObj = new DynamicObject();
@@ -558,7 +530,7 @@ bool PlayerManager::playPattern(Player* player, const var& pattern, double tempo
     
     if (result)
     {
-        std::cout << "Successfully started pattern playback on player: " << player->getMetadata().name << std::endl;
+        // std::cout << "Successfully started pattern playback on player: " << player->getMetadata().name << std::endl;
     }
     else
     {
@@ -606,13 +578,13 @@ void PlayerManager::stopPlayback(Player* player)
     if (player != nullptr)
     {
         // Stop playback for the specified player
-        std::cout << "Stopping playback for player: " << player->getMetadata().name << std::endl;
+        // std::cout << "Stopping playback for player: " << player->getMetadata().name << std::endl;
         player->stopPlayback();
     }
     else
     {
         // Stop playback for all players
-        std::cout << "Stopping playback for all players" << std::endl;
+        // std::cout << "Stopping playback for all players" << std::endl;
         for (auto* p : players)
         {
             p->stopPlayback();

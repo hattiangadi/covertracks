@@ -1,0 +1,347 @@
+#include <JuceHeader.h>
+#include "../Audio/AudioEngine.h"
+#include "../Player/Core/Player.h"
+
+namespace covertracks {
+
+/**
+ * @brief Comprehensive test suite for the new AudioEngine architecture
+ * 
+ * Tests the centralized AudioEngine singleton that manages all audio resources
+ * and coordinates multiple Players without conflicts.
+ */
+class AudioEngineTests : public juce::UnitTest
+{
+public:
+    AudioEngineTests() : juce::UnitTest("AudioEngine Tests", "Audio") {}
+
+    void runTest() override
+    {
+        beginTest("AudioEngine Singleton Access");
+        testSingletonAccess();
+        
+        beginTest("Resource Ownership");
+        testResourceOwnership();
+        
+        beginTest("Player Registration");
+        testPlayerRegistration();
+        
+        beginTest("Thread Safety");
+        testThreadSafety();
+        
+        beginTest("MIDI Routing");
+        testMidiRouting();
+        
+        beginTest("Audio Quality Monitoring");
+        testAudioQualityMonitoring();
+        
+        beginTest("Multi-Player Coordination");
+        testMultiPlayerCoordination();
+        
+        beginTest("Buffer Underrun Prevention");
+        testBufferUnderrunPrevention();
+        
+        beginTest("Performance Mode Stress Test");
+        testPerformanceModeStressTest();
+    }
+
+private:
+    void testSingletonAccess()
+    {
+        // Test singleton pattern
+        auto& engine1 = AudioEngine::getInstance();
+        auto& engine2 = AudioEngine::getInstance();
+        
+        // Should be the same instance
+        expect(&engine1 == &engine2, "AudioEngine should be singleton");
+        
+        // Should have valid components
+        expect(&engine1.getDeviceManager() != nullptr, "DeviceManager should be valid");
+        expect(&engine1.getFormatManager() != nullptr, "FormatManager should be valid");
+        expect(&engine1.getKnownPluginList() != nullptr, "KnownPluginList should be valid");
+    }
+    
+    void testResourceOwnership()
+    {
+        auto& engine = AudioEngine::getInstance();
+        
+        // AudioEngine should own all resources
+        auto& deviceManager = engine.getDeviceManager();
+        auto& formatManager = engine.getFormatManager();
+        auto& pluginList = engine.getKnownPluginList();
+        
+        // Resources should be consistently accessible
+        expect(&engine.getDeviceManager() == &deviceManager, "DeviceManager ownership should be stable");
+        expect(&engine.getFormatManager() == &formatManager, "FormatManager ownership should be stable");
+        expect(&engine.getKnownPluginList() == &pluginList, "PluginList ownership should be stable");
+        
+        // Resources should be properly initialized
+        expect(deviceManager.getCurrentAudioDevice() != nullptr, "Audio device should be available");
+        expect(formatManager.getNumFormats() > 0, "Plugin formats should be registered");
+    }
+    
+    void testPlayerRegistration()
+    {
+        auto& engine = AudioEngine::getInstance();
+        
+        // Create test players
+        auto player1 = createTestPlayer("TestPlayer1");
+        auto player2 = createTestPlayer("TestPlayer2");
+        
+        if (!player1 || !player2) {
+            expect(false, "Test skipped - could not create test players");
+            return;
+        }
+        
+        // Register players
+        expect(engine.registerPlayer(player1.get()), "Player1 registration should succeed");
+        expect(engine.registerPlayer(player2.get()), "Player2 registration should succeed");
+        
+        // Cannot register same player twice
+        expect(!engine.registerPlayer(player1.get()), "Duplicate registration should fail");
+        
+        // Activate players
+        expect(engine.activatePlayer(player1.get()), "Player1 activation should succeed");
+        expect(engine.activatePlayer(player2.get()), "Player2 activation should succeed");
+        
+        // Deactivate players
+        engine.deactivatePlayer(player1.get());
+        engine.deactivatePlayer(player2.get());
+        
+        // Unregister players
+        engine.unregisterPlayer(player1.get());
+        engine.unregisterPlayer(player2.get());
+    }
+    
+    void testThreadSafety()
+    {
+        auto& engine = AudioEngine::getInstance();
+        
+        // Create multiple players for concurrent access
+        std::vector<std::unique_ptr<Player>> players;
+        for (int i = 0; i < 10; ++i) {
+            players.push_back(createTestPlayer("ConcurrentPlayer" + String(i)));
+        }
+        
+        // Test concurrent registration/unregistration
+        std::vector<std::thread> threads;
+        std::atomic<int> successfulRegistrations{0};
+        
+        for (auto& player : players) {
+            threads.emplace_back([&engine, &player, &successfulRegistrations]() {
+                if (engine.registerPlayer(player.get())) {
+                    ++successfulRegistrations;
+                    
+                    // Simulate some work
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    
+                    engine.unregisterPlayer(player.get());
+                }
+            });
+        }
+        
+        // Wait for all threads
+        for (auto& thread : threads) {
+            thread.join();
+        }
+        
+        expect(successfulRegistrations.load() == static_cast<int>(players.size()), 
+               "All concurrent registrations should succeed");
+    }
+    
+    void testMidiRouting()
+    {
+        auto& engine = AudioEngine::getInstance();
+        
+        // Create test player with MIDI callback
+        auto player = createTestPlayer("MidiTestPlayer");
+        
+        if (!player) {
+            expect(false, "Test skipped - could not create test player");
+            return;
+        }
+        
+        // Mock MIDI callback to count received messages
+        std::atomic<int> midiMessagesReceived{0};
+        // TODO: Add MIDI callback when Player interface supports it
+        // player->setMidiCallback([&midiMessagesReceived](const MidiMessage&) {
+        //     ++midiMessagesReceived;
+        // });
+        
+        // Register and activate player
+        engine.registerPlayer(player.get());
+        engine.activatePlayer(player.get());
+        
+        // Send MIDI messages
+        for (int i = 0; i < 5; ++i) {
+            MidiMessage noteOn = MidiMessage::noteOn(1, 60 + i, 0.8f);
+            engine.routeMidiToPlayer(player.get(), noteOn);
+        }
+        
+        // Allow time for message processing
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        
+        // For now, just verify the routing doesn't crash and player is still active
+        // TODO: Verify actual message reception when Player supports MIDI callbacks
+        expect(engine.isPlayerActive(player.get()), "Player should remain active after MIDI routing");
+        
+        // Cleanup
+        engine.deactivatePlayer(player.get());
+        engine.unregisterPlayer(player.get());
+    }
+    
+    void testAudioQualityMonitoring()
+    {
+        auto& engine = AudioEngine::getInstance();
+        
+        // Initially should have good quality
+        expect(engine.isAudioQualityGood(), "Initial audio quality should be good");
+        
+        // CPU usage should be reasonable
+        double cpuUsage = engine.getCpuUsage();
+        expect(cpuUsage >= 0.0 && cpuUsage <= 1.0, "CPU usage should be in valid range");
+        
+        // Buffer underruns should be minimal
+        int underruns = engine.getBufferUnderruns();
+        expect(underruns >= 0, "Buffer underruns should be non-negative");
+        
+        // TODO: Test quality degradation scenarios
+    }
+    
+    void testMultiPlayerCoordination()
+    {
+        auto& engine = AudioEngine::getInstance();
+        
+        // Create multiple players
+        std::vector<std::unique_ptr<Player>> players;
+        for (int i = 0; i < 5; ++i) {
+            auto player = createTestPlayer("EnsemblePlayer" + String(i));
+            players.push_back(std::move(player));
+        }
+        
+        // Register all players
+        for (auto& player : players) {
+            expect(engine.registerPlayer(player.get()), 
+                   "Multi-player registration should succeed");
+        }
+        
+        // Activate all players simultaneously
+        for (auto& player : players) {
+            expect(engine.activatePlayer(player.get()), 
+                   "Multi-player activation should succeed");
+        }
+        
+        // Verify audio quality remains good with multiple players
+        expect(engine.isAudioQualityGood(), 
+               "Audio quality should remain good with multiple players");
+        
+        // Cleanup all players
+        for (auto& player : players) {
+            engine.deactivatePlayer(player.get());
+            engine.unregisterPlayer(player.get());
+        }
+    }
+    
+    void testBufferUnderrunPrevention()
+    {
+        auto& engine = AudioEngine::getInstance();
+        
+        // Record initial underrun count
+        int initialUnderruns = engine.getBufferUnderruns();
+        
+        // Create players and simulate heavy load
+        std::vector<std::unique_ptr<Player>> players;
+        for (int i = 0; i < 8; ++i) {
+            auto player = createTestPlayer("LoadTestPlayer" + String(i));
+            players.push_back(std::move(player));
+        }
+        
+        // Register and activate all players
+        for (auto& player : players) {
+            engine.registerPlayer(player.get());
+            engine.activatePlayer(player.get());
+        }
+        
+        // Simulate audio processing for a period
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        
+        // Check that underruns haven't significantly increased
+        int finalUnderruns = engine.getBufferUnderruns();
+        int newUnderruns = finalUnderruns - initialUnderruns;
+        
+        expect(newUnderruns <= 2, "Buffer underruns should be minimal under load");
+        
+        // Cleanup
+        for (auto& player : players) {
+            engine.deactivatePlayer(player.get());
+            engine.unregisterPlayer(player.get());
+        }
+    }
+    
+    void testPerformanceModeStressTest()
+    {
+        auto& engine = AudioEngine::getInstance();
+        
+        // This test simulates the performance mode scenario that causes clicking
+        
+        // Create ensemble of players
+        std::vector<std::unique_ptr<Player>> ensemble;
+        for (int i = 0; i < 6; ++i) {  // Typical ensemble size
+            auto player = createTestPlayer("PerformancePlayer" + String(i));
+            ensemble.push_back(std::move(player));
+        }
+        
+        // Register and activate all players
+        for (auto& player : ensemble) {
+            engine.registerPlayer(player.get());
+            engine.activatePlayer(player.get());
+        }
+        
+        // Simulate simultaneous pattern playback (the clicking scenario)
+        for (auto& player : ensemble) {
+            // TODO: Start pattern playback when Player interface is updated
+            // player->startPatternPlayback();
+            juce::ignoreUnused(player);
+        }
+        
+        // Monitor audio quality during stress test
+        bool qualityGood = true;
+        for (int i = 0; i < 10; ++i) {  // Monitor for 100ms
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            if (!engine.isAudioQualityGood()) {
+                qualityGood = false;
+                break;
+            }
+        }
+        
+        expect(qualityGood, "Audio quality should remain good during performance mode");
+        
+        // Cleanup
+        for (auto& player : ensemble) {
+            engine.deactivatePlayer(player.get());
+            engine.unregisterPlayer(player.get());
+        }
+    }
+    
+    // Helper method to create test players
+    std::unique_ptr<Player> createTestPlayer(const String& name)
+    {
+        // For now, create a minimal test player using existing constructor
+        try {
+            auto& audioEngine = AudioEngine::getInstance();
+            auto player = std::make_unique<Player>("test_" + name, name, 
+                                                 audioEngine.getFormatManager(), 
+                                                 audioEngine.getKnownPluginList(), 
+                                                 &audioEngine);
+            return player;
+        } catch (...) {
+            // If Player construction fails, return nullptr and skip tests that need it
+            return nullptr;
+        }
+    }
+};
+
+// Global test instance
+static AudioEngineTests audioEngineTests;
+
+} // namespace covertracks

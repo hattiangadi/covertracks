@@ -1,0 +1,84 @@
+---
+# Clang-tidy configuration for Covertracks
+# Focuses on code quality, performance, and modern C++ practices
+
+Checks: >
+  -*,
+  bugprone-*,
+  cert-*,
+  clang-analyzer-*,
+  cppcoreguidelines-*,
+  google-*,
+  hicpp-*,
+  llvm-*,
+  misc-*,
+  modernize-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  -modernize-use-trailing-return-type,
+  -google-runtime-references,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -readability-magic-numbers,
+  -cppcoreguidelines-pro-type-vararg,
+  -hicpp-vararg,
+  -google-readability-todo,
+  -llvm-header-guard,
+  -cppcoreguidelines-macro-usage,
+  -cppcoreguidelines-avoid-c-arrays,
+  -hicpp-avoid-c-arrays,
+  -modernize-avoid-c-arrays,
+  -readability-isolate-declaration,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -hicpp-no-array-decay
+
+CheckOptions:
+  # Naming conventions
+  - key: readability-identifier-naming.ClassCase
+    value: PascalCase
+  - key: readability-identifier-naming.FunctionCase  
+    value: camelCase
+  - key: readability-identifier-naming.VariableCase
+    value: camelCase
+  - key: readability-identifier-naming.ConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.EnumCase
+    value: PascalCase
+  - key: readability-identifier-naming.NamespaceCase
+    value: lower_case
+    
+  # Performance tuning
+  - key: performance-unnecessary-copy-initialization.AllowedTypes
+    value: "juce::String;juce::var"
+    
+  # Function length limits
+  - key: readability-function-size.LineThreshold
+    value: 80
+  - key: readability-function-size.StatementThreshold
+    value: 50
+    
+  # Complexity limits
+  - key: readability-function-cognitive-complexity.Threshold
+    value: 15
+
+# Only analyze our source code, not JUCE or external libraries
+HeaderFilterRegex: 'Source/.*\.(h|hpp)$'
+
+# Ignore certain files that are auto-generated or have special requirements
+ExcludeHeaderFilterRegex: >
+  (JuceHeader\.h|
+   BinaryData\.h|
+   modules/.*|
+   build/.*|
+   Builds/.*)
+
+# Warning format
+FormatStyle: file
+
+# Use these compile flags when not using compilation database
+CompileFlags:
+  Add: 
+    - "-std=c++17"
+    - "-DJUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1"
+  Remove:
+    - "-W*"

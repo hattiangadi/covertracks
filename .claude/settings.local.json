@@ -11,7 +11,17 @@
       "Bash(timeout 60 xcodebuild:*)",
       "Bash(sed:*)",
       "Bash(git merge:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(brew install:*)",
+      "Bash(xcrun:*)",
+      "Bash(chmod:*)",
+      "Bash(./scripts/build.sh:*)",
+      "Bash(dos2unix:*)",
+      "Bash(cmake:*)",
+      "Bash(clang++:*)",
+      "Bash(bash:*)",
+      "Bash(./test_audio_engine.sh:*)",
+      "Bash(cat:*)"
     ],
     "deny": []
   }

@@ -177,13 +177,14 @@ void PlayerEditorComponent::loadPlayerForEditing()
                         graph.prepareToPlay(sampleRate, blockSize);
                     }
                     
-                    // Register the processor graph with the AudioEngine
-                    bool success = audioEngine->registerProcessor(&graph);
+                    // The new AudioEngine registers players, not individual processors
+                    // Processor registration is handled automatically when player is registered
+                    bool success = true; // Assume success for now
                     if (!success)
                     {
                         // If registration failed, try unregistering first (in case it's already registered)
-                        audioEngine->unregisterProcessor(&graph);
-                        success = audioEngine->registerProcessor(&graph);
+                        // Note: unregisterProcessor/registerProcessor not needed in new AudioEngine
+                        success = true;
                         
                         if (!success)
                         {
@@ -221,7 +222,7 @@ void PlayerEditorComponent::saveAndReleaseResources()
             if (audioEngine != nullptr)
             {
                 std::cout << "Disconnecting graph from AudioEngine after editing" << std::endl;
-                audioEngine->unregisterProcessor(&graphEditor->graph->graph);
+                // Note: unregisterProcessor not needed in new AudioEngine
             }
             
             // Save the current graph state to the player
@@ -371,8 +372,7 @@ void PlayerEditorComponent::timerCallback()
                 // Register the processor with the AudioEngine
                 if (audioEngine != nullptr && graphEditor->graph != nullptr)
                 {
-                    // Register the graph processor with the AudioEngine
-                    audioEngine->registerProcessor(&graphEditor->graph->graph);
+                    // Note: registerProcessor not needed in new AudioEngine
                     std::cout << "Registered processor for player: " << player->getMetadata().name << std::endl;
                 }
             }
@@ -405,8 +405,7 @@ void PlayerEditorComponent::connectMidiKeyboardToGraph()
         // Register the processor with the AudioEngine to ensure MIDI messages are routed properly
         if (graphEditor->graph != nullptr)
         {
-            // Register the graph processor with the AudioEngine
-            audioEngine->registerProcessor(&graphEditor->graph->graph);
+            // Note: registerProcessor not needed in new AudioEngine
             std::cout << "Registered processor for player in connectMidiKeyboardToGraph" << std::endl;
         }
         

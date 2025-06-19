@@ -141,9 +141,9 @@ Player::Player(const String& playerId, const String& name,
     metadata.created = Time::getCurrentTime();
     metadata.lastModified = metadata.created;
 
-    std::cout << "Creating Player: " << name << " (ID: " << playerId << ")" 
-              << " with " << (audioEngine != nullptr ? "shared" : "dedicated") 
-              << " audio engine" << std::endl;
+    // std::cout << "Creating Player: " << name << " (ID: " << playerId << ")" 
+    //           << " with " << (audioEngine != nullptr ? "shared" : "dedicated") 
+    //           << " audio engine" << std::endl;
 }
 
 Player::~Player()
@@ -151,17 +151,17 @@ Player::~Player()
     // Stop playback before destruction
     stopPlayback();
     
-    std::cout << "Player destructor: Cleaning up " << metadata.name << " (ID: " << id << ")" << std::endl;
+    // std::cout << "Player destructor: Cleaning up " << metadata.name << " (ID: " << id << ")" << std::endl;
     
     // Explicitly clean up the instrument first
     // This ensures the instrument is destroyed before the player
     if (instrument)
     {
-        std::cout << "Player destructor: Explicitly cleaning up instrument for " << metadata.name << std::endl;
+        // std::cout << "Player destructor: Explicitly cleaning up instrument for " << metadata.name << std::endl;
         instrument.reset();
     }
     
-    std::cout << "Player destructor: Finished cleaning up " << metadata.name << " (ID: " << id << ")" << std::endl;
+    // std::cout << "Player destructor: Finished cleaning up " << metadata.name << " (ID: " << id << ")" << std::endl;
 }
 
 void Player::loadMinimalResources()
@@ -181,7 +181,7 @@ void Player::loadMinimalResources()
         }
         
         fullyLoaded = true;
-        std::cout << "Player " << metadata.name << " minimal resources loaded" << std::endl;
+        // std::cout << "Player " << metadata.name << " minimal resources loaded" << std::endl;
     }
 }
 
@@ -202,7 +202,7 @@ void Player::prepareForEditing()
             // Load the graph state if not already loaded
             if (!graphLoaded)
             {
-                std::cout << "Loading graph state for editing player: " << metadata.name << std::endl;
+                // std::cout << "Loading graph state for editing player: " << metadata.name << std::endl;
                 loadGraphStateIfNeeded();
             }
         }
@@ -223,7 +223,7 @@ void Player::prepareForPlayback()
         // Load the graph state if not already loaded
         if (!graphLoaded)
         {
-            std::cout << "Loading graph state for playback of player: " << metadata.name << std::endl;
+            // std::cout << "Loading graph state for playback of player: " << metadata.name << std::endl;
             loadGraphStateIfNeeded();
         }
         
@@ -236,7 +236,7 @@ void Player::prepareForPlayback()
             instrument->prepareForPlayback();
         
         readyForPlayback = true;
-        std::cout << "Player " << metadata.name << " prepared for playback" << std::endl;
+        // std::cout << "Player " << metadata.name << " prepared for playback" << std::endl;
     }
 }
 
@@ -258,7 +258,7 @@ void Player::releaseResources()
         fullyLoaded = false;
         graphLoaded = false; // Mark graph as unloaded so it will be reloaded when needed
         
-        std::cout << "Player " << metadata.name << " resources released" << std::endl;
+        // std::cout << "Player " << metadata.name << " resources released" << std::endl;
     }
 }
 
@@ -276,9 +276,12 @@ bool Player::connectToAudioEngine(AudioEngine* engine)
     // Register the processor graph with the AudioEngine to ensure MIDI messages are routed properly
     if (instrument && instrument->getProcessorGraph() != nullptr)
     {
-        // Register the processor with the AudioEngine
-        engine->registerProcessor(instrument->getProcessorGraph());
-        std::cout << "Registered processor for player " << metadata.name << " in connectToAudioEngine" << std::endl;
+        // Register the player with the AudioEngine (new method)
+        if (engine->registerPlayer(this)) {
+            // std::cout << "Registered player " << metadata.name << " with AudioEngine" << std::endl;
+        } else {
+            // std::cout << "Player " << metadata.name << " already registered with AudioEngine" << std::endl;
+        }
     }
     
     // Activate this player in the engine
@@ -336,7 +339,7 @@ bool Player::initializeMinimal()
         });
     }
     
-    std::cout << "Player initialized with minimal resources: " << metadata.name << " (ID: " << id << ")" << std::endl;
+    // std::cout << "Player initialized with minimal resources: " << metadata.name << " (ID: " << id << ")" << std::endl;
     
     // Mark as minimally loaded
     fullyLoaded = true;
@@ -361,7 +364,7 @@ bool Player::loadGraphStateIfNeeded()
                           .getChildFile("Graphs");
         
         File graphFile = appDataDir.getChildFile(graphFileName);
-        std::cout << "Loading graph state from file: " << graphFile.getFullPathName() << std::endl;
+        // std::cout << "Loading graph state from file: " << graphFile.getFullPathName() << std::endl;
         
         if (graphFile.existsAsFile())
         {
@@ -375,12 +378,12 @@ bool Player::loadGraphStateIfNeeded()
                 for (auto* node : graphState->getChildWithTagNameIterator("FILTER"))
                 {
                     nodeCount++;
-                    std::cout << "  Found node in file XML: " << node->getIntAttribute("uid") 
-                              << " - " << node->getStringAttribute("name") << std::endl;
+                    // std::cout << "  Found node in file XML: " << node->getIntAttribute("uid") 
+    //                           << " - " << node->getStringAttribute("name") << std::endl;
                 }
-                std::cout << "Graph file contains " << nodeCount << " nodes" << std::endl;
+                // std::cout << "Graph file contains " << nodeCount << " nodes" << std::endl;
                 
-                std::cout << "Successfully loaded graph state from file" << std::endl;
+                // std::cout << "Successfully loaded graph state from file" << std::endl;
                 success = loadPluginGraph(*graphState);
             }
             else
@@ -396,7 +399,7 @@ bool Player::loadGraphStateIfNeeded()
     // Fall back to embedded graph state if file loading failed
     else if (embeddedGraphState.isNotEmpty() && !success)
     {
-        std::cout << "Loading embedded graph state" << std::endl;
+        // std::cout << "Loading embedded graph state" << std::endl;
         
         // Convert from base64 to XML
         MemoryBlock mb;
@@ -411,12 +414,12 @@ bool Player::loadGraphStateIfNeeded()
             for (auto* node : graphState->getChildWithTagNameIterator("FILTER"))
             {
                 nodeCount++;
-                std::cout << "  Found node in embedded XML: " << node->getIntAttribute("uid") 
-                          << " - " << node->getStringAttribute("name") << std::endl;
+                // std::cout << "  Found node in embedded XML: " << node->getIntAttribute("uid") 
+    //                       << " - " << node->getStringAttribute("name") << std::endl;
             }
-            std::cout << "Embedded graph contains " << nodeCount << " nodes" << std::endl;
+            // std::cout << "Embedded graph contains " << nodeCount << " nodes" << std::endl;
             
-            std::cout << "Successfully loaded embedded graph state" << std::endl;
+            // std::cout << "Successfully loaded embedded graph state" << std::endl;
             success = loadPluginGraph(*graphState);
         }
         else
@@ -430,14 +433,14 @@ bool Player::loadGraphStateIfNeeded()
         File graphFile = getGraphFilePath();
         if (graphFile.existsAsFile())
         {
-            std::cout << "Trying to load graph from default path: " << graphFile.getFullPathName() << std::endl;
+            // std::cout << "Trying to load graph from default path: " << graphFile.getFullPathName() << std::endl;
             
             // Parse the XML file
             std::unique_ptr<XmlElement> graphState = parseXML(graphFile);
             
             if (graphState != nullptr && graphState->hasTagName("FILTERGRAPH"))
             {
-                std::cout << "Successfully loaded graph state from default path" << std::endl;
+                // std::cout << "Successfully loaded graph state from default path" << std::endl;
                 success = loadPluginGraph(*graphState);
             }
         }
@@ -480,7 +483,7 @@ bool Player::initialize()
         // Set up the musician to use the instrument for playback (done in setMusician)
     }
     
-    std::cout << "Player fully initialized: " << metadata.name << " (ID: " << id << ")" << std::endl;
+    // std::cout << "Player fully initialized: " << metadata.name << " (ID: " << id << ")" << std::endl;
     
     return instrumentInitialized;
 }
@@ -507,10 +510,10 @@ bool Player::loadPluginGraph(const XmlElement& graphState)
         for (auto* node : graphState.getChildWithTagNameIterator("FILTER"))
         {
             nodeCount++;
-            std::cout << "  Found node in XML: " << node->getIntAttribute("uid") 
-                      << " - " << node->getStringAttribute("name") << std::endl;
+            // std::cout << "  Found node in XML: " << node->getIntAttribute("uid") 
+    //                   << " - " << node->getStringAttribute("name") << std::endl;
         }
-        std::cout << "Player " << metadata.name << " loading graph with " << nodeCount << " nodes" << std::endl;
+        // std::cout << "Player " << metadata.name << " loading graph with " << nodeCount << " nodes" << std::endl;
         
         // Count connections before loading
         int midiConnections = 0;
@@ -531,16 +534,16 @@ bool Player::loadPluginGraph(const XmlElement& graphState)
                 audioConnections++;
         }
         
-        std::cout << "Player " << metadata.name << " loading graph with " 
-                  << (midiConnections + audioConnections) << " connections "
-                  << "(MIDI: " << midiConnections << ", Audio: " << audioConnections << ")" << std::endl;
+        // std::cout << "Player " << metadata.name << " loading graph with " 
+    //               // << (midiConnections + audioConnections) << " connections "
+                  // << "(MIDI: " << midiConnections << ", Audio: " << audioConnections << ")" << std::endl;
         
         // Load the graph
         bool result = instrument->loadPluginGraph(graphState);
         
         if (result)
         {
-            std::cout << "Graph loaded successfully for player " << metadata.name << std::endl;
+            // std::cout << "Graph loaded successfully for player " << metadata.name << std::endl;
             
             // Save the graph state to a file
             saveGraphState();
@@ -597,12 +600,12 @@ bool Player::savePluginGraphToFile(const XmlElement& graphState)
             graphState.writeTo(fos);
             fos.flush();
             
-            std::cout << "Saved graph state to file: " << graphFile.getFullPathName() << std::endl;
+            // std::cout << "Saved graph state to file: " << graphFile.getFullPathName() << std::endl;
             
             // Also update the instrument's internal state with this graph
             if (instrument != nullptr)
             {
-                std::cout << "Updating instrument with the saved graph state" << std::endl;
+                // std::cout << "Updating instrument with the saved graph state" << std::endl;
                 instrument->loadPluginGraph(graphState);
             }
             
@@ -630,7 +633,7 @@ std::unique_ptr<XmlElement> Player::getPluginGraphState()
 {
     if (instrument == nullptr)
     {
-        std::cout << "Instrument is null, trying to load graph from file" << std::endl;
+        // std::cout << "Instrument is null, trying to load graph from file" << std::endl;
         return loadGraphStateFromFile();
     }
     
@@ -641,7 +644,7 @@ std::unique_ptr<XmlElement> Player::getPluginGraphState()
     if (graphState == nullptr || !graphState->hasTagName("FILTERGRAPH") || 
         graphState->getNumChildElements() == 0)
     {
-        std::cout << "Instrument has no valid graph state, trying to load from file" << std::endl;
+        // std::cout << "Instrument has no valid graph state, trying to load from file" << std::endl;
         return loadGraphStateFromFile();
     }
     
@@ -655,7 +658,7 @@ std::unique_ptr<XmlElement> Player::loadGraphStateFromFile()
     
     if (graphFile.existsAsFile())
     {
-        std::cout << "Loading graph state from file: " << graphFile.getFullPathName() << std::endl;
+        // std::cout << "Loading graph state from file: " << graphFile.getFullPathName() << std::endl;
         
         // Parse the XML file
         std::unique_ptr<XmlElement> graphState = parseXML(graphFile);
@@ -667,10 +670,10 @@ std::unique_ptr<XmlElement> Player::loadGraphStateFromFile()
             for (auto* node : graphState->getChildWithTagNameIterator("FILTER"))
             {
                 nodeCount++;
-                std::cout << "  Found node in file XML: " << node->getIntAttribute("uid") 
-                          << " - " << node->getStringAttribute("name") << std::endl;
+                // std::cout << "  Found node in file XML: " << node->getIntAttribute("uid") 
+    //                       << " - " << node->getStringAttribute("name") << std::endl;
             }
-            std::cout << "Graph file contains " << nodeCount << " nodes" << std::endl;
+            // std::cout << "Graph file contains " << nodeCount << " nodes" << std::endl;
             
             // Count connections
             int midiConnections = 0;
@@ -687,14 +690,14 @@ std::unique_ptr<XmlElement> Player::loadGraphStateFromFile()
                     audioConnections++;
             }
             
-            std::cout << "Graph file contains " << (midiConnections + audioConnections) 
-                      << " connections (MIDI: " << midiConnections 
-                      << ", Audio: " << audioConnections << ")" << std::endl;
+            // std::cout << "Graph file contains " << (midiConnections + audioConnections) 
+    //                   << " connections (MIDI: " << midiConnections 
+    //                   << ", Audio: " << audioConnections << ")" << std::endl;
             
             // If we have an instrument, update it with this graph state
             if (instrument != nullptr)
             {
-                std::cout << "Updating instrument with loaded graph state" << std::endl;
+                // std::cout << "Updating instrument with loaded graph state" << std::endl;
                 instrument->loadPluginGraph(*graphState);
             }
             
@@ -702,8 +705,7 @@ std::unique_ptr<XmlElement> Player::loadGraphStateFromFile()
         }
         else
         {
-            std::cerr << "Failed to parse graph file or invalid format: " 
-                      << graphFile.getFullPathName() << std::endl;
+            std::cerr << "Failed to parse graph file or invalid format: " << graphFile.getFullPathName() << std::endl;
         }
     }
     else
@@ -932,10 +934,10 @@ bool Player::convertChartToMidi(const var& chart)
                 noteOn.setTimeStamp(timestamp);
                 sequence->addEvent(noteOn);
                 
-                std::cout << "Added note_on event: channel=" << channel 
-                          << ", note=" << note 
-                          << ", velocity=" << velocity 
-                          << ", timestamp=" << timestamp << std::endl;
+                // std::cout << "Added note_on event: channel=" << channel 
+    //                       << ", note=" << note 
+    //                       << ", velocity=" << velocity 
+    //                       << ", timestamp=" << timestamp << std::endl;
                 
                 // Create corresponding note off message based on duration
                 double noteOffTimestamp = timestamp + duration;
@@ -943,11 +945,11 @@ bool Player::convertChartToMidi(const var& chart)
                 noteOff.setTimeStamp(noteOffTimestamp);
                 sequence->addEvent(noteOff);
                 
-                std::cout << "Added note_off event: channel=" << channel 
-                          << ", note=" << note 
-                          << ", velocity=" << velocity 
-                          << ", timestamp=" << noteOffTimestamp 
-                          << ", duration=" << duration << std::endl;
+                // std::cout << "Added note_off event: channel=" << channel 
+    //                       << ", note=" << note 
+    //                       << ", velocity=" << velocity 
+    //                       << ", timestamp=" << noteOffTimestamp 
+    //                       << ", duration=" << duration << std::endl;
             }
             else if (type == "note_off")
             {
@@ -1020,8 +1022,8 @@ bool Player::convertChartToMidi(const var& chart)
         // Store the MIDI sequence
         currentMidiSequence = sequence;
         
-        std::cout << "Player::convertChartToMidi - Chart converted with " << sequence->getNumEvents() 
-                  << " events, duration: " << sequence->getEndTime() << " seconds" << std::endl;
+        // std::cout << "Player::convertChartToMidi - Chart converted with " << sequence->getNumEvents() 
+                  // << " events, duration: " << sequence->getEndTime() << " seconds" << std::endl;
         
         return true;
     }
@@ -1061,10 +1063,10 @@ bool Player::play()
         // Calculate the duration of the chart
         double duration = currentMidiSequence->getEndTime();
         
-        std::cout << "Player::play - Started playback of chart with " 
-                  << currentMidiSequence->getNumEvents() << " events"
-                  << ", duration: " << duration << " seconds"
-                  << ", tempo: " << chartTempo << " BPM" << std::endl;
+        // std::cout << "Player::play - Started playback of chart with " 
+                  // << currentMidiSequence->getNumEvents() << " events"
+                  // << ", duration: " << duration << " seconds"
+                  // << ", tempo: " << chartTempo << " BPM" << std::endl;
         
         // Log the first few events for debugging
         int eventsToLog = std::min(8, currentMidiSequence->getNumEvents());
@@ -1075,9 +1077,9 @@ bool Player::play()
                                     (event->message.isNoteOff() ? "Note Off" : "Other");
             int noteNumber = event->message.isNoteOnOrOff() ? event->message.getNoteNumber() : -1;
             
-            std::cout << "  Event " << i << ": " << eventType 
-                      << ", Note: " << noteNumber 
-                      << ", Time: " << event->message.getTimeStamp() << "s" << std::endl;
+            // std::cout << "  Event " << i << ": " << eventType 
+    //                   << ", Note: " << noteNumber 
+    //                   << ", Time: " << event->message.getTimeStamp() << "s" << std::endl;
         }
     }
     else
@@ -1107,7 +1109,7 @@ void Player::stop()
     if (instrument)
     {
         instrument->stopPlayback();
-        std::cout << "Player::stop - Stopped playback" << std::endl;
+        // std::cout << "Player::stop - Stopped playback" << std::endl;
     }
 }
 
@@ -1181,7 +1183,7 @@ var Player::toVar() const
                     graphState->writeTo(mo, {});
                     obj->setProperty("pluginGraph", mo.getMemoryBlock().toBase64Encoding());
                     
-                    std::cout << "Saved graph state to file AND embedded in player data: " << graphFile.getFullPathName() << std::endl;
+                    // std::cout << "Saved graph state to file AND embedded in player data: " << graphFile.getFullPathName() << std::endl;
                 }
                 else
                 {
@@ -1191,7 +1193,7 @@ var Player::toVar() const
                     MemoryOutputStream mo;
                     graphState->writeTo(mo, {});
                     obj->setProperty("pluginGraph", mo.getMemoryBlock().toBase64Encoding());
-                    std::cout << "Embedded graph state in player data as fallback" << std::endl;
+                    // std::cout << "Embedded graph state in player data as fallback" << std::endl;
                 }
             }
         catch (const std::exception& e)
@@ -1267,7 +1269,7 @@ std::unique_ptr<covertracks::Player> covertracks::Player::fromVar(const var& v, 
         if (obj->hasProperty("graphFile"))
         {
             String graphFileName = obj->getProperty("graphFile").toString();
-            std::cout << "Player has graphFile property: " << graphFileName << std::endl;
+            // std::cout << "Player has graphFile property: " << graphFileName << std::endl;
             
             // Store the graph file name for later loading
             player->setGraphFileName(graphFileName);
@@ -1275,14 +1277,14 @@ std::unique_ptr<covertracks::Player> covertracks::Player::fromVar(const var& v, 
         // Store embedded graph state for later loading
         else if (obj->hasProperty("pluginGraph"))
         {
-            std::cout << "Player has pluginGraph property, storing for later loading" << std::endl;
+            // std::cout << "Player has pluginGraph property, storing for later loading" << std::endl;
             
             // Store the embedded graph state for later loading
             player->setEmbeddedGraphState(obj->getProperty("pluginGraph").toString());
         }
         else
         {
-            std::cout << "Player has no graph state (neither graphFile nor pluginGraph property)" << std::endl;
+            // std::cout << "Player has no graph state (neither graphFile nor pluginGraph property)" << std::endl;
         }
 
         if (obj->hasProperty("musician"))

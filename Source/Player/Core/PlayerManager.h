@@ -46,15 +46,15 @@ namespace covertracks {
         // Delete a player
         bool deletePlayer(Player* player);
         
-        // Get the audio engine
-        AudioEngine* getAudioEngine() const { return audioEngine.get(); }
+        // Get the audio engine (singleton)
+        AudioEngine* getAudioEngine() const { return &AudioEngine::getInstance(); }
         
-        // Get the plugin format manager
-        AudioPluginFormatManager& getFormatManager() const { return *formatManager; }
+        // Get the plugin format manager (from singleton)
+        AudioPluginFormatManager& getFormatManager() const { return AudioEngine::getInstance().getFormatManager(); }
         
-        // Get the known plugin list (both methods provided for consistency)
-        KnownPluginList& getKnownPluginList() const { return *knownPluginList; }
-        KnownPluginList& getPluginList() const { return *knownPluginList; }
+        // Get the known plugin list (from singleton) - both methods provided for consistency
+        KnownPluginList& getKnownPluginList() const { return AudioEngine::getInstance().getKnownPluginList(); }
+        KnownPluginList& getPluginList() const { return AudioEngine::getInstance().getKnownPluginList(); }
         
         // Get the internal plugin types directly from the format
         std::vector<PluginDescription> getInternalPluginTypes() const { 
@@ -118,14 +118,7 @@ namespace covertracks {
         // Note: Order matters for destruction - internalPluginFormat must be destroyed AFTER formatManager
         // since formatManager holds a reference to it
         
-        // AudioEngine is owned by the PlayerManager and must be destroyed first
-        std::unique_ptr<AudioEngine> audioEngine;
-        
-        // KnownPluginList doesn't hold references to formats
-        std::unique_ptr<KnownPluginList> knownPluginList;
-        
-        // FormatManager holds references to formats, so it must be destroyed before internalPluginFormat
-        std::unique_ptr<AudioPluginFormatManager> formatManager;
+        // AudioEngine is now a singleton - no need to own formatManager or knownPluginList
         
         // Pointer to the internal plugin format (not owned, formatManager owns it)
         InternalPluginFormat* internalPluginFormat = nullptr;

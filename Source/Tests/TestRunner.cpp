@@ -7,6 +7,7 @@
 #include "MusicianTests.cpp"
 #include "MusicianAdvancedTests.cpp"
 #include "PlayerTests.cpp"
+#include "AudioEngineTests.cpp"
 
 namespace covertracks {
 
@@ -49,6 +50,11 @@ void runAllTests()
     
     // Run the advanced player tests
     runner.runTests({&playerAsyncTests, &playerPerformanceTests, &playerErrorTests, &playerIntegrationTests});
+    
+    std::cout << "\nRunning AudioEngine tests...\n" << std::endl;
+    
+    // Run the AudioEngine tests
+    runner.runTests({&audioEngineTests});
     
     // Print results
     int numTests = runner.getNumResults();

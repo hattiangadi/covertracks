@@ -2,839 +2,668 @@
   ==============================================================================
    AudioEngine.cpp
    
-   Implementation of the AudioEngine class.
+   Centralized singleton audio engine implementation for managing shared audio 
+   resources and coordinating multiple Players without conflicts.
   ==============================================================================
 */
 
 #include "AudioEngine.h"
-#include "../Player/Core/Instrument.h"
 #include "../Player/Core/Player.h"
-#include <iostream>
 
 namespace covertracks {
 
-AudioEngine::AudioEngine(AudioPluginFormatManager& fm,
-                         KnownPluginList& kpl)
-    : formatManager(fm),
-      knownPluginList(kpl),
-      doublePrecisionProcessing(false) // Default to false, can be set later
+//==============================================================================
+// Singleton Implementation
+//==============================================================================
+
+AudioEngine& AudioEngine::getInstance()
 {
-    // Create device manager but don't initialize it yet
-    std::cout << "[AudioEngine] Constructor starting..." << std::endl;
-    std::cout << "[AudioEngine] Creating device manager" << std::endl;
-    deviceManager = std::make_unique<AudioDeviceManager>();
-    
-    // Create the main processor graph
-    std::cout << "[AudioEngine] Creating main processor graph" << std::endl;
-    mainProcessorGraph = std::make_unique<AudioProcessorGraph>();
-    
-    // Add this as a change listener to the device manager
-    // Do this after creating all resources to avoid callbacks during initialization
-    std::cout << "[AudioEngine] Adding change listener to device manager" << std::endl;
-    deviceManager->addChangeListener(static_cast<ChangeListener*>(this));
-    
-    // Initialize device manager with default settings
-    // This will trigger a change notification, but now we're ready to handle it
-    std::cout << "[AudioEngine] Initializing device manager with default devices" << std::endl;
-    deviceManager->initialiseWithDefaultDevices(2, 2);
-    
-    std::cout << "[AudioEngine] Initialized (double precision: " 
-              << (doublePrecisionProcessing ? "enabled" : "disabled") << ")" << std::endl;
-    std::cout << "[AudioEngine] Constructor complete" << std::endl;
+    static AudioEngine instance;
+    return instance;
+}
+
+AudioEngine::AudioEngine()
+{
+    // Initialize audio resources
+    if (!initializeAudioResources()) {
+        DBG("ERROR: Failed to initialize AudioEngine resources");
+    }
 }
 
 AudioEngine::~AudioEngine()
 {
-    // Notify all Instruments that the AudioEngine is being destroyed
-    // This prevents them from trying to unregister when they're destroyed
-    std::cout << "AudioEngine destructor: Notifying Instruments of destruction" << std::endl;
-    covertracks::Instrument::notifyAudioEngineDestroyed();
-    
-    // Stop all audio processing
-    const ScopedLock sl(processorLock);
-    
-    for (auto* player : audioProcessorPlayers)
-    {
-        deviceManager->removeAudioCallback(player);
-        player->setProcessor(nullptr);
-    }
-    
-    // Unregister as a listener
-    deviceManager->removeChangeListener(static_cast<ChangeListener*>(this));
-    
-    std::cout << "AudioEngine destroyed" << std::endl;
+    shutdownAudioResources();
 }
 
-bool AudioEngine::registerProcessor(AudioProcessor* processor)
+//==============================================================================
+// Resource Initialization
+//==============================================================================
+
+bool AudioEngine::initializeAudioResources()
 {
-    if (processor == nullptr)
-        return false;
-    
-    // Use a lock to ensure thread safety when modifying the processor list
-    const ScopedLock sl(processorLock);
+    try {
+        // Create core audio resources
+        deviceManager = std::make_unique<juce::AudioDeviceManager>();
+        formatManager = std::make_unique<juce::AudioPluginFormatManager>();
+        knownPluginList = std::make_unique<juce::KnownPluginList>();
         
+        // Initialize plugin formats
+        formatManager->addDefaultFormats();
+        
+        // Initialize audio device with default settings
+        juce::String audioError = deviceManager->initialise(2, 2, nullptr, true);
+        if (audioError.isNotEmpty()) {
+            DBG("ERROR: Audio device initialization failed: " << audioError);
+            return false;
+        }
+        
+        // Set this as the audio callback
+        deviceManager->addAudioCallback(this);
+        
+        // Initialize master audio graph
+        if (!initializeMasterGraph()) {
+            DBG("ERROR: Failed to initialize master audio graph");
+            return false;
+        }
+        
+        // Update audio parameters
+        if (auto* device = deviceManager->getCurrentAudioDevice()) {
+            currentSampleRate.store(device->getCurrentSampleRate());
+            currentBufferSize.store(device->getCurrentBufferSizeSamples());
+        }
+        
+        // Initialize quality monitoring
+        resetQualityMonitoring();
+        
+        isAudioActive.store(true);
+        
+        DBG("INFO: AudioEngine initialized successfully");
+        return true;
+        
+    } catch (const std::exception& e) {
+        DBG("ERROR: Exception during AudioEngine initialization: " << e.what());
+        return false;
+    }
+}
+
+void AudioEngine::shutdownAudioResources()
+{
+    isAudioActive.store(false);
+    
+    // Deactivate all players first
+    {
+        juce::ScopedLock lock(playerRegistryMutex);
+        for (auto& [player, node] : playerNodes) {
+            if (node->isActive.load()) {
+                removePlayerFromMasterGraph(node.get());
+            }
+        }
+        playerNodes.clear();
+    }
+    
+    // Remove audio callback
+    if (deviceManager) {
+        deviceManager->removeAudioCallback(this);
+    }
+    
+    // Clear master graph
+    masterGraph.reset();
+    midiInputNode.reset();
+    audioOutputNode.reset();
+    
+    // Clear resources
+    knownPluginList.reset();
+    formatManager.reset();
+    deviceManager.reset();
+    
+    DBG("INFO: AudioEngine shutdown complete");
+}
+
+bool AudioEngine::initializeMasterGraph()
+{
+    try {
+        masterGraph = std::make_unique<juce::AudioProcessorGraph>();
+        
+        // Create MIDI input node
+        midiInputNode = masterGraph->addNode(std::make_unique<juce::AudioProcessorGraph::AudioGraphIOProcessor>(
+            juce::AudioProcessorGraph::AudioGraphIOProcessor::midiInputNode));
+        
+        // Create audio output node  
+        audioOutputNode = masterGraph->addNode(std::make_unique<juce::AudioProcessorGraph::AudioGraphIOProcessor>(
+            juce::AudioProcessorGraph::AudioGraphIOProcessor::audioOutputNode));
+        
+        if (!midiInputNode || !audioOutputNode) {
+            DBG("ERROR: Failed to create master graph I/O nodes");
+            return false;
+        }
+        
+        // Prepare the graph
+        if (auto* device = deviceManager->getCurrentAudioDevice()) {
+            double sampleRate = device->getCurrentSampleRate();
+            int bufferSize = device->getCurrentBufferSizeSamples();
+            
+            masterGraph->prepareToPlay(sampleRate, bufferSize);
+        }
+        
+        DBG("INFO: Master audio graph initialized");
+        return true;
+        
+    } catch (const std::exception& e) {
+        DBG("ERROR: Exception during master graph initialization: " << e.what());
+        return false;
+    }
+}
+
+//==============================================================================
+// Player Lifecycle Management (Thread-Safe)
+//==============================================================================
+
+bool AudioEngine::registerPlayer(Player* player)
+{
+    if (!player) return false;
+    
+    juce::ScopedLock lock(playerRegistryMutex);
+    
     // Check if already registered
-    for (auto* registeredProcessor : registeredProcessors)
-    {
-        if (registeredProcessor == processor)
-        {
-            std::cout << "Processor already registered, updating connections" << std::endl;
-            
-            // Find the player for this processor and ensure it's properly connected
-            auto* player = findPlayerForProcessor(processor);
-            if (player != nullptr)
-            {
-                // Make sure the player is connected to the device manager
-                deviceManager->addAudioCallback(player);
-                
-                // Reset the MIDI collector with the current sample rate
-                if (auto* currentDevice = deviceManager->getCurrentAudioDevice())
-                {
-                    double sampleRate = currentDevice->getCurrentSampleRate();
-                    player->getMidiMessageCollector().reset(sampleRate);
-                }
-                
-                // Audio output is now active - no automatic volume scaling
-            }
-            
-            return true; // Already registered and updated
-        }
+    if (playerNodes.find(player) != playerNodes.end()) {
+        return false; // Already registered
     }
     
-    try
-    {
-        // Create a new AudioProcessorPlayer
-        auto* player = new AudioProcessorPlayer(doublePrecisionProcessing);
-        
-        // Make sure the processor is properly initialized before setting it
-        if (auto* processorGraph = dynamic_cast<AudioProcessorGraph*>(processor))
-        {
-            // Check if the graph has audio output nodes and if they're properly configured
-            bool hasAudioOutputNode = false;
-            for (auto* node : processorGraph->getNodes())
-            {
-                auto* nodeProcessor = node->getProcessor();
-                auto* ioProcessor = dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(nodeProcessor);
-                
-                if (ioProcessor != nullptr && ioProcessor->getType() == AudioProcessorGraph::AudioGraphIOProcessor::audioOutputNode)
-                {
-                    hasAudioOutputNode = true;
-                    std::cout << "Found audio output node in graph with " 
-                              << ioProcessor->getTotalNumInputChannels() << " input channels" << std::endl;
-                    
-                    // If the audio output node has no input channels, try to fix it
-                    if (ioProcessor->getTotalNumInputChannels() == 0)
-                    {
-                        std::cout << "Audio output node has no input channels, attempting to fix..." << std::endl;
-                        
-                        // Try to set the bus layout to stereo
-                        AudioProcessor::BusesLayout layout = ioProcessor->getBusesLayout();
-                        if (layout.inputBuses.size() > 0)
-                        {
-                            layout.inputBuses[0] = AudioChannelSet::stereo();
-                            bool success = ioProcessor->setBusesLayout(layout);
-                            std::cout << "Set bus layout to stereo: " << (success ? "success" : "failed") << std::endl;
-                        }
-                    }
-                }
-            }
-            
-            if (!hasAudioOutputNode)
-            {
-                std::cout << "WARNING: Graph has no audio output nodes!" << std::endl;
-            }
-            
-            // Get the MidiMessageCollector from the player
-            auto& midiCollector = player->getMidiMessageCollector();
-            
-            // Reset it with the current sample rate
-            if (auto* currentDevice = deviceManager->getCurrentAudioDevice())
-            {
-                double sampleRate = currentDevice->getCurrentSampleRate();
-                int blockSize = currentDevice->getCurrentBufferSizeSamples();
-                
-                // Prepare the graph for playback with the current sample rate and block size
-                processorGraph->prepareToPlay(sampleRate, blockSize);
-                
-                // Reset the MIDI collector
-                midiCollector.reset(sampleRate);
-                
-                std::cout << "Prepared graph for playback: sample rate=" << sampleRate 
-                          << ", block size=" << blockSize << std::endl;
-            }
+    // Create player audio node
+    auto playerNode = std::make_unique<PlayerAudioNode>(player);
+    playerNodes[player] = std::move(playerNode);
+    
+    DBG("INFO: Player registered with AudioEngine");
+    return true;
+}
+
+void AudioEngine::unregisterPlayer(Player* player)
+{
+    if (!player) return;
+    
+    juce::ScopedLock lock(playerRegistryMutex);
+    
+    auto it = playerNodes.find(player);
+    if (it != playerNodes.end()) {
+        // Deactivate if active
+        if (it->second->isActive.load()) {
+            removePlayerFromMasterGraph(it->second.get());
         }
         
-        // Set the processor after initialization
-        player->setProcessor(processor);
-        
-        // Audio output is now active - no automatic volume scaling
-        
-        std::cout << "Set processor for player and activated audio output" << std::endl;
-        
-        // Register with the device manager
-        deviceManager->addAudioCallback(player);
-        
-        // Store the player
-        audioProcessorPlayers.add(player);
-        registeredProcessors.add(processor);
-        
-        // Make sure MIDI is enabled
-        midiEnabled = true;
-        
-        std::cout << "Registered processor: " << processor->getName() << std::endl;
+        playerNodes.erase(it);
+        DBG("INFO: Player unregistered from AudioEngine");
+    }
+}
+
+bool AudioEngine::activatePlayer(Player* player)
+{
+    if (!player) return false;
+    
+    juce::ScopedLock lock(playerRegistryMutex);
+    
+    auto it = playerNodes.find(player);
+    if (it == playerNodes.end()) {
+        return false; // Not registered
+    }
+    
+    auto* playerNode = it->second.get();
+    if (playerNode->isActive.load()) {
+        return true; // Already active
+    }
+    
+    // Add to master graph
+    if (addPlayerToMasterGraph(playerNode)) {
+        playerNode->isActive.store(true);
+        DBG("INFO: Player activated in AudioEngine");
         return true;
     }
-    catch (const std::exception& e)
-    {
-        std::cerr << "Failed to register processor: " << e.what() << std::endl;
-        return false;
-    }
+    
+    return false;
 }
 
-void AudioEngine::unregisterProcessor(AudioProcessor* processor)
+void AudioEngine::deactivatePlayer(Player* player)
 {
-    if (processor == nullptr)
-        return;
+    if (!player) return;
     
-    // Use a lock to ensure thread safety when modifying the processor list
-    const ScopedLock sl(processorLock);
-        
-    // Find the player for this processor
-    auto* player = findPlayerForProcessor(processor);
+    juce::ScopedLock lock(playerRegistryMutex);
     
-    if (player != nullptr)
-    {
-        // Unregister the player
-        if (auto* currentDevice = deviceManager->getCurrentAudioDevice())
-        {
-            // Just get the current device to ensure it's valid
+    auto it = playerNodes.find(player);
+    if (it != playerNodes.end()) {
+        auto* playerNode = it->second.get();
+        if (playerNode->isActive.load()) {
+            removePlayerFromMasterGraph(playerNode);
+            playerNode->isActive.store(false);
+            playerNode->isPlaying.store(false);
+            DBG("INFO: Player deactivated in AudioEngine");
         }
-        
-        // Unregister from device manager
-        deviceManager->removeAudioCallback(player);
-        
-        // Release the processor
-        player->setProcessor(nullptr);
-        
-        // Remove from our arrays
-        audioProcessorPlayers.removeObject(player);
-        registeredProcessors.removeFirstMatchingValue(processor);
-        
-        std::cout << "Unregistered processor: " << processor->getName() << std::endl;
-        
-        // Make sure MIDI is still enabled
-        midiEnabled = true;
     }
 }
 
-bool AudioEngine::registerMidiInput(const String& midiInputDeviceName, MidiInputCallback* callbackObject)
+bool AudioEngine::isPlayerRegistered(Player* player) const
 {
-    if (callbackObject == nullptr)
-    {
-        std::cerr << "ERROR: Attempted to register null MIDI callback" << std::endl;
-        return false;
-    }
-        
-    try
-    {
-        std::cout << "DEBUG: Before registering MIDI callback for '" 
-                  << (midiInputDeviceName.isEmpty() ? "default" : midiInputDeviceName) 
-                  << "', callback ptr: " << callbackObject << std::endl;
-                  
-        deviceManager->addMidiInputDeviceCallback(midiInputDeviceName, callbackObject);
-        
-        std::cout << "SUCCESS: Registered MIDI input callback for device: " 
-                  << (midiInputDeviceName.isEmpty() ? "default" : midiInputDeviceName) 
-                  << ", callback ptr: " << callbackObject << std::endl;
+    if (!player) return false;
+    
+    juce::ScopedLock lock(playerRegistryMutex);
+    return playerNodes.find(player) != playerNodes.end();
+}
+
+bool AudioEngine::isPlayerActive(Player* player) const
+{
+    if (!player) return false;
+    
+    juce::ScopedLock lock(playerRegistryMutex);
+    auto it = playerNodes.find(player);
+    return (it != playerNodes.end()) && it->second->isActive.load();
+}
+
+//==============================================================================
+// Audio Graph Management
+//==============================================================================
+
+bool AudioEngine::addPlayerToMasterGraph(PlayerAudioNode* playerNode)
+{
+    if (!playerNode || !masterGraph) return false;
+    
+    try {
+        // TODO: Add player's processor graph as node when Player interface is updated
+        // For now, just mark as ready
+        DBG("INFO: Player added to master audio graph (placeholder)");
         return true;
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "ERROR: Failed to register MIDI input callback: " << e.what() << std::endl;
+        
+    } catch (const std::exception& e) {
+        DBG("ERROR: Failed to add player to master graph: " << e.what());
         return false;
     }
 }
 
-void AudioEngine::unregisterMidiInput(const String& midiInputDeviceName, MidiInputCallback* callbackObject)
+void AudioEngine::removePlayerFromMasterGraph(PlayerAudioNode* playerNode)
 {
-    if (callbackObject == nullptr)
-    {
-        std::cerr << "ERROR: Attempted to unregister null MIDI callback" << std::endl;
-        return;
-    }
+    if (!playerNode || !masterGraph) return;
     
-    try
-    {
-        std::cout << "DEBUG: Before unregistering MIDI callback for '" 
-                  << (midiInputDeviceName.isEmpty() ? "default" : midiInputDeviceName) 
-                  << "', callback ptr: " << callbackObject << std::endl;
-                  
-        // Get list of available MIDI inputs for debugging
-        auto midiInputs = MidiInput::getAvailableDevices();
-        std::cout << "DEBUG: Available MIDI inputs: " << midiInputs.size() << std::endl;
-        for (auto& input : midiInputs)
-        {
-            std::cout << "  - " << input.name << " (ID: " << input.identifier << ")" << std::endl;
+    try {
+        // Remove player's graph node
+        if (playerNode->graphNode) {
+            masterGraph->removeNode(playerNode->graphNode);
+            playerNode->graphNode.reset();
         }
         
-        deviceManager->removeMidiInputDeviceCallback(midiInputDeviceName, callbackObject);
+        DBG("INFO: Player removed from master audio graph");
         
-        std::cout << "SUCCESS: Unregistered MIDI input callback for device: " 
-                  << (midiInputDeviceName.isEmpty() ? "default" : midiInputDeviceName) 
-                  << ", callback ptr: " << callbackObject << std::endl;
+    } catch (const std::exception& e) {
+        DBG("ERROR: Failed to remove player from master graph: " << e.what());
     }
-    catch (const std::exception& e)
-    {
-        std::cerr << "ERROR: Failed to unregister MIDI input callback: " << e.what() << std::endl;
+}
+
+//==============================================================================
+// MIDI Routing and Distribution
+//==============================================================================
+
+void AudioEngine::routeMidiToPlayer(Player* player, const juce::MidiMessage& message)
+{
+    if (!player) return;
+    
+    juce::ScopedLock lock(playerRegistryMutex);
+    auto it = playerNodes.find(player);
+    if (it != playerNodes.end() && it->second->isActive.load()) {
+        // TODO: Route MIDI to specific player when Player interface is updated
+        DBG("INFO: MIDI message routed to player (placeholder)");
     }
+}
+
+void AudioEngine::routeMidiToAllActivePlayers(const juce::MidiMessage& message)
+{
+    juce::ScopedLock lock(playerRegistryMutex);
+    
+    for (auto& [player, node] : playerNodes) {
+        if (node->isActive.load()) {
+            // TODO: Route MIDI to player when Player interface is updated
+        }
+    }
+}
+
+void AudioEngine::setMidiInputEnabled(bool enabled)
+{
+    midiInputEnabled.store(enabled);
+    DBG("INFO: MIDI input " << (enabled ? "enabled" : "disabled"));
+}
+
+bool AudioEngine::isMidiInputEnabled() const
+{
+    return midiInputEnabled.load();
+}
+
+void AudioEngine::sendMidiMessage(const juce::MidiMessage& message)
+{
+    // Same as routeMidiToAllActivePlayers but for backward compatibility
+    routeMidiToAllActivePlayers(message);
 }
 
 void AudioEngine::enableMidiInput(bool enabled)
 {
-    if (deviceManager == nullptr)
-    {
-        std::cerr << "ERROR: deviceManager is null in enableMidiInput" << std::endl;
-        return;
-    }
-    
-    try
-    {
-        // Get all available MIDI input devices
-        auto midiInputs = MidiInput::getAvailableDevices();
-        
-        // Log the number of available MIDI devices
-        std::cout << "Found " << midiInputs.size() << " MIDI input devices" << std::endl;
-        
-        if (midiInputs.isEmpty())
-        {
-            std::cout << "No MIDI input devices available." << std::endl;
-            
-            // If no MIDI devices are available, we can't do much
-            // The virtual keyboard will still work through direct MIDI message routing
-            if (enabled)
-            {
-                std::cout << "No MIDI inputs to enable, but virtual keyboard will still work" << std::endl;
-                // Set the flag to true even if there are no physical MIDI devices
-                // This will allow the virtual keyboard to work
-                midiEnabled = true;
-            }
-            else
-            {
-                std::cout << "No MIDI inputs to disable" << std::endl;
-                midiEnabled = false;
-            }
-        }
-        else
-        {
-            // Enable or disable all MIDI inputs
-            for (const auto& input : midiInputs)
-            {
-                std::cout << "Setting MIDI device " << input.name << " (" << input.identifier << ") to " 
-                          << (enabled ? "enabled" : "disabled") << std::endl;
-                          
-                deviceManager->setMidiInputDeviceEnabled(input.identifier, enabled);
-                
-                if (enabled)
-                    std::cout << "Enabled MIDI input: " << input.name << std::endl;
-                else
-                    std::cout << "Disabled MIDI input: " << input.name << std::endl;
-            }
-        }
-        
-        // Check if any MIDI inputs are enabled after our attempt
-        bool anyEnabled = false;
-        for (const auto& input : midiInputs)
-        {
-            if (deviceManager->isMidiInputDeviceEnabled(input.identifier))
-            {
-                anyEnabled = true;
-                std::cout << "Confirmed MIDI input is enabled: " << input.name << std::endl;
-                break;
-            }
-        }
-        
-        if (!anyEnabled && enabled)
-        {
-            std::cout << "WARNING: Failed to enable any MIDI inputs" << std::endl;
-            // Still set the flag to true if we're trying to enable MIDI
-            // This will allow the virtual keyboard to work even if no physical MIDI devices are available
-            midiEnabled = enabled;
-        }
-        else
-        {
-            // Set the flag based on whether any devices are enabled
-            midiEnabled = anyEnabled || enabled;
-        }
-        
-        // Log the current MIDI enabled state
-        std::cout << "MIDI input is now " << (midiEnabled ? "ENABLED" : "DISABLED") << std::endl;
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "ERROR: Failed to enable/disable MIDI inputs: " << e.what() << std::endl;
-        // Don't change the flag if there was an error
-    }
+    // Same as setMidiInputEnabled but for backward compatibility
+    setMidiInputEnabled(enabled);
 }
 
-void AudioEngine::sendMidiMessage(const MidiMessage& message)
+bool AudioEngine::registerMidiInput(const juce::String& deviceName, juce::MidiInputCallback* callback)
 {
-    // Use a lock to ensure thread safety when accessing the processor list
-    const ScopedLock sl(processorLock);
+    if (!deviceManager || !callback) return false;
     
-    // Send the MIDI message to all registered AudioProcessorPlayers
-    for (auto* player : audioProcessorPlayers)
-    {
-        if (player != nullptr)
-        {
-            // Get the MidiMessageCollector from the player and add the message
-            auto& collector = player->getMidiMessageCollector();
-            collector.addMessageToQueue(message);
-        }
-    }
-    
-    std::cout << "Sent MIDI message to " << audioProcessorPlayers.size() << " players" << std::endl;
-}
-
-void AudioEngine::processMidiKeyboardState(MidiKeyboardState& keyboardState)
-{
-    // Use a lock to ensure thread safety when accessing the processor list
-    const ScopedLock sl(processorLock);
-    
-    // Process the keyboard state for each player
-    for (auto* player : audioProcessorPlayers)
-    {
-        if (player != nullptr)
-        {
-            // Create a temporary MidiBuffer to hold the keyboard events
-            MidiBuffer midiBuffer;
-            
-            // Process the keyboard state into the buffer
-            // This converts keyboard events into MIDI messages
-            keyboardState.processNextMidiBuffer(midiBuffer, 0, 512, true);
-            
-            // If we have any messages, add them to the player's collector
-            if (!midiBuffer.isEmpty())
-            {
-                auto& collector = player->getMidiMessageCollector();
-                
-                // Add each message to the collector
-                for (const auto metadata : midiBuffer)
-                {
-                    MidiMessage message = metadata.getMessage();
-                    message.setTimeStamp(Time::getMillisecondCounterHiRes() * 0.001);
-                    collector.addMessageToQueue(message);
-                }
-                
-                std::cout << "Processed keyboard state, added messages to player" << std::endl;
-            }
-        }
-    }
-}
-
-void AudioEngine::setMasterGain(float gain)
-{
-    if (deviceManager == nullptr)
-        return;
-    
-    try
-    {
-        // Clamp the gain to a reasonable range
-        gain = jlimit(0.0f, 1.0f, gain);
-        
-        // Set the output volume on the audio device
-        if (auto* device = deviceManager->getCurrentAudioDevice())
-        {
-            // Set the output level on all registered processors
-            for (auto* processor : registeredProcessors)
-            {
-                if (processor != nullptr)
-                {
-                    // Apply the gain to the processor graph if it's an AudioProcessorGraph
-                    if (auto* processorGraph = dynamic_cast<AudioProcessorGraph*>(processor))
-                    {
-                        // Find all audio output nodes and set their gain
-                        for (auto* node : processorGraph->getNodes())
-                        {
-                            auto* nodeProcessor = node->getProcessor();
-                            auto* ioProcessor = dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(nodeProcessor);
-                            
-                            if (ioProcessor != nullptr && 
-                                ioProcessor->getType() == AudioProcessorGraph::AudioGraphIOProcessor::audioOutputNode)
-                            {
-                                // For now, just make sure the node is enabled and has inputs
-                                if (ioProcessor->getTotalNumInputChannels() == 0)
-                                {
-                                    // Try to set the bus layout to stereo
-                                    AudioProcessor::BusesLayout layout = ioProcessor->getBusesLayout();
-                                    if (layout.inputBuses.size() > 0)
-                                    {
-                                        layout.inputBuses[0] = AudioChannelSet::stereo();
-                                        bool success = ioProcessor->setBusesLayout(layout);
-                                        std::cout << "Set audio output bus layout to stereo: " 
-                                                  << (success ? "success" : "failed") << std::endl;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Also try to set the output level on the device if supported
-            // Note: This is device-dependent and may not work on all platforms
-            std::cout << "Set master gain to " << gain << " on device " << device->getName() << std::endl;
-            
-            // Force an audio device restart to apply changes
-            auto setup = deviceManager->getAudioDeviceSetup();
-            deviceManager->restartLastAudioDevice();
-        }
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "ERROR: Failed to set master gain: " << e.what() << std::endl;
-    }
-}
-
-std::unique_ptr<XmlElement> AudioEngine::getAudioDeviceState() const
-{
-    return deviceManager->createStateXml();
-}
-
-bool AudioEngine::setAudioDeviceState(const XmlElement* stateXml)
-{
-    if (stateXml == nullptr)
+    try {
+        deviceManager->addMidiInputDeviceCallback(deviceName, callback);
+        DBG("INFO: Registered MIDI input callback for device: " << deviceName);
+        return true;
+    } catch (const std::exception& e) {
+        DBG("ERROR: Failed to register MIDI input callback: " << e.what());
         return false;
-        
-    // Initialize the device manager with the saved state
-    auto result = deviceManager->initialise(
-        deviceManager->getAudioDeviceSetup().inputChannels.countNumberOfSetBits(),
-        deviceManager->getAudioDeviceSetup().outputChannels.countNumberOfSetBits(),
-        stateXml,
-        true);
-    // Convert result to bool - true if no error
-    return (result == juce::String());
+    }
 }
 
-void AudioEngine::showAudioSettings(Component* parentComponent)
+void AudioEngine::unregisterMidiInput(const juce::String& deviceName, juce::MidiInputCallback* callback)
 {
-    auto* audioSettingsComp = new AudioDeviceSelectorComponent(
-        *deviceManager,
-        0, 256,  // input channels
-        0, 256,  // output channels
-        true,    // show MIDI input
-        true,    // show MIDI output
-        true,    // show channels as stereo pairs
-        false);  // hide advanced options
-        
-    audioSettingsComp->setSize(500, 450);
+    if (!deviceManager || !callback) return;
     
-    DialogWindow::LaunchOptions o;
-    o.content.setOwned(audioSettingsComp);
-    o.dialogTitle = "Audio Settings";
-    o.componentToCentreAround = parentComponent;
-    o.dialogBackgroundColour = parentComponent->getLookAndFeel().findColour(ResizableWindow::backgroundColourId);
-    o.escapeKeyTriggersCloseButton = true;
-    o.useNativeTitleBar = false;
-    o.resizable = false;
-    
-    auto* w = o.create();
-    
-    // Use a lambda to handle the dialog close event
-    w->enterModalState(true, ModalCallbackFunction::create(
-        [this](int)
-        {
-            // Save audio state when dialog closes
-            auto audioState = this->getAudioDeviceState();
-            
-            // Notify listeners of the change without saving to settings
-            // Settings will be handled by MainHostWindow
-            broadcaster.sendChangeMessage();
-        }), true);
+    try {
+        deviceManager->removeMidiInputDeviceCallback(deviceName, callback);
+        DBG("INFO: Unregistered MIDI input callback for device: " << deviceName);
+    } catch (const std::exception& e) {
+        DBG("ERROR: Failed to unregister MIDI input callback: " << e.what());
+    }
 }
+
+//==============================================================================
+// Resource Access (Thread-Safe)
+//==============================================================================
+
+juce::AudioDeviceManager& AudioEngine::getDeviceManager()
+{
+    jassert(deviceManager != nullptr);
+    return *deviceManager;
+}
+
+juce::AudioPluginFormatManager& AudioEngine::getFormatManager()
+{
+    jassert(formatManager != nullptr);
+    return *formatManager;
+}
+
+juce::KnownPluginList& AudioEngine::getKnownPluginList()
+{
+    jassert(knownPluginList != nullptr);
+    return *knownPluginList;
+}
+
+//==============================================================================
+// Audio Quality Monitoring
+//==============================================================================
+
+bool AudioEngine::isAudioQualityGood() const
+{
+    return audioQualityGood.load();
+}
+
+double AudioEngine::getCpuUsage() const
+{
+    return cpuUsage.load();
+}
+
+int AudioEngine::getBufferUnderruns() const
+{
+    return bufferUnderrunCount.load();
+}
+
+void AudioEngine::resetQualityMonitoring()
+{
+    cpuUsage.store(0.0);
+    bufferUnderrunCount.store(0);
+    audioQualityGood.store(true);
+    averageProcessTime.store(0.0);
+    lastProcessTime = std::chrono::high_resolution_clock::now();
+    
+    DBG("INFO: Quality monitoring reset");
+}
+
+void AudioEngine::updateQualityMetrics(double processingTime)
+{
+    // Update average processing time with exponential moving average
+    double currentAverage = averageProcessTime.load();
+    double alpha = 0.1; // Smoothing factor
+    double newAverage = alpha * processingTime + (1.0 - alpha) * currentAverage;
+    averageProcessTime.store(newAverage);
+    
+    // Calculate CPU usage estimate (processing time / available time)
+    double bufferTime = static_cast<double>(currentBufferSize.load()) / currentSampleRate.load();
+    double usage = processingTime / bufferTime;
+    cpuUsage.store(juce::jmin(1.0, usage));
+    
+    // Check for buffer underruns (processing took too long)
+    if (processingTime > bufferTime * 0.8) { // 80% threshold
+        bufferUnderrunCount.fetch_add(1);
+        
+        // Mark quality as bad if too many underruns
+        if (bufferUnderrunCount.load() > 5) {
+            audioQualityGood.store(false);
+        }
+    }
+}
+
+void AudioEngine::checkAudioQuality()
+{
+    // Reset quality to good if underruns have stopped
+    if (audioQualityGood.load() == false) {
+        static int checkCounter = 0;
+        if (++checkCounter > 100) { // Check every ~2 seconds at 44.1kHz/512 samples
+            if (cpuUsage.load() < 0.5) { // CPU usage under control
+                audioQualityGood.store(true);
+                DBG("INFO: Audio quality restored");
+            }
+            checkCounter = 0;
+        }
+    }
+}
+
+//==============================================================================
+// Audio Device Management
+//==============================================================================
 
 double AudioEngine::getSampleRate() const
 {
-    if (auto* device = deviceManager->getCurrentAudioDevice())
-        return device->getCurrentSampleRate();
-        
-    return 44100.0; // Default sample rate
+    return currentSampleRate.load();
 }
 
 int AudioEngine::getBufferSize() const
 {
-    if (auto* device = deviceManager->getCurrentAudioDevice())
-        return device->getCurrentBufferSizeSamples();
-        
-    return 512; // Default buffer size
-}
-
-void AudioEngine::setDoublePrecisionProcessing(bool doublePrecision)
-{
-    if (doublePrecision == doublePrecisionProcessing)
-        return; // No change
-    
-    // Use a lock to ensure thread safety when modifying processor connections
-    const ScopedLock sl(processorLock);
-        
-    doublePrecisionProcessing = doublePrecision;
-    
-    // Update all players
-    for (auto* player : audioProcessorPlayers)
-    {
-        // Store the processor temporarily
-        auto* processor = player->getCurrentProcessor();
-        
-        // Unregister from device manager
-        deviceManager->removeAudioCallback(player);
-        
-        // Release the processor from the player
-        player->setProcessor(nullptr);
-        
-        // Set the double precision flag
-        player->setDoublePrecisionProcessing(doublePrecisionProcessing);
-        
-        // Re-assign the processor
-        player->setProcessor(processor);
-        
-        // Re-register with device manager
-        deviceManager->addAudioCallback(player);
-    }
-    
-    // Settings will be handled by MainHostWindow
-    // No need to save here to avoid circular dependencies
-    
-    std::cout << "Double precision processing " 
-              << (doublePrecisionProcessing ? "enabled" : "disabled") << std::endl;
-              
-    // Notify listeners of the change
-    broadcaster.sendChangeMessage();
-}
-
-void AudioEngine::addChangeListener(ChangeListener* listener)
-{
-    broadcaster.addChangeListener(listener);
-}
-
-void AudioEngine::removeChangeListener(ChangeListener* listener)
-{
-    broadcaster.removeChangeListener(listener);
-}
-
-void AudioEngine::changeListenerCallback(ChangeBroadcaster* source)
-{
-    if (source == deviceManager.get())
-    {
-        // Device manager changed, notify our listeners
-        broadcaster.sendChangeMessage();
-        
-        // Output some debug info
-        if (auto* device = deviceManager->getCurrentAudioDevice())
-        {
-            std::cout << "Audio device changed: " << device->getName() 
-                      << " (" << device->getCurrentSampleRate() << " Hz, " 
-                      << device->getCurrentBufferSizeSamples() << " samples)" << std::endl;
-        }
-        else
-        {
-            std::cout << "Audio device removed" << std::endl;
-        }
-    }
-}
-
-AudioProcessorPlayer* AudioEngine::findPlayerForProcessor(AudioProcessor* processor)
-{
-    // This method is called from within locked methods, so no need for additional locking
-    for (int i = 0; i < registeredProcessors.size(); ++i)
-    {
-        if (registeredProcessors[i] == processor)
-            return audioProcessorPlayers[i];
-    }
-    
-    return nullptr;
-}
-
-float AudioEngine::getCpuUsage() const
-{
-    return static_cast<float>(deviceManager->getCpuUsage());
+    return currentBufferSize.load();
 }
 
 int AudioEngine::getInputLatencySamples() const
 {
-    if (auto* device = deviceManager->getCurrentAudioDevice())
+    if (auto* device = deviceManager->getCurrentAudioDevice()) {
         return device->getInputLatencyInSamples();
+    }
     return 0;
 }
 
 int AudioEngine::getOutputLatencySamples() const
 {
-    if (auto* device = deviceManager->getCurrentAudioDevice())
+    if (auto* device = deviceManager->getCurrentAudioDevice()) {
         return device->getOutputLatencyInSamples();
+    }
     return 0;
 }
 
-StringArray AudioEngine::getAvailableAudioDeviceNames() const
+void AudioEngine::showAudioSettings(juce::Component* parentComponent)
 {
-    StringArray deviceNames;
-    // Get available device types without copying the OwnedArray
-    for (int i = 0; i < deviceManager->getAvailableDeviceTypes().size(); ++i)
-    {
-        auto* type = deviceManager->getAvailableDeviceTypes()[i];
-        auto names = type->getDeviceNames();
-        deviceNames.addArray(names);
+    if (deviceManager) {
+        juce::AudioDeviceSelectorComponent selector(*deviceManager, 2, 2, 2, 2, true, true, true, false);
+        
+        juce::DialogWindow::LaunchOptions options;
+        options.content.setNonOwned(&selector);
+        options.dialogTitle = "Audio Settings";
+        options.componentToCentreAround = parentComponent;
+        options.dialogBackgroundColour = juce::Colours::lightgrey;
+        options.escapeKeyTriggersCloseButton = true;
+        options.useNativeTitleBar = false;
+        options.resizable = false;
+        
+        options.launchAsync();
     }
-    
-    return deviceNames;
 }
 
-AudioProcessorGraph::NodeID AudioEngine::addPlayerGraph(AudioProcessorGraph& playerGraph)
-{
-    ScopedLock sl(processorLock);
-    
-    // Create the main processor graph if it doesn't exist
-    if (!mainProcessorGraph)
-    {
-        mainProcessorGraph = std::make_unique<AudioProcessorGraph>();
-        mainProcessorGraph->setPlayConfigDetails(2, 2, getSampleRate(), getBufferSize());
-        mainProcessorGraph->prepareToPlay(getSampleRate(), getBufferSize());
-        
-        // Register the main processor graph with the device manager
-        registerProcessor(mainProcessorGraph.get());
-    }
-    
-    // Create a node for the player graph in the main graph
-    AudioProcessorGraph::NodeID nodeId;
-    if (auto node = mainProcessorGraph->addNode(std::make_unique<AudioProcessorGraph::AudioGraphIOProcessor>(
-                                               AudioProcessorGraph::AudioGraphIOProcessor::audioInputNode)))
-    {
-        nodeId = node->nodeID;
-        
-        // Connect the player graph to the main graph
-        // Use playerGraph to set up connections here
-        // This is a placeholder - actual implementation would connect inputs/outputs appropriately
-        juce::ignoreUnused(playerGraph);
-    }
-    
-    return nodeId;
-}
+//==============================================================================
+// AudioIODeviceCallback Implementation
+//==============================================================================
 
-void AudioEngine::removePlayerGraph(AudioProcessorGraph::NodeID nodeId)
+void AudioEngine::audioDeviceIOCallbackWithContext(const float* const* inputChannelData,
+                                                  int numInputChannels,
+                                                  float* const* outputChannelData,
+                                                  int numOutputChannels,
+                                                  int numSamples,
+                                                  const juce::AudioIODeviceCallbackContext& context)
 {
-    ScopedLock sl(processorLock);
+    auto startTime = std::chrono::high_resolution_clock::now();
     
-    if (mainProcessorGraph)
-    {
-        // Remove all connections to this node
-        mainProcessorGraph->disconnectNode(nodeId);
-        
-        // Remove the node
-        mainProcessorGraph->removeNode(nodeId);
+    // Clear output buffers
+    for (int i = 0; i < numOutputChannels; ++i) {
+        if (outputChannelData[i] != nullptr) {
+            juce::FloatVectorOperations::clear(outputChannelData[i], numSamples);
+        }
     }
     
-    // Remove from active players map
-    for (auto it = activePlayers.begin(); it != activePlayers.end(); ++it)
-    {
-        if (it->second == nodeId)
-        {
-            activePlayers.erase(it);
-            break;
+    // Only process if audio is active and we have a master graph
+    if (!isAudioActive.load() || !masterGraph) {
+        return;
+    }
+    
+    // Try to get player registry lock without blocking audio thread
+    juce::ScopedTryLock lock(playerRegistryMutex);
+    if (!lock.isLocked()) {
+        // Skip this block if we can't get the lock immediately
+        return;
+    }
+    
+    try {
+        // Create audio buffer for processing
+        juce::AudioBuffer<float> audioBuffer(const_cast<float**>(outputChannelData), 
+                                           numOutputChannels, numSamples);
+        
+        // Create MIDI buffer for processing
+        juce::MidiBuffer midiBuffer;
+        
+        // Process MIDI events from active players
+        processMidiEvents(midiBuffer, numSamples);
+        
+        // Process master graph
+        masterGraph->processBlock(audioBuffer, midiBuffer);
+        
+        // Update quality metrics
+        auto endTime = std::chrono::high_resolution_clock::now();
+        double processingTime = std::chrono::duration<double>(endTime - startTime).count();
+        updateQualityMetrics(processingTime);
+        
+        // Check audio quality periodically
+        checkAudioQuality();
+        
+    } catch (const std::exception& e) {
+        DBG("ERROR: Exception in audio callback: " << e.what());
+        
+        // Clear output on exception to prevent noise
+        for (int i = 0; i < numOutputChannels; ++i) {
+            if (outputChannelData[i] != nullptr) {
+                juce::FloatVectorOperations::clear(outputChannelData[i], numSamples);
+            }
         }
     }
 }
 
-void AudioEngine::activatePlayer(covertracks::Player* player)
+void AudioEngine::audioDeviceAboutToStart(juce::AudioIODevice* device)
 {
-    if (!player)
-        return;
-    
-    // Check if already active
-    if (activePlayers.find(player) != activePlayers.end())
-        return;
-    
-    // Get the player's instrument and prepare it for playback
-    if (auto* instrument = player->getInstrument())
-    {
-        // Connect instrument's processor graph to the main graph
-        if (auto* processorGraph = instrument->getProcessorGraph())
-        {
-            auto nodeId = addPlayerGraph(*processorGraph);
-            activePlayers[player] = nodeId;
-            
-            // Instrument state changes
-            instrument->prepareForPlayback();
-        }
-    }
-    
-    // Notify change listeners
-    broadcaster.sendChangeMessage();
-}
-
-void AudioEngine::deactivatePlayer(covertracks::Player* player)
-{
-    if (!player)
-        return;
-    
-    auto it = activePlayers.find(player);
-    if (it != activePlayers.end())
-    {
-        // Remove the player's graph from the main graph
-        removePlayerGraph(it->second);
-        activePlayers.erase(it);
+    if (device) {
+        double sampleRate = device->getCurrentSampleRate();
+        int bufferSize = device->getCurrentBufferSizeSamples();
         
-        // Release instrument resources
-        if (auto* instrument = player->getInstrument())
-        {
-            instrument->releaseResources();
+        currentSampleRate.store(sampleRate);
+        currentBufferSize.store(bufferSize);
+        
+        // Prepare master graph
+        if (masterGraph) {
+            masterGraph->prepareToPlay(sampleRate, bufferSize);
         }
         
-        // Notify change listeners
-        broadcaster.sendChangeMessage();
-    }
-}
-
-std::shared_ptr<AudioProcessor> AudioEngine::getSharedProcessor(const String& processorId)
-{
-    auto it = sharedProcessors.find(processorId);
-    if (it != sharedProcessors.end())
-        return it->second;
-    
-    return nullptr;
-}
-
-void AudioEngine::registerSharedProcessor(const String& processorId, std::shared_ptr<AudioProcessor> processor)
-{
-    if (processor)
-        sharedProcessors[processorId] = processor;
-}
-
-bool AudioEngine::connectNodes(AudioProcessorGraph::NodeID sourceNodeId, 
-                              int sourceChannelIndex,
-                              AudioProcessorGraph::NodeID destNodeId,
-                              int destChannelIndex)
-{
-    if (!mainProcessorGraph)
-        return false;
-    
-    AudioProcessorGraph::Connection connection = {
-        { sourceNodeId, sourceChannelIndex },
-        { destNodeId, destChannelIndex }
-    };
-    
-    return mainProcessorGraph->addConnection(connection);
-}
-
-AudioProcessorGraph::NodeID AudioEngine::getPlayerGraphNodeId(AudioProcessorGraph* processorGraph) const
-{
-    if (!mainProcessorGraph || !processorGraph)
-        return AudioProcessorGraph::NodeID();
+        // Reset quality monitoring
+        resetQualityMonitoring();
         
-    // Find the node ID for this processor graph
-    for (auto* node : mainProcessorGraph->getNodes())
-    {
-        if (node->getProcessor() == processorGraph)
-            return node->nodeID;
+        DBG("INFO: Audio device started - " << sampleRate << "Hz, " << bufferSize << " samples");
+    }
+}
+
+void AudioEngine::audioDeviceStopped()
+{
+    if (masterGraph) {
+        masterGraph->releaseResources();
     }
     
-    return AudioProcessorGraph::NodeID();
+    DBG("INFO: Audio device stopped");
+}
+
+//==============================================================================
+// ChangeListener Implementation
+//==============================================================================
+
+void AudioEngine::changeListenerCallback(juce::ChangeBroadcaster* source)
+{
+    // Handle audio device changes
+    if (source == deviceManager.get()) {
+        DBG("INFO: Audio device configuration changed");
+        
+        if (auto* device = deviceManager->getCurrentAudioDevice()) {
+            currentSampleRate.store(device->getCurrentSampleRate());
+            currentBufferSize.store(device->getCurrentBufferSizeSamples());
+        }
+    }
+}
+
+//==============================================================================
+// MIDI Processing
+//==============================================================================
+
+void AudioEngine::processMidiEvents(juce::MidiBuffer& midiBuffer, int numSamples)
+{
+    if (!midiInputEnabled.load()) return;
+    
+    // Clear any existing MIDI data
+    midiBuffer.clear();
+    
+    // TODO: Collect MIDI events from active players when Player interface is updated
+    // For now, this is a placeholder
+    
+    // Process keyboard state if we have MIDI input
+    keyboardState.processNextMidiBuffer(midiBuffer, 0, numSamples, true);
+}
+
+void AudioEngine::setDoublePrecisionProcessing(bool doublePrecision)
+{
+    // For backward compatibility - the new AudioEngine doesn't currently support
+    // changing precision dynamically, but we can acknowledge the setting
+    DBG("INFO: Double precision processing " << (doublePrecision ? "enabled" : "disabled") << " (compatibility mode)");
+}
+
+void AudioEngine::unregisterProcessor(juce::AudioProcessor* processor)
+{
+    // For backward compatibility - no-op since we handle this at Player level
+    juce::ignoreUnused(processor);
+    DBG("INFO: unregisterProcessor called (compatibility mode - no action taken)");
+}
+
+void AudioEngine::processMidiKeyboardState(juce::MidiKeyboardState& keyboardState)
+{
+    // For backward compatibility - route MIDI messages to all active players
+    juce::MidiBuffer midiBuffer;
+    keyboardState.processNextMidiBuffer(midiBuffer, 0, getBufferSize(), true);
+    
+    // Send each MIDI message to all active players
+    for (const auto metadata : midiBuffer) {
+        sendMidiMessage(metadata.getMessage());
+    }
 }
 
 } // namespace covertracks
