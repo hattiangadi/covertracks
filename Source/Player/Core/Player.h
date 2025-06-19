@@ -67,9 +67,10 @@ struct PlayerMetadata {
  * @brief Core class for the unified Player architecture
  * 
  * Player combines instrument (audio processing) and musician (pattern generation)
- * capabilities in a unified interface.
+ * capabilities in a unified interface. Now extends juce::AudioProcessor for
+ * proper audio thread integration.
  */
-class Player {
+class Player : public juce::AudioProcessor {
 public:
     /**
      * @brief Construct a new Player
@@ -88,13 +89,12 @@ public:
     /**
      * @brief Destroy the Player
      */
-    ~Player();
+    ~Player() override;
 
     // Resource management
     void loadMinimalResources();  // Load metadata and minimal state
     void prepareForEditing();     // Prepare for UI editing
     void prepareForPlayback();    // Prepare for audio playback
-    void releaseResources();      // Release heavy resources
     bool initializeMinimal();     // Initialize with minimal resources
     
     // Graph state management for deferred loading
@@ -259,6 +259,36 @@ public:
      */
     void setChartFinishedCallback(std::function<void(const String&)> callback);
     
+    // =========================================================================
+    // MIDI Callback System
+    // =========================================================================
+    
+    /**
+     * @brief Set MIDI message callback for receiving MIDI from AudioEngine
+     * 
+     * @param callback Function to call when MIDI message is received
+     */
+    void setMidiCallback(std::function<void(const juce::MidiMessage&)> callback);
+    
+    /**
+     * @brief Remove MIDI callback
+     */
+    void clearMidiCallback();
+    
+    /**
+     * @brief Check if player has MIDI callback set
+     * 
+     * @return true if MIDI callback is set
+     */
+    bool hasMidiCallback() const;
+    
+    /**
+     * @brief Process incoming MIDI message (called by AudioEngine)
+     * 
+     * @param message MIDI message to process
+     */
+    void processMidiMessage(const juce::MidiMessage& message);
+    
     /**
      * @brief Get instrument capabilities for LLM integration
      * 
@@ -392,6 +422,57 @@ public:
       * @return float Current level (0.0 to 2.0)
       */
      float getLevel() const { return outputLevel; }
+
+    // =========================================================================
+    // AudioProcessor Interface Implementation
+    // =========================================================================
+    
+    // Core AudioProcessor methods
+    void prepareToPlay(double sampleRate, int blockSize) override;
+    void releaseResources() override;
+    void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override;
+    
+    // AudioProcessor configuration
+    double getTailLengthSeconds() const override { return 0.0; }
+    bool acceptsMidi() const override { return true; }
+    bool producesMidi() const override { return false; }
+    bool isMidiEffect() const override { return false; }
+    bool silenceInProducesSilenceOut() const override { return false; }
+    
+    // Bus configuration
+    bool isBusesLayoutSupported(const BusesLayout& layouts) const override;
+    static BusesProperties getDefaultBusesProperties();
+    
+    // AudioProcessor identification
+    const juce::String getName() const override;
+    bool hasEditor() const override { return false; }
+    juce::AudioProcessorEditor* createEditor() override { return nullptr; }
+    
+    // Program/preset management (not used)
+    int getNumPrograms() override { return 1; }
+    int getCurrentProgram() override { return 0; }
+    void setCurrentProgram(int) override {}
+    const juce::String getProgramName(int) override { return "Default"; }
+    void changeProgramName(int, const juce::String&) override {}
+    
+    // State management (not used for now)
+    void getStateInformation(juce::MemoryBlock&) override {}
+    void setStateInformation(const void*, int) override {}
+    
+    // =========================================================================
+    // Player-Specific AudioProcessor Interface
+    // =========================================================================
+    
+    /**
+     * @brief Start playback using AudioProcessor interface
+     */
+    void startPlayback();
+    
+    /**
+     * @brief Check if player is currently playing
+     * @return true if playing, false otherwise
+     */
+    bool isPlaying() const;
  
     
 private:
@@ -419,6 +500,10 @@ private:
     // Audio processing
     float outputLevel = 1.0f;     // Output level multiplier (0.0 to 2.0)
     
+    // MIDI callback system
+    std::function<void(const juce::MidiMessage&)> midiCallback;
+    juce::CriticalSection midiCallbackMutex;
+    
     // Deferred loading data
     String graphFileName;         // Name of the graph file to load when needed
     String embeddedGraphState;    // Base64-encoded graph state to load when needed
@@ -443,6 +528,13 @@ private:
     var currentLoadedChart;
     std::shared_ptr<juce::MidiMessageSequence> currentMidiSequence;
     double chartTempo = 120.0; // Default tempo in BPM
+    
+    // AudioProcessor state
+    std::atomic<bool> playbackActive{false};
+    double currentSampleRate = 44100.0;
+    int currentBlockSize = 512;
+    juce::int64 samplesPlayed = 0;
+    double playbackPositionSeconds = 0.0;
     
     // Chart finished callback
     std::function<void(const String&)> onChartFinished;

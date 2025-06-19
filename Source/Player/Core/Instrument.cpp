@@ -162,37 +162,8 @@ bool Instrument::prepareForPlayback()
             // Update the member variable
             sampleRate = currentSampleRate;
             
-            // First, check if we have audio output nodes in the graph
-            bool hasAudioOutputNode = false;
-            for (auto* node : processorGraph->getNodes())
-            {
-                auto* processor = node->getProcessor();
-                if (processor != nullptr && processor->getName().contains("Audio Output"))
-                {
-                    hasAudioOutputNode = true;
-                    // std::cout << "Found audio output node in graph: " << processor->getName() << std::endl;
-                    break;
-                }
-            }
-            
-            // If no audio output node found, create one
-            if (!hasAudioOutputNode)
-            {
-                // std::cout << "No audio output node found, creating one..." << std::endl;
-                
-                // Create an audio output node
-                auto audioOutputNode = processorGraph->addNode(std::make_unique<AudioProcessorGraph::AudioGraphIOProcessor>(
-                    AudioProcessorGraph::AudioGraphIOProcessor::audioOutputNode));
-                
-                if (audioOutputNode != nullptr)
-                {
-                    // std::cout << "Created audio output node with ID: " << audioOutputNode->nodeID.uid << std::endl;
-                }
-                else
-                {
-                    std::cerr << "Failed to create audio output node" << std::endl;
-                }
-            }
+            // NOTE: Don't create audio output nodes here - AudioEngine handles final audio routing
+            // The AudioEngine's master graph will handle connecting this Instrument's output to the actual audio device
             
             // Check if we have a MIDI input node in the graph
             bool hasMidiInputNode = false;
@@ -230,19 +201,7 @@ bool Instrument::prepareForPlayback()
             // Now connect all nodes properly
             // std::cout << "Setting up graph connections for " << instrumentName << "..." << std::endl;
             
-            // First, find the audio output node
-            AudioProcessorGraph::Node::Ptr audioOutputNode = nullptr;
-            for (auto* node : processorGraph->getNodes())
-            {
-                auto* processor = node->getProcessor();
-                if (processor != nullptr && 
-                    dynamic_cast<AudioProcessorGraph::AudioGraphIOProcessor*>(processor) != nullptr &&
-                    processor->getName().contains("Audio Output"))
-                {
-                    audioOutputNode = node;
-                    break;
-                }
-            }
+            // NOTE: No longer searching for audio output nodes - AudioEngine handles final routing
             
             // If we didn't find an existing MIDI input node, use the one we created
             if (!hasMidiInputNode && midiInputNode == nullptr)
@@ -280,28 +239,9 @@ bool Instrument::prepareForPlayback()
                     }
                 }
                 
-                // Connect this node to audio output if it produces audio
-                if (processor->getTotalNumOutputChannels() > 0 && audioOutputNode != nullptr)
-                {
-                    // Connect audio outputs to the audio output node
-                    int numChannels = std::min(2, processor->getTotalNumOutputChannels());
-                    for (int channel = 0; channel < numChannels; ++channel)
-                    {
-                        if (processorGraph->addConnection({ { node->nodeID, channel }, 
-                                                           { audioOutputNode->nodeID, channel } }))
-                        {
-                            // std::cout << "Connected node " << node->nodeID.uid 
-                                      // << " channel " << channel 
-                                      // << " to audio output node" << std::endl;
-                        }
-                        else
-                        {
-                            std::cerr << "Failed to connect node " << node->nodeID.uid 
-                                      << " channel " << channel 
-                                      << " to audio output node" << std::endl;
-                        }
-                    }
-                }
+                // NOTE: No longer connecting to audio output nodes here
+                // The AudioEngine will handle connecting this Instrument's output to the actual audio device
+                // The processor nodes will remain ready to produce audio when processed by AudioEngine
             }
             
             // Print the final graph structure
@@ -520,14 +460,14 @@ bool Instrument::loadPluginGraph(const XmlElement& graphState)
         // Check if this is an audio output node
         if (ioProcessor != nullptr && ioProcessor->getType() == AudioProcessorGraph::AudioGraphIOProcessor::audioOutputNode)
         {
-            // std::cout << "Found audio output node (ID: " << node->nodeID.uid << "), current inputs: " 
-                      // << processor->getTotalNumInputChannels() << std::endl;
+            std::cout << "🎵 Found audio output node (ID: " << node->nodeID.uid << "), current inputs: " 
+                      << processor->getTotalNumInputChannels() << std::endl;
             
             // If the audio output node has 0 input channels, we need to fix it
             if (processor->getTotalNumInputChannels() == 0)
             {
                 // Configure the node for stereo input - try multiple approaches
-                // std::cout << "Fixing audio output node (ID: " << node->nodeID.uid << ") with 0 input channels" << std::endl;
+                std::cout << "🔧 Fixing audio output node (ID: " << node->nodeID.uid << ") with 0 input channels for EDIT MODE" << std::endl;
                 bool fixed = false;
                 
                 // Approach 1: Set buses layout
@@ -537,12 +477,12 @@ bool Instrument::loadPluginGraph(const XmlElement& graphState)
                     layout.inputBuses[0] = AudioChannelSet::stereo();
                     if (processor->setBusesLayout(layout))
                     {
-                        // std::cout << "Approach 1 (setBusesLayout): success" << std::endl;
+                        std::cout << "✅ Approach 1 (setBusesLayout): success" << std::endl;
                         fixed = true;
                     }
                     else
                     {
-                        // std::cout << "Approach 1 (setBusesLayout): failed" << std::endl;
+                        std::cout << "❌ Approach 1 (setBusesLayout): failed" << std::endl;
                     }
                 }
                 
@@ -551,34 +491,39 @@ bool Instrument::loadPluginGraph(const XmlElement& graphState)
                 {
                     if (processor->enableAllBuses())
                     {
-                        // std::cout << "Approach 2 (enable bus): success" << std::endl;
+                        std::cout << "✅ Approach 2 (enable bus): success" << std::endl;
                     }
                     else
                     {
-                        // std::cout << "Approach 2 (enable bus): failed" << std::endl;
+                        std::cout << "❌ Approach 2 (enable bus): failed" << std::endl;
                     }
                     
                     if (processor->setChannelLayoutOfBus(true, 0, AudioChannelSet::stereo()))
                     {
-                        // std::cout << "Approach 2 (setCurrentLayout): success" << std::endl;
+                        std::cout << "✅ Approach 2 (setCurrentLayout): success" << std::endl;
                         fixed = true;
                     }
                     else
                     {
-                        // std::cout << "Approach 2 (setCurrentLayout): failed" << std::endl;
+                        std::cout << "❌ Approach 2 (setCurrentLayout): failed" << std::endl;
                     }
                 }
                 
                 if (fixed)
                 {
                     outputNodesFixed = true;
-                    // std::cout << "Successfully fixed audio output node to have " 
-                              // << processor->getTotalNumInputChannels() << " input channels" << std::endl;
+                    std::cout << "✅ Successfully fixed audio output node to have " 
+                              << processor->getTotalNumInputChannels() << " input channels for EDIT MODE" << std::endl;
                 }
                 else
                 {
-                    std::cerr << "Failed to fix audio output node!" << std::endl;
+                    std::cerr << "❌ Failed to fix audio output node for EDIT MODE!" << std::endl;
                 }
+            }
+            else
+            {
+                std::cout << "✅ Audio output node already has " << processor->getTotalNumInputChannels() 
+                          << " input channels - no fix needed" << std::endl;
             }
         }
     }
@@ -770,8 +715,65 @@ bool Instrument::loadPluginGraph(const XmlElement& graphState)
             }
             else
             {
-                std::cerr << "Failed to create connection in processorGraph" << std::endl;
+                // Get the actual nodes to check their configurations
+                auto* sourceNode = processorGraph->getNodeForId(sourceIt->second);
+                auto* destNode = processorGraph->getNodeForId(destIt->second);
+                
+                std::cerr << "Failed to create connection in processorGraph: " 
+                          << sourceIt->second.uid << "/" << connection.source.channelIndex
+                          << " -> " << destIt->second.uid << "/" << connection.destination.channelIndex << std::endl;
+                
+                if (sourceNode && destNode)
+                {
+                    auto* sourceProc = sourceNode->getProcessor();
+                    auto* destProc = destNode->getProcessor();
+                    std::cerr << "  Source (" << sourceIt->second.uid << "): " 
+                              << sourceProc->getTotalNumOutputChannels() << " outputs, type: " 
+                              << sourceProc->getName() << std::endl;
+                    std::cerr << "  Dest (" << destIt->second.uid << "): " 
+                              << destProc->getTotalNumInputChannels() << " inputs, type: " 
+                              << destProc->getName() << std::endl;
+                              
+                    // Check if dest is an audio output node and fix it
+                    auto* ioProcessor = dynamic_cast<juce::AudioProcessorGraph::AudioGraphIOProcessor*>(destProc);
+                    if (ioProcessor && ioProcessor->getType() == juce::AudioProcessorGraph::AudioGraphIOProcessor::audioOutputNode)
+                    {
+                        std::cerr << "  *** Dest is an audio output node with 0 inputs! Fixing bus layout ***" << std::endl;
+                        
+                        // Fix the bus layout to accept stereo input
+                        juce::AudioProcessor::BusesLayout layout;
+                        layout.inputBuses.add(juce::AudioChannelSet::stereo());
+                        layout.outputBuses.add(juce::AudioChannelSet::stereo());
+                        
+                        if (ioProcessor->setBusesLayout(layout))
+                        {
+                            std::cerr << "  ✅ Fixed audio output node bus layout - now has " 
+                                      << ioProcessor->getTotalNumInputChannels() << " inputs" << std::endl;
+                                      
+                            // Retry the connection now that the bus layout is fixed
+                            if (processorGraph->addConnection({ { sourceIt->second, connection.source.channelIndex },
+                                                               { destIt->second, connection.destination.channelIndex } }))
+                            {
+                                std::cerr << "  ✅ Connection successful after bus layout fix!" << std::endl;
+                                continue; // Skip the error reporting since we fixed it
+                            }
+                            else
+                            {
+                                std::cerr << "  ❌ Connection still failed after bus layout fix" << std::endl;
+                            }
+                        }
+                        else
+                        {
+                            std::cerr << "  ❌ Failed to fix audio output node bus layout" << std::endl;
+                        }
+                    }
+                }
             }
+        }
+        else
+        {
+            std::cerr << "Cannot create connection - node mapping not found: source " 
+                      << connection.source.nodeID.uid << " -> dest " << connection.destination.nodeID.uid << std::endl;
         }
     }
     
@@ -1251,6 +1253,7 @@ void Instrument::timerCallback()
     // Process MIDI events directly through the processor graph
     if (playing && !paused && currentSequence != nullptr && processorGraph != nullptr)
     {
+        std::cout << "Timer callback: processing MIDI events at time " << currentTime << std::endl;
         // Calculate the current time in seconds
         double currentTimeInSeconds = currentTime;
         
@@ -1290,10 +1293,10 @@ void Instrument::timerCallback()
                     messageCopy.getNoteNumber(),
                     messageCopy.getVelocity());
                     
-                // std::cout << "Processing note on: channel=" << (int)messageCopy.getChannel() 
-                          // << ", note=" << messageCopy.getNoteNumber() 
-                          // << ", velocity=" << (int)messageCopy.getVelocity() 
-                          // << ", pattern time=" << eventTime << std::endl;
+                std::cout << "Processing note on: channel=" << (int)messageCopy.getChannel() 
+                          << ", note=" << messageCopy.getNoteNumber() 
+                          << ", velocity=" << (int)messageCopy.getVelocity() 
+                          << ", pattern time=" << eventTime << std::endl;
             }
             else if (messageCopy.isNoteOff())
             {
@@ -1302,9 +1305,9 @@ void Instrument::timerCallback()
                     messageCopy.getChannel(),
                     messageCopy.getNoteNumber());
                     
-                // std::cout << "Processing note off: channel=" << (int)messageCopy.getChannel() 
-                          // << ", note=" << messageCopy.getNoteNumber() 
-                          // << ", pattern time=" << eventTime << std::endl;
+                std::cout << "Processing note off: channel=" << (int)messageCopy.getChannel() 
+                          << ", note=" << messageCopy.getNoteNumber() 
+                          << ", pattern time=" << eventTime << std::endl;
             }
             
             // Add the event to our buffer at sample position 0 (immediate)

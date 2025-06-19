@@ -75,6 +75,9 @@ bool AudioEngine::initializeAudioResources()
         // Initialize quality monitoring
         resetQualityMonitoring();
         
+        // Enable MIDI input by default
+        setMidiInputEnabled(true);
+        
         isAudioActive.store(true);
         
         DBG("INFO: AudioEngine initialized successfully");
@@ -160,12 +163,15 @@ bool AudioEngine::initializeMasterGraph()
 
 bool AudioEngine::registerPlayer(Player* player)
 {
+    std::cout << "🔧 registerPlayer() called for " << (player ? player->getMetadata().name : "null") << std::endl;
+    
     if (!player) return false;
     
     juce::ScopedLock lock(playerRegistryMutex);
     
     // Check if already registered
     if (playerNodes.find(player) != playerNodes.end()) {
+        std::cout << "⚠️ Player " << player->getMetadata().name << " already registered" << std::endl;
         return false; // Already registered
     }
     
@@ -173,7 +179,7 @@ bool AudioEngine::registerPlayer(Player* player)
     auto playerNode = std::make_unique<PlayerAudioNode>(player);
     playerNodes[player] = std::move(playerNode);
     
-    DBG("INFO: Player registered with AudioEngine");
+    std::cout << "✅ Player " << player->getMetadata().name << " registered with AudioEngine" << std::endl;
     return true;
 }
 
@@ -197,25 +203,36 @@ void AudioEngine::unregisterPlayer(Player* player)
 
 bool AudioEngine::activatePlayer(Player* player)
 {
+    std::cout << "🎯 activatePlayer() called for " << (player ? player->getMetadata().name : "null") << std::endl;
+    
     if (!player) return false;
     
     juce::ScopedLock lock(playerRegistryMutex);
     
     auto it = playerNodes.find(player);
     if (it == playerNodes.end()) {
+        std::cout << "❌ Player " << player->getMetadata().name << " not registered, cannot activate" << std::endl;
         return false; // Not registered
     }
     
     auto* playerNode = it->second.get();
     if (playerNode->isActive.load()) {
+        std::cout << "⚠️ Player " << player->getMetadata().name << " already active" << std::endl;
         return true; // Already active
     }
     
-    // Add to master graph
-    if (addPlayerToMasterGraph(playerNode)) {
-        playerNode->isActive.store(true);
-        DBG("INFO: Player activated in AudioEngine");
+    // Set active first, then add to master graph
+    playerNode->isActive.store(true);
+    std::cout << "🔗 Adding player " << player->getMetadata().name << " to master graph..." << std::endl;
+    if (addPlayerGraph(player)) {
+        std::cout << "✅ Player " << player->getMetadata().name << " activated in AudioEngine" << std::endl;
         return true;
+    }
+    else
+    {
+        // Failed to add to graph, revert active state
+        playerNode->isActive.store(false);
+        std::cout << "❌ Failed to add player " << player->getMetadata().name << " to master graph" << std::endl;
     }
     
     return false;
@@ -257,17 +274,192 @@ bool AudioEngine::isPlayerActive(Player* player) const
 }
 
 //==============================================================================
+// Player Graph Integration
+//==============================================================================
+
+bool AudioEngine::addPlayerGraph(Player* player)
+{
+    std::cout << "🔗 addPlayerGraph() called for " << (player ? player->getMetadata().name : "null") << std::endl;
+    
+    if (!player) return false;
+    
+    juce::ScopedLock lock(playerRegistryMutex);
+    
+    // Check if player is registered and active
+    auto it = playerNodes.find(player);
+    if (it == playerNodes.end() || !it->second->isActive.load())
+    {
+        return false;
+    }
+    
+    // Get the player's instrument and its processor graph
+    auto* instrument = player->getInstrument();
+    if (!instrument) return false;
+    
+    auto* processorGraph = instrument->getProcessorGraph();
+    if (!processorGraph) return false;
+    
+    // Check if already integrated
+    if (it->second->graphNode != nullptr) return true;
+    
+    try 
+    {
+        // Instead of copying the graph, we'll integrate by registering the player's processor directly
+        // The player's graph will be processed independently but coordinated by AudioEngine
+        
+        // For now, we'll mark the graph as integrated conceptually
+        // The actual audio processing will still go through the player's own graph
+        // but MIDI routing and coordination will be handled by AudioEngine
+        
+        // Create a placeholder node to track integration status
+        struct PlayerGraphWrapper : public juce::AudioProcessor 
+        {
+            Player* player;
+            
+            PlayerGraphWrapper(Player* p) : player(p) 
+            {
+                setPlayConfigDetails(0, 2, 44100, 512); // Stereo output
+            }
+            
+            const juce::String getName() const override 
+            { 
+                return "Player: " + (player ? player->getMetadata().name : "Unknown");
+            }
+            
+            void prepareToPlay(double, int) override {}
+            void releaseResources() override {}
+            void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override 
+            {
+                if (player) 
+                {
+                    // Debug: Check if wrapper is being called
+                    if (midiMessages.getNumEvents() > 0 || player->isPlaying())
+                    {
+                        std::cout << "PlayerGraphWrapper: Processing " << midiMessages.getNumEvents() 
+                                  << " MIDI events for player " << player->getMetadata().name 
+                                  << " (playing: " << player->isPlaying() << ")" << std::endl;
+                    }
+                    
+                    // Use the Player's AudioProcessor interface directly
+                    player->processBlock(buffer, midiMessages);
+                    
+                    // Debug: Check what we got back
+                    if (midiMessages.getNumEvents() > 0 || player->isPlaying())
+                    {
+                        std::cout << "PlayerGraphWrapper: After player->processBlock, buffer has " 
+                                  << midiMessages.getNumEvents() << " MIDI events" << std::endl;
+                    }
+                }
+            }
+            
+            double getTailLengthSeconds() const override { return 0.0; }
+            bool acceptsMidi() const override { return true; }
+            bool producesMidi() const override { return false; }
+            
+            juce::AudioProcessorEditor* createEditor() override { return nullptr; }
+            bool hasEditor() const override { return false; }
+            
+            int getNumPrograms() override { return 1; }
+            int getCurrentProgram() override { return 0; }
+            void setCurrentProgram(int) override {}
+            const juce::String getProgramName(int) override { return "Default"; }
+            void changeProgramName(int, const juce::String&) override {}
+            
+            void getStateInformation(juce::MemoryBlock&) override {}
+            void setStateInformation(const void*, int) override {}
+        };
+        
+        auto wrapper = std::make_unique<PlayerGraphWrapper>(player);
+        it->second->graphNode = masterGraph->addNode(std::move(wrapper));
+        
+        std::cout << "🔌 Created PlayerGraphWrapper for " << player->getMetadata().name 
+                  << " (node ID: " << (it->second->graphNode ? it->second->graphNode->nodeID.uid : 0) << ")" << std::endl;
+        
+        if (it->second->graphNode != nullptr)
+        {
+            // Connect to MIDI input if available
+            if (midiInputNode != nullptr)
+            {
+                bool midiConnected = masterGraph->addConnection({
+                    { midiInputNode->nodeID, juce::AudioProcessorGraph::midiChannelIndex },
+                    { it->second->graphNode->nodeID, juce::AudioProcessorGraph::midiChannelIndex }
+                });
+                std::cout << "🎹 MIDI connection to PlayerGraphWrapper: " << (midiConnected ? "SUCCESS" : "FAILED") << std::endl;
+            }
+            else
+            {
+                std::cout << "⚠️ No MIDI input node available - PlayerGraphWrapper won't receive MIDI!" << std::endl;
+            }
+            
+            // Connect audio output to master audio output
+            if (audioOutputNode != nullptr)
+            {
+                // Connect stereo audio output
+                masterGraph->addConnection({
+                    { it->second->graphNode->nodeID, 0 },
+                    { audioOutputNode->nodeID, 0 }
+                });
+                masterGraph->addConnection({
+                    { it->second->graphNode->nodeID, 1 },
+                    { audioOutputNode->nodeID, 1 }
+                });
+            }
+            
+            return true;
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Error adding player graph: " << e.what() << std::endl;
+    }
+    
+    return false;
+}
+
+void AudioEngine::removePlayerGraph(Player* player)
+{
+    if (!player) return;
+    
+    juce::ScopedLock lock(playerRegistryMutex);
+    
+    auto it = playerNodes.find(player);
+    if (it != playerNodes.end() && it->second->graphNode != nullptr)
+    {
+        // Remove the player's graph node from master graph
+        masterGraph->removeNode(it->second->graphNode->nodeID);
+        it->second->graphNode = nullptr;
+    }
+}
+
+bool AudioEngine::isPlayerGraphIntegrated(Player* player) const
+{
+    if (!player) return false;
+    
+    juce::ScopedLock lock(playerRegistryMutex);
+    
+    auto it = playerNodes.find(player);
+    return (it != playerNodes.end()) && (it->second->graphNode != nullptr);
+}
+
+//==============================================================================
 // Audio Graph Management
 //==============================================================================
 
 bool AudioEngine::addPlayerToMasterGraph(PlayerAudioNode* playerNode)
 {
-    if (!playerNode || !masterGraph) return false;
+    std::cout << "🔧 addPlayerToMasterGraph() called" << std::endl;
+    
+    if (!playerNode || !masterGraph) 
+    {
+        std::cout << "❌ addPlayerToMasterGraph failed: playerNode=" << (playerNode ? "valid" : "null") 
+                  << ", masterGraph=" << (masterGraph ? "valid" : "null") << std::endl;
+        return false;
+    }
     
     try {
-        // TODO: Add player's processor graph as node when Player interface is updated
-        // For now, just mark as ready
-        DBG("INFO: Player added to master audio graph (placeholder)");
+        // Player graph integration is now handled by addPlayerGraph() method
+        // This method (addPlayerToMasterGraph) is now primarily for internal use
+        std::cout << "✅ Player added to master audio graph" << std::endl;
         return true;
         
     } catch (const std::exception& e) {
@@ -304,9 +496,19 @@ void AudioEngine::routeMidiToPlayer(Player* player, const juce::MidiMessage& mes
     
     juce::ScopedLock lock(playerRegistryMutex);
     auto it = playerNodes.find(player);
-    if (it != playerNodes.end() && it->second->isActive.load()) {
-        // TODO: Route MIDI to specific player when Player interface is updated
-        DBG("INFO: MIDI message routed to player (placeholder)");
+    if (it != playerNodes.end() && it->second->isActive.load()) 
+    {
+        // Route MIDI message to player's callback if available
+        if (player->hasMidiCallback())
+        {
+            player->processMidiMessage(message);
+        }
+        else
+        {
+            // Fallback: could add direct instrument MIDI routing here if needed
+            // The callback system is the primary mechanism for MIDI routing
+            juce::ignoreUnused(player);
+        }
     }
 }
 
@@ -316,7 +518,11 @@ void AudioEngine::routeMidiToAllActivePlayers(const juce::MidiMessage& message)
     
     for (auto& [player, node] : playerNodes) {
         if (node->isActive.load()) {
-            // TODO: Route MIDI to player when Player interface is updated
+            // Route MIDI message to each active player
+            if (player->hasMidiCallback())
+            {
+                player->processMidiMessage(message);
+            }
         }
     }
 }
@@ -334,7 +540,20 @@ bool AudioEngine::isMidiInputEnabled() const
 
 void AudioEngine::sendMidiMessage(const juce::MidiMessage& message)
 {
-    // Same as routeMidiToAllActivePlayers but for backward compatibility
+    // Add MIDI message to the buffer for master graph processing
+    if (message.isNoteOn() || message.isNoteOff())
+    {
+        juce::ScopedLock lock(midiBufferMutex);
+        // Add with timestamp 0 for immediate processing
+        currentMidiBuffer.addEvent(message, 0);
+        
+        std::cout << "🎹 AudioEngine::sendMidiMessage: Added " 
+                  << (message.isNoteOn() ? "note ON" : "note OFF") 
+                  << " to MIDI buffer - Note: " << message.getNoteNumber() 
+                  << ", MIDI enabled: " << midiInputEnabled.load() << std::endl;
+    }
+    
+    // Also route to players via callback system (for backward compatibility)
     routeMidiToAllActivePlayers(message);
 }
 
@@ -552,8 +771,75 @@ void AudioEngine::audioDeviceIOCallbackWithContext(const float* const* inputChan
         // Process MIDI events from active players
         processMidiEvents(midiBuffer, numSamples);
         
+        // Debug: Check active players and master graph processing
+        if (midiBuffer.getNumEvents() > 0)
+        {
+            int activePlayerCount = 0;
+            for (auto& [player, node] : playerNodes) {
+                if (node->isActive.load()) activePlayerCount++;
+            }
+            std::cout << "🎛️ Master graph processing " << midiBuffer.getNumEvents() 
+                      << " MIDI events with " << activePlayerCount << " active players" << std::endl;
+        }
+        
         // Process master graph
         masterGraph->processBlock(audioBuffer, midiBuffer);
+        
+        // Process edit mode processor if registered (for edit mode audio)
+        {
+            juce::ScopedLock lock(editModeProcessorMutex);
+            if (editModeProcessor)
+            {
+                // Create a separate MIDI buffer for edit mode processing
+                juce::MidiBuffer editMidiBuffer;
+                
+                // Copy the collected MIDI messages for edit mode processing
+                {
+                    juce::ScopedLock midiLock(midiBufferMutex);
+                    if (currentMidiBuffer.getNumEvents() > 0)
+                    {
+                        editMidiBuffer.addEvents(currentMidiBuffer, 0, numSamples, 0);
+                    }
+                }
+                
+                // Create a temporary audio buffer for edit mode
+                juce::AudioBuffer<float> editBuffer(audioBuffer.getNumChannels(), numSamples);
+                editBuffer.clear();
+                
+                // Process edit mode
+                editModeProcessor->processBlock(editBuffer, editMidiBuffer);
+                
+                // Mix edit mode audio with master graph output
+                for (int channel = 0; channel < audioBuffer.getNumChannels(); ++channel)
+                {
+                    if (channel < editBuffer.getNumChannels())
+                    {
+                        audioBuffer.addFrom(channel, 0, editBuffer, channel, 0, numSamples);
+                    }
+                }
+                
+                // Debug: Check if edit mode generated audio
+                bool hasEditAudio = false;
+                for (int channel = 0; channel < editBuffer.getNumChannels(); ++channel)
+                {
+                    auto* channelData = editBuffer.getReadPointer(channel);
+                    for (int sample = 0; sample < numSamples; ++sample)
+                    {
+                        if (std::abs(channelData[sample]) > 0.001f)
+                        {
+                            hasEditAudio = true;
+                            break;
+                        }
+                    }
+                    if (hasEditAudio) break;
+                }
+                
+                if (hasEditAudio)
+                {
+                    std::cout << "🔊 Edit mode audio mixed into output!" << std::endl;
+                }
+            }
+        }
         
         // Update quality metrics
         auto endTime = std::chrono::high_resolution_clock::now();
@@ -628,16 +914,53 @@ void AudioEngine::changeListenerCallback(juce::ChangeBroadcaster* source)
 
 void AudioEngine::processMidiEvents(juce::MidiBuffer& midiBuffer, int numSamples)
 {
-    if (!midiInputEnabled.load()) return;
+    if (!midiInputEnabled.load()) {
+        static bool warnedOnce = false;
+        if (!warnedOnce) {
+            std::cout << "⚠️ AudioEngine::processMidiEvents: MIDI input disabled - skipping" << std::endl;
+            warnedOnce = true;
+        }
+        return;
+    }
     
     // Clear any existing MIDI data
     midiBuffer.clear();
     
-    // TODO: Collect MIDI events from active players when Player interface is updated
-    // For now, this is a placeholder
+    // Copy MIDI events from the current buffer (thread-safe)
+    {
+        juce::ScopedLock lock(midiBufferMutex);
+        if (currentMidiBuffer.getNumEvents() > 0)
+        {
+            // Copy all events to the output buffer
+            midiBuffer.addEvents(currentMidiBuffer, 0, numSamples, 0);
+            // Clear the current buffer after copying
+            currentMidiBuffer.clear();
+        }
+    }
     
-    // Process keyboard state if we have MIDI input
-    keyboardState.processNextMidiBuffer(midiBuffer, 0, numSamples, true);
+    // Debug: Show MIDI events being processed by master graph
+    if (midiBuffer.getNumEvents() > 0)
+    {
+        std::cout << "🎹 AudioEngine::processMidiEvents: Processing " << midiBuffer.getNumEvents() 
+                  << " MIDI events in master graph" << std::endl;
+        
+        // Show details of each MIDI event
+        for (const auto metadata : midiBuffer)
+        {
+            auto message = metadata.getMessage();
+            if (message.isNoteOn())
+            {
+                std::cout << "   📝 Note ON: " << message.getNoteNumber() 
+                          << ", Velocity: " << message.getVelocity() 
+                          << ", Channel: " << message.getChannel() << std::endl;
+            }
+            else if (message.isNoteOff())
+            {
+                std::cout << "   📝 Note OFF: " << message.getNoteNumber() 
+                          << ", Channel: " << message.getChannel() << std::endl;
+            }
+        }
+    }
 }
 
 void AudioEngine::setDoublePrecisionProcessing(bool doublePrecision)
@@ -663,6 +986,47 @@ void AudioEngine::processMidiKeyboardState(juce::MidiKeyboardState& keyboardStat
     // Send each MIDI message to all active players
     for (const auto metadata : midiBuffer) {
         sendMidiMessage(metadata.getMessage());
+    }
+}
+
+//==============================================================================
+// Edit Mode Support
+//==============================================================================
+
+void AudioEngine::registerEditModeProcessor(juce::AudioProcessor* processor)
+{
+    juce::ScopedLock lock(editModeProcessorMutex);
+    
+    if (editModeProcessor != nullptr)
+    {
+        std::cout << "⚠️ Edit mode processor already registered, replacing..." << std::endl;
+    }
+    
+    editModeProcessor = processor;
+    
+    if (processor)
+    {
+        // Prepare the processor with current audio settings
+        double sampleRate = getSampleRate();
+        int blockSize = getBufferSize();
+        
+        processor->prepareToPlay(sampleRate, blockSize);
+        
+        std::cout << "✅ Edit mode processor registered and prepared (SR: " << sampleRate 
+                  << ", BS: " << blockSize << ")" << std::endl;
+    }
+}
+
+void AudioEngine::unregisterEditModeProcessor()
+{
+    juce::ScopedLock lock(editModeProcessorMutex);
+    
+    if (editModeProcessor)
+    {
+        editModeProcessor->releaseResources();
+        editModeProcessor = nullptr;
+        
+        std::cout << "✅ Edit mode processor unregistered" << std::endl;
     }
 }
 

@@ -21,7 +21,14 @@
       "Bash(clang++:*)",
       "Bash(bash:*)",
       "Bash(./test_audio_engine.sh:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(make:*)",
+      "Bash(./test_audioengine_features.sh:*)",
+      "Bash(./Build/Products/Debug/Covertracks - App.app/Contents/MacOS/Covertracks - App:*)",
+      "Bash(./build/Debug/Covertracks.app/Contents/MacOS/Covertracks:*)",
+      "Bash(timeout:*)",
+      "Bash(gtimeout:*)",
+      "Bash(open:*)"
     ],
     "deny": []
   }

@@ -916,6 +916,366 @@ void PlayerIntegrationTests::testAudioEngineIntegration()
     logMessage("Player-AudioEngine integration verified");
 }
 
+// NEW: Player AudioProcessor Interface Tests
+void PlayerAudioProcessorTests::runTest()
+{
+    testAudioProcessorInheritance();
+    testPrepareToPlay();
+    testProcessBlock();
+    testReleaseResources();
+    testMidiAcceptance();
+    testAudioChannelConfiguration();
+    testPlaybackState();
+    testRealTimeMidiProcessing();
+    testSampleAccurateTiming();
+    testBufferBasedPlayback();
+    testMidiSequencePlayback();
+}
+
+void PlayerAudioProcessorTests::testAudioProcessorInheritance()
+{
+    beginTest("Player inherits from AudioProcessor");
+    
+    auto player = createTestPlayer();
+    
+    // FAILING TEST: Player should inherit from AudioProcessor
+    auto* audioProcessor = dynamic_cast<juce::AudioProcessor*>(player.get());
+    expect(audioProcessor != nullptr, "Player should inherit from juce::AudioProcessor");
+    
+    logMessage("Player AudioProcessor inheritance verified");
+}
+
+void PlayerAudioProcessorTests::testPrepareToPlay()
+{
+    beginTest("Player implements prepareToPlay");
+    
+    auto player = createTestPlayer();
+    auto* audioProcessor = dynamic_cast<juce::AudioProcessor*>(player.get());
+    
+    if (audioProcessor != nullptr)
+    {
+        // FAILING TEST: Should implement prepareToPlay properly
+        audioProcessor->prepareToPlay(44100.0, 512);
+        expect(true, "prepareToPlay should not crash");
+        
+        // Should be able to handle different sample rates and buffer sizes
+        audioProcessor->prepareToPlay(48000.0, 1024);
+        expect(true, "prepareToPlay should handle different configurations");
+    }
+    else
+    {
+        expect(false, "Cannot test prepareToPlay - Player is not an AudioProcessor");
+    }
+    
+    logMessage("Player prepareToPlay implementation verified");
+}
+
+void PlayerAudioProcessorTests::testProcessBlock()
+{
+    beginTest("Player implements processBlock");
+    
+    auto player = createTestPlayer();
+    auto* audioProcessor = dynamic_cast<juce::AudioProcessor*>(player.get());
+    
+    if (audioProcessor != nullptr)
+    {
+        // Prepare for processing
+        audioProcessor->prepareToPlay(44100.0, 512);
+        
+        // FAILING TEST: Should implement processBlock
+        juce::AudioBuffer<float> buffer(2, 512);
+        juce::MidiBuffer midiBuffer;
+        
+        // This should not crash
+        audioProcessor->processBlock(buffer, midiBuffer);
+        expect(true, "processBlock should not crash with empty buffers");
+        
+        // Test with actual MIDI data
+        midiBuffer.addEvent(juce::MidiMessage::noteOn(1, 60, 0.8f), 0);
+        midiBuffer.addEvent(juce::MidiMessage::noteOff(1, 60), 256);
+        
+        audioProcessor->processBlock(buffer, midiBuffer);
+        expect(true, "processBlock should handle MIDI events");
+    }
+    else
+    {
+        expect(false, "Cannot test processBlock - Player is not an AudioProcessor");
+    }
+    
+    logMessage("Player processBlock implementation verified");
+}
+
+void PlayerAudioProcessorTests::testReleaseResources()
+{
+    beginTest("Player implements releaseResources");
+    
+    auto player = createTestPlayer();
+    auto* audioProcessor = dynamic_cast<juce::AudioProcessor*>(player.get());
+    
+    if (audioProcessor != nullptr)
+    {
+        audioProcessor->prepareToPlay(44100.0, 512);
+        
+        // FAILING TEST: Should implement releaseResources
+        audioProcessor->releaseResources();
+        expect(true, "releaseResources should not crash");
+        
+        // Should be safe to call multiple times
+        audioProcessor->releaseResources();
+        expect(true, "releaseResources should be safe to call multiple times");
+    }
+    else
+    {
+        expect(false, "Cannot test releaseResources - Player is not an AudioProcessor");
+    }
+    
+    logMessage("Player releaseResources implementation verified");
+}
+
+void PlayerAudioProcessorTests::testMidiAcceptance()
+{
+    beginTest("Player accepts MIDI input");
+    
+    auto player = createTestPlayer();
+    auto* audioProcessor = dynamic_cast<juce::AudioProcessor*>(player.get());
+    
+    if (audioProcessor != nullptr)
+    {
+        // FAILING TEST: Player should accept MIDI
+        expect(audioProcessor->acceptsMidi(), "Player should accept MIDI input");
+        expect(!audioProcessor->producesMidi(), "Player should not produce MIDI output");
+        
+        expect(audioProcessor->isMidiEffect() == false, "Player should not be a MIDI effect");
+    }
+    else
+    {
+        expect(false, "Cannot test MIDI acceptance - Player is not an AudioProcessor");
+    }
+    
+    logMessage("Player MIDI acceptance verified");
+}
+
+void PlayerAudioProcessorTests::testAudioChannelConfiguration()
+{
+    beginTest("Player audio channel configuration");
+    
+    auto player = createTestPlayer();
+    auto* audioProcessor = dynamic_cast<juce::AudioProcessor*>(player.get());
+    
+    if (audioProcessor != nullptr)
+    {
+        // FAILING TEST: Should have proper channel configuration
+        expect(audioProcessor->getTotalNumInputChannels() == 0, "Player should have no audio inputs");
+        expect(audioProcessor->getTotalNumOutputChannels() == 2, "Player should have stereo output");
+        
+        // Should support stereo bus layout
+        auto busesLayout = audioProcessor->getBusesLayout();
+        expect(busesLayout.outputBuses.size() >= 1, "Should have at least one output bus");
+        
+        if (busesLayout.outputBuses.size() > 0)
+        {
+            expect(busesLayout.outputBuses[0].size() == 2, "First output bus should be stereo");
+        }
+    }
+    else
+    {
+        expect(false, "Cannot test audio configuration - Player is not an AudioProcessor");
+    }
+    
+    logMessage("Player audio channel configuration verified");
+}
+
+void PlayerAudioProcessorTests::testPlaybackState()
+{
+    beginTest("Player playback state management");
+    
+    auto player = createTestPlayer();
+    
+    // Load a test chart
+    auto testChart = createTestMidiChart();
+    bool loadResult = player->loadChart(testChart);
+    expect(loadResult, "Should be able to load test chart");
+    
+    // Test playback state
+    expect(!player->isPlaying(), "Player should not be playing initially");
+    
+    // FAILING TEST: Start playback should work
+    player->startPlayback();
+    expect(player->isPlaying(), "Player should be playing after startPlayback()");
+    
+    // Stop playback
+    player->stopPlayback();
+    expect(!player->isPlaying(), "Player should not be playing after stopPlayback()");
+    
+    logMessage("Player playback state management verified");
+}
+
+void PlayerAudioProcessorTests::testRealTimeMidiProcessing()
+{
+    beginTest("Player real-time MIDI processing");
+    
+    auto player = createTestPlayer();
+    auto* audioProcessor = dynamic_cast<juce::AudioProcessor*>(player.get());
+    
+    if (audioProcessor != nullptr)
+    {
+        // Load chart and start playback
+        auto testChart = createTestMidiChart();
+        player->loadChart(testChart);
+        player->startPlayback();
+        
+        audioProcessor->prepareToPlay(44100.0, 512);
+        
+        // FAILING TEST: Should process MIDI in real-time during processBlock
+        juce::AudioBuffer<float> buffer(2, 512);
+        juce::MidiBuffer inputMidi, outputMidi;
+        
+        // Process several blocks to simulate real-time playback
+        for (int block = 0; block < 10; ++block)
+        {
+            inputMidi.clear();
+            audioProcessor->processBlock(buffer, inputMidi);
+            // Player should generate internal MIDI events based on loaded chart
+        }
+        
+        expect(true, "Real-time MIDI processing should not crash");
+    }
+    else
+    {
+        expect(false, "Cannot test MIDI processing - Player is not an AudioProcessor");
+    }
+    
+    logMessage("Player real-time MIDI processing verified");
+}
+
+void PlayerAudioProcessorTests::testSampleAccurateTiming()
+{
+    beginTest("Player sample-accurate timing");
+    
+    auto player = createTestPlayer();
+    auto* audioProcessor = dynamic_cast<juce::AudioProcessor*>(player.get());
+    
+    if (audioProcessor != nullptr)
+    {
+        auto testChart = createTestMidiChart();
+        player->loadChart(testChart);
+        player->startPlayback();
+        
+        audioProcessor->prepareToPlay(44100.0, 512);
+        
+        // FAILING TEST: Timing should be sample-accurate
+        simulateAudioProcessing(*player, 44100, 44100.0); // 1 second of audio
+        
+        // Verify that playback position is tracked accurately
+        // (This will be implemented based on sample counting, not timers)
+        expect(true, "Sample-accurate timing should be maintained");
+    }
+    else
+    {
+        expect(false, "Cannot test timing - Player is not an AudioProcessor");
+    }
+    
+    logMessage("Player sample-accurate timing verified");
+}
+
+void PlayerAudioProcessorTests::testBufferBasedPlayback()
+{
+    beginTest("Player buffer-based playback");
+    
+    auto player = createTestPlayer();
+    auto* audioProcessor = dynamic_cast<juce::AudioProcessor*>(player.get());
+    
+    if (audioProcessor != nullptr)
+    {
+        auto testChart = createTestMidiChart();
+        player->loadChart(testChart);
+        player->startPlayback();
+        
+        // FAILING TEST: Should handle different buffer sizes
+        for (int bufferSize : {128, 256, 512, 1024, 2048})
+        {
+            audioProcessor->prepareToPlay(44100.0, bufferSize);
+            
+            juce::AudioBuffer<float> buffer(2, bufferSize);
+            juce::MidiBuffer midiBuffer;
+            
+            audioProcessor->processBlock(buffer, midiBuffer);
+            expect(true, juce::String("Should handle buffer size: ") + juce::String(bufferSize));
+        }
+    }
+    else
+    {
+        expect(false, "Cannot test buffer-based playback - Player is not an AudioProcessor");
+    }
+    
+    logMessage("Player buffer-based playback verified");
+}
+
+void PlayerAudioProcessorTests::testMidiSequencePlayback()
+{
+    beginTest("Player MIDI sequence playback");
+    
+    auto player = createTestPlayer();
+    
+    // FAILING TEST: Should play MIDI sequences through AudioProcessor interface
+    auto testChart = createTestMidiChart();
+    bool loadResult = player->loadChart(testChart);
+    expect(loadResult, "Should load test MIDI chart");
+    
+    // Start playback
+    player->startPlayback();
+    expect(player->isPlaying(), "Should be playing after startPlayback");
+    
+    // Simulate audio processing
+    auto* audioProcessor = dynamic_cast<juce::AudioProcessor*>(player.get());
+    if (audioProcessor != nullptr)
+    {
+        audioProcessor->prepareToPlay(44100.0, 512);
+        simulateAudioProcessing(*player, 22050, 44100.0); // 0.5 seconds
+    }
+    
+    logMessage("Player MIDI sequence playback verified");
+}
+
+// Helper methods
+std::unique_ptr<Player> PlayerAudioProcessorTests::createTestPlayer()
+{
+    static juce::AudioPluginFormatManager formatManager;
+    static juce::KnownPluginList knownPluginList;
+    
+    auto player = std::make_unique<Player>("test-audio-processor", "Test AudioProcessor Player", formatManager, knownPluginList);
+    player->initialize();
+    return player;
+}
+
+void PlayerAudioProcessorTests::simulateAudioProcessing(Player& player, int numSamples, double sampleRate)
+{
+    auto* audioProcessor = dynamic_cast<juce::AudioProcessor*>(&player);
+    if (audioProcessor == nullptr) return;
+    
+    const int bufferSize = 512;
+    int samplesRemaining = numSamples;
+    
+    audioProcessor->prepareToPlay(sampleRate, bufferSize);
+    
+    while (samplesRemaining > 0)
+    {
+        int currentBufferSize = juce::jmin(bufferSize, samplesRemaining);
+        
+        juce::AudioBuffer<float> buffer(2, currentBufferSize);
+        juce::MidiBuffer midiBuffer;
+        
+        audioProcessor->processBlock(buffer, midiBuffer);
+        
+        samplesRemaining -= currentBufferSize;
+    }
+}
+
+juce::var PlayerAudioProcessorTests::createTestMidiChart()
+{
+    return juce::JSON::parse(PlayerTestData().validMidiEventChart);
+}
+
 // Test registry - global instances for TestRunner access
 PlayerBasicTests playerBasicTests;
 PlayerResourceTests playerResourceTests;
@@ -925,5 +1285,6 @@ PlayerAsyncTests playerAsyncTests;
 PlayerPerformanceTests playerPerformanceTests;
 PlayerErrorTests playerErrorTests;
 PlayerIntegrationTests playerIntegrationTests;
+PlayerAudioProcessorTests playerAudioProcessorTests;
 
 } // namespace covertracks

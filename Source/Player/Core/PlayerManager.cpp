@@ -112,8 +112,11 @@ void PlayerManager::activatePlayer(Player* player)
     {
         if (auto* processorGraph = instrument->getProcessorGraph())
         {
-            // Note: addPlayerGraph method not yet implemented in new AudioEngine
-            // TODO: Implement player graph integration when ready
+            // Integrate player's graph into AudioEngine master graph
+            if (!AudioEngine::getInstance().addPlayerGraph(player))
+            {
+                std::cerr << "Warning: Could not integrate player graph for " << player->getMetadata().name << std::endl;
+            }
         }
     }
     
@@ -132,8 +135,8 @@ void PlayerManager::deactivatePlayer(Player* player)
     {
         if (auto* processorGraph = instrument->getProcessorGraph())
         {
-            // Note: Player graph removal not yet implemented in new AudioEngine
-            // TODO: Implement player graph removal when ready
+            // Remove player's graph from AudioEngine master graph
+            AudioEngine::getInstance().removePlayerGraph(player);
         }
     }
     

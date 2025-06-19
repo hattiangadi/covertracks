@@ -332,6 +332,7 @@ void PlayerModeComponent::buttonClicked(juce::Button* button)
     }
     else if (button == &playButton)
     {
+        std::cout << "🔘 Play button clicked!" << std::endl;
         // Play the loaded chart
         playLoadedChart();
     }
@@ -1800,13 +1801,15 @@ void PlayerModeComponent::loadMidiChart()
 
 void PlayerModeComponent::playLoadedChart()
 {
+    std::cout << "🎵 PlayerModeComponent::playLoadedChart() called!" << std::endl;
+    
     if (selectedPlayer == nullptr)
     {
-        std::cerr << "PlayerMode::playLoadedChart - No player available" << std::endl;
+        std::cerr << "❌ PlayerMode::playLoadedChart - No player available" << std::endl;
         return;
     }
     
-    std::cout << "Starting playback on player..." << std::endl;
+    std::cout << "✅ Starting playback on player..." << std::endl;
     
     // Simply play the loaded chart (same as Performance workflow)
     if (selectedPlayer->play())

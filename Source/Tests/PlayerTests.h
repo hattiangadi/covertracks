@@ -182,6 +182,38 @@ private:
     void testAudioEngineIntegration();
 };
 
+/**
+ * @brief NEW: Player as AudioProcessor interface tests
+ * Tests the core AudioProcessor functionality that Player must implement
+ */
+class PlayerAudioProcessorTests : public juce::UnitTest {
+public:
+    PlayerAudioProcessorTests() : juce::UnitTest("Player AudioProcessor Interface") {}
+    
+    void runTest() override;
+    
+private:
+    // Core AudioProcessor interface tests
+    void testAudioProcessorInheritance();
+    void testPrepareToPlay();
+    void testProcessBlock();
+    void testReleaseResources();
+    void testMidiAcceptance();
+    void testAudioChannelConfiguration();
+    
+    // Player-specific AudioProcessor behavior
+    void testPlaybackState();
+    void testRealTimeMidiProcessing();
+    void testSampleAccurateTiming();
+    void testBufferBasedPlayback();
+    void testMidiSequencePlayback();
+    
+    // Helper methods
+    std::unique_ptr<Player> createTestPlayer();
+    void simulateAudioProcessing(Player& player, int numSamples, double sampleRate);
+    juce::var createTestMidiChart();
+};
+
 // Global test instances
 extern PlayerBasicTests playerBasicTests;
 extern PlayerResourceTests playerResourceTests;
@@ -191,5 +223,6 @@ extern PlayerAsyncTests playerAsyncTests;
 extern PlayerPerformanceTests playerPerformanceTests;
 extern PlayerErrorTests playerErrorTests;
 extern PlayerIntegrationTests playerIntegrationTests;
+extern PlayerAudioProcessorTests playerAudioProcessorTests;
 
 } // namespace covertracks

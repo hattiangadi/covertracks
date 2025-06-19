@@ -322,14 +322,12 @@ MainHostWindow::MainHostWindow()
                       LookAndFeel::getDefaultLookAndFeel().findColour (ResizableWindow::backgroundColourId),
                       DocumentWindow::allButtons)
 {
-    std::cout << "[MainHostWindow] Constructor starting..." << std::endl;
-    
     // Request audio permissions - this will be used when creating the AudioEngine in PlayerManager
-    std::cout << "[MainHostWindow] Requesting audio permissions" << std::endl;
+    DBG("MainHostWindow:  Requesting audio permissions");
     RuntimePermissions::request (RuntimePermissions::recordAudio,
                                  [] (bool granted) mutable
                                  {
-                                     std::cout << "[MainHostWindow] Audio permissions " << (granted ? "granted" : "denied") << std::endl;
+                                     DBG("MainHostWindow:  Audio permissions " << (granted ? "granted" : "denied"));
                                  });
 
    #if JUCE_IOS || JUCE_ANDROID
@@ -342,27 +340,27 @@ MainHostWindow::MainHostWindow()
 
     // Create a PlayerManager instance that owns the AudioEngine
     // The PlayerManager will create its own AudioEngine, plugin formats, and plugin list
-    std::cout << "[MainHostWindow] Creating PlayerManager" << std::endl;
+    DBG("MainHostWindow:  Creating PlayerManager");
     playerManager = std::make_shared<PlayerManager>();
-    std::cout << "[MainHostWindow] PlayerManager created" << std::endl;
+    DBG("MainHostWindow:  PlayerManager created");
 
     
     // Create PlayerLibraryComponent and PlayerModeComponent
-    std::cout << "[MainHostWindow] Creating PlayerLibraryComponent" << std::endl;
+    DBG("MainHostWindow:  Creating PlayerLibraryComponent");
     playerLibraryWindow = std::make_unique<PlayerLibraryComponent>(playerManager);
-    std::cout << "[MainHostWindow] PlayerLibraryComponent created" << std::endl;
+    DBG("MainHostWindow:  PlayerLibraryComponent created");
     
-    std::cout << "[MainHostWindow] Creating PlayerModeComponent" << std::endl;
+    DBG("MainHostWindow:  Creating PlayerModeComponent");
     playerModeWindow = std::make_unique<PlayerModeComponent>(*playerManager);
-    std::cout << "[MainHostWindow] PlayerModeComponent created" << std::endl;
+    DBG("MainHostWindow:  PlayerModeComponent created");
     
     // Create Musician instance for LLM and Pattern components
-    std::cout << "[MainHostWindow] Creating Musician" << std::endl;
+    DBG("MainHostWindow:  Creating Musician");
     musician = std::make_shared<Musician>("main_musician", "default");
-    std::cout << "[MainHostWindow] Musician created" << std::endl;
+    DBG("MainHostWindow:  Musician created");
     
     // Create LLM client
-    std::cout << "[MainHostWindow] Creating LLM client" << std::endl;
+    DBG("MainHostWindow:  Creating LLM client");
     llmClient = LLMManager::getInstance().getDefaultClient();
     if (llmClient)
     {
@@ -371,7 +369,7 @@ MainHostWindow::MainHostWindow()
     }
     else
     {
-        std::cout << "[MainHostWindow] No LLM client available, creating dummy client" << std::endl;
+        DBG("MainHostWindow:  No LLM client available, creating dummy client");
         // Create a dummy client that returns error messages
         // Create a dummy LLM client for testing
         class DummyLLMClient : public LLMClient {
@@ -439,37 +437,37 @@ MainHostWindow::MainHostWindow()
         llmClientShared = dummyClient;
     }
     // Create Song Manager component
-    std::cout << "[MainHostWindow] Creating SongManagerComponent" << std::endl;
+    DBG("MainHostWindow:  Creating SongManagerComponent");
     songManagerWindow = std::make_unique<SongManagerComponent>();
     // Initialize SongEditorComponent with the LLM client
     songManagerWindow->initializeWithLLMClient(llmClientShared);
     // Register this window as a listener for song selection events
     songManagerWindow->addListener(this);
-    std::cout << "[MainHostWindow] SongManagerComponent created" << std::endl;
+    DBG("MainHostWindow:  SongManagerComponent created");
     
     // Create Performance Library component
-    std::cout << "[MainHostWindow] Creating PerformanceLibraryComponent" << std::endl;
+    DBG("MainHostWindow:  Creating PerformanceLibraryComponent");
     // Create a PerformanceManager instance
     performanceManager = std::make_unique<PerformanceManager>();
     
     performanceWindow = std::make_unique<PerformanceLibraryComponent>(performanceManager.get(), llmClientShared, playerManager.get());
     
-    std::cout << "[MainHostWindow] PerformanceLibraryComponent created" << std::endl;
+    DBG("MainHostWindow:  PerformanceLibraryComponent created");
     
     // Create Pattern Editor component
-    std::cout << "[MainHostWindow] Creating PatternEditorComponent" << std::endl;
+    DBG("MainHostWindow:  Creating PatternEditorComponent");
     patternEditorWindow = std::make_unique<PatternEditorComponent>(musician.get(), playerManager.get());
-    std::cout << "[MainHostWindow] PatternEditorComponent created" << std::endl;
+    DBG("MainHostWindow:  PatternEditorComponent created");
     
     // Create Ensemble Main Panel component
-    std::cout << "[MainHostWindow] Creating EnsembleMainPanel" << std::endl;
+    DBG("MainHostWindow:  Creating EnsembleMainPanel");
     ensembleMainWindow = std::make_unique<EnsembleMainPanel>(playerManager.get());
-    std::cout << "[MainHostWindow] EnsembleMainPanel created" << std::endl;
+    DBG("MainHostWindow:  EnsembleMainPanel created");
     
     // Create Tests component
-    std::cout << "[MainHostWindow] Creating TestsComponent" << std::endl;
+    DBG("MainHostWindow:  Creating TestsComponent");
     testsWindow = std::make_unique<TestsComponent>();
-    std::cout << "[MainHostWindow] TestsComponent created" << std::endl;
+    DBG("MainHostWindow:  TestsComponent created");
     
     // Create a tabbed component to hold all views
     auto* tabbedComponent = new TabbedComponent(TabbedButtonBar::TabsAtTop);
@@ -482,60 +480,60 @@ MainHostWindow::MainHostWindow()
     tabbedComponent->addTab("Tests", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), testsWindow.get(), false);
     
     // Set it as the main content
-    std::cout << "[MainHostWindow] Setting content" << std::endl;
+    DBG("MainHostWindow:  Setting content");
     setContentOwned(tabbedComponent, true);
 
     setUsingNativeTitleBar (true);
 
-    std::cout << "[MainHostWindow] Restoring window state" << std::endl;
+    DBG("MainHostWindow:  Restoring window state");
     restoreWindowStateFromString (getAppProperties().getUserSettings()->getValue ("mainWindowPos"));
 
     setVisible (true);
     
     // Load saved plugin list into the PlayerManager's KnownPluginList
-    std::cout << "[MainHostWindow] Loading saved plugin list" << std::endl;
+    DBG("MainHostWindow:  Loading saved plugin list");
     if (auto savedPluginList = getAppProperties().getUserSettings()->getXmlValue ("pluginList"))
     {
-        std::cout << "[MainHostWindow] Recreating plugin list from XML" << std::endl;
+        DBG("MainHostWindow:  Recreating plugin list from XML");
         getPluginList().recreateFromXml (*savedPluginList);
     }
     
     // The internal plugin types are now added by the PlayerManager during initialization
-    std::cout << "[MainHostWindow] Setting plugin sort method" << std::endl;
+    DBG("MainHostWindow:  Setting plugin sort method");
     // Set plugin sort method
     pluginSortMethod = (KnownPluginList::SortMethod) getAppProperties().getUserSettings()
                             ->getIntValue ("pluginSortMethod", KnownPluginList::sortByManufacturer);
 
     // Register as a change listener for the plugin list
-    std::cout << "[MainHostWindow] Adding change listener for plugin list" << std::endl;
+    DBG("MainHostWindow:  Adding change listener for plugin list");
     getPluginList().addChangeListener (this);
 
-    std::cout << "[MainHostWindow] Adding key listener" << std::endl;
+    DBG("MainHostWindow:  Adding key listener");
     addKeyListener (getCommandManager().getKeyMappings());
 
-    std::cout << "[MainHostWindow] Setting process priority" << std::endl;
+    DBG("MainHostWindow:  Setting process priority");
     Process::setPriority (Process::HighPriority);
 
   #if JUCE_IOS || JUCE_ANDROID
     // Mobile menu setup - removed graph holder reference
   #else
    #if JUCE_MAC
-    std::cout << "[MainHostWindow] Setting Mac main menu" << std::endl;
+    DBG("MainHostWindow:  Setting Mac main menu");
     setMacMainMenu (this);
    #else
-    std::cout << "[MainHostWindow] Setting menu bar" << std::endl;
+    DBG("MainHostWindow:  Setting menu bar");
     setMenuBar (this);
    #endif
   #endif
 
-    std::cout << "[MainHostWindow] Setting first command target" << std::endl;
+    DBG("MainHostWindow:  Setting first command target");
     getCommandManager().setFirstCommandTarget (this);
-    std::cout << "[MainHostWindow] Constructor complete" << std::endl;
+    DBG("MainHostWindow:  Constructor complete");
 }
 
 MainHostWindow::~MainHostWindow()
 {
-    std::cout << "MainHostWindow destructor: Starting cleanup" << std::endl;
+    DBG("MainHostWindow destructor: Starting cleanup");
     
     // Save window position
     getAppProperties().getUserSettings()->setValue ("mainWindowPos", getWindowStateAsString());
@@ -561,8 +559,8 @@ MainHostWindow::~MainHostWindow()
     // We'll let the natural C++ destruction order handle this
     // Just add some logging to verify the order
     
-    std::cout << "MainHostWindow destructor: Class members will be destroyed in reverse declaration order" << std::endl;
-    std::cout << "MainHostWindow destructor: PlayerManager will be destroyed first, then AudioEngine" << std::endl;
+    DBG("MainHostWindow destructor: Class members will be destroyed in reverse declaration order");
+    DBG("MainHostWindow destructor: PlayerManager will be destroyed first, then AudioEngine");
     
   #if ! (JUCE_ANDROID || JUCE_IOS)
    #if JUCE_MAC
@@ -572,7 +570,7 @@ MainHostWindow::~MainHostWindow()
    #endif
   #endif
   
-    std::cout << "MainHostWindow destructor: Cleanup complete" << std::endl;
+    DBG("MainHostWindow destructor: Cleanup complete");
 }
 
 void MainHostWindow::closeButtonPressed()
@@ -617,7 +615,7 @@ void MainHostWindow::changeListenerCallback (ChangeBroadcaster* changed)
         // Check if the change came from the plugin list
         if (playerManager && changed == &getPluginList())
         {
-            std::cout << "[MainHostWindow] Change from plugin list detected" << std::endl;
+            DBG("MainHostWindow:  Change from plugin list detected");
             
             // Update menu items
             menuItemsChanged();
@@ -633,20 +631,20 @@ void MainHostWindow::changeListenerCallback (ChangeBroadcaster* changed)
                     {
                         settings->setValue("pluginList", savedPluginList.get());
                         settings->saveIfNeeded();
-                        std::cout << "[MainHostWindow] Plugin list saved" << std::endl;
+                        DBG("MainHostWindow:  Plugin list saved");
                     }
                 }
             }
             catch (const std::exception& e)
             {
-                std::cerr << "[MainHostWindow] Error saving plugin list: " << e.what() << std::endl;
+                std::cerr << "[MainHostWindow] Error saving plugin list: " << e.what();
             }
         }
         // We no longer need to handle audio device changes here as that's now fully handled by the AudioEngine
     }
     catch (const std::exception& e)
     {
-        std::cerr << "[MainHostWindow] Unhandled exception in changeListenerCallback: " << e.what() << std::endl;
+        std::cerr << "[MainHostWindow] Unhandled exception in changeListenerCallback:" << e.what();
     }
     
     // Set the window title to the application name
@@ -844,7 +842,7 @@ void covertracks::MainHostWindow::addPluginsToMenu (PopupMenu& m)
     // Make sure we have a valid playerManager before proceeding
     if (!playerManager)
     {
-        std::cerr << "Warning: playerManager is null in addPluginsToMenu" << std::endl;
+        std::cerr << "Warning: playerManager is null in addPluginsToMenu";
         return;
     }
     
@@ -853,7 +851,7 @@ void covertracks::MainHostWindow::addPluginsToMenu (PopupMenu& m)
     // Check if we have any plugin descriptions
     if (pluginDescriptions.isEmpty())
     {
-        std::cerr << "Warning: No plugin descriptions available" << std::endl;
+        std::cerr << "Warning: No plugin descriptions available";
         return;
     }
 

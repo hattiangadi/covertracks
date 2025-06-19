@@ -98,6 +98,30 @@ public:
     bool isPlayerActive(Player* player) const;
     
     // =========================================================================
+    // Player Graph Integration
+    // =========================================================================
+    
+    /**
+     * @brief Add a player's audio graph to the master graph
+     * @param player Player whose graph to add (must be registered and active)
+     * @return true if graph was added successfully
+     */
+    bool addPlayerGraph(Player* player);
+    
+    /**
+     * @brief Remove a player's audio graph from the master graph
+     * @param player Player whose graph to remove
+     */
+    void removePlayerGraph(Player* player);
+    
+    /**
+     * @brief Check if a player's graph is integrated into master graph
+     * @param player Player to check
+     * @return true if player's graph is integrated
+     */
+    bool isPlayerGraphIntegrated(Player* player) const;
+    
+    // =========================================================================
     // MIDI Routing and Distribution
     // =========================================================================
     
@@ -203,6 +227,21 @@ public:
     void resetQualityMonitoring();
     
     // =========================================================================
+    // Edit Mode Support
+    // =========================================================================
+    
+    /**
+     * @brief Register an audio processor for edit mode processing
+     * @param processor The processor to register for real-time processing
+     */
+    void registerEditModeProcessor(juce::AudioProcessor* processor);
+    
+    /**
+     * @brief Unregister the current edit mode processor
+     */
+    void unregisterEditModeProcessor();
+    
+    // =========================================================================
     // Audio Device Management
     // =========================================================================
     
@@ -298,6 +337,10 @@ private:
     // Thread-safe player registry
     mutable juce::CriticalSection playerRegistryMutex;
     std::map<Player*, std::unique_ptr<PlayerAudioNode>> playerNodes;
+    
+    // Edit mode processor support
+    mutable juce::CriticalSection editModeProcessorMutex;
+    juce::AudioProcessor* editModeProcessor = nullptr;
     
     // =========================================================================
     // Audio Resources (Owned by AudioEngine)

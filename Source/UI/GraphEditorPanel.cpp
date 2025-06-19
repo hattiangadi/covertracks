@@ -1433,6 +1433,85 @@ struct GraphDocumentComponent::PluginListBoxModel final : public ListBoxModel,
 };
 
 //==============================================================================
+// Edit Mode Audio Processor - connects plugin graph to AudioEngine
+class GraphDocumentComponent::EditModeAudioProcessor : public juce::AudioProcessor
+{
+public:
+    EditModeAudioProcessor(PluginGraph& pluginGraph, juce::MidiMessageCollector& collector)
+        : graph(pluginGraph), midiCollector(collector)
+    {
+        setPlayConfigDetails(0, 2, 44100, 512); // Stereo output
+    }
+    
+    const juce::String getName() const override { return "Edit Mode Graph"; }
+    void prepareToPlay(double sampleRate, int maximumExpectedSamplesPerBlock) override
+    {
+        graph.graph.setPlayConfigDetails(0, 2, sampleRate, maximumExpectedSamplesPerBlock);
+        graph.graph.prepareToPlay(sampleRate, maximumExpectedSamplesPerBlock);
+    }
+    
+    void releaseResources() override
+    {
+        graph.graph.releaseResources();
+    }
+    
+    void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override
+    {
+        // Get MIDI messages from the collector
+        midiCollector.removeNextBlockOfMessages(midiMessages, buffer.getNumSamples());
+        
+        // Debug output
+        if (midiMessages.getNumEvents() > 0)
+        {
+            std::cout << "🎵 EditModeAudioProcessor: Processing " << midiMessages.getNumEvents() 
+                      << " MIDI events" << std::endl;
+        }
+        
+        // Process through the plugin graph
+        graph.graph.processBlock(buffer, midiMessages);
+        
+        // Check for audio output
+        bool hasAudio = false;
+        for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+        {
+            auto* channelData = buffer.getReadPointer(channel);
+            for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+            {
+                if (std::abs(channelData[sample]) > 0.001f)
+                {
+                    hasAudio = true;
+                    break;
+                }
+            }
+            if (hasAudio) break;
+        }
+        
+        if (hasAudio)
+        {
+            std::cout << "🔊 EditModeAudioProcessor: Generated audio!" << std::endl;
+        }
+    }
+    
+    // Required AudioProcessor methods
+    double getTailLengthSeconds() const override { return 0.0; }
+    bool acceptsMidi() const override { return true; }
+    bool producesMidi() const override { return false; }
+    juce::AudioProcessorEditor* createEditor() override { return nullptr; }
+    bool hasEditor() const override { return false; }
+    int getNumPrograms() override { return 1; }
+    int getCurrentProgram() override { return 0; }
+    void setCurrentProgram(int) override {}
+    const juce::String getProgramName(int) override { return "Default"; }
+    void changeProgramName(int, const juce::String&) override {}
+    void getStateInformation(juce::MemoryBlock&) override {}
+    void setStateInformation(const void*, int) override {}
+    
+private:
+    PluginGraph& graph;
+    juce::MidiMessageCollector& midiCollector;
+};
+
+//==============================================================================
 GraphDocumentComponent::GraphDocumentComponent(AudioPluginFormatManager& fm,
                                              KnownPluginList& kpl,
                                              AudioEngine& engine)
@@ -1474,6 +1553,9 @@ GraphDocumentComponent::GraphDocumentComponent(AudioPluginFormatManager& fm,
             std::cout << "Registered GraphDocumentComponent as MIDI input callback in constructor" << std::endl;
         }
     }
+    
+    // Create the edit mode audio processor for connecting to AudioEngine
+    editModeProcessor = std::make_unique<EditModeAudioProcessor>(*graph, midiCollector);
     
     // Add a timer to periodically check if the keyboard state is active
     startTimer(1000); // Check every second
@@ -1534,6 +1616,9 @@ void GraphDocumentComponent::setDoublePrecision(bool doublePrecision)
 
 GraphDocumentComponent::~GraphDocumentComponent()
 {
+    // Disconnect edit mode processor first
+    disconnectEditModeFromAudioEngine();
+    
     // Release all resources
     releaseGraph();
 }
@@ -1723,6 +1808,9 @@ void GraphDocumentComponent::timerCallback()
         // This is crucial for the keyboard to work properly
         audioEngine.processMidiKeyboardState(keyState);
         
+        // Connect edit mode processor to AudioEngine for real-time audio processing
+        connectEditModeToAudioEngine();
+        
         if (midiEnabled)
         {
             audioEngineStatus = "MIDI enabled";
@@ -1751,6 +1839,34 @@ void GraphDocumentComponent::timerCallback()
     {
         std::cout << "Graph is null in timerCallback" << std::endl;
     }
+}
+
+void GraphDocumentComponent::connectEditModeToAudioEngine()
+{
+    if (editModeConnected || !editModeProcessor) return;
+    
+    std::cout << "🔗 Registering edit mode processor with AudioEngine..." << std::endl;
+    
+    // Register the edit mode processor with the AudioEngine for real-time processing
+    audioEngine.registerEditModeProcessor(editModeProcessor.get());
+    
+    editModeConnected = true;
+    
+    std::cout << "✅ Edit mode processor connected to real-time audio processing" << std::endl;
+}
+
+void GraphDocumentComponent::disconnectEditModeFromAudioEngine()
+{
+    if (!editModeConnected) return;
+    
+    std::cout << "🔌 Unregistering edit mode processor from AudioEngine..." << std::endl;
+    
+    // Unregister from AudioEngine
+    audioEngine.unregisterEditModeProcessor();
+    
+    editModeConnected = false;
+    
+    std::cout << "✅ Edit mode processor disconnected" << std::endl;
 }
 
 }// namespace covertracks

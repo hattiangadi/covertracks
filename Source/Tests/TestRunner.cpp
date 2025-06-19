@@ -52,6 +52,11 @@ void runAllTests()
     // Run the advanced player tests
     runner.runTests({&playerAsyncTests, &playerPerformanceTests, &playerErrorTests, &playerIntegrationTests});
     
+    std::cout << "\nRunning Player AudioProcessor tests...\n" << std::endl;
+    
+    // Run the new AudioProcessor interface tests
+    runner.runTests({&playerAudioProcessorTests});
+    
     std::cout << "\nRunning AudioEngine tests...\n" << std::endl;
     
     // Run the AudioEngine tests

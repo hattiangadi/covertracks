@@ -177,6 +177,10 @@ public:
     // AudioEngine reference (not owned)
     AudioEngine& audioEngine;
     
+    // Edit mode audio processor wrapper for connecting to AudioEngine
+    class EditModeAudioProcessor;
+    std::unique_ptr<EditModeAudioProcessor> editModeProcessor;
+    
 private:
     // References to shared resources (not owned)
     KnownPluginList& pluginList;
@@ -234,11 +238,18 @@ private:
     // The keyboard state listener instance
     std::unique_ptr<KeyboardStateListener> keyboardStateListener;
     
+    // Track edit mode connection state
+    bool editModeConnected = false;
+    
     // Access to keyboard state for MIDI routing
     MidiKeyboardState& getMidiKeyboardState() { return keyState; }
     
     // Access to MIDI message collector for processors
     MidiMessageCollector& getMidiMessageCollector() { return midiCollector; }
+    
+    // Edit mode audio connection methods
+    void connectEditModeToAudioEngine();
+    void disconnectEditModeFromAudioEngine();
     
     // Status bar
     struct TooltipBar;

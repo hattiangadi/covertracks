@@ -48,7 +48,47 @@
 - **Plugins**: PluginGraph + state management
 
 ## Development Standards
-- **Test-first development** (starting Stage 2)
+
+### Test-Driven Development (TDD) - MANDATORY
+**Follow the Red-Green-Refactor cycle for ALL new features:**
+
+1. **🔴 RED**: Write failing test first
+   - Write test that describes the desired behavior
+   - Test should fail (feature doesn't exist yet)
+   - Commit to verify test actually fails
+
+2. **🟢 GREEN**: Write minimal code to make test pass
+   - Implement just enough to make the test pass
+   - Don't over-engineer or add extra features
+   - Focus on making the test green, nothing more
+
+3. **🔵 REFACTOR**: Clean up code while keeping tests green
+   - Improve implementation quality
+   - Add proper error handling, thread safety, etc.
+   - Ensure all tests still pass after refactoring
+
+**Example TDD Workflow:**
+```cpp
+// 1. RED: Write failing test
+void testMidiCallback() {
+    auto player = createTestPlayer();
+    expect(!player->hasMidiCallback());  // FAILS - method doesn't exist
+}
+
+// 2. GREEN: Minimal implementation  
+bool Player::hasMidiCallback() const { return false; }  // Just make it compile
+
+// 3. REFACTOR: Proper implementation
+bool Player::hasMidiCallback() const { 
+    ScopedLock lock(midiCallbackMutex);
+    return midiCallback != nullptr; 
+}
+```
+
+**❌ NEVER implement features first then add tests**
+**✅ ALWAYS write tests first, then implement**
+
+### Other Standards
 - **Architecture review** for major changes
 - **Component isolation** before refactoring
 - **Documentation updates** with code changes

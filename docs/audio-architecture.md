@@ -1,31 +1,49 @@
-# Audio Architecture - Current State
+# Audio Architecture - Player-as-AudioProcessor Design
 
 ## Overview
-The audio system is built around a centralized **AudioEngine** that manages shared resources, with **Players** containing **Instruments** for actual audio processing.
+The audio system follows a clean **plugin host pattern** where the **AudioEngine** acts as a JUCE plugin host, and **Players** are first-class **AudioProcessor** instances. This provides proper audio threading, timing, and integration with JUCE's mature audio infrastructure.
 
 ## Core Components
 
-### AudioEngine (Singleton Pattern)
+### AudioEngine (Plugin Host)
 **Location**: `Source/Audio/AudioEngine.*`  
-**Purpose**: Centralized audio resource management  
+**Purpose**: JUCE plugin host managing Player processors  
 **Owns**: 
 - `AudioDeviceManager` (audio device configuration)
-- `mainProcessorGraph` (hosts all player processor graphs)
-
-**References** (shared, not owned):
+- `AudioProcessorGraph` (hosts Player AudioProcessor instances)
 - `AudioPluginFormatManager` (plugin format discovery)  
 - `KnownPluginList` (discovered plugins)
 
-### Player → Instrument Chain
-**Player** (`Source/Player/Core/Player.*`)
-- Manages high-level music functionality (patterns, LLM integration)
-- Contains one **Instrument** for audio processing
-- Registers with AudioEngine when needing audio output
+**Key Methods**:
+- `addPlayer(Player*)` - Adds Player as AudioProcessor to graph
+- `removePlayer(Player*)` - Removes Player from graph
+- Standard `AudioIODeviceCallback` for audio thread processing
 
+### Player (AudioProcessor)
+**Player** (`Source/Player/Core/Player.*`) **extends `juce::AudioProcessor`**
+- **Primary Interface**: Standard JUCE AudioProcessor (processBlock, prepareToPlay, etc.)
+- **Music Functionality**: Pattern management, MIDI sequencing, LLM integration
+- **Audio Processing**: Real-time MIDI event processing in audio thread
+- **Timing**: Sample-accurate timing based on audio buffers, not timers
+
+**Key Methods**:
+```cpp
+// AudioProcessor interface
+void processBlock(AudioBuffer<float>& buffer, MidiBuffer& midiBuffer) override;
+void prepareToPlay(double sampleRate, int blockSize) override;
+void releaseResources() override;
+
+// Player-specific interface  
+bool loadChart(const var& chart);
+void startPlayback();
+void stopPlayback();
+```
+
+### Instrument (Internal Audio Graph)
 **Instrument** (`Source/Player/Core/Instrument.*`)  
-- Wraps JUCE `AudioProcessorGraph` for actual audio processing
-- Handles MIDI input/output and audio effects
-- Manages plugin state persistence and restoration
+- **Purpose**: Internal audio processing graph for Player
+- **Ownership**: Owned by Player, not exposed to AudioEngine
+- **Processing**: Called from Player::processBlock() only
 
 ### PluginGraph System
 **PluginGraph** (`Source/Plugins/PluginGraph.*`)
@@ -33,84 +51,112 @@ The audio system is built around a centralized **AudioEngine** that manages shar
 - Manages plugin connections and state
 - Handles plugin discovery and instantiation
 
-## Current Resource Flow
+## New Resource Flow
 
 ```
 PlayerManager
-├── AudioEngine (owned)
+├── AudioEngine (owned) - Plugin Host
 │   ├── AudioDeviceManager (owned)
-│   ├── mainProcessorGraph (owned)
-│   ├── AudioPluginFormatManager (referenced)
-│   └── KnownPluginList (referenced)
-└── Players[] 
-    └── Instrument
-        ├── pluginGraph (PluginGraph)
-        ├── processorGraph (AudioProcessorGraph)
-        └── audioEngine (reference)
+│   ├── AudioProcessorGraph (owned) - hosts Players
+│   ├── AudioPluginFormatManager (owned)
+│   └── KnownPluginList (owned)
+└── Players[] (AudioProcessor instances)
+    └── Instrument (internal)
+        └── processorGraph (AudioProcessorGraph)
+```
+
+## Audio Thread Processing Flow
+
+```
+AudioEngine::audioDeviceIOCallback()
+└── masterGraph.processBlock()
+    └── Player::processBlock() [audio thread]
+        ├── Process MIDI events for current buffer
+        ├── Update playback position (sample-accurate)
+        └── Instrument::processBlock()
+            └── Internal plugin graph processing
 ```
 
 ## Key Methods & Interfaces
 
-### AudioEngine Registration
+### AudioEngine (Plugin Host)
 ```cpp
-// Player lifecycle
-void activatePlayer(Player* player);
-void deactivatePlayer(Player* player);
+// Player management (simplified)
+bool addPlayer(Player* player);        // Add as AudioProcessor to graph
+void removePlayer(Player* player);     // Remove from graph
 
-// Processor management  
-bool registerProcessor(AudioProcessor* processor);
-void unregisterProcessor(AudioProcessor* processor);
-
-// MIDI routing
-bool registerMidiInput(const String& deviceName, MidiInputCallback* callback);
+// Standard plugin host functionality
+AudioProcessorGraph& getMainGraph();
+AudioDeviceManager& getDeviceManager();
 ```
 
-### Instrument Audio Processing
+### Player (AudioProcessor)
 ```cpp
-// Resource states
-enum class ResourceState { Unloaded, EditReady, PlaybackReady };
+// AudioProcessor interface (JUCE standard)
+void processBlock(AudioBuffer<float>& buffer, MidiBuffer& midiBuffer) override;
+void prepareToPlay(double sampleRate, int blockSize) override;
+void releaseResources() override;
+bool acceptsMidi() const override { return true; }
+bool producesMidi() const override { return false; }
 
-// Lifecycle
-void prepareForEditing();   // Load UI resources
-bool prepareForPlayback();  // Load audio resources
-void releaseResources();    // Free heavy resources
-
-// Playback
-bool playMIDIPattern(const var& pattern, double tempo);
-bool playMIDISequence(const MidiMessageSequence& sequence, double tempo);
+// Player-specific interface
+bool loadChart(const var& chart);      // Load MIDI sequence for playback
+void startPlayback();                  // Start real-time playback
+void stopPlayback();                   // Stop playback
+bool isPlaying() const;               // Playback state
 ```
 
-## Current Issues & Architecture Problems
+### Instrument (Internal)
+```cpp
+// Called only from Player::processBlock()
+void processAudioBlock(AudioBuffer<float>& buffer, MidiBuffer& midiBuffer);
+void prepareForPlayback(double sampleRate, int blockSize);
+void releaseResources();
+```
 
-### ❌ CRITICAL: Audio Quality Issues
-- **Performance Mode Clicking**: Significant audio clicking/popping during multi-player playback
-- **Likely causes**: Buffer underruns, MIDI timing conflicts, audio thread blocking
-- **Must be fixed in Stage 2 AudioEngine refactor**
+## Benefits of New Architecture
 
-### ❌ Resource Ownership Confusion
-- AudioEngine owns deviceManager but references formatManager/pluginList
-- Unclear who owns what between PlayerManager and AudioEngine
-- Players hold references to shared resources without clear contracts
+### ✅ **Proper Audio Threading**
+- All audio processing happens in audio thread via standard JUCE AudioProcessor interface
+- No more timer-based processing or message thread audio work
+- Sample-accurate timing based on actual audio buffers
 
-### ❌ Complex Initialization Dependencies  
-- Player needs AudioEngine reference during construction
-- Instrument needs AudioEngine for playback preparation
-- Circular dependency potential between components
+### ✅ **Simplified Resource Management**
+- Clear ownership: AudioEngine owns shared resources, Players are self-contained
+- No complex PlayerGraphWrapper or manual routing
+- Standard JUCE plugin host patterns
 
-### ❌ State Synchronization Issues
-- Players can be in different resource states (Unloaded/EditReady/PlaybackReady)
-- AudioEngine doesn't know about Player resource states
-- No centralized coordination of audio resource allocation
+### ✅ **Better MIDI Timing**
+- MIDI events processed in real-time during processBlock()
+- Perfect synchronization with audio buffers
+- No timing drift or latency issues
 
-### ❌ MIDI Routing Complexity
-- MIDI input registered per-device per-callback
-- No centralized MIDI routing or distribution
-- Each Instrument manages its own MIDI input independently
+### ✅ **Easier Testing**
+- Players can be tested as standard AudioProcessor instances
+- Clean separation of concerns
+- Mock audio devices and test frameworks work naturally
 
-### ❌ Plugin Graph Duplication
-- Each Instrument has both `pluginGraph` (PluginGraph) and `processorGraph` (AudioProcessorGraph)
-- State synchronization between these two graphs
-- Complex state transfer during playback preparation
+### ✅ **JUCE Integration**
+- Leverage mature JUCE infrastructure
+- Standard plugin development patterns
+- Better debugging and profiling tools
+
+## Migration Strategy
+
+### Phase 1: Foundation
+1. Update Player to extend AudioProcessor
+2. Write comprehensive tests for Player AudioProcessor interface
+3. Update AudioEngine to simple plugin host
+
+### Phase 2: Implementation  
+1. Move MIDI processing from timer to processBlock
+2. Remove PlayerGraphWrapper complexity
+3. Simplify Instrument to internal-only processing
+
+### Phase 3: Testing & Validation
+1. Update PlayerMode UI for testing
+2. Validate audio quality and timing
+3. Performance testing and optimization
 
 ## Testing Status
 - **AudioEngine**: No dedicated tests found

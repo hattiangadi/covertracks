@@ -129,7 +129,8 @@ Player::Player(const String& playerId, const String& name,
                AudioPluginFormatManager& fm,
                KnownPluginList& kpl,
                AudioEngine* engine)
-    : id(playerId),
+    : AudioProcessor(getDefaultBusesProperties()),
+      id(playerId),
       formatManager(fm),
       knownPluginList(kpl),
       audioEngine(engine)
@@ -228,8 +229,25 @@ void Player::prepareForPlayback()
         }
         
         // Connect to AudioEngine if available
-        if (audioEngine && !isConnectedToAudioEngine())
-            connectToAudioEngine(audioEngine);
+        std::cout << "🔍 Checking AudioEngine connection: audioEngine=" << (audioEngine ? "exists" : "null")
+                  << ", isConnected=" << isConnectedToAudioEngine() << std::endl;
+        if (audioEngine)
+        {
+            std::cout << "🔗 Ensuring Player is registered with AudioEngine..." << std::endl;
+            // Always try to register/activate - the AudioEngine will handle already-registered players
+            if (audioEngine->registerPlayer(this)) {
+                std::cout << "✅ Player " << metadata.name << " registered with AudioEngine" << std::endl;
+            } else {
+                std::cout << "⚠️ Player " << metadata.name << " already registered with AudioEngine" << std::endl;
+            }
+            
+            bool activated = audioEngine->activatePlayer(this);
+            std::cout << "Player " << metadata.name << " activation: " << (activated ? "SUCCESS" : "FAILED") << std::endl;
+        }
+        else
+        {
+            std::cout << "❌ No AudioEngine available for registration" << std::endl;
+        }
         
         // Prepare instrument for playback
         if (instrument)
@@ -240,27 +258,6 @@ void Player::prepareForPlayback()
     }
 }
 
-void Player::releaseResources()
-{
-    // Release all heavy resources
-    if (fullyLoaded)
-    {
-        // Disconnect from AudioEngine if connected
-        if (isConnectedToAudioEngine())
-            disconnectFromAudioEngine();
-        
-        // Release instrument resources
-        if (instrument)
-            instrument->releaseResources();
-        
-        readyForEditing = false;
-        readyForPlayback = false;
-        fullyLoaded = false;
-        graphLoaded = false; // Mark graph as unloaded so it will be reloaded when needed
-        
-        // std::cout << "Player " << metadata.name << " resources released" << std::endl;
-    }
-}
 
 bool Player::connectToAudioEngine(AudioEngine* engine)
 {
@@ -278,14 +275,19 @@ bool Player::connectToAudioEngine(AudioEngine* engine)
     {
         // Register the player with the AudioEngine (new method)
         if (engine->registerPlayer(this)) {
-            // std::cout << "Registered player " << metadata.name << " with AudioEngine" << std::endl;
+            std::cout << "✅ Registered player " << metadata.name << " with AudioEngine" << std::endl;
         } else {
-            // std::cout << "Player " << metadata.name << " already registered with AudioEngine" << std::endl;
+            std::cout << "⚠️ Player " << metadata.name << " already registered with AudioEngine" << std::endl;
         }
+    }
+    else
+    {
+        std::cout << "❌ Player " << metadata.name << " has no instrument or processor graph!" << std::endl;
     }
     
     // Activate this player in the engine
-    engine->activatePlayer(this);
+    bool activated = engine->activatePlayer(this);
+    std::cout << "Player " << metadata.name << " activation: " << (activated ? "SUCCESS" : "FAILED") << std::endl;
     
     return true;
 }
@@ -373,11 +375,10 @@ bool Player::loadGraphStateIfNeeded()
             
             if (graphState != nullptr && graphState->hasTagName("FILTERGRAPH"))
             {
-                // Count nodes in the graph state
-                int nodeCount = 0;
+                // Count nodes in the graph state (for debugging)
                 for (auto* node : graphState->getChildWithTagNameIterator("FILTER"))
                 {
-                    nodeCount++;
+                    juce::ignoreUnused(node);
                     // std::cout << "  Found node in file XML: " << node->getIntAttribute("uid") 
     //                           << " - " << node->getStringAttribute("name") << std::endl;
                 }
@@ -409,11 +410,10 @@ bool Player::loadGraphStateIfNeeded()
         
         if (graphState != nullptr && graphState->hasTagName("FILTERGRAPH"))
         {
-            // Count nodes in the graph state
-            int nodeCount = 0;
+            // Count nodes in the graph state (for debugging)
             for (auto* node : graphState->getChildWithTagNameIterator("FILTER"))
             {
-                nodeCount++;
+                juce::ignoreUnused(node);
                 // std::cout << "  Found node in embedded XML: " << node->getIntAttribute("uid") 
     //                       << " - " << node->getStringAttribute("name") << std::endl;
             }
@@ -506,33 +506,16 @@ bool Player::loadPluginGraph(const XmlElement& graphState)
         }
         
         // Debug: Count nodes in the graph state
-        int nodeCount = 0;
         for (auto* node : graphState.getChildWithTagNameIterator("FILTER"))
         {
-            nodeCount++;
+            juce::ignoreUnused(node);
             // std::cout << "  Found node in XML: " << node->getIntAttribute("uid") 
     //                   << " - " << node->getStringAttribute("name") << std::endl;
         }
         // std::cout << "Player " << metadata.name << " loading graph with " << nodeCount << " nodes" << std::endl;
         
-        // Count connections before loading
-        int midiConnections = 0;
-        int audioConnections = 0;
-        
-        for (auto* e : graphState.getChildWithTagNameIterator ("CONNECTION"))
-        {
-            auto srcChannel = e->getIntAttribute ("srcChannel");
-            auto dstChannel = e->getIntAttribute ("dstChannel");
-            
-            // Get connection type if available
-            String type = e->hasAttribute("type") ? e->getStringAttribute("type") : "unknown";
-            bool isMidi = (type == "midi") || srcChannel == 4096 || dstChannel == 4096;
-            
-            if (isMidi)
-                midiConnections++;
-            else
-                audioConnections++;
-        }
+        // Count connections before loading (for debugging if needed)
+        // Connection counting removed to eliminate unused variable warnings
         
         // std::cout << "Player " << metadata.name << " loading graph with " 
     //               // << (midiConnections + audioConnections) << " connections "
@@ -666,29 +649,15 @@ std::unique_ptr<XmlElement> Player::loadGraphStateFromFile()
         if (graphState != nullptr && graphState->hasTagName("FILTERGRAPH"))
         {
             // Count nodes in the graph state
-            int nodeCount = 0;
             for (auto* node : graphState->getChildWithTagNameIterator("FILTER"))
             {
-                nodeCount++;
+                juce::ignoreUnused(node);
                 // std::cout << "  Found node in file XML: " << node->getIntAttribute("uid") 
     //                       << " - " << node->getStringAttribute("name") << std::endl;
             }
             // std::cout << "Graph file contains " << nodeCount << " nodes" << std::endl;
             
-            // Count connections
-            int midiConnections = 0;
-            int audioConnections = 0;
-            
-            for (auto* e : graphState->getChildWithTagNameIterator("CONNECTION"))
-            {
-                auto srcChannel = e->getIntAttribute("srcChannel");
-                bool isMidi = (srcChannel == 4096);
-                
-                if (isMidi)
-                    midiConnections++;
-                else
-                    audioConnections++;
-            }
+            // Connection counting removed to eliminate unused variable warnings
             
             // std::cout << "Graph file contains " << (midiConnections + audioConnections) 
     //                   << " connections (MIDI: " << midiConnections 
@@ -774,20 +743,25 @@ void Player::generateChart(const var& parameters,
 
 bool Player::loadChart(const var& chart)
 {
+    std::cout << "📊 Player::loadChart() called for " << metadata.name << std::endl;
+    
     if (!chart.isObject())
     {
-        std::cerr << "Player::loadChart - Invalid chart format (not an object)" << std::endl;
+        std::cerr << "❌ Player::loadChart - Invalid chart format (not an object)" << std::endl;
         return false;
     }
     
     // Store the chart
     currentLoadedChart = chart;
+    std::cout << "✅ Chart stored in player " << metadata.name << std::endl;
     
     // Extract tempo if available, otherwise use default (120 BPM)
     chartTempo = chart.hasProperty("tempo") ? static_cast<double>(chart["tempo"]) : 120.0;
     
     // Convert chart to MIDI sequence
-    return convertChartToMidi(chart);
+    bool conversionResult = convertChartToMidi(chart);
+    std::cout << "🎵 Chart conversion result: " << (conversionResult ? "SUCCESS" : "FAILED") << std::endl;
+    return conversionResult;
 }
 
 bool Player::loadChartFromMusician()
@@ -1036,58 +1010,51 @@ bool Player::convertChartToMidi(const var& chart)
 
 bool Player::play()
 {
+    std::cout << "🎮 Player::play() called for " << metadata.name << std::endl;
+    
     if (!currentMidiSequence)
     {
-        std::cerr << "Player::play - No chart loaded" << std::endl;
+        std::cerr << "❌ Player::play - No chart loaded" << std::endl;
         return false;
     }
     
     if (!instrument)
     {
-        std::cerr << "Player::play - Instrument not initialized" << std::endl;
+        std::cerr << "❌ Player::play - Instrument not initialized" << std::endl;
         return false;
     }
     
     // Ensure the instrument is ready for playback
     if (instrument->getResourceState() != Instrument::ResourceState::PlaybackReady)
     {
-        std::cerr << "Player::play - Instrument not ready for playback, preparing now" << std::endl;
+        std::cerr << "⚠️ Player::play - Instrument not ready for playback, preparing now" << std::endl;
         prepareForPlayback();
     }
     
-    // Use the efficient direct MIDI sequence method instead of converting to var/JSON
-    bool result = instrument->playMIDISequence(*currentMidiSequence, chartTempo);
+    std::cout << "🔗 Player connection status: " << (isConnectedToAudioEngine() ? "CONNECTED" : "NOT CONNECTED") << std::endl;
     
-    if (result)
+    // Use new AudioProcessor-based playback instead of old timer system
+    startPlayback();
+    
+    std::cout << "Player::play - Started AudioProcessor-based playback with " 
+              << currentMidiSequence->getNumEvents() << " events, "
+              << "tempo: " << chartTempo << " BPM" << std::endl;
+    
+    // Log the first few events for debugging
+    int eventsToLog = std::min(3, currentMidiSequence->getNumEvents());
+    for (int i = 0; i < eventsToLog; ++i)
     {
-        // Calculate the duration of the chart
-        double duration = currentMidiSequence->getEndTime();
-        
-        // std::cout << "Player::play - Started playback of chart with " 
-                  // << currentMidiSequence->getNumEvents() << " events"
-                  // << ", duration: " << duration << " seconds"
-                  // << ", tempo: " << chartTempo << " BPM" << std::endl;
-        
-        // Log the first few events for debugging
-        int eventsToLog = std::min(8, currentMidiSequence->getNumEvents());
-        for (int i = 0; i < eventsToLog; ++i)
+        auto event = currentMidiSequence->getEventPointer(i);
+        if (event->message.isNoteOnOrOff())
         {
-            auto event = currentMidiSequence->getEventPointer(i);
-            juce::String eventType = event->message.isNoteOn() ? "Note On" : 
-                                    (event->message.isNoteOff() ? "Note Off" : "Other");
-            int noteNumber = event->message.isNoteOnOrOff() ? event->message.getNoteNumber() : -1;
-            
-            // std::cout << "  Event " << i << ": " << eventType 
-    //                   << ", Note: " << noteNumber 
-    //                   << ", Time: " << event->message.getTimeStamp() << "s" << std::endl;
+            std::cout << "  Event " << i << ": " 
+                      << (event->message.isNoteOn() ? "Note On" : "Note Off")
+                      << ", Note: " << event->message.getNoteNumber()
+                      << ", Time: " << event->message.getTimeStamp() << "s" << std::endl;
         }
     }
-    else
-    {
-        std::cerr << "Player::play - Failed to start playback" << std::endl;
-    }
     
-    return result;
+    return true;
 }
 
 void Player::generateAndLoad(const var& parameters, std::function<void(bool success)> callback)
@@ -1098,19 +1065,17 @@ void Player::generateAndLoad(const var& parameters, std::function<void(bool succ
 
 void Player::stopPlayback()
 {
-    if (instrument != nullptr)
-    {
-        instrument->stopPlayback();
-    }
+    // Use AudioProcessor-based stopping
+    playbackActive = false;
+    samplesPlayed = 0;
+    playbackPositionSeconds = 0.0;
+    
+    std::cout << "Player::stopPlayback - Stopped AudioProcessor-based playback" << std::endl;
 }
 
 void Player::stop()
 {
-    if (instrument)
-    {
-        instrument->stopPlayback();
-        // std::cout << "Player::stop - Stopped playback" << std::endl;
-    }
+    stopPlayback();
 }
 
 void Player::setChartFinishedCallback(std::function<void(const String&)> callback)
@@ -1370,6 +1335,253 @@ InstrumentCapabilities Player::createGuitarCapabilities(int minNote, int maxNote
     capabilities.maxNote = maxNote;
     
     return capabilities;
+}
+
+// =========================================================================
+// MIDI Callback System Implementation
+// =========================================================================
+
+void Player::setMidiCallback(std::function<void(const juce::MidiMessage&)> callback)
+{
+    juce::ScopedLock lock(midiCallbackMutex);
+    midiCallback = std::move(callback);
+}
+
+void Player::clearMidiCallback()
+{
+    juce::ScopedLock lock(midiCallbackMutex);
+    midiCallback = nullptr;
+}
+
+bool Player::hasMidiCallback() const
+{
+    juce::ScopedLock lock(midiCallbackMutex);
+    return midiCallback != nullptr;
+}
+
+void Player::processMidiMessage(const juce::MidiMessage& message)
+{
+    juce::ScopedLock lock(midiCallbackMutex);
+    if (midiCallback)
+    {
+        try
+        {
+            midiCallback(message);
+        }
+        catch (const std::exception& e)
+        {
+            std::cerr << "Error in Player MIDI callback: " << e.what() << std::endl;
+        }
+        catch (...)
+        {
+            std::cerr << "Unknown error in Player MIDI callback" << std::endl;
+        }
+    }
+}
+
+//==============================================================================
+// AudioProcessor Interface Implementation
+//==============================================================================
+
+void Player::prepareToPlay(double sampleRate, int blockSize)
+{
+    currentSampleRate = sampleRate;
+    currentBlockSize = blockSize;
+    samplesPlayed = 0;
+    playbackPositionSeconds = 0.0;
+    
+    // Prepare the instrument for audio processing
+    if (instrument)
+    {
+        instrument->prepareForPlayback();
+    }
+    
+    std::cout << "Player " << metadata.name << " prepared for audio: " 
+              << sampleRate << "Hz, " << blockSize << " samples" << std::endl;
+}
+
+void Player::releaseResources()
+{
+    // AudioProcessor implementation - release all heavy resources
+    if (fullyLoaded)
+    {
+        // Disconnect from AudioEngine if connected
+        if (isConnectedToAudioEngine())
+            disconnectFromAudioEngine();
+        
+        // Release instrument resources
+        if (instrument)
+            instrument->releaseResources();
+        
+        readyForEditing = false;
+        readyForPlayback = false;
+        fullyLoaded = false;
+        graphLoaded = false; // Mark graph as unloaded so it will be reloaded when needed
+    }
+    
+    // AudioProcessor-specific cleanup
+    playbackActive = false;
+    samplesPlayed = 0;
+    playbackPositionSeconds = 0.0;
+    
+    std::cout << "Player " << metadata.name << " released audio resources" << std::endl;
+}
+
+void Player::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+{
+    // Clear output buffer
+    buffer.clear();
+    
+    if (!playbackActive.load() || !currentMidiSequence || !instrument)
+    {
+        return; // Nothing to process
+    }
+    
+    // Calculate timing for this buffer
+    const int numSamples = buffer.getNumSamples();
+    const double bufferDurationSeconds = numSamples / currentSampleRate;
+    const double bufferStartTime = playbackPositionSeconds;
+    const double bufferEndTime = bufferStartTime + bufferDurationSeconds;
+    
+    // Debug: Show timing details more frequently for debugging
+    static int debugCounter = 0;
+    if (debugCounter++ % 20 == 0) // Print every 20th call 
+    {
+        std::cout << "🎵 Player::processBlock() - position: " << playbackPositionSeconds 
+                  << "s, buffer: " << bufferStartTime << "-" << bufferEndTime 
+                  << "s (" << bufferDurationSeconds << "s)" << std::endl;
+    }
+    
+    // Process MIDI events that fall within this buffer's time window
+    juce::MidiBuffer bufferMidi;
+    int eventsInBuffer = 0;
+    
+    for (int i = 0; i < currentMidiSequence->getNumEvents(); ++i)
+    {
+        auto* event = currentMidiSequence->getEventPointer(i);
+        double eventTime = event->message.getTimeStamp();
+        
+        // Check if event falls within this buffer's time window
+        if (eventTime >= bufferStartTime && eventTime < bufferEndTime)
+        {
+            // Calculate sample position within buffer
+            double relativeTime = eventTime - bufferStartTime;
+            int samplePosition = static_cast<int>(relativeTime * currentSampleRate);
+            samplePosition = juce::jlimit(0, numSamples - 1, samplePosition);
+            
+            bufferMidi.addEvent(event->message, samplePosition);
+            eventsInBuffer++;
+            
+            // Debug first few events
+            if (eventsInBuffer <= 3)
+            {
+                std::cout << "📝 Added MIDI event " << i << " at time " << eventTime 
+                          << "s (sample " << samplePosition << ")" << std::endl;
+            }
+        }
+    }
+    
+    if (eventsInBuffer > 0)
+    {
+        std::cout << "🎹 Player::processBlock() generated " << eventsInBuffer << " MIDI events" << std::endl;
+    }
+    else if (debugCounter % 20 == 0)
+    {
+        // Show upcoming events when no events are found
+        std::cout << "❌ No events in window " << bufferStartTime << "-" << bufferEndTime << "s. Next events:" << std::endl;
+        for (int i = 0; i < std::min(3, currentMidiSequence->getNumEvents()); ++i)
+        {
+            auto* event = currentMidiSequence->getEventPointer(i);
+            std::cout << "  Event " << i << ": time=" << event->message.getTimeStamp() << "s" << std::endl;
+        }
+    }
+    
+    // Copy generated MIDI events to the output buffer  
+    midiMessages.clear();
+    midiMessages.addEvents(bufferMidi, 0, buffer.getNumSamples(), 0);
+    
+    std::cout << "🔄 After copying: midiMessages has " << midiMessages.getNumEvents() 
+              << " events, bufferMidi has " << bufferMidi.getNumEvents() << " events" << std::endl;
+    
+    // Process audio through instrument
+    if (auto* processorGraph = instrument->getProcessorGraph())
+    {
+        processorGraph->processBlock(buffer, bufferMidi);
+        
+        // Debug: Check if we got any audio output
+        if (bufferMidi.getNumEvents() > 0)
+        {
+            float maxLevel = 0.0f;
+            for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+            {
+                maxLevel = std::max(maxLevel, buffer.getMagnitude(ch, 0, buffer.getNumSamples()));
+            }
+            std::cout << "Player " << metadata.name << " processed " << bufferMidi.getNumEvents() 
+                      << " MIDI events, audio level: " << maxLevel << std::endl;
+        }
+    }
+    else
+    {
+        std::cout << "Player " << metadata.name << " has no processor graph!" << std::endl;
+    }
+    
+    // Update playback position
+    samplesPlayed += numSamples;
+    playbackPositionSeconds = samplesPlayed / currentSampleRate;
+    
+    // Check if playback is complete
+    if (currentMidiSequence && playbackPositionSeconds >= currentMidiSequence->getEndTime())
+    {
+        playbackActive = false;
+        handleChartFinished();
+    }
+}
+
+const juce::String Player::getName() const
+{
+    return "Player: " + metadata.name;
+}
+
+bool Player::isBusesLayoutSupported(const BusesLayout& layouts) const
+{
+    // Support stereo output only
+    if (layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo())
+        return true;
+    
+    return false;
+}
+
+
+juce::AudioProcessor::BusesProperties Player::getDefaultBusesProperties()
+{
+    return BusesProperties()
+        .withOutput("Output", juce::AudioChannelSet::stereo(), true);
+}
+
+//==============================================================================
+// Player-Specific AudioProcessor Interface
+//==============================================================================
+
+void Player::startPlayback()
+{
+    if (!currentMidiSequence)
+    {
+        std::cerr << "❌ Cannot start playback: no chart loaded" << std::endl;
+        return;
+    }
+    
+    // Reset playback state
+    samplesPlayed = 0;
+    playbackPositionSeconds = 0.0;
+    playbackActive = true;
+    
+    std::cout << "🎵 Started real-time playback on player " << metadata.name 
+              << " (connected to AudioEngine: " << (audioEngine ? "YES" : "NO") << ")" << std::endl;
+}
+
+bool Player::isPlaying() const
+{
+    return playbackActive.load();
 }
 
 } // namespace covertracks
