@@ -1070,6 +1070,13 @@ void Player::stopPlayback()
     samplesPlayed = 0;
     playbackPositionSeconds = 0.0;
     
+    // Deactivate the player from AudioEngine
+    if (audioEngine)
+    {
+        std::cout << "🛑 Deactivating player " << metadata.name << " from AudioEngine..." << std::endl;
+        audioEngine->deactivatePlayer(this);
+    }
+    
     std::cout << "Player::stopPlayback - Stopped AudioProcessor-based playback" << std::endl;
 }
 
@@ -1574,6 +1581,24 @@ void Player::startPlayback()
     samplesPlayed = 0;
     playbackPositionSeconds = 0.0;
     playbackActive = true;
+    
+    // CRITICAL FIX: Activate the player with AudioEngine for real-time processing
+    if (audioEngine)
+    {
+        std::cout << "🎯 Activating player " << metadata.name << " with AudioEngine..." << std::endl;
+        if (audioEngine->activatePlayer(this))
+        {
+            std::cout << "✅ Player " << metadata.name << " activated for real-time processing!" << std::endl;
+        }
+        else
+        {
+            std::cerr << "❌ Failed to activate player " << metadata.name << " with AudioEngine" << std::endl;
+        }
+    }
+    else
+    {
+        std::cerr << "❌ No AudioEngine available - player won't produce sound!" << std::endl;
+    }
     
     std::cout << "🎵 Started real-time playback on player " << metadata.name 
               << " (connected to AudioEngine: " << (audioEngine ? "YES" : "NO") << ")" << std::endl;

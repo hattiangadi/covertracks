@@ -340,7 +340,36 @@ bool AudioEngine::addPlayerGraph(Player* player)
                                   << " (playing: " << player->isPlaying() << ")" << std::endl;
                     }
                     
-                    // Use the Player's AudioProcessor interface directly
+                    // TESTING: Instead of using Player's internal MIDI generation,
+                    // route external MIDI directly to the Player's instrument for testing
+                    if (midiMessages.getNumEvents() > 0)
+                    {
+                        std::cout << "🧪 TEST: Routing " << midiMessages.getNumEvents() 
+                                  << " external MIDI events directly to Player's instrument..." << std::endl;
+                        
+                        // Route external MIDI directly to player's instrument processor graph
+                        if (auto* instrument = player->getInstrument())
+                        {
+                            if (auto* processorGraph = instrument->getProcessorGraph())
+                            {
+                                processorGraph->processBlock(buffer, midiMessages);
+                                
+                                // Check if we got audio output
+                                float maxLevel = 0.0f;
+                                for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+                                {
+                                    maxLevel = std::max(maxLevel, buffer.getMagnitude(ch, 0, buffer.getNumSamples()));
+                                }
+                                if (maxLevel > 0.001f)
+                                {
+                                    std::cout << "🔊 SUCCESS: Player's instrument generated audio! Level: " << maxLevel << std::endl;
+                                }
+                                return; // Skip Player's internal MIDI generation for this test
+                            }
+                        }
+                    }
+                    
+                    // Use the Player's AudioProcessor interface directly  
                     player->processBlock(buffer, midiMessages);
                     
                     // Debug: Check what we got back
@@ -775,11 +804,20 @@ void AudioEngine::audioDeviceIOCallbackWithContext(const float* const* inputChan
         if (midiBuffer.getNumEvents() > 0)
         {
             int activePlayerCount = 0;
+            int totalPlayerCount = 0;
             for (auto& [player, node] : playerNodes) {
-                if (node->isActive.load()) activePlayerCount++;
+                totalPlayerCount++;
+                if (node->isActive.load()) {
+                    activePlayerCount++;
+                    std::cout << "  ✅ Active player: " << player->getMetadata().name 
+                              << " (playing: " << player->isPlaying() << ")" << std::endl;
+                } else {
+                    std::cout << "  ❌ Inactive player: " << player->getMetadata().name 
+                              << " (playing: " << player->isPlaying() << ")" << std::endl;
+                }
             }
             std::cout << "🎛️ Master graph processing " << midiBuffer.getNumEvents() 
-                      << " MIDI events with " << activePlayerCount << " active players" << std::endl;
+                      << " MIDI events with " << activePlayerCount << "/" << totalPlayerCount << " active players" << std::endl;
         }
         
         // Process master graph
