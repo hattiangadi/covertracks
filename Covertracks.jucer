@@ -28,6 +28,9 @@
         <MODULEPATH id="juce_audio_devices" path="../../../Shared/JUCE/modules"/>
         <MODULEPATH id="juce_audio_basics" path="../../../Shared/JUCE/modules"/>
         <MODULEPATH id="juce_dsp" path="../../../Shared/JUCE/modules"/>
+        <MODULEPATH id="tracktion_engine" path="modules/tracktion_engine/modules"/>
+        <MODULEPATH id="tracktion_graph" path="modules/tracktion_engine/modules"/>
+        <MODULEPATH id="tracktion_core" path="modules/tracktion_engine/modules"/>
       </MODULEPATHS>
     </XCODE_MAC>
   </EXPORTFORMATS>
@@ -39,6 +42,17 @@
         <FILE id="N8oly3" name="PatternParserTests.cpp" compile="1" resource="0"
               file="Source/Tests/PatternParserTests.cpp"/>
         <FILE id="pWTeo6" name="TestRunner.cpp" compile="1" resource="0" file="Source/Tests/TestRunner.cpp"/>
+        <FILE id="TracktionIntegrationTests" name="TracktionIntegrationTests.cpp" compile="1" resource="0" file="Source/Tests/TracktionIntegrationTests.cpp"/>
+      </GROUP>
+      <GROUP id="{TRACKTION-ENGINE-GROUP}" name="Tracktion Engine">
+        <FILE id="tracktion_core" name="tracktion_core.cpp" compile="1" resource="0" file="modules/tracktion_engine/modules/tracktion_core/tracktion_core.cpp"/>
+        <FILE id="tracktion_graph" name="tracktion_graph.cpp" compile="1" resource="0" file="modules/tracktion_engine/modules/tracktion_graph/tracktion_graph.cpp"/>
+        <FILE id="tracktion_engine_utils" name="tracktion_engine_utils.cpp" compile="1" resource="0" file="modules/tracktion_engine/modules/tracktion_engine/tracktion_engine_utils.cpp"/>
+        <FILE id="tracktion_engine_model_1" name="tracktion_engine_model_1.cpp" compile="1" resource="0" file="modules/tracktion_engine/modules/tracktion_engine/tracktion_engine_model_1.cpp"/>
+        <FILE id="tracktion_engine_model_2" name="tracktion_engine_model_2.cpp" compile="1" resource="0" file="modules/tracktion_engine/modules/tracktion_engine/tracktion_engine_model_2.cpp"/>
+        <FILE id="tracktion_engine_playback" name="tracktion_engine_playback.cpp" compile="1" resource="0" file="modules/tracktion_engine/modules/tracktion_engine/tracktion_engine_playback.cpp"/>
+        <FILE id="tracktion_engine_plugins" name="tracktion_engine_plugins.cpp" compile="1" resource="0" file="modules/tracktion_engine/modules/tracktion_engine/tracktion_engine_plugins.cpp"/>
+        <FILE id="tracktion_engine_audio_files" name="tracktion_engine_audio_files.cpp" compile="1" resource="0" file="modules/tracktion_engine/modules/tracktion_engine/tracktion_engine_audio_files.cpp"/>
       </GROUP>
       <GROUP id="{C05A6CB8-92D3-46E6-AD2E-B13D7347AC80}" name="Musician">
         <GROUP id="{34D9D57E-F198-9FB2-4C66-8742C66AFBE3}" name="Core">
@@ -263,6 +277,9 @@
     <MODULE id="juce_gui_basics" showAllCode="1"/>
     <MODULE id="juce_gui_extra" showAllCode="1"/>
     <MODULE id="juce_opengl" showAllCode="1"/>
+    <MODULE id="tracktion_core" showAllCode="1"/>
+    <MODULE id="tracktion_graph" showAllCode="1"/>
+    <MODULE id="tracktion_engine" showAllCode="1"/>
   </MODULES>
   <LIVE_SETTINGS>
     <OSX/>

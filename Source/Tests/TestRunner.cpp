@@ -9,6 +9,7 @@
 #include "PlayerTests.cpp"
 #include "AudioEngineTests.cpp"
 #include "PerformanceModeTests.cpp"
+#include "TracktionIntegrationTests.cpp"
 
 namespace covertracks {
 
@@ -66,6 +67,11 @@ void runAllTests()
     
     // Run the Performance Mode validation tests
     runner.runTests({&performanceModeTests});
+    
+    std::cout << "\nRunning Tracktion Integration tests...\n" << std::endl;
+    
+    // Run the Tracktion Engine integration tests (TDD approach)
+    runner.runTests({&tracktionIntegrationTests});
     
     // Print results
     int numTests = runner.getNumResults();
