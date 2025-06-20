@@ -314,7 +314,7 @@ std::unique_ptr<Player> PlayerManager::createPlayer()
     
     // Create a new player with default settings, using singleton AudioEngine
     auto& audioEngine = AudioEngine::getInstance();
-    auto player = std::make_unique<Player>(id, "New Player", audioEngine.getFormatManager(), audioEngine.getKnownPluginList(), &audioEngine);
+    auto player = std::make_unique<Player>(id, "New Player", audioEngine.getFormatManager(), audioEngine.getKnownPluginList());
     player->initialize();
     
     // Set default metadata
@@ -348,7 +348,7 @@ std::unique_ptr<Player> PlayerManager::loadPlayer(const File& file)
     {
         // Use the fromVar method to create a player with the singleton AudioEngine
         auto& audioEngine = AudioEngine::getInstance();
-        return Player::fromVar(json, audioEngine.getFormatManager(), audioEngine.getKnownPluginList(), &audioEngine);
+        return Player::fromVar(json, audioEngine.getFormatManager(), audioEngine.getKnownPluginList());
     }
     
     return nullptr;

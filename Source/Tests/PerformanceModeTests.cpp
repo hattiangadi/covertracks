@@ -56,8 +56,7 @@ private:
                 "test_" + instrumentName.toLowerCase(),
                 instrumentName,
                 audioEngine.getFormatManager(),
-                audioEngine.getKnownPluginList(),
-                &audioEngine
+                audioEngine.getKnownPluginList()
             );
             
             expect(player != nullptr, "Should create " + instrumentName + " player");
@@ -115,8 +114,7 @@ private:
                 "simul_test_" + String(i),
                 "SimulTest" + String(i),
                 audioEngine.getFormatManager(),
-                audioEngine.getKnownPluginList(),
-                &audioEngine
+                audioEngine.getKnownPluginList()
             );
             
             if (player)
@@ -241,8 +239,7 @@ private:
                 "load_test_" + String(i),
                 "LoadTest" + String(i),
                 audioEngine.getFormatManager(),
-                audioEngine.getKnownPluginList(),
-                &audioEngine
+                audioEngine.getKnownPluginList()
             );
             
             if (player)
@@ -306,8 +303,7 @@ private:
                 "cpu_test_" + String(i),
                 "CpuTest" + String(i),
                 audioEngine.getFormatManager(),
-                audioEngine.getKnownPluginList(),
-                &audioEngine
+                audioEngine.getKnownPluginList()
             );
             
             if (player)
@@ -345,12 +341,10 @@ private:
         // Test that multiple players can coordinate resource access
         auto player1 = std::make_unique<Player>("coord_test_1", "CoordTest1", 
                                                audioEngine.getFormatManager(), 
-                                               audioEngine.getKnownPluginList(), 
-                                               &audioEngine);
+                                               audioEngine.getKnownPluginList());
         auto player2 = std::make_unique<Player>("coord_test_2", "CoordTest2", 
                                                audioEngine.getFormatManager(), 
-                                               audioEngine.getKnownPluginList(), 
-                                               &audioEngine);
+                                               audioEngine.getKnownPluginList());
         
         if (player1 && player2)
         {
@@ -406,8 +400,7 @@ private:
                 "perf_" + role.toLowerCase(),
                 "Performance" + role,
                 audioEngine.getFormatManager(),
-                audioEngine.getKnownPluginList(),
-                &audioEngine
+                audioEngine.getKnownPluginList()
             );
             
             if (player)
@@ -520,8 +513,7 @@ private:
                 "quality_test_" + String(loadLevel),
                 "QualityTest" + String(loadLevel),
                 audioEngine.getFormatManager(),
-                audioEngine.getKnownPluginList(),
-                &audioEngine
+                audioEngine.getKnownPluginList()
             );
             
             if (player)

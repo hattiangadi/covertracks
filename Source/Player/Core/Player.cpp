@@ -127,13 +127,11 @@ void PlayerMetadata::fromVar(const var& v)
 // Player implementation
 Player::Player(const String& playerId, const String& name,
                AudioPluginFormatManager& fm,
-               KnownPluginList& kpl,
-               AudioEngine* engine)
+               KnownPluginList& kpl)
     : AudioProcessor(getDefaultBusesProperties()),
       id(playerId),
       formatManager(fm),
-      knownPluginList(kpl),
-      audioEngine(engine)
+      knownPluginList(kpl)
 {
     // Initialize metadata
     metadata.name = name;
@@ -143,8 +141,7 @@ Player::Player(const String& playerId, const String& name,
     metadata.lastModified = metadata.created;
 
     // std::cout << "Creating Player: " << name << " (ID: " << playerId << ")" 
-    //           << " with " << (audioEngine != nullptr ? "shared" : "dedicated") 
-    //           << " audio engine" << std::endl;
+    //           << " with AudioEngine singleton" << std::endl;
 }
 
 Player::~Player()
@@ -173,7 +170,7 @@ void Player::loadMinimalResources()
         // Create instrument if needed (but don't initialize)
         if (instrument == nullptr)
         {
-            instrument = std::make_unique<Instrument>(metadata.name, formatManager, knownPluginList, audioEngine);
+            instrument = std::make_unique<Instrument>(metadata.name, formatManager, knownPluginList, &AudioEngine::getInstance());
             
             // Set up chart finished callback
             instrument->setPatternFinishedCallback([this]() {
@@ -228,26 +225,20 @@ void Player::prepareForPlayback()
             loadGraphStateIfNeeded();
         }
         
-        // Connect to AudioEngine if available
-        std::cout << "🔍 Checking AudioEngine connection: audioEngine=" << (audioEngine ? "exists" : "null")
-                  << ", isConnected=" << isConnectedToAudioEngine() << std::endl;
-        if (audioEngine)
-        {
-            std::cout << "🔗 Ensuring Player is registered with AudioEngine..." << std::endl;
-            // Always try to register/activate - the AudioEngine will handle already-registered players
-            if (audioEngine->registerPlayer(this)) {
-                std::cout << "✅ Player " << metadata.name << " registered with AudioEngine" << std::endl;
-            } else {
-                std::cout << "⚠️ Player " << metadata.name << " already registered with AudioEngine" << std::endl;
-            }
-            
-            bool activated = audioEngine->activatePlayer(this);
-            std::cout << "Player " << metadata.name << " activation: " << (activated ? "SUCCESS" : "FAILED") << std::endl;
+        // Connect to AudioEngine singleton
+        auto& audioEngine = AudioEngine::getInstance();
+        std::cout << "🔍 Using AudioEngine singleton, isConnected=" << isConnectedToAudioEngine() << std::endl;
+        
+        std::cout << "🔗 Ensuring Player is registered with AudioEngine..." << std::endl;
+        // Always try to register/activate - the AudioEngine will handle already-registered players
+        if (audioEngine.registerPlayer(this)) {
+            std::cout << "✅ Player " << metadata.name << " registered with AudioEngine" << std::endl;
+        } else {
+            std::cout << "⚠️ Player " << metadata.name << " already registered with AudioEngine" << std::endl;
         }
-        else
-        {
-            std::cout << "❌ No AudioEngine available for registration" << std::endl;
-        }
+        
+        bool activated = audioEngine.activatePlayer(this);
+        std::cout << "Player " << metadata.name << " activation: " << (activated ? "SUCCESS" : "FAILED") << std::endl;
         
         // Prepare instrument for playback
         if (instrument)
@@ -261,20 +252,20 @@ void Player::prepareForPlayback()
 
 bool Player::connectToAudioEngine(AudioEngine* engine)
 {
-    if (engine == nullptr)
-        return false;
+    // Ignore the parameter - always use singleton
+    juce::ignoreUnused(engine);
     
-    audioEngine = engine;
+    auto& audioEngine = AudioEngine::getInstance();
     
     // Connect instrument to the engine
-    if (instrument && !instrument->connectToAudioEngine(engine))
+    if (instrument && !instrument->connectToAudioEngine(&audioEngine))
         return false;
     
     // Register the processor graph with the AudioEngine to ensure MIDI messages are routed properly
     if (instrument && instrument->getProcessorGraph() != nullptr)
     {
         // Register the player with the AudioEngine (new method)
-        if (engine->registerPlayer(this)) {
+        if (audioEngine.registerPlayer(this)) {
             std::cout << "✅ Registered player " << metadata.name << " with AudioEngine" << std::endl;
         } else {
             std::cout << "⚠️ Player " << metadata.name << " already registered with AudioEngine" << std::endl;
@@ -286,7 +277,7 @@ bool Player::connectToAudioEngine(AudioEngine* engine)
     }
     
     // Activate this player in the engine
-    bool activated = engine->activatePlayer(this);
+    bool activated = audioEngine.activatePlayer(this);
     std::cout << "Player " << metadata.name << " activation: " << (activated ? "SUCCESS" : "FAILED") << std::endl;
     
     return true;
@@ -294,23 +285,20 @@ bool Player::connectToAudioEngine(AudioEngine* engine)
 
 void Player::disconnectFromAudioEngine()
 {
-    if (audioEngine)
-    {
-        // Deactivate this player in the engine
-        audioEngine->deactivatePlayer(this);
-        
-        // Disconnect instrument from the engine
-        if (instrument)
-            instrument->disconnectFromAudioEngine();
-        
-        audioEngine = nullptr;
-    }
+    auto& audioEngine = AudioEngine::getInstance();
+    
+    // Deactivate this player in the engine
+    audioEngine.deactivatePlayer(this);
+    
+    // Disconnect instrument from the engine
+    if (instrument)
+        instrument->disconnectFromAudioEngine();
 }
 
 
 bool Player::isConnectedToAudioEngine() const
 {
-    return audioEngine != nullptr;
+    return true; // Always connected to singleton
 }
 
 bool Player::isFullyLoaded() const
@@ -333,7 +321,7 @@ bool Player::initializeMinimal()
     // Only create the instrument with minimal initialization
     if (instrument == nullptr)
     {
-        instrument = std::make_unique<Instrument>(metadata.name, formatManager, knownPluginList, audioEngine);
+        instrument = std::make_unique<Instrument>(metadata.name, formatManager, knownPluginList, &AudioEngine::getInstance());
         
         // Set up chart finished callback
         instrument->setPatternFinishedCallback([this]() {
@@ -460,7 +448,7 @@ bool Player::initialize()
     // Create instrument if needed
     if (instrument == nullptr)
     {
-        instrument = std::make_unique<Instrument>(metadata.name, formatManager, knownPluginList, audioEngine);
+        instrument = std::make_unique<Instrument>(metadata.name, formatManager, knownPluginList, &AudioEngine::getInstance());
         
         // Set up chart finished callback
         instrument->setPatternFinishedCallback([this]() {
@@ -1071,11 +1059,9 @@ void Player::stopPlayback()
     playbackPositionSeconds = 0.0;
     
     // Deactivate the player from AudioEngine
-    if (audioEngine)
-    {
-        std::cout << "🛑 Deactivating player " << metadata.name << " from AudioEngine..." << std::endl;
-        audioEngine->deactivatePlayer(this);
-    }
+    auto& audioEngine = AudioEngine::getInstance();
+    std::cout << "🛑 Deactivating player " << metadata.name << " from AudioEngine..." << std::endl;
+    audioEngine.deactivatePlayer(this);
     
     std::cout << "Player::stopPlayback - Stopped AudioProcessor-based playback" << std::endl;
 }
@@ -1199,7 +1185,7 @@ var Player::toVar() const
     return var(obj);
 }
 
-std::unique_ptr<covertracks::Player> covertracks::Player::fromVar(const var& v, AudioPluginFormatManager& fm, KnownPluginList& kpl, AudioEngine* engine)
+std::unique_ptr<covertracks::Player> covertracks::Player::fromVar(const var& v, AudioPluginFormatManager& fm, KnownPluginList& kpl)
 {
     if (v.isObject())
     {
@@ -1228,7 +1214,7 @@ std::unique_ptr<covertracks::Player> covertracks::Player::fromVar(const var& v, 
         }
         
         // Create the player with the provided format manager and plugin list
-        auto player = std::make_unique<Player>(playerId, name, fm, kpl, engine);
+        auto player = std::make_unique<Player>(playerId, name, fm, kpl);
         
         // Load metadata
         if (obj->hasProperty("metadata"))
@@ -1282,7 +1268,7 @@ std::unique_ptr<covertracks::Player> covertracks::Player::fromVar(const var& v, 
     
     // If parsing failed, return a default player
     return std::make_unique<Player>(String::toHexString(Random::getSystemRandom().nextInt()), 
-                                   "Default Player", fm, kpl, engine);
+                                   "Default Player", fm, kpl);
 }
 
 // Static helper functions for creating instrument capabilities
@@ -1409,12 +1395,19 @@ void Player::prepareToPlay(double sampleRate, int blockSize)
 
 void Player::releaseResources()
 {
-    // AudioProcessor implementation - release all heavy resources
+    std::cout << "🔄 Player::releaseResources() called for " << metadata.name 
+              << " (audioEngine=singleton)" << std::endl;
+    
+    // IMPORTANT: Don't disconnect from AudioEngine here!
+    // releaseResources() is called by JUCE when the AudioProcessor is removed from graphs,
+    // but we want to keep the AudioEngine connection for re-activation later.
+    
+    // AudioProcessor implementation - release heavy resources but keep AudioEngine connection
     if (fullyLoaded)
     {
-        // Disconnect from AudioEngine if connected
-        if (isConnectedToAudioEngine())
-            disconnectFromAudioEngine();
+        // DON'T disconnect from AudioEngine - we want to stay registered
+        // if (isConnectedToAudioEngine())
+        //     disconnectFromAudioEngine();
         
         // Release instrument resources
         if (instrument)
@@ -1583,25 +1576,19 @@ void Player::startPlayback()
     playbackActive = true;
     
     // CRITICAL FIX: Activate the player with AudioEngine for real-time processing
-    if (audioEngine)
+    auto& audioEngine = AudioEngine::getInstance();
+    std::cout << "🎯 Activating player " << metadata.name << " with AudioEngine..." << std::endl;
+    if (audioEngine.activatePlayer(this))
     {
-        std::cout << "🎯 Activating player " << metadata.name << " with AudioEngine..." << std::endl;
-        if (audioEngine->activatePlayer(this))
-        {
-            std::cout << "✅ Player " << metadata.name << " activated for real-time processing!" << std::endl;
-        }
-        else
-        {
-            std::cerr << "❌ Failed to activate player " << metadata.name << " with AudioEngine" << std::endl;
-        }
+        std::cout << "✅ Player " << metadata.name << " activated for real-time processing!" << std::endl;
     }
     else
     {
-        std::cerr << "❌ No AudioEngine available - player won't produce sound!" << std::endl;
+        std::cerr << "❌ Failed to activate player " << metadata.name << " with AudioEngine" << std::endl;
     }
     
     std::cout << "🎵 Started real-time playback on player " << metadata.name 
-              << " (connected to AudioEngine: " << (audioEngine ? "YES" : "NO") << ")" << std::endl;
+              << " (connected to AudioEngine: YES)" << std::endl;
 }
 
 bool Player::isPlaying() const

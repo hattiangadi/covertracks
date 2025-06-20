@@ -28,7 +28,8 @@
       "Bash(./build/Debug/Covertracks.app/Contents/MacOS/Covertracks:*)",
       "Bash(timeout:*)",
       "Bash(gtimeout:*)",
-      "Bash(open:*)"
+      "Bash(open:*)",
+      "Bash(git commit:*)"
     ],
     "deny": []
   }

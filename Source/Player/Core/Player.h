@@ -79,12 +79,10 @@ public:
      * @param name Display name for this player
      * @param formatManager Reference to the shared AudioPluginFormatManager
      * @param knownPluginList Reference to the shared KnownPluginList
-     * @param audioEngine Optional AudioEngine reference for centralized audio management
      */
      Player(const String& id, const String& name, 
         AudioPluginFormatManager& formatManager,
-        KnownPluginList& knownPluginList,
-        AudioEngine* audioEngine = nullptr);
+        KnownPluginList& knownPluginList);
     
     /**
      * @brief Destroy the Player
@@ -350,13 +348,11 @@ public:
      * @param v JSON representation
      * @param formatManager Reference to the shared AudioPluginFormatManager
      * @param knownPluginList Reference to the shared KnownPluginList
-     * @param audioEngine Optional AudioEngine reference for centralized audio management
      * @return std::unique_ptr<Player> The created player
      */
     static std::unique_ptr<Player> fromVar(const var& v, 
                                            AudioPluginFormatManager& formatManager,
-                                           KnownPluginList& knownPluginList,
-                                           AudioEngine* audioEngine = nullptr);
+                                           KnownPluginList& knownPluginList);
     
     /**
      * @brief Get the ID of this player
@@ -382,11 +378,11 @@ public:
     Instrument* getInstrument() { return instrument.get(); }
     
     /**
-     * @brief Get the audio engine
+     * @brief Get the audio engine singleton
      * 
-     * @return AudioEngine* Pointer to the audio engine (not owned)
+     * @return AudioEngine& Reference to the AudioEngine singleton
      */
-    AudioEngine* getAudioEngine() { return audioEngine; }
+    AudioEngine& getAudioEngine() { return AudioEngine::getInstance(); }
     
        /**
      * @brief Set the musician component
@@ -484,7 +480,6 @@ private:
     AudioPluginFormatManager& formatManager;
     KnownPluginList& knownPluginList;
 
-    AudioEngine* audioEngine = nullptr;
 
     
     // Core components

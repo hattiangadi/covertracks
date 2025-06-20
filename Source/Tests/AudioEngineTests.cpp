@@ -384,8 +384,7 @@ private:
             auto& audioEngine = AudioEngine::getInstance();
             auto player = std::make_unique<Player>("test_" + name, name, 
                                                  audioEngine.getFormatManager(), 
-                                                 audioEngine.getKnownPluginList(), 
-                                                 &audioEngine);
+                                                 audioEngine.getKnownPluginList());
             return player;
         } catch (...) {
             // If Player construction fails, return nullptr and skip tests that need it
