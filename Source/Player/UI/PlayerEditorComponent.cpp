@@ -7,7 +7,7 @@
 namespace covertracks {
 
 // Constructor
-PlayerEditorComponent::PlayerEditorComponent(Player* playerToEdit, AudioEngine* engine)
+PlayerEditorComponent::PlayerEditorComponent(Player* playerToEdit, AudioEngineImpl* engine)
     : player(playerToEdit),
       audioEngine(engine)
 {

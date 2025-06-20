@@ -18,7 +18,7 @@ namespace covertracks {
 public:
 // Modified constructor with engine reference
 PlayerEditorComponent(Player* playerToEdit = nullptr, 
-AudioEngine* audioEngine = nullptr);
+AudioEngineImpl* audioEngine = nullptr);
 ~PlayerEditorComponent() override;
 
 // Resource management tied to UI
@@ -98,7 +98,7 @@ std::unique_ptr<GraphDocumentComponent> graphEditor;
 ListenerList<Listener> listeners;
 
 // Reference to AudioEngine
-AudioEngine* audioEngine = nullptr;
+AudioEngineImpl* audioEngine = nullptr;
 
 // Player state update methods
 void updatePlayerFromUI();

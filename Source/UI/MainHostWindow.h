@@ -38,7 +38,7 @@
 #include "../Plugins/InternalPlugins.h"
 #include "../Player/UI/PlayerLibraryComponent.h"
 #include "../Player/UI/PlayerModeComponent.h"
-#include "../Audio/AudioEngine.h"
+#include "../Audio/AudioEngineInterface.h"
 #include "../Musician/UI/Performance/PerformanceLibraryComponent.h"
 #include "../Musician/Core/PerformanceManager.h"
 #include "../Musician/UI/PatternEditorComponent.h"
@@ -143,7 +143,7 @@ public:
     AudioDeviceManager& getDeviceManager();
     KnownPluginList& getPluginList() const;
 
-    AudioEngine* getAudioEngine() { return playerManager ? playerManager->getAudioEngine() : nullptr; }
+    AudioEngineImpl* getAudioEngine() { return playerManager ? playerManager->getAudioEngine() : nullptr; }
 
     // PlayerManager owns the AudioEngine and all audio resources
     std::shared_ptr<PlayerManager> playerManager; 

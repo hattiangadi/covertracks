@@ -6,7 +6,7 @@
 #include "../Core/Player.h"
 #include "../../Plugins/PluginGraph.h"
 #include "../../Plugins/InternalPlugins.h"
-#include "../../Audio/AudioEngine.h"
+#include "../../Audio/AudioEngineInterface.h"
 #include "../../LLM/Core/LLMClient.h"
 #include "../../LLM/Core/ClaudeClient.h"
 
@@ -47,14 +47,14 @@ namespace covertracks {
         bool deletePlayer(Player* player);
         
         // Get the audio engine (singleton)
-        AudioEngine* getAudioEngine() const { return &AudioEngine::getInstance(); }
+        AudioEngineImpl* getAudioEngine() const { return &covertracks::getAudioEngine(); }
         
         // Get the plugin format manager (from singleton)
-        AudioPluginFormatManager& getFormatManager() const { return AudioEngine::getInstance().getFormatManager(); }
+        AudioPluginFormatManager& getFormatManager() const { return covertracks::getAudioEngine().getFormatManager(); }
         
         // Get the known plugin list (from singleton) - both methods provided for consistency
-        KnownPluginList& getKnownPluginList() const { return AudioEngine::getInstance().getKnownPluginList(); }
-        KnownPluginList& getPluginList() const { return AudioEngine::getInstance().getKnownPluginList(); }
+        KnownPluginList& getKnownPluginList() const { return covertracks::getAudioEngine().getKnownPluginList(); }
+        KnownPluginList& getPluginList() const { return covertracks::getAudioEngine().getKnownPluginList(); }
         
         // Get the internal plugin types directly from the format
         std::vector<PluginDescription> getInternalPluginTypes() const { 

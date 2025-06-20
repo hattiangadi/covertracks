@@ -149,7 +149,7 @@ void PlayerLibraryComponent::showPlayerEditor(Player* playerToEdit)
     }
     
     // Get the AudioEngine from the PlayerManager
-    AudioEngine* audioEngine = playerManager->getAudioEngine();
+    auto* audioEngine = playerManager->getAudioEngine();
     
     // Create the editor component with the AudioEngine reference
     playerEditor = std::make_unique<PlayerEditorComponent>(playerToEdit, audioEngine);

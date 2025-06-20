@@ -35,7 +35,7 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "../Audio/AudioEngine.h"
+#include "../Audio/AudioEngineInterface.h"
 #include "../Plugins/PluginGraph.h"
 
 namespace covertracks {
@@ -128,7 +128,7 @@ public:
     // Modified constructor
     GraphDocumentComponent(AudioPluginFormatManager& fm,
                           KnownPluginList& kpl,
-                          AudioEngine& engine);
+                          AudioEngineImpl& engine);
     
     ~GraphDocumentComponent() override;
     
@@ -175,7 +175,7 @@ public:
     std::unique_ptr<MidiKeyboardComponent> keyboardComp;
     
     // AudioEngine reference (not owned)
-    AudioEngine& audioEngine;
+    AudioEngineImpl& audioEngine;
     
     // Edit mode audio processor wrapper for connecting to AudioEngine
     class EditModeAudioProcessor;
@@ -195,7 +195,7 @@ private:
     class KeyboardStateListener : public MidiKeyboardStateListener
     {
     public:
-        KeyboardStateListener(MidiMessageCollector& collector, AudioEngine& engine) 
+        KeyboardStateListener(MidiMessageCollector& collector, AudioEngineImpl& engine) 
             : midiCollector(collector), audioEngine(engine) {}
         
         void handleNoteOn(MidiKeyboardState* /*source*/, int midiChannel, int midiNoteNumber, float velocity) override
@@ -232,7 +232,7 @@ private:
         
     private:
         MidiMessageCollector& midiCollector;
-        AudioEngine& audioEngine;
+        AudioEngineImpl& audioEngine;
     };
     
     // The keyboard state listener instance

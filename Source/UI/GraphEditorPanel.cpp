@@ -1514,7 +1514,7 @@ private:
 //==============================================================================
 GraphDocumentComponent::GraphDocumentComponent(AudioPluginFormatManager& fm,
                                              KnownPluginList& kpl,
-                                             AudioEngine& engine)
+                                             AudioEngineImpl& engine)
     : graph(new PluginGraph(fm, kpl)),
       audioEngine(engine),
       pluginList(kpl)

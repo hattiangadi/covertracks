@@ -148,6 +148,9 @@
       <GROUP id="{7ECD7D00-FEA6-F942-0B50-69DFADAB75E1}" name="Audio">
         <FILE id="ylQuZ8" name="AudioEngine.cpp" compile="1" resource="0" file="Source/Audio/AudioEngine.cpp"/>
         <FILE id="vOsdTR" name="AudioEngine.h" compile="0" resource="0" file="Source/Audio/AudioEngine.h"/>
+        <FILE id="TracktionAudioEngine_cpp" name="TracktionAudioEngine.cpp" compile="1" resource="0" file="Source/Audio/TracktionAudioEngine.cpp"/>
+        <FILE id="TracktionAudioEngine_h" name="TracktionAudioEngine.h" compile="0" resource="0" file="Source/Audio/TracktionAudioEngine.h"/>
+        <FILE id="AudioEngineInterface_h" name="AudioEngineInterface.h" compile="0" resource="0" file="Source/Audio/AudioEngineInterface.h"/>
       </GROUP>
       <GROUP id="{63C773C8-4305-87DD-DB3F-6D1143EFEC61}" name="Musician">
         <GROUP id="{6E960005-4182-0346-FD90-6B37FE7B26E1}" name="UI">
