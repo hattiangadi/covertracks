@@ -31,6 +31,7 @@
         <MODULEPATH id="tracktion_engine" path="modules/tracktion_engine/modules"/>
         <MODULEPATH id="tracktion_graph" path="modules/tracktion_engine/modules"/>
         <MODULEPATH id="tracktion_core" path="modules/tracktion_engine/modules"/>
+        <MODULEPATH id="juce_osc" path="../../../Shared/JUCE/modules"/>
       </MODULEPATHS>
     </XCODE_MAC>
   </EXPORTFORMATS>
@@ -42,17 +43,10 @@
         <FILE id="N8oly3" name="PatternParserTests.cpp" compile="1" resource="0"
               file="Source/Tests/PatternParserTests.cpp"/>
         <FILE id="pWTeo6" name="TestRunner.cpp" compile="1" resource="0" file="Source/Tests/TestRunner.cpp"/>
-        <FILE id="TracktionIntegrationTests" name="TracktionIntegrationTests.cpp" compile="1" resource="0" file="Source/Tests/TracktionIntegrationTests.cpp"/>
+        <FILE id="TracktionIntegrationTests" name="TracktionIntegrationTests.cpp"
+              compile="1" resource="0" file="Source/Tests/TracktionIntegrationTests.cpp"/>
       </GROUP>
       <GROUP id="{TRACKTION-ENGINE-GROUP}" name="Tracktion Engine">
-        <FILE id="tracktion_core" name="tracktion_core.cpp" compile="1" resource="0" file="modules/tracktion_engine/modules/tracktion_core/tracktion_core.cpp"/>
-        <FILE id="tracktion_graph" name="tracktion_graph.cpp" compile="1" resource="0" file="modules/tracktion_engine/modules/tracktion_graph/tracktion_graph.cpp"/>
-        <FILE id="tracktion_engine_utils" name="tracktion_engine_utils.cpp" compile="1" resource="0" file="modules/tracktion_engine/modules/tracktion_engine/tracktion_engine_utils.cpp"/>
-        <FILE id="tracktion_engine_model_1" name="tracktion_engine_model_1.cpp" compile="1" resource="0" file="modules/tracktion_engine/modules/tracktion_engine/tracktion_engine_model_1.cpp"/>
-        <FILE id="tracktion_engine_model_2" name="tracktion_engine_model_2.cpp" compile="1" resource="0" file="modules/tracktion_engine/modules/tracktion_engine/tracktion_engine_model_2.cpp"/>
-        <FILE id="tracktion_engine_playback" name="tracktion_engine_playback.cpp" compile="1" resource="0" file="modules/tracktion_engine/modules/tracktion_engine/tracktion_engine_playback.cpp"/>
-        <FILE id="tracktion_engine_plugins" name="tracktion_engine_plugins.cpp" compile="1" resource="0" file="modules/tracktion_engine/modules/tracktion_engine/tracktion_engine_plugins.cpp"/>
-        <FILE id="tracktion_engine_audio_files" name="tracktion_engine_audio_files.cpp" compile="1" resource="0" file="modules/tracktion_engine/modules/tracktion_engine/tracktion_engine_audio_files.cpp"/>
       </GROUP>
       <GROUP id="{C05A6CB8-92D3-46E6-AD2E-B13D7347AC80}" name="Musician">
         <GROUP id="{34D9D57E-F198-9FB2-4C66-8742C66AFBE3}" name="Core">
@@ -68,8 +62,6 @@
                 file="Source/Musician/Core/MusicPatternComponents.h"/>
           <FILE id="b7T5P1" name="MusicPatternSystem.cpp" compile="1" resource="0"
                 file="Source/Musician/Core/MusicPatternSystem.cpp"/>
-          <FILE id="Im2uUk" name="MusicPatternSystem.cpp.new" compile="0" resource="1"
-                file="Source/Musician/Core/MusicPatternSystem.cpp.new"/>
           <FILE id="teMuI0" name="MusicPatternSystem.h" compile="0" resource="0"
                 file="Source/Musician/Core/MusicPatternSystem.h"/>
           <FILE id="wa6Iwx" name="PatternGenerator.cpp" compile="1" resource="0"
@@ -258,7 +250,7 @@
     <FILE id="p4cNTa" name="reverb_ir.wav" compile="0" resource="1" file="BinaryData/reverb_ir.wav"/>
     <FILE id="ebtWxC" name="singing.ogg" compile="0" resource="1" file="BinaryData/singing.ogg"/>
   </MAINGROUP>
-  <JUCEOPTIONS JUCE_WASAPI="1" JUCE_DIRECTSOUND="1" JUCE_ALSA="1" JUCE_USE_FLAC="0"
+  <JUCEOPTIONS JUCE_WASAPI="1" JUCE_DIRECTSOUND="1" JUCE_ALSA="1" JUCE_USE_FLAC="1"
                JUCE_USE_OGGVORBIS="1" JUCE_USE_CDBURNER="0" JUCE_USE_CDREADER="0"
                JUCE_USE_CAMERA="0" JUCE_PLUGINHOST_AU="1" JUCE_WEB_BROWSER="0"
                JUCE_PLUGINHOST_VST3="1" JUCE_PLUGINHOST_LADSPA="1" JUCE_PLUGINHOST_LV2="1"/>
@@ -277,9 +269,10 @@
     <MODULE id="juce_gui_basics" showAllCode="1"/>
     <MODULE id="juce_gui_extra" showAllCode="1"/>
     <MODULE id="juce_opengl" showAllCode="1"/>
+    <MODULE id="juce_osc" showAllCode="1" useLocalCopy="0" useGlobalPath="0"/>
     <MODULE id="tracktion_core" showAllCode="1"/>
-    <MODULE id="tracktion_graph" showAllCode="1"/>
     <MODULE id="tracktion_engine" showAllCode="1"/>
+    <MODULE id="tracktion_graph" showAllCode="1"/>
   </MODULES>
   <LIVE_SETTINGS>
     <OSX/>
