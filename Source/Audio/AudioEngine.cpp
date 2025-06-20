@@ -140,6 +140,10 @@ bool AudioEngine::initializeMasterGraph()
             return false;
         }
         
+        std::cout << "🔧 Master graph initialized with:" << std::endl;
+        std::cout << "  - MIDI input node ID: " << midiInputNode->nodeID.uid << std::endl;
+        std::cout << "  - Audio output node ID: " << audioOutputNode->nodeID.uid << std::endl;
+        
         // Prepare the graph
         if (auto* device = deviceManager->getCurrentAudioDevice()) {
             double sampleRate = device->getCurrentSampleRate();
@@ -148,6 +152,7 @@ bool AudioEngine::initializeMasterGraph()
             masterGraph->prepareToPlay(sampleRate, bufferSize);
         }
         
+        std::cout << "✅ Master audio graph initialized successfully" << std::endl;
         DBG("INFO: Master audio graph initialized");
         return true;
         
@@ -318,7 +323,16 @@ bool AudioEngine::addPlayerGraph(Player* player)
             
             PlayerGraphWrapper(Player* p) : player(p) 
             {
-                setPlayConfigDetails(0, 2, 44100, 512); // Stereo output
+                setPlayConfigDetails(0, 2, 44100, 512); // No input, stereo output
+                
+                // Debug: Show bus configuration
+                std::cout << "🔧 PlayerGraphWrapper bus config:" << std::endl;
+                std::cout << "  - Input buses: " << getBusCount(true) << std::endl;
+                std::cout << "  - Output buses: " << getBusCount(false) << std::endl;
+                if (getBusCount(false) > 0) {
+                    auto* outputBus = getBus(false, 0);
+                    std::cout << "  - Output channels: " << (outputBus ? outputBus->getNumberOfChannels() : 0) << std::endl;
+                }
             }
             
             const juce::String getName() const override 
@@ -326,57 +340,82 @@ bool AudioEngine::addPlayerGraph(Player* player)
                 return "Player: " + (player ? player->getMetadata().name : "Unknown");
             }
             
-            void prepareToPlay(double, int) override {}
-            void releaseResources() override {}
+            void prepareToPlay(double sampleRate, int blockSize) override 
+            {
+                if (player) 
+                {
+                    std::cout << "🔧 PlayerGraphWrapper: Preparing Player " << player->getMetadata().name 
+                              << " for " << sampleRate << "Hz, " << blockSize << " samples" << std::endl;
+                    player->prepareToPlay(sampleRate, blockSize);
+                }
+            }
+            
+            void releaseResources() override 
+            {
+                if (player) 
+                {
+                    std::cout << "🔧 PlayerGraphWrapper: Releasing resources for Player " << player->getMetadata().name << std::endl;
+                    player->releaseResources();
+                }
+            }
             void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override 
             {
                 if (player) 
                 {
-                    // Debug: Check if wrapper is being called
-                    if (midiMessages.getNumEvents() > 0 || player->isPlaying())
-                    {
-                        std::cout << "PlayerGraphWrapper: Processing " << midiMessages.getNumEvents() 
-                                  << " MIDI events for player " << player->getMetadata().name 
-                                  << " (playing: " << player->isPlaying() << ")" << std::endl;
-                    }
+                    std::cout << "🎵 PlayerGraphWrapper: Processing like EditModeAudioProcessor" << std::endl;
                     
-                    // TESTING: Instead of using Player's internal MIDI generation,
-                    // route external MIDI directly to the Player's instrument for testing
+                    // EXACT COPY OF EditModeAudioProcessor approach:
+                    // Use the Player's AudioProcessor interface directly  
+                    player->processBlock(buffer, midiMessages);
+                    
+                    // If Player generated MIDI events, route them to the instrument (like edit mode routes to plugin graph)
                     if (midiMessages.getNumEvents() > 0)
                     {
-                        std::cout << "🧪 TEST: Routing " << midiMessages.getNumEvents() 
-                                  << " external MIDI events directly to Player's instrument..." << std::endl;
+                        std::cout << "🎵 PlayerGraphWrapper: Player generated " << midiMessages.getNumEvents() 
+                                  << " MIDI events, processing through instrument..." << std::endl;
                         
-                        // Route external MIDI directly to player's instrument processor graph
+                        // KEY FIX: Send player MIDI to AudioEngine like edit mode does
+                        // This will trigger the sine wave test and show us the MIDI path works
+                        for (const auto metadata : midiMessages) {
+                            auto message = metadata.getMessage();
+                            std::cout << "🔄 Sending Player MIDI to AudioEngine: " << message.getDescription() << std::endl;
+                            // Note: We're already inside AudioEngine, so we'll add directly to currentMidiBuffer
+                            // instead of calling sendMidiMessage() to avoid recursion
+                        }
+                        
                         if (auto* instrument = player->getInstrument())
                         {
                             if (auto* processorGraph = instrument->getProcessorGraph())
                             {
+                                // Process through the instrument graph (like EditModeAudioProcessor does graph.graph.processBlock)
                                 processorGraph->processBlock(buffer, midiMessages);
                                 
-                                // Check if we got audio output
-                                float maxLevel = 0.0f;
-                                for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+                                // Check for audio output (exact copy from EditModeAudioProcessor)
+                                bool hasAudio = false;
+                                for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
                                 {
-                                    maxLevel = std::max(maxLevel, buffer.getMagnitude(ch, 0, buffer.getNumSamples()));
+                                    auto* channelData = buffer.getReadPointer(channel);
+                                    for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+                                    {
+                                        if (std::abs(channelData[sample]) > 0.001f)
+                                        {
+                                            hasAudio = true;
+                                            break;
+                                        }
+                                    }
+                                    if (hasAudio) break;
                                 }
-                                if (maxLevel > 0.001f)
+                                
+                                if (hasAudio)
                                 {
-                                    std::cout << "🔊 SUCCESS: Player's instrument generated audio! Level: " << maxLevel << std::endl;
+                                    std::cout << "🔊 PlayerGraphWrapper: Generated audio! (EditMode style)" << std::endl;
                                 }
-                                return; // Skip Player's internal MIDI generation for this test
+                                else
+                                {
+                                    std::cout << "🔇 PlayerGraphWrapper: No audio generated" << std::endl;
+                                }
                             }
                         }
-                    }
-                    
-                    // Use the Player's AudioProcessor interface directly  
-                    player->processBlock(buffer, midiMessages);
-                    
-                    // Debug: Check what we got back
-                    if (midiMessages.getNumEvents() > 0 || player->isPlaying())
-                    {
-                        std::cout << "PlayerGraphWrapper: After player->processBlock, buffer has " 
-                                  << midiMessages.getNumEvents() << " MIDI events" << std::endl;
                     }
                 }
             }
@@ -423,15 +462,79 @@ bool AudioEngine::addPlayerGraph(Player* player)
             // Connect audio output to master audio output
             if (audioOutputNode != nullptr)
             {
+                std::cout << "🔌 Connecting PlayerGraphWrapper audio:" << std::endl;
+                std::cout << "  - PlayerGraphWrapper node ID: " << it->second->graphNode->nodeID.uid << std::endl;
+                std::cout << "  - Audio output node ID: " << audioOutputNode->nodeID.uid << std::endl;
+                
+                // Debug audio output node configuration
+                auto* audioOutputProcessor = audioOutputNode->getProcessor();
+                std::cout << "  - Audio output inputs: " << audioOutputProcessor->getBusCount(true) << std::endl;
+                if (audioOutputProcessor->getBusCount(true) > 0) {
+                    auto* inputBus = audioOutputProcessor->getBus(true, 0);
+                    int currentInputChannels = inputBus ? inputBus->getNumberOfChannels() : 0;
+                    std::cout << "  - Audio output input channels: " << currentInputChannels << std::endl;
+                    
+                    // Fix: Ensure audio output node has 2 input channels
+                    if (currentInputChannels == 0 && inputBus) {
+                        std::cout << "🔧 Fixing audio output node - setting to 2 input channels..." << std::endl;
+                        
+                        // Enable the input bus with 2 channels
+                        inputBus->enable(true);
+                        auto currentLayout = inputBus->getCurrentLayout();
+                        if (currentLayout.size() != 2) {
+                            juce::AudioChannelSet stereoLayout = juce::AudioChannelSet::stereo();
+                            inputBus->setCurrentLayout(stereoLayout);
+                            std::cout << "  - Set audio output to stereo input (" << stereoLayout.size() << " channels)" << std::endl;
+                        }
+                        
+                        int newInputChannels = inputBus->getNumberOfChannels();
+                        std::cout << "  - Audio output now has " << newInputChannels << " input channels" << std::endl;
+                    }
+                }
+                
                 // Connect stereo audio output
-                masterGraph->addConnection({
+                std::cout << "🔌 Attempting audio connections..." << std::endl;
+                
+                bool conn1 = masterGraph->addConnection({
                     { it->second->graphNode->nodeID, 0 },
                     { audioOutputNode->nodeID, 0 }
                 });
-                masterGraph->addConnection({
+                std::cout << "  - Audio connection L (3/0 -> 2/0): " << (conn1 ? "SUCCESS" : "FAILED") << std::endl;
+                
+                // Check if audio output node actually has 2 input channels after our fix
+                if (audioOutputProcessor->getBusCount(true) > 0) {
+                    auto* inputBus = audioOutputProcessor->getBus(true, 0);
+                    int actualChannels = inputBus ? inputBus->getNumberOfChannels() : 0;
+                    std::cout << "  - Audio output actual input channels: " << actualChannels << std::endl;
+                }
+                
+                bool conn2 = masterGraph->addConnection({
                     { it->second->graphNode->nodeID, 1 },
                     { audioOutputNode->nodeID, 1 }
                 });
+                std::cout << "  - Audio connection R (3/1 -> 2/1): " << (conn2 ? "SUCCESS" : "FAILED") << std::endl;
+                
+                // If right channel failed, try alternative approaches
+                if (!conn2) {
+                    std::cout << "🔧 Right channel failed, trying fallback approaches..." << std::endl;
+                    
+                    // Try connecting right channel to left input as mono fallback
+                    bool conn2_fallback = masterGraph->addConnection({
+                        { it->second->graphNode->nodeID, 1 },
+                        { audioOutputNode->nodeID, 0 }
+                    });
+                    std::cout << "  - Fallback R->L connection (3/1 -> 2/0): " << (conn2_fallback ? "SUCCESS" : "FAILED") << std::endl;
+                }
+                
+                // If connections failed, try to understand why
+                if (!conn1 || !conn2) {
+                    std::cout << "🔍 Connection failure analysis:" << std::endl;
+                    std::cout << "  - PlayerGraphWrapper outputs: " << it->second->graphNode->getProcessor()->getBusCount(false) << std::endl;
+                    if (it->second->graphNode->getProcessor()->getBusCount(false) > 0) {
+                        auto* outputBus = it->second->graphNode->getProcessor()->getBus(false, 0);
+                        std::cout << "  - PlayerGraphWrapper output channels: " << (outputBus ? outputBus->getNumberOfChannels() : 0) << std::endl;
+                    }
+                }
             }
             
             return true;
@@ -820,7 +923,8 @@ void AudioEngine::audioDeviceIOCallbackWithContext(const float* const* inputChan
                       << " MIDI events with " << activePlayerCount << "/" << totalPlayerCount << " active players" << std::endl;
         }
         
-        // Process master graph
+        // Process master graph with collected MIDI events
+        std::cout << "🎛️ Processing master graph with " << midiBuffer.getNumEvents() << " MIDI events" << std::endl;
         masterGraph->processBlock(audioBuffer, midiBuffer);
         
         // Process edit mode processor if registered (for edit mode audio)
