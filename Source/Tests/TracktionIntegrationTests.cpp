@@ -1,5 +1,5 @@
 #include <JuceHeader.h>
-#include "../Audio/AudioEngine.h"
+#include "../Audio/AudioEngineInterface.h"
 
 // Include Tracktion Engine headers
 #include "../../modules/tracktion_engine/modules/tracktion_engine/tracktion_engine.h"

@@ -1,4 +1,5 @@
 #include "Instrument.h"
+#include "../../Audio/AudioEngineInterface.h"
 #include <iostream>
 
 namespace covertracks {
@@ -6,7 +7,7 @@ namespace covertracks {
 Instrument::Instrument(const String& name, 
                      AudioPluginFormatManager& fm,
                      KnownPluginList& kpl,
-                     AudioEngine* engine)
+                     AudioEngineImpl* engine)
     : instrumentName(name), 
       resourceState(ResourceState::Unloaded),
       audioEngine(engine),
@@ -295,7 +296,7 @@ void Instrument::releaseResources()
     }
 }
 
-bool Instrument::connectToAudioEngine(AudioEngine* engine)
+bool Instrument::connectToAudioEngine(AudioEngineImpl* engine)
 {
     if (engine == nullptr)
         return false;
@@ -1339,27 +1340,19 @@ void Instrument::timerCallback()
         // Update the current time
         currentTime = blockEndTime;
         
-        // If we've reached the end of the sequence, schedule stopping playback
+        // If we've reached the end of the sequence, just stop the timer
+        // but don't automatically stop playback - let the TracktionAudioEngine
+        // manage player lifecycle for real-time audio processing
         if (nextEventIndex >= currentSequence->getNumEvents() && !addedEvents)
         {
             // Stop the timer to prevent further callbacks
             stopTimer();
             
-            // All events have been processed, stop playback after a short delay
-            // to allow the last notes to finish playing
-            static bool stopScheduled = false;
+            // Log that we've finished processing the sequence
+            // std::cout << "Finished processing MIDI sequence for " << instrumentName << std::endl;
             
-            if (!stopScheduled)
-            {
-                stopScheduled = true;
-                // std::cout << "Scheduling playback to stop after delay..." << std::endl;
-                
-                Timer::callAfterDelay(1000, [this]()
-                {
-                    this->stopPlayback();
-                    stopScheduled = false;
-                });
-            }
+            // Don't automatically call stopPlayback() - let the TracktionAudioEngine
+            // handle player lifecycle. Players should remain active for real-time audio.
         }
     }
 }

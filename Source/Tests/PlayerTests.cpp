@@ -353,7 +353,7 @@ void PlayerPlaybackTests::testBasicPlayback()
     if (player->loadChart(chart))
     {
         // Test play (may not actually produce audio in test environment)
-        bool playResult = player->play();
+        (void)player->play();
         // In test environment, play might fail due to no audio output, which is acceptable
         expect(true, "Play method should not crash");
         
@@ -621,7 +621,7 @@ void PlayerPerformanceTests::testRepeatedPlayback()
         // Repeated play/stop cycles
         for (int i = 0; i < 20; ++i)
         {
-            bool playResult = player->play();
+            (void)player->play();
             juce::Thread::sleep(5); // Brief playback
             player->stop();
             

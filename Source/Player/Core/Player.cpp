@@ -1,4 +1,5 @@
 #include "Player.h"
+#include "../../Audio/AudioEngineInterface.h"
 #include <iostream>
 
 namespace covertracks {
@@ -170,7 +171,7 @@ void Player::loadMinimalResources()
         // Create instrument if needed (but don't initialize)
         if (instrument == nullptr)
         {
-            instrument = std::make_unique<Instrument>(metadata.name, formatManager, knownPluginList, &AudioEngine::getInstance());
+            instrument = std::make_unique<Instrument>(metadata.name, formatManager, knownPluginList, &getAudioEngine());
             
             // Set up chart finished callback
             instrument->setPatternFinishedCallback([this]() {
@@ -226,7 +227,7 @@ void Player::prepareForPlayback()
         }
         
         // Connect to AudioEngine singleton
-        auto& audioEngine = AudioEngine::getInstance();
+        auto& audioEngine = getAudioEngine();
         std::cout << "🔍 Using AudioEngine singleton, isConnected=" << isConnectedToAudioEngine() << std::endl;
         
         std::cout << "🔗 Ensuring Player is registered with AudioEngine..." << std::endl;
@@ -250,12 +251,12 @@ void Player::prepareForPlayback()
 }
 
 
-bool Player::connectToAudioEngine(AudioEngine* engine)
+bool Player::connectToAudioEngine(AudioEngineImpl* engine)
 {
     // Ignore the parameter - always use singleton
     juce::ignoreUnused(engine);
     
-    auto& audioEngine = AudioEngine::getInstance();
+    auto& audioEngine = getAudioEngine();
     
     // Connect instrument to the engine
     if (instrument && !instrument->connectToAudioEngine(&audioEngine))
@@ -285,7 +286,7 @@ bool Player::connectToAudioEngine(AudioEngine* engine)
 
 void Player::disconnectFromAudioEngine()
 {
-    auto& audioEngine = AudioEngine::getInstance();
+    auto& audioEngine = getAudioEngine();
     
     // Deactivate this player in the engine
     audioEngine.deactivatePlayer(this);
@@ -321,7 +322,7 @@ bool Player::initializeMinimal()
     // Only create the instrument with minimal initialization
     if (instrument == nullptr)
     {
-        instrument = std::make_unique<Instrument>(metadata.name, formatManager, knownPluginList, &AudioEngine::getInstance());
+        instrument = std::make_unique<Instrument>(metadata.name, formatManager, knownPluginList, &getAudioEngine());
         
         // Set up chart finished callback
         instrument->setPatternFinishedCallback([this]() {
@@ -448,7 +449,7 @@ bool Player::initialize()
     // Create instrument if needed
     if (instrument == nullptr)
     {
-        instrument = std::make_unique<Instrument>(metadata.name, formatManager, knownPluginList, &AudioEngine::getInstance());
+        instrument = std::make_unique<Instrument>(metadata.name, formatManager, knownPluginList, &getAudioEngine());
         
         // Set up chart finished callback
         instrument->setPatternFinishedCallback([this]() {
@@ -1059,7 +1060,7 @@ void Player::stopPlayback()
     playbackPositionSeconds = 0.0;
     
     // Deactivate the player from AudioEngine
-    auto& audioEngine = AudioEngine::getInstance();
+    auto& audioEngine = getAudioEngine();
     std::cout << "🛑 Deactivating player " << metadata.name << " from AudioEngine..." << std::endl;
     audioEngine.deactivatePlayer(this);
     
@@ -1576,7 +1577,7 @@ void Player::startPlayback()
     playbackActive = true;
     
     // CRITICAL FIX: Activate the player with AudioEngine for real-time processing
-    auto& audioEngine = AudioEngine::getInstance();
+    auto& audioEngine = getAudioEngine();
     std::cout << "🎯 Activating player " << metadata.name << " with AudioEngine..." << std::endl;
     if (audioEngine.activatePlayer(this))
     {

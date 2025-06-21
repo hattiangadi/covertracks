@@ -4,7 +4,7 @@
 
 namespace covertracks {
 
-EnsembleManager::EnsembleManager(PlayerManager* playerManagerPtr, AudioEngine* audioEnginePtr, const juce::String& id)
+EnsembleManager::EnsembleManager(PlayerManager* playerManagerPtr, AudioEngineImpl* audioEnginePtr, const juce::String& id)
     : playerManager(playerManagerPtr),
       audioEngine(audioEnginePtr),
       playing(false),

@@ -2,7 +2,7 @@
 
 #include <JuceHeader.h>
 #include "../../Plugins/PluginGraph.h"
-#include "../../Audio/AudioEngine.h"
+#include "../../Audio/AudioEngineInterface.h"
 
 namespace covertracks {
 
@@ -21,7 +21,7 @@ public:
 Instrument(const String& name, 
 AudioPluginFormatManager& formatManager,
 KnownPluginList& knownPluginList,
-AudioEngine* engine = nullptr);
+AudioEngineImpl* engine = nullptr);
 ~Instrument() override;
 
 // Resource state management
@@ -39,7 +39,7 @@ bool prepareForPlayback();  // Load resources needed for playback, returns succe
 void releaseResources();    // Release all heavy resources
 
 // AudioEngine connection methods
-bool connectToAudioEngine(AudioEngine* engine);
+bool connectToAudioEngine(AudioEngineImpl* engine);
 void disconnectFromAudioEngine();
 bool isConnectedToAudioEngine() const { return audioEngine != nullptr; }
     
@@ -80,7 +80,7 @@ private:
 // Core state
 String instrumentName;
 ResourceState resourceState = ResourceState::Unloaded;
-AudioEngine* audioEngine = nullptr;
+AudioEngineImpl* audioEngine = nullptr;
 
 // References to shared plugin environment (not owned)
 AudioPluginFormatManager& formatManager;

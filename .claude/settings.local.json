@@ -29,7 +29,15 @@
       "Bash(timeout:*)",
       "Bash(gtimeout:*)",
       "Bash(open:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(/Applications/Projucer.app/Contents/MacOS/Projucer --resave Covertracks.jucer)",
+      "Bash(\"./build/Debug/Covertracks.app/Contents/MacOS/Covertracks\" --run-tests)",
+      "Bash(/Users/anand/src/covertracks/test_tracktion.sh)",
+      "Bash(Projucer:*)",
+      "Bash(g++:*)",
+      "Bash(./verify_tracktion.sh)",
+      "Bash(mv:*)",
+      "Bash(rm:*)"
     ],
     "deny": []
   }

@@ -45,9 +45,12 @@
         <FILE id="pWTeo6" name="TestRunner.cpp" compile="1" resource="0" file="Source/Tests/TestRunner.cpp"/>
         <FILE id="TracktionIntegrationTests" name="TracktionIntegrationTests.cpp"
               compile="1" resource="0" file="Source/Tests/TracktionIntegrationTests.cpp"/>
+        <FILE id="TracktionAudioTest" name="TracktionAudioTest.cpp" compile="1" 
+              resource="0" file="Source/Tests/TracktionAudioTest.cpp"/>
+        <FILE id="TracktionAudioTestH" name="TracktionAudioTest.h" compile="0" 
+              resource="0" file="Source/Tests/TracktionAudioTest.h"/>
       </GROUP>
-      <GROUP id="{TRACKTION-ENGINE-GROUP}" name="Tracktion Engine">
-      </GROUP>
+      <GROUP id="{TRACKTION-ENGINE-GROUP}" name="Tracktion Engine"/>
       <GROUP id="{C05A6CB8-92D3-46E6-AD2E-B13D7347AC80}" name="Musician">
         <GROUP id="{34D9D57E-F198-9FB2-4C66-8742C66AFBE3}" name="Core">
           <FILE id="mfdozh" name="EnsembleManager.cpp" compile="1" resource="0"
@@ -146,11 +149,12 @@
         <GROUP id="{CC93008E-34A2-F0FB-0868-5A4E4E58B664}" name="UI"/>
       </GROUP>
       <GROUP id="{7ECD7D00-FEA6-F942-0B50-69DFADAB75E1}" name="Audio">
-        <FILE id="ylQuZ8" name="AudioEngine.cpp" compile="1" resource="0" file="Source/Audio/AudioEngine.cpp"/>
-        <FILE id="vOsdTR" name="AudioEngine.h" compile="0" resource="0" file="Source/Audio/AudioEngine.h"/>
-        <FILE id="TracktionAudioEngine_cpp" name="TracktionAudioEngine.cpp" compile="1" resource="0" file="Source/Audio/TracktionAudioEngine.cpp"/>
-        <FILE id="TracktionAudioEngine_h" name="TracktionAudioEngine.h" compile="0" resource="0" file="Source/Audio/TracktionAudioEngine.h"/>
-        <FILE id="AudioEngineInterface_h" name="AudioEngineInterface.h" compile="0" resource="0" file="Source/Audio/AudioEngineInterface.h"/>
+        <FILE id="TracktionAudioEngine_cpp" name="TracktionAudioEngine.cpp"
+              compile="1" resource="0" file="Source/Audio/TracktionAudioEngine.cpp"/>
+        <FILE id="TracktionAudioEngine_h" name="TracktionAudioEngine.h" compile="0"
+              resource="0" file="Source/Audio/TracktionAudioEngine.h"/>
+        <FILE id="AudioEngineInterface_h" name="AudioEngineInterface.h" compile="0"
+              resource="0" file="Source/Audio/AudioEngineInterface.h"/>
       </GROUP>
       <GROUP id="{63C773C8-4305-87DD-DB3F-6D1143EFEC61}" name="Musician">
         <GROUP id="{6E960005-4182-0346-FD90-6B37FE7B26E1}" name="UI">

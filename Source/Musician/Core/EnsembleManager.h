@@ -4,7 +4,7 @@
 #include "../../Player/Core/Player.h"
 #include "../../Player/Core/PlayerManager.h"
 #include "../../LLM/Core/LLMManager.h"
-#include "../../Audio/AudioEngine.h"
+#include "../../Audio/AudioEngineInterface.h"
 #include "MusicPatternSystem.h"
 
 namespace covertracks {
@@ -46,7 +46,7 @@ public:
      * @param audioEngine The audio engine to use for all players in the ensemble
      * @param id Optional unique identifier for this ensemble
      */
-    EnsembleManager(PlayerManager* playerManager, AudioEngine* audioEngine = nullptr, const juce::String& id = juce::String());
+    EnsembleManager(PlayerManager* playerManager, AudioEngineImpl* audioEngine = nullptr, const juce::String& id = juce::String());
     
     /**
      * @brief Destroy the Ensemble Manager
@@ -281,7 +281,7 @@ private:
     juce::Array<MusicianRole> musicianRoles;
     
     // Core properties
-    AudioEngine* audioEngine;
+    AudioEngineImpl* audioEngine;
     juce::String ensembleName;
     juce::String ensembleDescription;
     juce::String currentSongDescription;

@@ -1,5 +1,5 @@
 #include <JuceHeader.h>
-#include "../Audio/AudioEngine.h"
+#include "../Audio/AudioEngineInterface.h"
 #include "../Player/Core/Player.h"
 #include "../Player/Core/PlayerManager.h"
 #include "../Musician/Core/Performance.h"
@@ -44,7 +44,7 @@ public:
 private:
     void testEnsemblePerformanceScenario()
     {
-        auto& audioEngine = AudioEngine::getInstance();
+        auto& audioEngine = getAudioEngine();
         
         // Create a typical ensemble: drums, bass, guitar, piano, strings, vocals
         std::vector<std::unique_ptr<Player>> ensemble;
@@ -103,7 +103,7 @@ private:
     
     void testSimultaneousPatternPlayback()
     {
-        auto& audioEngine = AudioEngine::getInstance();
+        auto& audioEngine = getAudioEngine();
         
         // Create multiple players for simultaneous playback
         std::vector<std::unique_ptr<Player>> players;
@@ -225,7 +225,7 @@ private:
     
     void testBufferUnderrunPrevention()
     {
-        auto& audioEngine = AudioEngine::getInstance();
+        auto& audioEngine = getAudioEngine();
         
         // Record baseline buffer underruns
         int initialUnderruns = audioEngine.getBufferUnderruns();
@@ -288,7 +288,7 @@ private:
     
     void testCpuUsageMonitoring()
     {
-        auto& audioEngine = AudioEngine::getInstance();
+        auto& audioEngine = getAudioEngine();
         
         // Test CPU usage monitoring accuracy
         double idleCpu = audioEngine.getCpuUsage();
@@ -336,7 +336,7 @@ private:
     
     void testMultiPlayerResourceCoordination()
     {
-        auto& audioEngine = AudioEngine::getInstance();
+        auto& audioEngine = getAudioEngine();
         
         // Test that multiple players can coordinate resource access
         auto player1 = std::make_unique<Player>("coord_test_1", "CoordTest1", 
@@ -384,7 +384,7 @@ private:
     
     void testPerformanceModeStressTest()
     {
-        auto& audioEngine = AudioEngine::getInstance();
+        auto& audioEngine = getAudioEngine();
         
         // This is the ultimate test - recreate the exact scenario that caused clicking
         // Create a performance with multiple patterns playing simultaneously
@@ -440,7 +440,7 @@ private:
         
         // Record pre-performance metrics
         int initialUnderruns = audioEngine.getBufferUnderruns();
-        double initialCpuUsage = audioEngine.getCpuUsage();
+
         
         // THE CRITICAL TEST: Start all patterns simultaneously
         int successfulStarts = 0;
@@ -498,7 +498,7 @@ private:
     
     void testAudioQualityUnderLoad()
     {
-        auto& audioEngine = AudioEngine::getInstance();
+        auto& audioEngine = getAudioEngine();
         
         // Test audio quality monitoring under various load conditions
         expect(audioEngine.isAudioQualityGood(), "Audio quality should start good");

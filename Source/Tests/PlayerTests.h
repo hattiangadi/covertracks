@@ -4,7 +4,7 @@
 #include <JuceHeader.h>
 #include "../Player/Core/Player.h"
 #include "../Player/Core/PlayerManager.h"
-#include "../Audio/AudioEngine.h"
+#include "../Audio/AudioEngineInterface.h"
 
 namespace covertracks {
 

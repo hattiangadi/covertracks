@@ -1,6 +1,7 @@
 // PlayerManager.cpp
 #include "PlayerManager.h"
 #include "../../Plugins/InternalPlugins.h"
+#include "../../Audio/AudioEngineInterface.h"
 
 namespace covertracks {
 
@@ -10,9 +11,9 @@ PlayerManager::PlayerManager()
     
     // Get singleton AudioEngine which owns the formatManager and knownPluginList
     // std::cout << "[PlayerManager] Getting AudioEngine singleton for plugin setup" << std::endl;
-    auto& audioEngine = AudioEngine::getInstance();
-    auto& formatManager = audioEngine.getFormatManager();
-    auto& knownPluginList = audioEngine.getKnownPluginList();
+    auto* audioEngine = getAudioEnginePtr();
+    auto& formatManager = audioEngine->getFormatManager();
+    auto& knownPluginList = audioEngine->getKnownPluginList();
     
     // Create a single internal plugin format that will be owned by the formatManager
     // std::cout << "[PlayerManager] Creating internal plugin format" << std::endl;
@@ -100,7 +101,7 @@ void PlayerManager::activatePlayer(Player* player)
     player->prepareForPlayback();
     
     // Connect to AudioEngine singleton
-    if (!player->connectToAudioEngine(&AudioEngine::getInstance()))
+    if (!player->connectToAudioEngine(getAudioEnginePtr()))
     {
         std::cerr << "Failed to connect player to AudioEngine" << std::endl;
         player->releaseResources();
@@ -113,7 +114,7 @@ void PlayerManager::activatePlayer(Player* player)
         if (auto* processorGraph = instrument->getProcessorGraph())
         {
             // Integrate player's graph into AudioEngine master graph
-            if (!AudioEngine::getInstance().addPlayerGraph(player))
+            if (!getAudioEnginePtr()->addPlayerGraph(player))
             {
                 std::cerr << "Warning: Could not integrate player graph for " << player->getMetadata().name << std::endl;
             }
@@ -136,7 +137,7 @@ void PlayerManager::deactivatePlayer(Player* player)
         if (auto* processorGraph = instrument->getProcessorGraph())
         {
             // Remove player's graph from AudioEngine master graph
-            AudioEngine::getInstance().removePlayerGraph(player);
+            getAudioEnginePtr()->removePlayerGraph(player);
         }
     }
     
@@ -313,8 +314,8 @@ std::unique_ptr<Player> PlayerManager::createPlayer()
     String id = String::toHexString(Random::getSystemRandom().nextInt());
     
     // Create a new player with default settings, using singleton AudioEngine
-    auto& audioEngine = AudioEngine::getInstance();
-    auto player = std::make_unique<Player>(id, "New Player", audioEngine.getFormatManager(), audioEngine.getKnownPluginList());
+    auto* audioEngine = getAudioEnginePtr();
+    auto player = std::make_unique<Player>(id, "New Player", audioEngine->getFormatManager(), audioEngine->getKnownPluginList());
     player->initialize();
     
     // Set default metadata
@@ -347,8 +348,8 @@ std::unique_ptr<Player> PlayerManager::loadPlayer(const File& file)
     if (result.wasOk() && json.isObject())
     {
         // Use the fromVar method to create a player with the singleton AudioEngine
-        auto& audioEngine = AudioEngine::getInstance();
-        return Player::fromVar(json, audioEngine.getFormatManager(), audioEngine.getKnownPluginList());
+        auto* audioEngine = getAudioEnginePtr();
+        return Player::fromVar(json, audioEngine->getFormatManager(), audioEngine->getKnownPluginList());
     }
     
     return nullptr;
@@ -484,7 +485,7 @@ bool PlayerManager::playPattern(Player* player, const var& pattern, double tempo
     if (!player->isConnectedToAudioEngine())
     {
         // std::cout << "Connecting player " << player->getMetadata().name << " to AudioEngine" << std::endl;
-        if (!player->connectToAudioEngine(&AudioEngine::getInstance()))
+        if (!player->connectToAudioEngine(getAudioEnginePtr()))
         {
             std::cerr << "Failed to connect player to AudioEngine" << std::endl;
             return false;
@@ -495,7 +496,7 @@ bool PlayerManager::playPattern(Player* player, const var& pattern, double tempo
     if (player != activePlayer)
     {
         // std::cout << "Activating player " << player->getMetadata().name << " in AudioEngine" << std::endl;
-        AudioEngine::getInstance().activatePlayer(player);
+        getAudioEnginePtr()->activatePlayer(player);
     }
     
     // Make sure the player's processor is registered with the AudioEngine

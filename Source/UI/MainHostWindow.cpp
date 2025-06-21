@@ -36,7 +36,7 @@
 #include "MainHostWindow.h"
 #include "../Plugins/InternalPlugins.h"
 #include "../Player/UI/PlayerLibraryComponent.h"
-#include "../Audio/AudioEngine.h"
+#include "../Audio/AudioEngineInterface.h"
 #include "../Musician/Core/Musician.h"
 #include "../LLM/Core/ClaudeClient.h"
 #include "../Musician/UI/EnsembleEditPanel.h"

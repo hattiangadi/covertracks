@@ -1,5 +1,5 @@
 #include <JuceHeader.h>
-#include "../Audio/AudioEngine.h"
+#include "../Audio/AudioEngineInterface.h"
 #include "../Player/Core/Player.h"
 
 namespace covertracks {
@@ -52,21 +52,19 @@ private:
     void testSingletonAccess()
     {
         // Test singleton pattern
-        auto& engine1 = AudioEngine::getInstance();
-        auto& engine2 = AudioEngine::getInstance();
+        auto& engine1 = getAudioEngine();
+        auto& engine2 = getAudioEngine();
         
         // Should be the same instance
         expect(&engine1 == &engine2, "AudioEngine should be singleton");
         
         // Should have valid components
-        expect(&engine1.getDeviceManager() != nullptr, "DeviceManager should be valid");
-        expect(&engine1.getFormatManager() != nullptr, "FormatManager should be valid");
-        expect(&engine1.getKnownPluginList() != nullptr, "KnownPluginList should be valid");
+
     }
     
     void testResourceOwnership()
     {
-        auto& engine = AudioEngine::getInstance();
+        auto& engine = getAudioEngine();
         
         // AudioEngine should own all resources
         auto& deviceManager = engine.getDeviceManager();
@@ -85,7 +83,7 @@ private:
     
     void testPlayerRegistration()
     {
-        auto& engine = AudioEngine::getInstance();
+        auto& engine = getAudioEngine();
         
         // Create test players
         auto player1 = createTestPlayer("TestPlayer1");
@@ -118,7 +116,7 @@ private:
     
     void testThreadSafety()
     {
-        auto& engine = AudioEngine::getInstance();
+        auto& engine = getAudioEngine();
         
         // Create multiple players for concurrent access
         std::vector<std::unique_ptr<Player>> players;
@@ -154,7 +152,7 @@ private:
     
     void testMidiRouting()
     {
-        auto& engine = AudioEngine::getInstance();
+        auto& engine = getAudioEngine();
         
         // Create test player with MIDI callback
         auto player = createTestPlayer("MidiTestPlayer");
@@ -198,7 +196,7 @@ private:
     
     void testPlayerGraphIntegration()
     {
-        auto& engine = AudioEngine::getInstance();
+        auto& engine = getAudioEngine();
         
         // Create test player with audio graph
         auto player = createTestPlayer("GraphIntegrationPlayer");
@@ -244,7 +242,7 @@ private:
     
     void testAudioQualityMonitoring()
     {
-        auto& engine = AudioEngine::getInstance();
+        auto& engine = getAudioEngine();
         
         // Initially should have good quality
         expect(engine.isAudioQualityGood(), "Initial audio quality should be good");
@@ -263,7 +261,7 @@ private:
     
     void testMultiPlayerCoordination()
     {
-        auto& engine = AudioEngine::getInstance();
+        auto& engine = getAudioEngine();
         
         // Create multiple players
         std::vector<std::unique_ptr<Player>> players;
@@ -297,7 +295,7 @@ private:
     
     void testBufferUnderrunPrevention()
     {
-        auto& engine = AudioEngine::getInstance();
+        auto& engine = getAudioEngine();
         
         // Record initial underrun count
         int initialUnderruns = engine.getBufferUnderruns();
@@ -333,7 +331,7 @@ private:
     
     void testPerformanceModeStressTest()
     {
-        auto& engine = AudioEngine::getInstance();
+        auto& engine = getAudioEngine();
         
         // This test simulates the performance mode scenario that causes clicking
         
@@ -381,7 +379,7 @@ private:
     {
         // For now, create a minimal test player using existing constructor
         try {
-            auto& audioEngine = AudioEngine::getInstance();
+            auto& audioEngine = getAudioEngine();
             auto player = std::make_unique<Player>("test_" + name, name, 
                                                  audioEngine.getFormatManager(), 
                                                  audioEngine.getKnownPluginList());

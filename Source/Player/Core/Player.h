@@ -2,7 +2,7 @@
 
 #include <JuceHeader.h>
 #include "Instrument.h"
-#include "../../Audio/AudioEngine.h"
+#include "../../Audio/AudioEngineInterface.h"
 #include "../../Musician/Core/Musician.h"
 
 namespace covertracks {
@@ -101,7 +101,7 @@ public:
     bool loadGraphStateIfNeeded();  // Load graph state if not already loaded
         
     // AudioEngine connection
-    bool connectToAudioEngine(AudioEngine* engine);
+    bool connectToAudioEngine(AudioEngineImpl* engine);
     void disconnectFromAudioEngine();
     bool isConnectedToAudioEngine() const;
         
@@ -380,9 +380,9 @@ public:
     /**
      * @brief Get the audio engine singleton
      * 
-     * @return AudioEngine& Reference to the AudioEngine singleton
+     * @return AudioEngineImpl& Reference to the AudioEngine singleton
      */
-    AudioEngine& getAudioEngine() { return AudioEngine::getInstance(); }
+    AudioEngineImpl& getAudioEngine() { return covertracks::getAudioEngine(); }
     
        /**
      * @brief Set the musician component

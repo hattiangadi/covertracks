@@ -134,7 +134,7 @@ void EnsembleListPanel::setEnsembleEditCallback(std::function<void(EnsembleManag
 void EnsembleListPanel::addEnsemble()
 {
     // Create a new empty ensemble
-    auto newEnsemble = new EnsembleManager(playerManager);
+    auto newEnsemble = new EnsembleManager(playerManager, nullptr);
     newEnsemble->setName("New Ensemble " + juce::String(ensembles.size() + 1));
     newEnsemble->setDescription("A new ensemble");
     
