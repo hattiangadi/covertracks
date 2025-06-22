@@ -118,45 +118,41 @@ public:
      */
     bool initialize();
     
-    /**
-     * @brief Load a plugin graph configuration
-     * 
-     * @param graphState XML representation of plugin graph
-     * @return true If loaded successfully
-     * @return false If loading failed
-     */
+    // Note: Custom plugin graph methods removed - now using Tracktion Track-based plugin management
+    // Use Player::addTracktionPlugin(), Player::clearTracktionPlugins(), Player::getTracktionTrack() instead
+    
+    // Temporary stub methods for compilation compatibility (will be removed)
     bool loadPluginGraph(const XmlElement& graphState);
-    
-    /**
-     * @brief Save the current graph state to a file
-     * 
-     * @return true if successful
-     * @return false if failed
-     */
     bool saveGraphState();
-    
-    /**
-     * @brief Save a specific graph state XML to the player's graph file
-     * 
-     * @param graphState XML representation of plugin graph
-     * @return true if successful
-     * @return false if failed
-     */
-    bool savePluginGraphToFile(const XmlElement& graphState);
-    
-    /**
-     * @brief Get the current plugin graph state
-     * 
-     * @return std::unique_ptr<XmlElement> XML representation of the current graph
-     */
     std::unique_ptr<XmlElement> getPluginGraphState();
     
+    // =========================================================================
+    // Tracktion Track Plugin Management (New Unified System)
+    // =========================================================================
+    
     /**
-     * @brief Load the plugin graph state from the saved file
-     * 
-     * @return std::unique_ptr<XmlElement> XML representation of the graph from file
+     * @brief Get this Player's dedicated Tracktion track
+     * @return Pointer to the Tracktion track, or nullptr if not registered
      */
-    std::unique_ptr<XmlElement> loadGraphStateFromFile();
+    te::Track* getTracktionTrack();
+    
+    /**
+     * @brief Add a plugin to this Player's Tracktion track
+     * @param pluginDesc Plugin description from the known plugin list
+     * @return true if plugin was added successfully
+     */
+    bool addTracktionPlugin(const juce::PluginDescription& pluginDesc);
+    
+    /**
+     * @brief Remove all plugins from this Player's Tracktion track
+     */
+    void clearTracktionPlugins();
+    
+    /**
+     * @brief Get the number of plugins on this Player's Tracktion track
+     * @return Number of plugins
+     */
+    int getTracktionPluginCount() const;
     
     /**
      * @brief Set the LLM client for the musician (stubbed)
@@ -543,5 +539,8 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Player)
 
 };
+
+// Global test function (required by TestsComponent during transition)
+bool runAllTests();
 
 }

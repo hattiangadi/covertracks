@@ -1,17 +1,19 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "../Player/Core/TracktionPlayer.h"
+#include "../Player/Core/TracktionInstrument.h"
 #include "../Audio/AudioEngineInterface.h"
-
-// Include Tracktion Engine headers
-#include "../../modules/tracktion_engine/modules/tracktion_engine/tracktion_engine.h"
-
-namespace te = tracktion;
 
 namespace covertracks {
 
 /**
- * @brief Simple test component for verifying basic Tracktion Engine audio functionality
+ * @brief Simple test component for verifying TracktionInstrument and TracktionPlayer functionality
+ * 
+ * This test demonstrates the new clean architecture where:
+ * - TracktionInstrument owns all audio responsibilities
+ * - TracktionPlayer handles orchestration between Musician and Instrument
+ * - Simple audio generation without plugin complexity
  */
 class TracktionAudioTest : public juce::Component,
                           public juce::Button::Listener
@@ -25,20 +27,29 @@ public:
     void buttonClicked(juce::Button* button) override;
     
 private:
-    void generateSineWave(float frequency, float duration);
-    void generateTwoTones();
-    void stopAllAudio();
+    void testBasicInstrument();
+    void testTracktionPlayer();
+    void testSimultaneousPlayers();
+    void stopAllTests();
+    void updateStatus(const juce::String& message);
     
     // UI Components
     juce::Label titleLabel;
-    juce::TextButton sineWaveButton;
-    juce::TextButton twoTonesButton;
+    juce::TextButton basicInstrumentButton;
+    juce::TextButton tracktionPlayerButton;
+    juce::TextButton simultaneousButton;
     juce::TextButton stopButton;
     juce::Label statusLabel;
     
-    // Audio test state
-    std::unique_ptr<te::AudioTrack> testTrack;
-    bool isPlaying = false;
+    // Test components using new architecture
+    std::unique_ptr<TracktionInstrument> testInstrument1;
+    std::unique_ptr<TracktionInstrument> testInstrument2;
+    std::unique_ptr<TracktionPlayer> testPlayer1;
+    std::unique_ptr<TracktionPlayer> testPlayer2;
+    
+    // Shared plugin format manager and known plugin list
+    juce::AudioPluginFormatManager formatManager;
+    juce::KnownPluginList knownPluginList;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TracktionAudioTest)
 };

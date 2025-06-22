@@ -653,14 +653,15 @@ void TracktionAudioEngine::audioDeviceIOCallbackWithContext(const float* const* 
                     if (trackInfo->isActive.load() && player) {
                         // Get the player's instrument and process its audio
                         if (auto* instrument = player->getInstrument()) {
-                            if (auto* processorGraph = instrument->getProcessorGraph()) {
+                            // Note: Custom processor graph removed - audio now handled by Tracktion Tracks
+                            if (false) { // Disabled custom audio processing
                                 // Create a copy of the audio buffer for this player
                                 juce::AudioBuffer<float> playerBuffer(numOutputChannels, numSamples);
                                 playerBuffer.clear();
                                 
                                 // Process the player's audio through its processor graph
                                 juce::MidiBuffer playerMidiBuffer;
-                                processorGraph->processBlock(playerBuffer, playerMidiBuffer);
+                                // Note: Custom audio processing removed
                                 
                                 // Mix the player's output into the main output buffer
                                 for (int channel = 0; channel < numOutputChannels; ++channel) {

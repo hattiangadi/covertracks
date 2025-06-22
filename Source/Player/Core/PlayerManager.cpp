@@ -111,8 +111,10 @@ void PlayerManager::activatePlayer(Player* player)
     // Add player's graph to the main processor graph in AudioEngine
     if (auto* instrument = player->getInstrument())
     {
-        if (auto* processorGraph = instrument->getProcessorGraph())
+        // TODO: Update to use TracktionInstrument instead of PluginGraph
+        // if (auto* processorGraph = instrument->getProcessorGraph())
         {
+            // Note: Old PluginGraph integration disabled - now using TracktionPlayer/TracktionInstrument
             // Integrate player's graph into AudioEngine master graph
             if (!getAudioEnginePtr()->addPlayerGraph(player))
             {
@@ -134,8 +136,10 @@ void PlayerManager::deactivatePlayer(Player* player)
     // Remove player's graph from AudioEngine
     if (auto* instrument = player->getInstrument())
     {
-        if (auto* processorGraph = instrument->getProcessorGraph())
+        // TODO: Update to use TracktionInstrument instead of PluginGraph
+        // if (auto* processorGraph = instrument->getProcessorGraph())
         {
+            // Note: Old PluginGraph removal disabled - now using TracktionPlayer/TracktionInstrument
             // Remove player's graph from AudioEngine master graph
             getAudioEnginePtr()->removePlayerGraph(player);
         }
@@ -502,17 +506,19 @@ bool PlayerManager::playPattern(Player* player, const var& pattern, double tempo
     // Make sure the player's processor is registered with the AudioEngine
     if (auto* instrument = player->getInstrument())
     {
-        if (auto* processorGraph = instrument->getProcessorGraph())
+        // TODO: Update to use TracktionInstrument instead of PluginGraph
+        // if (auto* processorGraph = instrument->getProcessorGraph())
         {
+            // Note: Old PluginGraph registration disabled - now using TracktionPlayer/TracktionInstrument
             // std::cout << "Registering processor for player " << player->getMetadata().name << std::endl;
             // Note: registerProcessor method not available in new AudioEngine
             // Player registration handles this automatically
         }
-        else
-        {
-            std::cerr << "Player " << player->getMetadata().name << " has no processor graph!" << std::endl;
-            return false;
-        }
+        // else
+        // {
+        //     std::cerr << "Player " << player->getMetadata().name << " has no processor graph!" << std::endl;
+        //     return false;
+        // }
     }
     else
     {

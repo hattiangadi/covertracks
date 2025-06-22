@@ -2,16 +2,13 @@
 
 #include <JuceHeader.h>
 #include "../Audio/AudioEngineInterface.h"
-
-// Include Tracktion Engine headers
-#include "../../modules/tracktion_engine/modules/tracktion_engine/tracktion_engine.h"
-
-namespace te = tracktion;
+#include "../Player/Core/TracktionPlayer.h"
+#include "../Player/Core/TracktionInstrument.h"
 
 namespace covertracks {
 
 /**
- * @brief Component for running unit tests within the application
+ * @brief Component for running unit tests and testing new architecture within the application
  */
 class TestsComponent : public juce::Component,
                        private juce::Button::Listener
@@ -34,22 +31,30 @@ private:
     juce::TextButton clearButton;
     juce::TextEditor resultsText;
     
-    // Audio test components
+    // Audio test components (now using new architecture)
     juce::Label audioTestLabel;
     juce::TextButton sineWaveButton;
     juce::TextButton twoTonesButton;
     juce::TextButton stopAudioButton;
     juce::Label audioStatusLabel;
     
-    // Audio test methods
+    // Test methods
     void runTests();
+    
+    // Audio test methods using new TracktionPlayer/TracktionInstrument architecture
     void generateSineWave(float frequency, float duration);
     void generateTwoTones();
     void stopAllAudio();
+    void updateAudioStatus(const juce::String& message);
     
-    // Audio test state
-    te::AudioTrack* testTrack = nullptr;
-    bool isAudioPlaying = false;
+    // New architecture components
+    std::unique_ptr<TracktionInstrument> testInstrument;
+    std::unique_ptr<TracktionPlayer> testPlayer1;
+    std::unique_ptr<TracktionPlayer> testPlayer2;
+    
+    // Shared plugin format manager and known plugin list for new architecture
+    juce::AudioPluginFormatManager formatManager;
+    juce::KnownPluginList knownPluginList;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TestsComponent)
 };

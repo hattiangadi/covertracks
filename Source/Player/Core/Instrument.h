@@ -1,7 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "../../Plugins/PluginGraph.h"
+// Note: PluginGraph.h removed - now using Tracktion Track-based plugin management
 #include "../../Audio/AudioEngineInterface.h"
 
 namespace covertracks {
@@ -47,10 +47,10 @@ bool isConnectedToAudioEngine() const { return audioEngine != nullptr; }
 static void notifyAudioEngineDestroyed();
 
 // Graph management (existing methods)
-bool loadPluginGraph(const XmlElement& graphState);
-std::unique_ptr<XmlElement> getPluginGraphState();
-PluginGraph* getPluginGraph() { return pluginGraph.get(); }
-AudioProcessorGraph* getProcessorGraph() { return processorGraph.get(); }
+// Note: loadPluginGraph removed - use Player::addTracktionPlugin() instead
+// Note: getPluginGraphState removed - plugins now managed by Tracktion Track
+// Note: getPluginGraph removed - use Player::getTracktionTrack() instead
+// Note: getProcessorGraph removed - audio processing now handled by TracktionAudioEngine
 
 // MIDI pattern playback (existing methods)
 bool playMIDIPattern(const var& pattern, double tempo = 120.0);
@@ -86,12 +86,8 @@ AudioEngineImpl* audioEngine = nullptr;
 AudioPluginFormatManager& formatManager;
 KnownPluginList& knownPluginList;
 
-// Plugin and processor graphs
-std::unique_ptr<PluginGraph> pluginGraph;
-std::unique_ptr<AudioProcessorGraph> processorGraph;
-
-// Audio processor player for handling audio callbacks
-std::unique_ptr<AudioProcessorPlayer> audioProcessorPlayer;
+// Note: Custom plugin graphs removed - now using Tracktion Track-based plugin management
+// Audio processing is handled by TracktionAudioEngine through Player's dedicated Track
 
 // MIDI playback state
 bool playing = false;

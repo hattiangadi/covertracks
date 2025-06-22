@@ -42,12 +42,15 @@
               file="Source/Tests/PatternGeneratorTests.cpp"/>
         <FILE id="N8oly3" name="PatternParserTests.cpp" compile="1" resource="0"
               file="Source/Tests/PatternParserTests.cpp"/>
-        <FILE id="pWTeo6" name="TestRunner.cpp" compile="1" resource="0" file="Source/Tests/TestRunner.cpp"/>
+        <FILE id="TestRunner" name="TestRunner.cpp" compile="1" resource="0"
+              file="Source/Tests/TestRunner.cpp"/>
+        <FILE id="TestRunnerH" name="TestRunner.h" compile="0" resource="0"
+              file="Source/Tests/TestRunner.h"/>
         <FILE id="TracktionIntegrationTests" name="TracktionIntegrationTests.cpp"
               compile="1" resource="0" file="Source/Tests/TracktionIntegrationTests.cpp"/>
-        <FILE id="TracktionAudioTest" name="TracktionAudioTest.cpp" compile="1" 
+        <FILE id="TracktionAudioTest" name="TracktionAudioTest.cpp" compile="1"
               resource="0" file="Source/Tests/TracktionAudioTest.cpp"/>
-        <FILE id="TracktionAudioTestH" name="TracktionAudioTest.h" compile="0" 
+        <FILE id="TracktionAudioTestH" name="TracktionAudioTest.h" compile="0"
               resource="0" file="Source/Tests/TracktionAudioTest.h"/>
       </GROUP>
       <GROUP id="{TRACKTION-ENGINE-GROUP}" name="Tracktion Engine"/>
@@ -219,11 +222,18 @@
       </GROUP>
       <GROUP id="{A3F7F3C9-8C9E-4F3F-8D67-B2A810D057EF}" name="Player">
         <GROUP id="{B3F7F3C9-8C9E-4F3F-8D67-B2A810D057EF}" name="Core">
+          <FILE id="Vo5zcL" name="Player.cpp" compile="1" resource="0" file="Source/Player/Core/Player.cpp"/>
+          <FILE id="KEhS5x" name="TracktionInstrument.cpp" compile="1" resource="0"
+                file="Source/Player/Core/TracktionInstrument.cpp"/>
+          <FILE id="UTcgsf" name="TracktionInstrument.h" compile="0" resource="0"
+                file="Source/Player/Core/TracktionInstrument.h"/>
+          <FILE id="CPuVCI" name="TracktionPlayer.cpp" compile="1" resource="0"
+                file="Source/Player/Core/TracktionPlayer.cpp"/>
+          <FILE id="BK2fzD" name="TracktionPlayer.h" compile="0" resource="0"
+                file="Source/Player/Core/TracktionPlayer.h"/>
           <FILE id="yTxmvb" name="Instrument.cpp" compile="1" resource="0" file="Source/Player/Core/Instrument.cpp"/>
           <FILE id="NEW_FILE_ID_1" name="PlayerManager.cpp" compile="1" resource="0"
                 file="Source/Player/Core/PlayerManager.cpp"/>
-          <FILE id="oIwNcN" name="Player.cpp" compile="1" resource="0" file="Source/Player/Core/Player.cpp"/>
-          <FILE id="raqQwD" name="Player.h" compile="0" resource="0" file="Source/Player/Core/Player.h"/>
           <FILE id="O9Wi3Q" name="Instrument.h" compile="0" resource="0" file="Source/Player/Core/Instrument.h"/>
           <FILE id="NEW_FILE_ID_2" name="PlayerManager.h" compile="0" resource="0"
                 file="Source/Player/Core/PlayerManager.h"/>

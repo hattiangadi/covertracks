@@ -1,37 +1,45 @@
 #include "TracktionAudioTest.h"
+#include <iostream>
 
 namespace covertracks {
 
 TracktionAudioTest::TracktionAudioTest()
 {
     // Set up title
-    titleLabel.setText("Tracktion Engine Audio Test", juce::dontSendNotification);
-    titleLabel.setFont(juce::Font(18.0f, juce::Font::bold));
+    titleLabel.setText("New Architecture Audio Test - TracktionInstrument & TracktionPlayer", juce::dontSendNotification);
+    titleLabel.setFont(juce::Font(juce::FontOptions(16.0f).withStyle("bold")));
     titleLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(titleLabel);
     
     // Set up test buttons
-    sineWaveButton.setButtonText("Generate 440Hz Sine Wave (2s)");
-    sineWaveButton.addListener(this);
-    addAndMakeVisible(sineWaveButton);
+    basicInstrumentButton.setButtonText("Test Basic TracktionInstrument (440Hz Sine)");
+    basicInstrumentButton.addListener(this);
+    addAndMakeVisible(basicInstrumentButton);
     
-    twoTonesButton.setButtonText("Generate Two Tones (440Hz + 660Hz)");
-    twoTonesButton.addListener(this);
-    addAndMakeVisible(twoTonesButton);
+    tracktionPlayerButton.setButtonText("Test TracktionPlayer (Chart Generation + Play)");
+    tracktionPlayerButton.addListener(this);
+    addAndMakeVisible(tracktionPlayerButton);
     
-    stopButton.setButtonText("Stop All Audio");
+    simultaneousButton.setButtonText("Test Simultaneous Players (440Hz + 660Hz)");
+    simultaneousButton.addListener(this);
+    addAndMakeVisible(simultaneousButton);
+    
+    stopButton.setButtonText("Stop All Tests");
     stopButton.addListener(this);
     addAndMakeVisible(stopButton);
     
     // Status label
-    statusLabel.setText("Ready to test Tracktion Engine audio", juce::dontSendNotification);
+    statusLabel.setText("Ready to test new architecture (TracktionInstrument owns audio, TracktionPlayer orchestrates)", juce::dontSendNotification);
     statusLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(statusLabel);
+    
+    std::cout << "TracktionAudioTest: Initialized new architecture test component" << std::endl;
 }
 
 TracktionAudioTest::~TracktionAudioTest()
 {
-    stopAllAudio();
+    stopAllTests();
+    std::cout << "TracktionAudioTest: Destroyed" << std::endl;
 }
 
 void TracktionAudioTest::paint(juce::Graphics& g)
@@ -39,8 +47,25 @@ void TracktionAudioTest::paint(juce::Graphics& g)
     g.fillAll(getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId));
     
     // Draw border
-    g.setColour(juce::Colours::grey);
-    g.drawRect(getLocalBounds(), 2);
+    g.setColour(juce::Colours::lightblue);
+    g.drawRect(getLocalBounds(), 3);
+    
+    // Draw architecture diagram
+    auto area = getLocalBounds().reduced(10);
+    area.removeFromTop(40); // Skip title
+    area.removeFromBottom(200); // Skip buttons and status
+    
+    g.setColour(juce::Colours::darkgrey);
+    g.setFont(juce::Font(juce::FontOptions(12.0f)));
+    
+    g.drawText("Architecture: TracktionPlayer → TracktionInstrument → TracktionEngine → Audio", 
+               area.removeFromTop(20), juce::Justification::centred);
+    g.drawText("• TracktionInstrument: Owns Track, Plugins, Audio Generation", 
+               area.removeFromTop(20), juce::Justification::centredLeft);
+    g.drawText("• TracktionPlayer: Orchestrates Musician ↔ Instrument interaction", 
+               area.removeFromTop(20), juce::Justification::centredLeft);
+    g.drawText("• Clean separation: Audio ownership vs. orchestration", 
+               area.removeFromTop(20), juce::Justification::centredLeft);
 }
 
 void TracktionAudioTest::resized()
@@ -48,272 +73,324 @@ void TracktionAudioTest::resized()
     auto area = getLocalBounds().reduced(20);
     
     titleLabel.setBounds(area.removeFromTop(40));
-    area.removeFromTop(20); // spacing
+    area.removeFromTop(100); // Space for architecture info
     
-    sineWaveButton.setBounds(area.removeFromTop(40));
+    basicInstrumentButton.setBounds(area.removeFromTop(40));
     area.removeFromTop(10);
     
-    twoTonesButton.setBounds(area.removeFromTop(40));
+    tracktionPlayerButton.setBounds(area.removeFromTop(40));
+    area.removeFromTop(10);
+    
+    simultaneousButton.setBounds(area.removeFromTop(40));
     area.removeFromTop(10);
     
     stopButton.setBounds(area.removeFromTop(40));
-    area.removeFromTop(20);
+    area.removeFromTop(15);
     
-    statusLabel.setBounds(area.removeFromTop(30));
+    statusLabel.setBounds(area.removeFromTop(40));
 }
 
 void TracktionAudioTest::buttonClicked(juce::Button* button)
 {
-    if (button == &sineWaveButton)
+    if (button == &basicInstrumentButton)
     {
-        statusLabel.setText("Generating 440Hz sine wave...", juce::dontSendNotification);
-        generateSineWave(440.0f, 2.0f);
+        updateStatus("Testing basic TracktionInstrument audio generation...");
+        testBasicInstrument();
     }
-    else if (button == &twoTonesButton)
+    else if (button == &tracktionPlayerButton)
     {
-        statusLabel.setText("Generating two simultaneous tones...", juce::dontSendNotification);
-        generateTwoTones();
+        updateStatus("Testing TracktionPlayer chart generation and playback...");
+        testTracktionPlayer();
+    }
+    else if (button == &simultaneousButton)
+    {
+        updateStatus("Testing simultaneous TracktionPlayers...");
+        testSimultaneousPlayers();
     }
     else if (button == &stopButton)
     {
-        statusLabel.setText("Stopping audio...", juce::dontSendNotification);
-        stopAllAudio();
+        updateStatus("Stopping all tests...");
+        stopAllTests();
     }
 }
 
-void TracktionAudioTest::generateSineWave(float frequency, float duration)
+void TracktionAudioTest::testBasicInstrument()
 {
     try 
     {
-        auto& audioEngine = getAudioEngine();
-        auto* currentEdit = audioEngine.getCurrentEdit();
+        std::cout << "🧪 Testing basic TracktionInstrument functionality" << std::endl;
         
-        if (!currentEdit)
+        // Stop any existing tests
+        stopAllTests();
+        
+        // Create a TracktionInstrument
+        testInstrument1 = std::make_unique<TracktionInstrument>("TestInstrument1", formatManager, knownPluginList);
+        
+        if (!testInstrument1->registerWithAudioEngine())
         {
-            statusLabel.setText("ERROR: No Tracktion Edit available", juce::dontSendNotification);
+            updateStatus("❌ ERROR: Failed to register instrument with audio engine");
             return;
         }
         
-        // Stop any existing playback
-        stopAllAudio();
+        std::cout << "✅ TracktionInstrument registered with audio engine" << std::endl;
         
-        // Create a new audio track if we don't have one
-        if (!testTrack)
+        // Create a simple MIDI chart with a 440Hz note
+        juce::Array<juce::var> midiEventsArray;
+        juce::var chart = juce::var(midiEventsArray);
+        
+        // Note on at time 0
+        juce::DynamicObject::Ptr noteOnEvent = new juce::DynamicObject();
+        noteOnEvent->setProperty("type", "noteOn");
+        noteOnEvent->setProperty("time", 0.0);
+        noteOnEvent->setProperty("channel", 1);
+        noteOnEvent->setProperty("note", 69); // A4 = 440Hz
+        noteOnEvent->setProperty("velocity", 0.8);
+        midiEventsArray.add(juce::var(noteOnEvent.get()));
+        
+        // Note off at time 2.0
+        juce::DynamicObject::Ptr noteOffEvent = new juce::DynamicObject();
+        noteOffEvent->setProperty("type", "noteOff");
+        noteOffEvent->setProperty("time", 2.0);
+        noteOffEvent->setProperty("channel", 1);
+        noteOffEvent->setProperty("note", 69);
+        noteOffEvent->setProperty("velocity", 0.8);
+        midiEventsArray.add(juce::var(noteOffEvent.get()));
+        
+        // Update chart with the array
+        chart = juce::var(midiEventsArray);
+        
+        std::cout << "🎵 Playing chart with " << midiEventsArray.size() << " MIDI events" << std::endl;
+        
+        // Play the chart
+        if (testInstrument1->playChart(chart, 120.0))
         {
-            testTrack = currentEdit->insertNewAudioTrack(te::TrackInsertPoint::getEndOfTracks(*currentEdit), nullptr);
-            testTrack->setName("Test Audio Track");
-        }
-        
-        // Generate sine wave audio data
-        auto sampleRate = audioEngine.getSampleRate();
-        auto numSamples = static_cast<int>(sampleRate * duration);
-        
-        juce::AudioBuffer<float> audioBuffer(1, numSamples); // Mono
-        auto* channelData = audioBuffer.getWritePointer(0);
-        
-        // Generate sine wave
-        for (int i = 0; i < numSamples; ++i)
-        {
-            auto sample = std::sin(2.0 * juce::MathConstants<double>::pi * frequency * i / sampleRate);
-            channelData[i] = static_cast<float>(sample * 0.5); // 50% volume
-        }
-        
-        // Create a temporary audio file
-        auto tempDir = juce::File::getSpecialLocation(juce::File::tempDirectory);
-        auto tempFile = tempDir.getChildFile("tracktion_test_" + juce::String(juce::Random::getSystemRandom().nextInt()) + ".wav");
-        
-        // Write audio buffer to file
-        if (auto fileStream = std::unique_ptr<juce::FileOutputStream>(tempFile.createOutputStream()))
-        {
-            juce::WavAudioFormat wavFormat;
-            if (auto writer = std::unique_ptr<juce::AudioFormatWriter>(wavFormat.createWriterFor(fileStream.get(), sampleRate, 1, 16, {}, 0)))
-            {
-                fileStream.release(); // Writer takes ownership
-                writer->writeFromAudioSampleBuffer(audioBuffer, 0, numSamples);
-                writer.reset(); // Finalize file
-                
-                // Create audio clip on the track
-                auto& transport = currentEdit->getTransport();
-                transport.setPosition(0.0);
-                
-                // Insert the audio file as a clip
-                if (auto clip = testTrack->insertWaveClip("Test Sine Wave", tempFile, 
-                                                       te::TimePosition::fromSeconds(0.0), 
-                                                       false))
-                {
-                    statusLabel.setText("Playing " + juce::String(frequency, 1) + "Hz sine wave", juce::dontSendNotification);
-                    
-                    // Start playback
-                    transport.play(false);
-                    isPlaying = true;
-                    
-                    // Schedule cleanup after duration
-                    juce::Timer::callAfterDelay(static_cast<int>(duration * 1000 + 500), [this, tempFile]() 
-                    {
-                        stopAllAudio();
-                        tempFile.deleteFile(); // Clean up temp file
-                        statusLabel.setText("Sine wave test completed", juce::dontSendNotification);
-                    });
-                }
-                else
-                {
-                    statusLabel.setText("ERROR: Failed to create audio clip", juce::dontSendNotification);
-                    tempFile.deleteFile();
-                }
-            }
-            else
-            {
-                statusLabel.setText("ERROR: Failed to create audio writer", juce::dontSendNotification);
-            }
+            updateStatus("✅ TracktionInstrument: Playing 440Hz note (A4) for 2 seconds");
+            
+            // Schedule completion status update
+            juce::Timer::callAfterDelay(2500, [this]() {
+                updateStatus("✅ Basic TracktionInstrument test completed successfully");
+            });
         }
         else
         {
-            statusLabel.setText("ERROR: Failed to create temp file", juce::dontSendNotification);
+            updateStatus("❌ ERROR: Failed to play chart on TracktionInstrument");
         }
     }
     catch (const std::exception& e)
     {
-        statusLabel.setText("ERROR: " + juce::String(e.what()), juce::dontSendNotification);
+        updateStatus("❌ ERROR in basic instrument test: " + juce::String(e.what()));
+        std::cerr << "TracktionAudioTest::testBasicInstrument error: " << e.what() << std::endl;
     }
 }
 
-void TracktionAudioTest::generateTwoTones()
+void TracktionAudioTest::testTracktionPlayer()
 {
     try 
     {
-        auto& audioEngine = getAudioEngine();
-        auto* currentEdit = audioEngine.getCurrentEdit();
+        std::cout << "🧪 Testing TracktionPlayer orchestration functionality" << std::endl;
         
-        if (!currentEdit)
+        // Stop any existing tests
+        stopAllTests();
+        
+        // Create a TracktionPlayer (which internally creates a TracktionInstrument)
+        testPlayer1 = std::make_unique<TracktionPlayer>("TestPlayer1", "Test Player 1", formatManager, knownPluginList);
+        
+        if (!testPlayer1->initialize())
         {
-            statusLabel.setText("ERROR: No Tracktion Edit available", juce::dontSendNotification);
+            updateStatus("❌ ERROR: Failed to initialize TracktionPlayer");
             return;
         }
         
-        // Stop any existing playback
-        stopAllAudio();
+        std::cout << "✅ TracktionPlayer initialized and registered" << std::endl;
         
-        // Create tracks for each tone
-        auto track1 = currentEdit->insertNewAudioTrack(te::TrackInsertPoint::getEndOfTracks(*currentEdit), nullptr);
-        auto track2 = currentEdit->insertNewAudioTrack(te::TrackInsertPoint::getEndOfTracks(*currentEdit), nullptr);
+        // Create a simple chord chart (C major chord)
+        juce::Array<juce::var> midiEventsArray;
         
-        track1->setName("Tone 1 (440Hz)");
-        track2->setName("Tone 2 (660Hz)");
+        // C major chord: C, E, G (notes 60, 64, 67)
+        std::vector<int> chordNotes = {60, 64, 67}; // C4, E4, G4
         
-        // Generate audio data for both tones
-        auto sampleRate = audioEngine.getSampleRate();
-        auto duration = 3.0f; // 3 seconds
-        auto numSamples = static_cast<int>(sampleRate * duration);
-        
-        // Generate first tone (440Hz)
-        juce::AudioBuffer<float> buffer1(1, numSamples);
-        auto* data1 = buffer1.getWritePointer(0);
-        for (int i = 0; i < numSamples; ++i)
+        for (int note : chordNotes)
         {
-            auto sample = std::sin(2.0 * juce::MathConstants<double>::pi * 440.0 * i / sampleRate);
-            data1[i] = static_cast<float>(sample * 0.3); // 30% volume
+            // Note on at time 0
+            juce::DynamicObject::Ptr noteOnEvent = new juce::DynamicObject();
+            noteOnEvent->setProperty("type", "noteOn");
+            noteOnEvent->setProperty("time", 0.0);
+            noteOnEvent->setProperty("channel", 1);
+            noteOnEvent->setProperty("note", note);
+            noteOnEvent->setProperty("velocity", 0.6);
+            midiEventsArray.add(juce::var(noteOnEvent.get()));
+            
+            // Note off at time 3.0
+            juce::DynamicObject::Ptr noteOffEvent = new juce::DynamicObject();
+            noteOffEvent->setProperty("type", "noteOff");
+            noteOffEvent->setProperty("time", 3.0);
+            noteOffEvent->setProperty("channel", 1);
+            noteOffEvent->setProperty("note", note);
+            noteOffEvent->setProperty("velocity", 0.6);
+            midiEventsArray.add(juce::var(noteOffEvent.get()));
         }
         
-        // Generate second tone (660Hz)
-        juce::AudioBuffer<float> buffer2(1, numSamples);
-        auto* data2 = buffer2.getWritePointer(0);
-        for (int i = 0; i < numSamples; ++i)
+        juce::var chart = juce::var(midiEventsArray);
+        
+        std::cout << "🎵 Playing C major chord (3 notes) for 3 seconds" << std::endl;
+        
+        // Use TracktionPlayer to play the chart (demonstrates orchestration)
+        if (testPlayer1->playChart(chart, 120.0))
         {
-            auto sample = std::sin(2.0 * juce::MathConstants<double>::pi * 660.0 * i / sampleRate);
-            data2[i] = static_cast<float>(sample * 0.3); // 30% volume
+            updateStatus("✅ TracktionPlayer: Playing C major chord (C-E-G) for 3 seconds");
+            
+            // Schedule completion status update
+            juce::Timer::callAfterDelay(3500, [this]() {
+                updateStatus("✅ TracktionPlayer orchestration test completed successfully");
+            });
         }
-        
-        // Create temp files for both tones
-        auto tempDir = juce::File::getSpecialLocation(juce::File::tempDirectory);
-        auto tempFile1 = tempDir.getChildFile("tracktion_tone1_" + juce::String(juce::Random::getSystemRandom().nextInt()) + ".wav");
-        auto tempFile2 = tempDir.getChildFile("tracktion_tone2_" + juce::String(juce::Random::getSystemRandom().nextInt()) + ".wav");
-        
-        // Write first tone
-        if (auto fileStream1 = std::unique_ptr<juce::FileOutputStream>(tempFile1.createOutputStream()))
+        else
         {
-            juce::WavAudioFormat wavFormat;
-            if (auto writer1 = std::unique_ptr<juce::AudioFormatWriter>(wavFormat.createWriterFor(fileStream1.get(), sampleRate, 1, 16, {}, 0)))
-            {
-                fileStream1.release();
-                writer1->writeFromAudioSampleBuffer(buffer1, 0, numSamples);
-                writer1.reset();
-                
-                // Write second tone
-                if (auto fileStream2 = std::unique_ptr<juce::FileOutputStream>(tempFile2.createOutputStream()))
-                {
-                    if (auto writer2 = std::unique_ptr<juce::AudioFormatWriter>(wavFormat.createWriterFor(fileStream2.get(), sampleRate, 1, 16, {}, 0)))
-                    {
-                        fileStream2.release();
-                        writer2->writeFromAudioSampleBuffer(buffer2, 0, numSamples);
-                        writer2.reset();
-                        
-                        // Create clips on both tracks
-                        auto clip1 = track1->insertWaveClip("440Hz Tone", tempFile1, te::TimePosition::fromSeconds(0.0), false);
-                        auto clip2 = track2->insertWaveClip("660Hz Tone", tempFile2, te::TimePosition::fromSeconds(0.0), false);
-                        
-                        if (clip1 && clip2)
-                        {
-                            statusLabel.setText("Playing two simultaneous tones (440Hz + 660Hz)", juce::dontSendNotification);
-                            
-                            // Start playback
-                            auto& transport = currentEdit->getTransport();
-                            transport.setPosition(0.0);
-                            transport.play(false);
-                            isPlaying = true;
-                            
-                            // Schedule cleanup
-                            juce::Timer::callAfterDelay(static_cast<int>(duration * 1000 + 500), [this, tempFile1, tempFile2]() 
-                            {
-                                stopAllAudio();
-                                tempFile1.deleteFile();
-                                tempFile2.deleteFile();
-                                statusLabel.setText("Two tone test completed", juce::dontSendNotification);
-                            });
-                        }
-                        else
-                        {
-                            statusLabel.setText("ERROR: Failed to create audio clips", juce::dontSendNotification);
-                            tempFile1.deleteFile();
-                            tempFile2.deleteFile();
-                        }
-                    }
-                }
-            }
+            updateStatus("❌ ERROR: TracktionPlayer failed to play chart");
         }
     }
     catch (const std::exception& e)
     {
-        statusLabel.setText("ERROR: " + juce::String(e.what()), juce::dontSendNotification);
+        updateStatus("❌ ERROR in TracktionPlayer test: " + juce::String(e.what()));
+        std::cerr << "TracktionAudioTest::testTracktionPlayer error: " << e.what() << std::endl;
     }
 }
 
-void TracktionAudioTest::stopAllAudio()
+void TracktionAudioTest::testSimultaneousPlayers()
 {
     try 
     {
-        auto& audioEngine = getAudioEngine();
-        auto* currentEdit = audioEngine.getCurrentEdit();
+        std::cout << "🧪 Testing simultaneous TracktionPlayers" << std::endl;
         
-        if (currentEdit && isPlaying)
+        // Stop any existing tests
+        stopAllTests();
+        
+        // Create two TracktionPlayers
+        testPlayer1 = std::make_unique<TracktionPlayer>("TestPlayer1", "Player 1 (440Hz)", formatManager, knownPluginList);
+        testPlayer2 = std::make_unique<TracktionPlayer>("TestPlayer2", "Player 2 (660Hz)", formatManager, knownPluginList);
+        
+        if (!testPlayer1->initialize() || !testPlayer2->initialize())
         {
-            auto& transport = currentEdit->getTransport();
-            transport.stop(false, false);
-            isPlaying = false;
+            updateStatus("❌ ERROR: Failed to initialize TracktionPlayers");
+            return;
+        }
+        
+        std::cout << "✅ Two TracktionPlayers initialized" << std::endl;
+        
+        // Create chart for first player (440Hz = A4)
+        juce::Array<juce::var> events1Array;
+        
+        juce::DynamicObject::Ptr noteOn1 = new juce::DynamicObject();
+        noteOn1->setProperty("type", "noteOn");
+        noteOn1->setProperty("time", 0.0);
+        noteOn1->setProperty("channel", 1);
+        noteOn1->setProperty("note", 69); // A4 = 440Hz
+        noteOn1->setProperty("velocity", 0.5);
+        events1Array.add(juce::var(noteOn1.get()));
+        
+        juce::DynamicObject::Ptr noteOff1 = new juce::DynamicObject();
+        noteOff1->setProperty("type", "noteOff");
+        noteOff1->setProperty("time", 4.0);
+        noteOff1->setProperty("channel", 1);
+        noteOff1->setProperty("note", 69);
+        noteOff1->setProperty("velocity", 0.5);
+        events1Array.add(juce::var(noteOff1.get()));
+        
+        // Create chart for second player (660Hz = approximately E5)
+        juce::Array<juce::var> events2Array;
+        
+        juce::DynamicObject::Ptr noteOn2 = new juce::DynamicObject();
+        noteOn2->setProperty("type", "noteOn");
+        noteOn2->setProperty("time", 0.0);
+        noteOn2->setProperty("channel", 1);
+        noteOn2->setProperty("note", 76); // E5 = ~659Hz (close to 660Hz)
+        noteOn2->setProperty("velocity", 0.5);
+        events2Array.add(juce::var(noteOn2.get()));
+        
+        juce::DynamicObject::Ptr noteOff2 = new juce::DynamicObject();
+        noteOff2->setProperty("type", "noteOff");
+        noteOff2->setProperty("time", 4.0);
+        noteOff2->setProperty("channel", 1);
+        noteOff2->setProperty("note", 76);
+        noteOff2->setProperty("velocity", 0.5);
+        events2Array.add(juce::var(noteOff2.get()));
+        
+        std::cout << "🎵 Starting simultaneous playback on both players" << std::endl;
+        
+        // Create the final charts
+        juce::var chart1 = juce::var(events1Array);
+        juce::var chart2 = juce::var(events2Array);
+        
+        // Start both players simultaneously
+        bool success1 = testPlayer1->playChart(chart1, 120.0);
+        bool success2 = testPlayer2->playChart(chart2, 120.0);
+        
+        if (success1 && success2)
+        {
+            updateStatus("✅ Simultaneous Players: Playing 440Hz + 660Hz harmony for 4 seconds");
             
-            // Clear all tracks
-            while (currentEdit->getNumTracks() > 0)
-            {
-                currentEdit->deleteTrack(currentEdit->getTrack(0));
-            }
-            
-            testTrack.reset();
-            statusLabel.setText("Audio stopped", juce::dontSendNotification);
+            // Schedule completion status update
+            juce::Timer::callAfterDelay(4500, [this]() {
+                updateStatus("✅ Simultaneous TracktionPlayers test completed - Clean architecture works!");
+            });
+        }
+        else
+        {
+            updateStatus("❌ ERROR: Failed to start simultaneous playback");
         }
     }
     catch (const std::exception& e)
     {
-        statusLabel.setText("ERROR stopping audio: " + juce::String(e.what()), juce::dontSendNotification);
+        updateStatus("❌ ERROR in simultaneous players test: " + juce::String(e.what()));
+        std::cerr << "TracktionAudioTest::testSimultaneousPlayers error: " << e.what() << std::endl;
     }
+}
+
+void TracktionAudioTest::stopAllTests()
+{
+    try 
+    {
+        std::cout << "🛑 Stopping all TracktionAudioTest instances" << std::endl;
+        
+        // Stop and clean up all test components
+        if (testPlayer1)
+        {
+            testPlayer1->stop();
+            testPlayer1.reset();
+        }
+        
+        if (testPlayer2)
+        {
+            testPlayer2->stop();
+            testPlayer2.reset();
+        }
+        
+        if (testInstrument1)
+        {
+            testInstrument1->stopPlayback();
+            testInstrument1.reset();
+        }
+        
+        if (testInstrument2)
+        {
+            testInstrument2->stopPlayback();
+            testInstrument2.reset();
+        }
+        
+        updateStatus("🛑 All tests stopped - Ready for new tests");
+        std::cout << "✅ All test components cleaned up" << std::endl;
+    }
+    catch (const std::exception& e)
+    {
+        updateStatus("❌ ERROR stopping tests: " + juce::String(e.what()));
+        std::cerr << "TracktionAudioTest::stopAllTests error: " << e.what() << std::endl;
+    }
+}
+
+void TracktionAudioTest::updateStatus(const juce::String& message)
+{
+    statusLabel.setText(message, juce::dontSendNotification);
+    std::cout << "TracktionAudioTest: " << message.toStdString() << std::endl;
 }
 
 } // namespace covertracks

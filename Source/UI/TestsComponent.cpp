@@ -53,6 +53,9 @@ TestsComponent::TestsComponent()
     audioStatusLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(audioStatusLabel);
     
+    // Initialize plugin format manager
+    formatManager.addDefaultFormats();
+    
     // Test runner is now handled by the runAllTests() function
 }
 
@@ -175,92 +178,67 @@ void TestsComponent::generateSineWave(float frequency, float duration)
 {
     try 
     {
-        auto& audioEngine = getAudioEngine();
-        auto* currentEdit = audioEngine.getCurrentEdit();
+        audioStatusLabel.setText("Creating TracktionInstrument for " + juce::String(frequency, 1) + "Hz sine wave...", juce::dontSendNotification);
         
-        if (!currentEdit)
-        {
-            audioStatusLabel.setText("ERROR: No Tracktion Edit available", juce::dontSendNotification);
-            return;
-        }
-        
-        // Stop any existing playback
+        // Stop any existing audio
         stopAllAudio();
         
-        // Create an audio track (Tracktion tracks can handle both audio and MIDI)
-        auto audioTrack = currentEdit->insertNewAudioTrack(te::TrackInsertPoint::getEndOfTracks(*currentEdit), nullptr);
-        if (!audioTrack)
+        // Create a TracktionInstrument for testing
+        testInstrument = std::make_unique<TracktionInstrument>("TestInstrument_SineWave", formatManager, knownPluginList);
+        
+        if (!testInstrument->registerWithAudioEngine())
         {
-            audioStatusLabel.setText("ERROR: Failed to create audio track", juce::dontSendNotification);
+            audioStatusLabel.setText("ERROR: Failed to register instrument with audio engine", juce::dontSendNotification);
             return;
         }
         
-        audioTrack->setName("Test MIDI Track");
-        testTrack = audioTrack.get();
+        // Create a simple MIDI chart with the specified frequency
+        juce::Array<juce::var> midiEventsArray;
         
-        // Add a built-in synth plugin to the track for MIDI playback
-        try {
-            // Create a simple built-in synth (FourOscPlugin)
-            juce::PluginDescription synthDesc;
-            synthDesc.name = "4-Oscillator Synth";
-            synthDesc.fileOrIdentifier = "1_trkbuiltin";
-            synthDesc.pluginFormatName = te::PluginManager::builtInPluginFormatName;
-            synthDesc.category = te::FourOscPlugin::xmlTypeName;
-            synthDesc.isInstrument = true;
-            
-            // Create the plugin using Tracktion's plugin cache
-            if (auto synthPlugin = currentEdit->getPluginCache().createNewPlugin(te::FourOscPlugin::xmlTypeName, synthDesc))
-            {
-                // Add the plugin to the track
-                audioTrack->pluginList.insertPlugin(synthPlugin, 0, nullptr);
-                audioStatusLabel.setText("Added built-in synth: " + synthDesc.name, juce::dontSendNotification);
-            }
-            else
-            {
-                audioStatusLabel.setText("Failed to create built-in synth", juce::dontSendNotification);
-            }
-        }
-        catch (const std::exception& e)
+        // Convert frequency to MIDI note number (A4 = 440Hz = MIDI note 69)
+        int midiNote = static_cast<int>(69 + 12 * std::log2(frequency / 440.0));
+        
+        // Note on at time 0
+        juce::DynamicObject::Ptr noteOnEvent = new juce::DynamicObject();
+        noteOnEvent->setProperty("type", "noteOn");
+        noteOnEvent->setProperty("time", 0.0);
+        noteOnEvent->setProperty("channel", 1);
+        noteOnEvent->setProperty("note", midiNote);
+        noteOnEvent->setProperty("velocity", 100); // MIDI velocity 0-127
+        midiEventsArray.add(juce::var(noteOnEvent.get()));
+        
+        // Note off at specified duration
+        juce::DynamicObject::Ptr noteOffEvent = new juce::DynamicObject();
+        noteOffEvent->setProperty("type", "noteOff");
+        noteOffEvent->setProperty("time", duration);
+        noteOffEvent->setProperty("channel", 1);
+        noteOffEvent->setProperty("note", midiNote);
+        noteOffEvent->setProperty("velocity", 0); // Note off velocity is typically 0
+        midiEventsArray.add(juce::var(noteOffEvent.get()));
+        
+        juce::var chart = juce::var(midiEventsArray);
+        
+        std::cout << "TestsComponent: Playing " << frequency << "Hz (MIDI note " << midiNote << ") for " << duration << " seconds using TracktionInstrument" << std::endl;
+        
+        // Play the chart using TracktionInstrument
+        if (testInstrument->playChart(chart, 120.0))
         {
-            audioStatusLabel.setText("Error creating synth: " + juce::String(e.what()), juce::dontSendNotification);
-        }
-        
-        // Create a simple MIDI clip with a sustained note using proper TimeRange
-        te::TimePosition start = te::TimePosition::fromSeconds(0.0);
-        te::TimePosition end = te::TimePosition::fromSeconds(duration);
-        te::TimeRange timeRange(start, end);
-        
-        auto midiClip = audioTrack->insertMIDIClip("Test Note", timeRange, nullptr);
-        if (midiClip)
-        {
-            // Add a MIDI note - convert frequency to MIDI note number (approximately)
-            int midiNote = static_cast<int>(69 + 12 * std::log2(frequency / 440.0)); // A4 = 440Hz = MIDI note 69
+            audioStatusLabel.setText("Playing " + juce::String(frequency, 1) + "Hz (MIDI note " + juce::String(midiNote) + ") using TracktionInstrument", juce::dontSendNotification);
             
-            auto& sequence = midiClip->getSequence();
-            // Convert time values to proper Tracktion beat positions
-            te::BeatPosition startBeat = te::BeatPosition::fromBeats(0.0);
-            te::BeatDuration noteDuration = te::BeatDuration::fromBeats(duration * 2.0); // Rough conversion
-            sequence.addNote(midiNote, startBeat, noteDuration, 100, 0, nullptr);
-            
-            audioStatusLabel.setText("Created MIDI note " + juce::String(midiNote) + " (" + juce::String(frequency, 1) + "Hz)", juce::dontSendNotification);
+            // Schedule completion status update
+            juce::Timer::callAfterDelay(static_cast<int>((duration + 0.5) * 1000), [this]() {
+                audioStatusLabel.setText("Sine wave test completed using new architecture", juce::dontSendNotification);
+            });
         }
-        
-        // Start playback
-        auto& transport = currentEdit->getTransport();
-        transport.setPosition(te::TimePosition::fromSeconds(0.0));
-        transport.play(false);
-        isAudioPlaying = true;
-        
-        // Schedule stop after duration
-        juce::Timer::callAfterDelay(static_cast<int>(duration * 1000), [this]() 
+        else
         {
-            stopAllAudio();
-            audioStatusLabel.setText("MIDI test completed", juce::dontSendNotification);
-        });
+            audioStatusLabel.setText("ERROR: Failed to play chart on TracktionInstrument", juce::dontSendNotification);
+        }
     }
     catch (const std::exception& e)
     {
         audioStatusLabel.setText("ERROR: " + juce::String(e.what()), juce::dontSendNotification);
+        std::cerr << "TestsComponent::generateSineWave error: " << e.what() << std::endl;
     }
 }
 
@@ -268,104 +246,92 @@ void TestsComponent::generateTwoTones()
 {
     try 
     {
-        auto& audioEngine = getAudioEngine();
-        auto* currentEdit = audioEngine.getCurrentEdit();
+        audioStatusLabel.setText("Creating two TracktionPlayers for simultaneous tones...", juce::dontSendNotification);
         
-        if (!currentEdit)
-        {
-            audioStatusLabel.setText("ERROR: No Tracktion Edit available", juce::dontSendNotification);
-            return;
-        }
-        
-        // Stop any existing playback
+        // Stop any existing audio
         stopAllAudio();
         
-        // Create two audio tracks for two different tones
-        auto track1 = currentEdit->insertNewAudioTrack(te::TrackInsertPoint::getEndOfTracks(*currentEdit), nullptr);
-        auto track2 = currentEdit->insertNewAudioTrack(te::TrackInsertPoint::getEndOfTracks(*currentEdit), nullptr);
+        // Create two TracktionPlayers for the two tones
+        testPlayer1 = std::make_unique<TracktionPlayer>("TestPlayer1_440Hz", "Player 1 (440Hz)", formatManager, knownPluginList);
+        testPlayer2 = std::make_unique<TracktionPlayer>("TestPlayer2_660Hz", "Player 2 (660Hz)", formatManager, knownPluginList);
         
-        if (!track1 || !track2)
+        if (!testPlayer1->initialize() || !testPlayer2->initialize())
         {
-            audioStatusLabel.setText("ERROR: Failed to create audio tracks", juce::dontSendNotification);
+            audioStatusLabel.setText("ERROR: Failed to initialize TracktionPlayers", juce::dontSendNotification);
             return;
         }
         
-        track1->setName("Test Track 1 (440Hz)");
-        track2->setName("Test Track 2 (660Hz)");
+        std::cout << "TestsComponent: Two TracktionPlayers initialized for simultaneous playback" << std::endl;
         
-        // Add built-in synth plugins to both tracks
-        try {
-            juce::PluginDescription synthDesc;
-            synthDesc.name = "4-Oscillator Synth";
-            synthDesc.fileOrIdentifier = "1_trkbuiltin";
-            synthDesc.pluginFormatName = te::PluginManager::builtInPluginFormatName;
-            synthDesc.category = te::FourOscPlugin::xmlTypeName;
-            synthDesc.isInstrument = true;
-            
-            // Add synth to both tracks
-            if (auto synth1 = currentEdit->getPluginCache().createNewPlugin(te::FourOscPlugin::xmlTypeName, synthDesc))
-            {
-                track1->pluginList.insertPlugin(synth1, 0, nullptr);
-            }
-            
-            if (auto synth2 = currentEdit->getPluginCache().createNewPlugin(te::FourOscPlugin::xmlTypeName, synthDesc))
-            {
-                track2->pluginList.insertPlugin(synth2, 0, nullptr);
-            }
-        }
-        catch (const std::exception& e)
-        {
-            audioStatusLabel.setText("Error creating synths: " + juce::String(e.what()), juce::dontSendNotification);
-            return;
-        }
-        
-        // Create MIDI clips with different notes
         const float duration = 3.0f;
         
-        // Create proper time range
-        te::TimePosition start = te::TimePosition::fromSeconds(0.0);
-        te::TimePosition end = te::TimePosition::fromSeconds(duration);
-        te::TimeRange timeRange(start, end);
+        // Create chart for first player (440Hz = A4 = MIDI note 69)
+        juce::Array<juce::var> events1Array;
         
-        // Track 1: 440Hz (A4 = MIDI note 69)
-        auto clip1 = track1->insertMIDIClip("440Hz Note", timeRange, nullptr);
-        if (clip1)
+        juce::DynamicObject::Ptr noteOn1 = new juce::DynamicObject();
+        noteOn1->setProperty("type", "noteOn");
+        noteOn1->setProperty("time", 0.0);
+        noteOn1->setProperty("channel", 1);
+        noteOn1->setProperty("note", 69); // A4 = 440Hz
+        noteOn1->setProperty("velocity", 80); // MIDI velocity 0-127
+        events1Array.add(juce::var(noteOn1.get()));
+        
+        juce::DynamicObject::Ptr noteOff1 = new juce::DynamicObject();
+        noteOff1->setProperty("type", "noteOff");
+        noteOff1->setProperty("time", duration);
+        noteOff1->setProperty("channel", 1);
+        noteOff1->setProperty("note", 69);
+        noteOff1->setProperty("velocity", 0); // Note off velocity is typically 0
+        events1Array.add(juce::var(noteOff1.get()));
+        
+        // Create chart for second player (660Hz = approximately E5 = MIDI note 76)
+        juce::Array<juce::var> events2Array;
+        
+        int midiNote2 = static_cast<int>(69 + 12 * std::log2(660.0 / 440.0)); // Convert 660Hz to MIDI note
+        
+        juce::DynamicObject::Ptr noteOn2 = new juce::DynamicObject();
+        noteOn2->setProperty("type", "noteOn");
+        noteOn2->setProperty("time", 0.0);
+        noteOn2->setProperty("channel", 1);
+        noteOn2->setProperty("note", midiNote2);
+        noteOn2->setProperty("velocity", 80); // MIDI velocity 0-127
+        events2Array.add(juce::var(noteOn2.get()));
+        
+        juce::DynamicObject::Ptr noteOff2 = new juce::DynamicObject();
+        noteOff2->setProperty("type", "noteOff");
+        noteOff2->setProperty("time", duration);
+        noteOff2->setProperty("channel", 1);
+        noteOff2->setProperty("note", midiNote2);
+        noteOff2->setProperty("velocity", 0); // Note off velocity is typically 0
+        events2Array.add(juce::var(noteOff2.get()));
+        
+        juce::var chart1 = juce::var(events1Array);
+        juce::var chart2 = juce::var(events2Array);
+        
+        std::cout << "🎵 TestsComponent: Playing simultaneous tones - 440Hz (MIDI " << 69 << ") + 660Hz (MIDI " << midiNote2 << ")" << std::endl;
+        
+        // Start both players simultaneously using TracktionPlayer
+        bool success1 = testPlayer1->playChart(chart1, 120.0);
+        bool success2 = testPlayer2->playChart(chart2, 120.0);
+        
+        if (success1 && success2)
         {
-            auto& seq1 = clip1->getSequence();
-            te::BeatPosition startBeat = te::BeatPosition::fromBeats(0.0);
-            te::BeatDuration noteDuration = te::BeatDuration::fromBeats(duration * 2.0);
-            seq1.addNote(69, startBeat, noteDuration, 80, 0, nullptr); // A4 = 440Hz
+            audioStatusLabel.setText("Playing simultaneous tones: 440Hz + 660Hz using TracktionPlayers", juce::dontSendNotification);
+            
+            // Schedule completion status update
+            juce::Timer::callAfterDelay(static_cast<int>((duration + 0.5) * 1000), [this]() {
+                audioStatusLabel.setText("Two tones test completed using new architecture", juce::dontSendNotification);
+            });
         }
-        
-        // Track 2: 660Hz (approximately E5 = MIDI note 76)
-        auto clip2 = track2->insertMIDIClip("660Hz Note", timeRange, nullptr); 
-        if (clip2)
+        else
         {
-            auto& seq2 = clip2->getSequence();
-            int midiNote = static_cast<int>(69 + 12 * std::log2(660.0 / 440.0)); // Convert 660Hz to MIDI note
-            te::BeatPosition startBeat = te::BeatPosition::fromBeats(0.0);
-            te::BeatDuration noteDuration = te::BeatDuration::fromBeats(duration * 2.0);
-            seq2.addNote(midiNote, startBeat, noteDuration, 80, 0, nullptr);
+            audioStatusLabel.setText("ERROR: Failed to start simultaneous playback with TracktionPlayers", juce::dontSendNotification);
         }
-        
-        // Start playback
-        auto& transport = currentEdit->getTransport();
-        transport.setPosition(te::TimePosition::fromSeconds(0.0));
-        transport.play(false);
-        isAudioPlaying = true;
-        
-        audioStatusLabel.setText("Playing two tones: 440Hz + 660Hz", juce::dontSendNotification);
-        
-        // Schedule stop after duration
-        juce::Timer::callAfterDelay(3000, [this]() 
-        {
-            stopAllAudio();
-            audioStatusLabel.setText("Two tones test completed", juce::dontSendNotification);
-        });
     }
     catch (const std::exception& e)
     {
         audioStatusLabel.setText("ERROR: " + juce::String(e.what()), juce::dontSendNotification);
+        std::cerr << "TestsComponent::generateTwoTones error: " << e.what() << std::endl;
     }
 }
 
@@ -373,32 +339,35 @@ void TestsComponent::stopAllAudio()
 {
     try 
     {
-        auto& audioEngine = getAudioEngine();
-        auto* currentEdit = audioEngine.getCurrentEdit();
+        std::cout << "TestsComponent: Stopping all audio using new architecture" << std::endl;
         
-        if (currentEdit && isAudioPlaying)
+        // Stop and clean up all TracktionPlayers
+        if (testPlayer1)
         {
-            auto& transport = currentEdit->getTransport();
-            transport.stop(false, false);
-            isAudioPlaying = false;
-            
-            // Clear all test tracks
-            for (auto track : currentEdit->getTrackList())
-            {
-                if (track->getName() == "Test Audio Track")
-                {
-                    currentEdit->deleteTrack(track);
-                    break;
-                }
-            }
-            
-            testTrack = nullptr;
-            audioStatusLabel.setText("Audio stopped", juce::dontSendNotification);
+            testPlayer1->stop();
+            testPlayer1.reset();
         }
+        
+        if (testPlayer2)
+        {
+            testPlayer2->stop();
+            testPlayer2.reset();
+        }
+        
+        // Stop and clean up TracktionInstrument
+        if (testInstrument)
+        {
+            testInstrument->stopPlayback();
+            testInstrument.reset();
+        }
+        
+        audioStatusLabel.setText("All audio stopped using new architecture", juce::dontSendNotification);
+        std::cout << "TestsComponent: All test components cleaned up" << std::endl;
     }
     catch (const std::exception& e)
     {
         audioStatusLabel.setText("ERROR stopping audio: " + juce::String(e.what()), juce::dontSendNotification);
+        std::cerr << "TestsComponent::stopAllAudio error: " << e.what() << std::endl;
     }
 }
 

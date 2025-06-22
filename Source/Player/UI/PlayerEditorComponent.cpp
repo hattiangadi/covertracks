@@ -250,8 +250,9 @@ void PlayerEditorComponent::saveAndReleaseResources()
                           << " connections (MIDI: " << midiConnections 
                           << ", Audio: " << audioConnections << ")" << std::endl;
                 
+                // TODO: Update to use TracktionPlayer plugin state saving
                 // Save directly to the player's graph file
-                player->savePluginGraphToFile(*graphState);
+                // player->savePluginGraphToFile(*graphState);
             }
         }
         
