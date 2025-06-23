@@ -298,6 +298,27 @@ public:
     void setInstrumentCapabilities(const InstrumentCapabilities& capabilities) { metadata.capabilities = capabilities; }
     
     /**
+     * @brief Store TracktionPlayer state for persistence
+     * 
+     * @param tracktionState Complete TracktionPlayer state
+     */
+    void setTracktionPlayerState(const juce::var& tracktionState) { this->tracktionPlayerState = tracktionState; }
+    
+    /**
+     * @brief Get stored TracktionPlayer state
+     * 
+     * @return const juce::var& TracktionPlayer state
+     */
+    const juce::var& getTracktionPlayerState() const { return tracktionPlayerState; }
+    
+    /**
+     * @brief Check if TracktionPlayer state is available
+     * 
+     * @return true if state is stored
+     */
+    bool hasTracktionPlayerState() const { return !tracktionPlayerState.isVoid(); }
+    
+    /**
      * @brief Create standard drum capabilities with GM percussion mapping
      * 
      * @return InstrumentCapabilities Standard drum capabilities
@@ -529,6 +550,9 @@ private:
     
     // Chart finished callback
     std::function<void(const String&)> onChartFinished;
+    
+    // TracktionPlayer state storage (for persistence across sessions)
+    juce::var tracktionPlayerState;
     
     // Handle chart completion
     void handleChartFinished();

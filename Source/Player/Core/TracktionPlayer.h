@@ -128,6 +128,50 @@ public:
      */
     void stop();
     
+    // =========================================================================
+    // State Persistence (Complete Player + Instrument + Plugin Configurations)
+    // =========================================================================
+    
+    /**
+     * @brief Save complete player state including instrument and plugin configurations
+     * @return JSON representation of the full player state
+     */
+    juce::var saveCompleteState() const;
+    
+    /**
+     * @brief Load complete player state including instrument and plugin configurations
+     * @param state JSON representation of the player state
+     * @return true if loaded successfully
+     */
+    bool loadCompleteState(const juce::var& state);
+    
+    /**
+     * @brief Save just the plugin chain configuration (for presets)
+     * @return JSON representation of the plugin chain
+     */
+    juce::var savePluginChain() const;
+    
+    /**
+     * @brief Load plugin chain configuration (for presets)
+     * @param pluginChainState JSON representation of the plugin chain
+     * @return true if loaded successfully
+     */
+    bool loadPluginChain(const juce::var& pluginChainState);
+    
+    /**
+     * @brief Export player as preset file
+     * @param file File to save preset to
+     * @return true if saved successfully
+     */
+    bool exportAsPreset(const juce::File& file) const;
+    
+    /**
+     * @brief Import player from preset file
+     * @param file File to load preset from
+     * @return true if loaded successfully
+     */
+    bool importFromPreset(const juce::File& file);
+    
     /**
      * @brief Pause current playback
      * Delegates to TracktionInstrument::pausePlayback()

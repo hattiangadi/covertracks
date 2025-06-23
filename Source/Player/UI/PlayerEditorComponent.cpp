@@ -59,9 +59,6 @@ PlayerEditorComponent::PlayerEditorComponent(Player* playerToEdit, AudioEngineIm
     cancelButton.addListener(this);
     addAndMakeVisible(cancelButton);
 
-    loadGraphButton.setButtonText("Load Graph");
-    loadGraphButton.addListener(this);
-    addAndMakeVisible(loadGraphButton);
 
     // Setup instrument capabilities UI
     setupCapabilitiesUI();
@@ -96,7 +93,6 @@ PlayerEditorComponent::~PlayerEditorComponent()
 {
     saveButton.removeListener(this);
     cancelButton.removeListener(this);
-    loadGraphButton.removeListener(this);
     instrumentTypeCombo.removeListener(this);
     capabilityTypeCombo.removeListener(this);
 }
@@ -454,6 +450,38 @@ void PlayerEditorComponent::buttonClicked(Button* button)
         // Update the player data from UI
         updatePlayerFromUI();
         
+        // Update the player's name from the UI (important for file naming)
+        auto newName = nameEditor.getText().trim();
+        if (newName.isNotEmpty())
+        {
+            auto& metadata = player->getMetadata();
+            metadata.name = newName;
+        }
+        
+        // Transfer TracktionPlayer state back to the main Player object
+        if (tracktionPlayer && player)
+        {
+            // Update TracktionPlayer name to match the UI
+            if (newName.isNotEmpty())
+            {
+                tracktionPlayer->setName(newName);
+            }
+            
+            // Save the TracktionPlayer's complete state and store it in the main Player
+            auto completeState = tracktionPlayer->saveCompleteState();
+            
+            // Store this state in the Player object so PlayerManager can save it
+            player->setTracktionPlayerState(completeState);
+            
+            std::cout << "TracktionPlayer state transferred to Player object for persistence" << std::endl;
+            std::cout << "Plugin count: " << tracktionPlayer->getPluginCount() << std::endl;
+            
+            // Also update the capabilities from the UI (this is already done in updatePlayerFromUI())
+            auto& capabilities = player->getInstrumentCapabilities();
+            std::cout << "Saving instrument capabilities: type=" << (int)capabilities.type 
+                      << ", instrumentType=" << capabilities.instrumentType << std::endl;
+        }
+        
         // Notify listeners that save has been requested
         listeners.call(&Listener::playerEditorSaveRequested, this);
     }
@@ -464,46 +492,6 @@ void PlayerEditorComponent::buttonClicked(Button* button)
         
         // Notify listeners that cancel has been requested
         listeners.call(&Listener::playerEditorCancelRequested, this);
-    }
-    else if (button == &loadGraphButton)
-    {
-        // Use the FileBasedDocument method to load a file asynchronously
-        if (graphEditor != nullptr && graphEditor->graph != nullptr)
-        {
-            graphEditor->graph->loadFromUserSpecifiedFileAsync(true, [this](Result result)
-            {
-                if (result.wasOk())
-                {
-                    // Get the XML representation of the loaded graph
-                    auto xml = graphEditor->graph->createXml();
-                    
-                    if (xml != nullptr)
-                    {
-                        // Force the graph panel to update
-                        if (graphEditor != nullptr && graphEditor->graphPanel != nullptr)
-                        {
-                            graphEditor->graphPanel->updateComponents();
-                            graphEditor->repaint();
-                        }
-                        
-                        // Update the player's graph state
-                        if (player != nullptr)
-                        {
-                            player->loadPluginGraph(*xml);
-                            
-                            // Explicitly save the player to ensure the graph state is persisted
-                            if (auto* mainWindow = dynamic_cast<MainHostWindow*>(getTopLevelComponent()))
-                            {
-                                if (mainWindow->playerManager != nullptr)
-                                {
-                                    mainWindow->playerManager->savePlayer(player);
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
     }
 }
 
@@ -592,7 +580,6 @@ void PlayerEditorComponent::resized()
 
     saveButton.setBounds(sidePanel.getX() + panelMargin, buttonY, buttonWidth, buttonHeight);
     cancelButton.setBounds(sidePanel.getX() + panelMargin + buttonWidth + panelMargin, buttonY, buttonWidth, buttonHeight);
-    loadGraphButton.setBounds(sidePanel.getX() + panelMargin + 2 * (buttonWidth + panelMargin), buttonY, buttonWidth, buttonHeight);
 
     // --- Main area for plugin chain editor and MIDI keyboard ---
     if (pluginChainEditor && midiKeyboard)
@@ -951,6 +938,30 @@ void PlayerEditorComponent::setupNewTracktionPlayerSystem()
         return;
     }
     
+    // Try to load existing state from the Player object (via PlayerManager)
+    auto playerName = metadata.name;
+    
+    // Check if the Player has stored TracktionPlayer state
+    if (player && player->hasTracktionPlayerState())
+    {
+        std::cout << "Loading TracktionPlayer state from Player object..." << std::endl;
+        auto storedState = player->getTracktionPlayerState();
+        
+        if (tracktionPlayer->loadCompleteState(storedState))
+        {
+            std::cout << "TracktionPlayer state loaded successfully from Player object!" << std::endl;
+        }
+        else
+        {
+            std::cerr << "Failed to load TracktionPlayer state from Player object" << std::endl;
+        }
+    }
+    else
+    {
+        std::cout << "No stored TracktionPlayer state found in Player object" << std::endl;
+        std::cout << "Starting with empty plugin configuration" << std::endl;
+    }
+    
     // Create the plugin chain editor
     pluginChainEditor = std::make_unique<PluginChainEditor>();
     pluginChainEditor->setPlayer(tracktionPlayer.get());
@@ -965,6 +976,15 @@ void PlayerEditorComponent::setupNewTracktionPlayerSystem()
     keyboardState.addListener(this);
     
     std::cout << "TracktionPlayer system setup complete" << std::endl;
+    std::cout << "Current plugin count: " << (tracktionPlayer->getInstrument() ? tracktionPlayer->getInstrument()->getPluginCount() : 0) << std::endl;
+    
+    // Debug: Show current capabilities
+    if (player) {
+        auto& capabilities = player->getInstrumentCapabilities();
+        std::cout << "Loaded capabilities: type=" << (int)capabilities.type 
+                  << ", instrumentType=" << capabilities.instrumentType
+                  << ", soundMappings.size()=" << capabilities.soundMappings.size() << std::endl;
+    }
 }
 
 void PlayerEditorComponent::switchToPluginChainEditor()

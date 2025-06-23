@@ -399,6 +399,189 @@ void TracktionPlayer::shutdown()
 }
 
 // =========================================================================
+// Comprehensive State Persistence (NEW)
+// =========================================================================
+
+juce::var TracktionPlayer::saveCompleteState() const
+{
+    juce::DynamicObject::Ptr obj = new juce::DynamicObject();
+    
+    // Player metadata
+    obj->setProperty("id", playerId);
+    obj->setProperty("name", playerName);
+    obj->setProperty("initialized", initialized);
+    obj->setProperty("version", "1.0");
+    obj->setProperty("timestamp", juce::Time::getCurrentTime().toISO8601(true));
+    
+    // Instrument state (includes complete plugin chain + configurations)
+    if (instrument)
+    {
+        obj->setProperty("instrumentState", instrument->saveInstrumentState());
+    }
+    
+    // Last generated chart
+    if (!lastGeneratedChart.isVoid())
+    {
+        obj->setProperty("lastChart", lastGeneratedChart);
+    }
+    
+    return juce::var(obj.get());
+}
+
+bool TracktionPlayer::loadCompleteState(const juce::var& state)
+{
+    if (!state.isObject())
+    {
+        std::cerr << "Invalid player state: not an object" << std::endl;
+        return false;
+    }
+    
+    auto* obj = state.getDynamicObject();
+    if (!obj)
+    {
+        std::cerr << "Invalid player state: could not get dynamic object" << std::endl;
+        return false;
+    }
+    
+    // Validate version (for future compatibility)
+    auto version = obj->getProperty("version").toString();
+    if (version.isEmpty())
+    {
+        std::cerr << "Warning: No version in player state, assuming legacy format" << std::endl;
+    }
+    
+    // Load instrument state
+    auto instrumentStateVar = obj->getProperty("instrumentState");
+    if (!instrumentStateVar.isVoid() && instrument)
+    {
+        if (!instrument->loadInstrumentState(instrumentStateVar))
+        {
+            std::cerr << "Failed to load instrument state" << std::endl;
+            return false;
+        }
+    }
+    
+    // Load musician state
+    auto musicianStateVar = obj->getProperty("musicianState");
+    if (!musicianStateVar.isVoid() && musician)
+    {
+        // TODO: Load musician state when supported
+    }
+    
+    // Load last chart
+    auto lastChartVar = obj->getProperty("lastChart");
+    if (!lastChartVar.isVoid())
+    {
+        lastGeneratedChart = lastChartVar;
+    }
+    
+    DBG("TracktionPlayer " << playerName << " complete state loaded successfully");
+    return true;
+}
+
+juce::var TracktionPlayer::savePluginChain() const
+{
+    if (!instrument)
+        return juce::var();
+        
+    auto instrumentState = instrument->saveInstrumentState();
+    if (auto* obj = instrumentState.getDynamicObject())
+    {
+        return obj->getProperty("pluginChain");
+    }
+    
+    return juce::var();
+}
+
+bool TracktionPlayer::loadPluginChain(const juce::var& pluginChainState)
+{
+    if (!instrument)
+    {
+        std::cerr << "No instrument available for loading plugin chain" << std::endl;
+        return false;
+    }
+    
+    // Create a minimal instrument state with just the plugin chain
+    juce::DynamicObject::Ptr tempState = new juce::DynamicObject();
+    tempState->setProperty("name", instrument->getName());
+    tempState->setProperty("pluginChain", pluginChainState);
+    
+    return instrument->loadInstrumentState(juce::var(tempState.get()));
+}
+
+bool TracktionPlayer::exportAsPreset(const juce::File& file) const
+{
+    auto state = saveCompleteState();
+    
+    // Add preset metadata
+    if (auto* obj = state.getDynamicObject())
+    {
+        obj->setProperty("type", "TracktionPlayerPreset");
+        obj->setProperty("exportedAt", juce::Time::getCurrentTime().toISO8601(true));
+        obj->setProperty("application", "Covertracks");
+    }
+    
+    // Save as JSON
+    auto json = juce::JSON::toString(state);
+    
+    if (file.replaceWithText(json))
+    {
+        DBG("TracktionPlayer preset exported to: " << file.getFullPathName());
+        return true;
+    }
+    else
+    {
+        std::cerr << "Failed to export preset to: " << file.getFullPathName() << std::endl;
+        return false;
+    }
+}
+
+bool TracktionPlayer::importFromPreset(const juce::File& file)
+{
+    if (!file.existsAsFile())
+    {
+        std::cerr << "Preset file does not exist: " << file.getFullPathName() << std::endl;
+        return false;
+    }
+    
+    auto jsonText = file.loadFileAsString();
+    if (jsonText.isEmpty())
+    {
+        std::cerr << "Could not load preset file: " << file.getFullPathName() << std::endl;
+        return false;
+    }
+    
+    auto state = juce::JSON::parse(jsonText);
+    if (state.isVoid())
+    {
+        std::cerr << "Invalid JSON in preset file: " << file.getFullPathName() << std::endl;
+        return false;
+    }
+    
+    // Validate preset type
+    if (auto* obj = state.getDynamicObject())
+    {
+        auto type = obj->getProperty("type").toString();
+        if (type != "TracktionPlayerPreset")
+        {
+            std::cerr << "Invalid preset type: " << type << std::endl;
+            return false;
+        }
+    }
+    
+    if (loadCompleteState(state))
+    {
+        DBG("TracktionPlayer preset imported from: " << file.getFullPathName());
+        return true;
+    }
+    else
+    {
+        std::cerr << "Failed to load preset state from: " << file.getFullPathName() << std::endl;
+        return false;
+    }
+}
+
+// =========================================================================
 // Helper Methods
 // =========================================================================
 

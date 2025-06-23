@@ -72,7 +72,6 @@ Label categoryLabel;
 Label descriptionLabel;
 TextButton saveButton;
 TextButton cancelButton;
-TextButton loadGraphButton;
 
 // Instrument capabilities UI
 Label capabilitiesLabel;

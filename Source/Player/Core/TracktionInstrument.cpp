@@ -63,34 +63,9 @@ bool TracktionInstrument::registerWithAudioEngine()
     myTrack = trackPtr.get();
     myTrack->setName(instrumentName + "_Track");
     
-    // Add a built-in synthesizer plugin automatically for MIDI-to-audio conversion
-    try {
-        juce::PluginDescription synthDesc;
-        synthDesc.name = "4-Oscillator Synth";
-        synthDesc.fileOrIdentifier = "1_trkbuiltin";
-        synthDesc.pluginFormatName = te::PluginManager::builtInPluginFormatName;
-        synthDesc.category = te::FourOscPlugin::xmlTypeName;
-        synthDesc.isInstrument = true;
-        
-        // Create the built-in synth plugin
-        if (auto synthPlugin = currentEdit->getPluginCache().createNewPlugin(te::FourOscPlugin::xmlTypeName, synthDesc))
-        {
-            // Add the plugin to our track
-            if (auto* audioTrack = dynamic_cast<te::AudioTrack*>(myTrack))
-            {
-                audioTrack->pluginList.insertPlugin(synthPlugin, 0, nullptr);
-                DBG("TracktionInstrument " << instrumentName << " added built-in synthesizer: " << synthDesc.name);
-            }
-        }
-        else
-        {
-            std::cerr << "Failed to create built-in synthesizer for " << instrumentName << std::endl;
-        }
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "Error adding synthesizer to " << instrumentName << ": " << e.what() << std::endl;
-    }
+    // Note: No default plugins added automatically
+    // Users can add plugins through the UI or by loading saved state
+    DBG("TracktionInstrument " << instrumentName << " created with empty plugin chain");
     
     // Ensure the Edit transport is in a state that allows audio processing
     auto& transport = currentEdit->getTransport();
@@ -209,6 +184,54 @@ void TracktionInstrument::clearPlugins()
         audioTrack->pluginList.clear();
         DBG("Cleared all plugins from " << instrumentName);
     }
+}
+
+bool TracktionInstrument::addDefaultSynth()
+{
+    if (myTrack == nullptr)
+    {
+        std::cerr << "Cannot add default synth: instrument not registered with audio engine" << std::endl;
+        return false;
+    }
+    
+    auto& audioEngine = getAudioEngine();
+    auto* currentEdit = audioEngine.getCurrentEdit();
+    if (!currentEdit)
+    {
+        std::cerr << "No Tracktion Edit available" << std::endl;
+        return false;
+    }
+    
+    try {
+        juce::PluginDescription synthDesc;
+        synthDesc.name = "4-Oscillator Synth";
+        synthDesc.fileOrIdentifier = "1_trkbuiltin";
+        synthDesc.pluginFormatName = te::PluginManager::builtInPluginFormatName;
+        synthDesc.category = te::FourOscPlugin::xmlTypeName;
+        synthDesc.isInstrument = true;
+        
+        // Create the built-in synth plugin
+        if (auto synthPlugin = currentEdit->getPluginCache().createNewPlugin(te::FourOscPlugin::xmlTypeName, synthDesc))
+        {
+            // Add the plugin to our track
+            if (auto* audioTrack = dynamic_cast<te::AudioTrack*>(myTrack))
+            {
+                audioTrack->pluginList.insertPlugin(synthPlugin, -1, nullptr);
+                DBG("TracktionInstrument " << instrumentName << " added default synthesizer: " << synthDesc.name);
+                return true;
+            }
+        }
+        else
+        {
+            std::cerr << "Failed to create default synthesizer for " << instrumentName << std::endl;
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Error adding default synthesizer to " << instrumentName << ": " << e.what() << std::endl;
+    }
+    
+    return false;
 }
 
 bool TracktionInstrument::removePlugin(int index)
@@ -495,20 +518,47 @@ std::unique_ptr<juce::XmlElement> TracktionInstrument::getPluginState() const
     state->setAttribute("name", instrumentName);
     state->setAttribute("pluginCount", getPluginCount());
     
-    // TODO: Add detailed plugin state serialization when needed
-    // For now, just track basic info
-    
     if (myTrack)
     {
         state->setAttribute("trackName", myTrack->getName());
         
-        // Add plugin names
-        auto pluginNames = getPluginNames();
-        auto* pluginsElement = state->createNewChildElement("Plugins");
-        for (const auto& name : pluginNames)
+        // Save detailed plugin chain with configurations
+        auto* pluginsElement = state->createNewChildElement("PluginChain");
+        
+        if (auto* audioTrack = dynamic_cast<te::AudioTrack*>(myTrack))
         {
-            auto* pluginElement = pluginsElement->createNewChildElement("Plugin");
-            pluginElement->setAttribute("name", name);
+            for (int i = 0; i < audioTrack->pluginList.size(); ++i)
+            {
+                auto* plugin = audioTrack->pluginList[i];
+                if (!plugin) continue;
+                
+                auto* pluginElement = pluginsElement->createNewChildElement("Plugin");
+                pluginElement->setAttribute("index", i);
+                pluginElement->setAttribute("name", plugin->getName());
+                pluginElement->setAttribute("type", plugin->getPluginType());
+                
+                // Save plugin-specific state using Tracktion's state management
+                plugin->flushPluginStateToValueTree();
+                auto pluginState = plugin->state;
+                if (pluginState.isValid())
+                {
+                    if (auto stateXml = pluginState.createXml())
+                    {
+                        pluginElement->addChildElement(stateXml.release());
+                    }
+                }
+                
+                // For external plugins, save the plugin description
+                if (auto* externalPlugin = dynamic_cast<te::ExternalPlugin*>(plugin))
+                {
+                    auto* descElement = pluginElement->createNewChildElement("PluginDescription");
+                    descElement->setAttribute("name", externalPlugin->desc.name);
+                    descElement->setAttribute("format", externalPlugin->desc.pluginFormatName);
+                    descElement->setAttribute("identifier", externalPlugin->desc.fileOrIdentifier);
+                    descElement->setAttribute("manufacturer", externalPlugin->desc.manufacturerName);
+                    descElement->setAttribute("isInstrument", externalPlugin->desc.isInstrument);
+                }
+            }
         }
     }
     
@@ -537,6 +587,234 @@ bool TracktionInstrument::restorePluginState(const juce::XmlElement& state)
     }
     
     DBG("TracktionInstrument " << instrumentName << " state restored");
+    return true;
+}
+
+juce::var TracktionInstrument::saveInstrumentState() const
+{
+    juce::DynamicObject::Ptr obj = new juce::DynamicObject();
+    
+    // Basic instrument info
+    obj->setProperty("name", instrumentName);
+    obj->setProperty("pluginCount", getPluginCount());
+    
+    // Save plugin chain
+    juce::Array<juce::var> pluginChain;
+    
+    if (myTrack)
+    {
+        if (auto* audioTrack = dynamic_cast<te::AudioTrack*>(myTrack))
+        {
+            for (int i = 0; i < audioTrack->pluginList.size(); ++i)
+            {
+                auto* plugin = audioTrack->pluginList[i];
+                if (!plugin) continue;
+                
+                juce::DynamicObject::Ptr pluginObj = new juce::DynamicObject();
+                pluginObj->setProperty("index", i);
+                pluginObj->setProperty("name", plugin->getName());
+                pluginObj->setProperty("type", plugin->getPluginType());
+                
+                // Save plugin state as XML string
+                plugin->flushPluginStateToValueTree();
+                auto pluginState = plugin->state;
+                if (pluginState.isValid())
+                {
+                    if (auto stateXml = pluginState.createXml())
+                    {
+                        pluginObj->setProperty("state", stateXml->toString());
+                    }
+                }
+                
+                // Save plugin description for recreation
+                juce::DynamicObject::Ptr descObj = new juce::DynamicObject();
+                
+                if (auto* externalPlugin = dynamic_cast<te::ExternalPlugin*>(plugin))
+                {
+                    // External plugin - save full plugin description
+                    descObj->setProperty("name", externalPlugin->desc.name);
+                    descObj->setProperty("format", externalPlugin->desc.pluginFormatName);
+                    descObj->setProperty("identifier", externalPlugin->desc.fileOrIdentifier);
+                    descObj->setProperty("manufacturer", externalPlugin->desc.manufacturerName);
+                    descObj->setProperty("isInstrument", externalPlugin->desc.isInstrument);
+                    descObj->setProperty("uniqueId", externalPlugin->desc.uniqueId);
+                    descObj->setProperty("version", externalPlugin->desc.version);
+                }
+                else
+                {
+                    // Built-in plugin - save plugin type information for recreation
+                    descObj->setProperty("name", plugin->getName());
+                    descObj->setProperty("format", te::PluginManager::builtInPluginFormatName);
+                    descObj->setProperty("identifier", "builtin");
+                    descObj->setProperty("manufacturer", "Tracktion");
+                    
+                    // For built-in plugins, determine if it's an instrument based on plugin type
+                    juce::String pluginTypeName = plugin->getPluginType();
+                    bool isInstrument = pluginTypeName.contains("Synth") || 
+                                       pluginTypeName.contains("Instrument") ||
+                                       pluginTypeName.contains("Osc");
+                    descObj->setProperty("isInstrument", isInstrument);
+                    descObj->setProperty("category", plugin->getPluginType()); // This is the key for built-in plugins!
+                }
+                
+                pluginObj->setProperty("description", juce::var(descObj.get()));
+                
+                pluginChain.add(juce::var(pluginObj.get()));
+            }
+        }
+    }
+    
+    obj->setProperty("pluginChain", pluginChain);
+    
+    return juce::var(obj.get());
+}
+
+bool TracktionInstrument::loadInstrumentState(const juce::var& state)
+{
+    if (!state.isObject())
+    {
+        std::cerr << "Invalid instrument state: not an object" << std::endl;
+        return false;
+    }
+    
+    auto* obj = state.getDynamicObject();
+    if (!obj)
+    {
+        std::cerr << "Invalid instrument state: could not get dynamic object" << std::endl;
+        return false;
+    }
+    
+    // Clear existing plugins
+    clearPlugins();
+    
+    // Load plugin chain
+    auto pluginChainVar = obj->getProperty("pluginChain");
+    if (pluginChainVar.isArray())
+    {
+        auto* pluginArray = pluginChainVar.getArray();
+        for (const auto& pluginVar : *pluginArray)
+        {
+            if (!pluginVar.isObject()) continue;
+            
+            auto* pluginObj = pluginVar.getDynamicObject();
+            if (!pluginObj) continue;
+            
+            juce::String pluginType = pluginObj->getProperty("type");
+            
+            // Recreate the plugin based on type
+            if (pluginType == te::ExternalPlugin::xmlTypeName)
+            {
+                // External plugin - recreate from description
+                auto descVar = pluginObj->getProperty("description");
+                if (descVar.isObject())
+                {
+                    auto* descObj = descVar.getDynamicObject();
+                    
+                    juce::PluginDescription desc;
+                    desc.name = descObj->getProperty("name");
+                    desc.pluginFormatName = descObj->getProperty("format");
+                    desc.fileOrIdentifier = descObj->getProperty("identifier");
+                    desc.manufacturerName = descObj->getProperty("manufacturer");
+                    desc.isInstrument = descObj->getProperty("isInstrument");
+                    desc.uniqueId = descObj->getProperty("uniqueId");
+                    desc.version = descObj->getProperty("version");
+                    
+                    // Try to add the plugin
+                    if (addPlugin(desc))
+                    {
+                        // Restore plugin state if available
+                        auto stateStr = pluginObj->getProperty("state").toString();
+                        if (stateStr.isNotEmpty())
+                        {
+                            if (auto stateXml = juce::XmlDocument::parse(stateStr))
+                            {
+                                auto valueTree = juce::ValueTree::fromXml(*stateXml);
+                                if (valueTree.isValid())
+                                {
+                                    // Get the last added plugin and restore its state
+                                    if (auto* audioTrack = dynamic_cast<te::AudioTrack*>(myTrack))
+                                    {
+                                        if (audioTrack->pluginList.size() > 0)
+                                        {
+                                            auto* plugin = audioTrack->pluginList[audioTrack->pluginList.size() - 1];
+                                            if (plugin)
+                                            {
+                                                plugin->restorePluginStateFromValueTree(valueTree);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Built-in plugin - recreate from category
+                auto descVar = pluginObj->getProperty("description");
+                if (descVar.isObject())
+                {
+                    auto* descObj = descVar.getDynamicObject();
+                    
+                    // Check if this is a built-in plugin
+                    auto format = descObj->getProperty("format").toString();
+                    if (format == te::PluginManager::builtInPluginFormatName)
+                    {
+                        auto category = descObj->getProperty("category").toString();
+                        auto pluginName = descObj->getProperty("name").toString();
+                        
+                        std::cout << "Restoring built-in plugin: " << pluginName << " (category: " << category << ")" << std::endl;
+                        
+                        // Create plugin description for built-in plugin
+                        juce::PluginDescription desc;
+                        desc.name = pluginName;
+                        desc.pluginFormatName = te::PluginManager::builtInPluginFormatName;
+                        desc.category = category;
+                        desc.isInstrument = descObj->getProperty("isInstrument");
+                        
+                        // Try to add the built-in plugin
+                        if (addPlugin(desc))
+                        {
+                            std::cout << "Successfully restored built-in plugin: " << pluginName << std::endl;
+                            
+                            // Restore plugin state if available
+                            auto stateStr = pluginObj->getProperty("state").toString();
+                            if (stateStr.isNotEmpty())
+                            {
+                                if (auto stateXml = juce::XmlDocument::parse(stateStr))
+                                {
+                                    auto valueTree = juce::ValueTree::fromXml(*stateXml);
+                                    if (valueTree.isValid())
+                                    {
+                                        // Get the last added plugin and restore its state
+                                        if (auto* audioTrack = dynamic_cast<te::AudioTrack*>(myTrack))
+                                        {
+                                            if (audioTrack->pluginList.size() > 0)
+                                            {
+                                                auto* plugin = audioTrack->pluginList[audioTrack->pluginList.size() - 1];
+                                                if (plugin)
+                                                {
+                                                    plugin->restorePluginStateFromValueTree(valueTree);
+                                                    std::cout << "Restored state for built-in plugin: " << pluginName << std::endl;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            std::cerr << "Failed to restore built-in plugin: " << pluginName << std::endl;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    DBG("TracktionInstrument " << instrumentName << " state loaded successfully");
     return true;
 }
 

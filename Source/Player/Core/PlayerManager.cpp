@@ -234,8 +234,8 @@ bool PlayerManager::savePlayer(Player* player)
     // Convert to JSON
     var playerJson = player->toVar();
     
-    // Get the file path
-    File playerFile = getPlayersDirectory().getChildFile(metadata.name + ".player");
+    // Get the file path - use player ID to avoid duplicates when renaming
+    File playerFile = getPlayersDirectory().getChildFile(player->getId() + ".player");
     
     // Save to file
     String jsonStr = JSON::toString(playerJson);
@@ -278,8 +278,8 @@ bool PlayerManager::savePlayerAndTakeOwnership(std::unique_ptr<Player> player)
     // Convert to JSON
     var playerJson = playerPtr->toVar();
     
-    // Get the file path
-    File playerFile = getPlayersDirectory().getChildFile(metadata.name + ".player");
+    // Get the file path - use player ID to avoid duplicates when renaming
+    File playerFile = getPlayersDirectory().getChildFile(playerPtr->getId() + ".player");
     
     // Save to file
     String jsonStr = JSON::toString(playerJson);
@@ -366,44 +366,70 @@ bool PlayerManager::deletePlayer(Player* player)
         return false;
     }
     
-    // Get the player file path
+    // Get the player file paths - check both old (.player) and new (.json) locations
     auto& metadata = player->getMetadata();
-    File playerFile = getPlayersDirectory().getChildFile(metadata.name + ".player");
     
-    // Also get the graph file path
+    // Primary location: ~/Library/Application Support/CovertTracks/Players/ (use ID)
+    File playerFile = getPlayersDirectory().getChildFile(player->getId() + ".player");
+    
+    // Also check old Documents location (used by previous PlayerEditorComponent saves) - try both name and ID
+    File documentsDir = File::getSpecialLocation(File::userDocumentsDirectory);
+    File oldDocumentsDir = documentsDir.getChildFile("Covertracks").getChildFile("Players");
+    File oldDocumentsFileByName = oldDocumentsDir.getChildFile(metadata.name + ".json");
+    File oldDocumentsFileById = oldDocumentsDir.getChildFile(player->getId() + ".json");
+    
+    // Graph file location
     File graphFile = File::getSpecialLocation(File::userApplicationDataDirectory)
                       .getChildFile("Covertracks")
                       .getChildFile("Graphs")
                       .getChildFile(player->getId() + ".filtergraph");
     
-    // std::cout << "Deleting player: " << metadata.name << " (ID: " << player->getId() << ")" << std::endl;
-    // std::cout << "Player file: " << playerFile.getFullPathName() << std::endl;
-    // std::cout << "Graph file: " << graphFile.getFullPathName() << std::endl;
+    std::cout << "Deleting player: " << metadata.name << " (ID: " << player->getId() << ")" << std::endl;
+    std::cout << "Checking player file: " << playerFile.getFullPathName() << std::endl;
+    std::cout << "Checking old documents file (by name): " << oldDocumentsFileByName.getFullPathName() << std::endl;
+    std::cout << "Checking old documents file (by ID): " << oldDocumentsFileById.getFullPathName() << std::endl;
+    std::cout << "Checking graph file: " << graphFile.getFullPathName() << std::endl;
     
     // Delete the files
     bool playerFileDeleted = true;
     if (playerFile.existsAsFile())
     {
         playerFileDeleted = playerFile.deleteFile();
-        // std::cout << "Player file deleted: " << (playerFileDeleted ? "yes" : "no") << std::endl;
+        std::cout << "Player file deleted: " << (playerFileDeleted ? "yes" : "no") << std::endl;
+    }
+    
+    bool oldDocumentsFileByNameDeleted = true;
+    if (oldDocumentsFileByName.existsAsFile())
+    {
+        oldDocumentsFileByNameDeleted = oldDocumentsFileByName.deleteFile();
+        std::cout << "Old documents file (by name) deleted: " << (oldDocumentsFileByNameDeleted ? "yes" : "no") << std::endl;
+    }
+    
+    bool oldDocumentsFileByIdDeleted = true;
+    if (oldDocumentsFileById.existsAsFile())
+    {
+        oldDocumentsFileByIdDeleted = oldDocumentsFileById.deleteFile();
+        std::cout << "Old documents file (by ID) deleted: " << (oldDocumentsFileByIdDeleted ? "yes" : "no") << std::endl;
     }
     
     bool graphFileDeleted = true;
     if (graphFile.existsAsFile())
     {
         graphFileDeleted = graphFile.deleteFile();
-        // std::cout << "Graph file deleted: " << (graphFileDeleted ? "yes" : "no") << std::endl;
+        std::cout << "Graph file deleted: " << (graphFileDeleted ? "yes" : "no") << std::endl;
     }
     
     // Remove from the list
     players.removeObject(player, true);
-    return playerFileDeleted && graphFileDeleted;
+    
+    // Return true if all existing files were deleted successfully
+    return playerFileDeleted && oldDocumentsFileByNameDeleted && oldDocumentsFileByIdDeleted && graphFileDeleted;
 }
 
 File PlayerManager::getPlayersDirectory()
 {
     File appDir = File::getSpecialLocation(File::userApplicationDataDirectory)
-                    .getChildFile("CovertTracks");
+                    .getChildFile("Covertracks");
     
     // Create the directory if it doesn't exist
     appDir.createDirectory();

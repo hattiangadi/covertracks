@@ -84,6 +84,12 @@ public:
     void clearPlugins();
     
     /**
+     * @brief Add a default built-in synthesizer (optional)
+     * @return true if added successfully
+     */
+    bool addDefaultSynth();
+    
+    /**
      * @brief Remove a plugin at specified index from this instrument's Track
      * @param index Index of plugin to remove (0-based)
      * @return true if plugin removed successfully
@@ -199,17 +205,30 @@ public:
     // =========================================================================
     
     /**
-     * @brief Get current plugin state for persistence
+     * @brief Get current plugin state for persistence (includes configurations)
      * @return Plugin state as XML
      */
     std::unique_ptr<juce::XmlElement> getPluginState() const;
     
     /**
-     * @brief Restore plugin state from XML
+     * @brief Restore plugin state from XML (includes configurations)
      * @param state Plugin state XML
      * @return true if restored successfully
      */
     bool restorePluginState(const juce::XmlElement& state);
+    
+    /**
+     * @brief Save complete instrument state including plugin parameters
+     * @return JSON representation of instrument state
+     */
+    juce::var saveInstrumentState() const;
+    
+    /**
+     * @brief Load complete instrument state including plugin parameters
+     * @param state JSON representation of instrument state
+     * @return true if loaded successfully
+     */
+    bool loadInstrumentState(const juce::var& state);
     
     /**
      * @brief Get instrument name
