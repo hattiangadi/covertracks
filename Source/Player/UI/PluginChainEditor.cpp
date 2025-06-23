@@ -56,9 +56,6 @@ PluginChainEditor::PluginChainEditor()
 
 PluginChainEditor::~PluginChainEditor()
 {
-    // Close all open plugin editors
-    openEditors.clear();
-    
     pluginListBox.setModel(nullptr);
 }
 
@@ -212,9 +209,11 @@ void PluginChainEditor::listBoxItemClicked(int row, const juce::MouseEvent& /*e*
     pluginListBox.selectRow(row);
 }
 
-void PluginChainEditor::listBoxItemDoubleClicked(int row, const juce::MouseEvent& /*e*/)
+void PluginChainEditor::listBoxItemDoubleClicked(int row, const juce::MouseEvent&)
 {
-    editPlugin(row);
+    if (currentInstrument)
+        if (auto* plugin = currentInstrument->getPlugin(row))
+            plugin->windowState->showWindowExplicitly();
 }
 
 void PluginChainEditor::refreshPluginList()
@@ -281,23 +280,9 @@ void PluginChainEditor::removeSelectedPlugin()
     int selectedRow = pluginListBox.getSelectedRow();
     if (selectedRow >= 0 && currentInstrument)
     {
-        // Get the plugin before removing it
-        auto* plugin = currentInstrument->getPlugin(selectedRow);
-        
         if (currentInstrument->removePlugin(selectedRow))
         {
             std::cout << "Successfully removed plugin at index " << selectedRow << std::endl;
-            
-            // Close any open editor for this plugin
-            if (plugin)
-            {
-                auto it = openEditors.find(plugin);
-                if (it != openEditors.end())
-                {
-                    std::cout << "Closing editor for removed plugin: " << plugin->getName() << std::endl;
-                    openEditors.erase(it);
-                }
-            }
             
             refreshPluginList();
             
@@ -359,134 +344,34 @@ void PluginChainEditor::editSelectedPlugin()
     int selectedRow = pluginListBox.getSelectedRow();
     if (selectedRow >= 0)
     {
-        editPlugin(selectedRow);
+        if (currentInstrument)
+        {
+            if (auto* plugin = currentInstrument->getPlugin(selectedRow))
+            {
+                // Check if it's an external plugin that's still initializing
+                if (auto* externalPlugin = dynamic_cast<te::ExternalPlugin*>(plugin))
+                {
+                    if (externalPlugin->isInitialisingAsync())
+                    {
+                        std::cout << "Plugin is still initializing, please wait..." << std::endl;
+                        // Could add a timer here to retry later, but for now just inform user
+                        return;
+                    }
+                    
+                    if (externalPlugin->getAudioPluginInstance() == nullptr)
+                    {
+                        std::cout << "External plugin AudioPluginInstance not available" << std::endl;
+                        return;
+                    }
+                }
+                
+                plugin->windowState->showWindowExplicitly();
+            }
+        }
     }
     else
     {
         std::cout << "No plugin selected for editing" << std::endl;
-    }
-}
-
-void PluginChainEditor::editPlugin(int index)
-{
-    if (!currentInstrument)
-    {
-        std::cout << "No instrument available for plugin editing" << std::endl;
-        return;
-    }
-    
-    // Try to get either a Tracktion plugin or JUCE AudioProcessor
-    auto* plugin = currentInstrument->getPlugin(index);
-    auto* juceProcessor = currentInstrument->getJucePlugin(index);
-    
-    if (!plugin && !juceProcessor)
-    {
-        std::cout << "Invalid plugin index for editing: " << index << std::endl;
-        return;
-    }
-    
-    // Check for JUCE processor (external plugins)
-    if (juceProcessor)
-    {
-        std::cout << "Creating editor for JUCE AudioProcessor: " << juceProcessor->getName() << std::endl;
-        
-        // Create editor window directly from JUCE AudioProcessor
-        try 
-        {
-            auto editorWindow = std::make_unique<PluginEditorWindow>(juceProcessor);
-            if (editorWindow)
-            {
-                editorWindow->setVisible(true);
-                // Note: We're not tracking JUCE editors in openEditors map for now - could be improved
-                std::cout << "Opened JUCE plugin editor for: " << juceProcessor->getName() << std::endl;
-            }
-            else
-            {
-                std::cout << "Failed to create editor window for JUCE processor: " << juceProcessor->getName() << std::endl;
-            }
-        }
-        catch (const std::exception& e)
-        {
-            std::cout << "Error creating JUCE plugin editor: " << e.what() << std::endl;
-        }
-    }
-    else if (plugin)
-    {
-        // For external plugins where wrapped processor isn't available yet, 
-        // try to force initialization first
-        if (auto* externalPlugin = dynamic_cast<te::ExternalPlugin*>(plugin))
-        {
-            std::cout << "External plugin detected, attempting to ensure initialization..." << std::endl;
-            
-            // Give the plugin a moment to initialize if it's still loading
-            juce::Timer::callAfterDelay(100, [this, plugin, index]()
-            {
-                auto* delayedProcessor = currentInstrument->getJucePlugin(index);
-                if (delayedProcessor)
-                {
-                    std::cout << "External plugin processor now available: " << delayedProcessor->getName() << std::endl;
-                    
-                    try 
-                    {
-                        auto editorWindow = std::make_unique<PluginEditorWindow>(delayedProcessor);
-                        if (editorWindow)
-                        {
-                            editorWindow->setVisible(true);
-                            std::cout << "Opened delayed JUCE plugin editor for: " << delayedProcessor->getName() << std::endl;
-                        }
-                    }
-                    catch (const std::exception& e)
-                    {
-                        std::cout << "Error creating delayed JUCE plugin editor: " << e.what() << std::endl;
-                    }
-                }
-                else
-                {
-                    std::cout << "External plugin processor still not available after delay" << std::endl;
-                    // Fall back to Tracktion plugin editor
-                    editTracktionPlugin(plugin);
-                }
-            });
-            
-            return; // Don't continue to Tracktion editor creation
-        }
-        else
-        {
-            editTracktionPlugin(plugin);
-        }
-    }
-}
-
-void PluginChainEditor::editTracktionPlugin(te::Plugin* plugin)
-{
-    // Check if we already have an editor open for this Tracktion plugin
-    auto it = openEditors.find(plugin);
-    if (it != openEditors.end())
-    {
-        // Bring existing editor to front
-        it->second->toFront(true);
-        std::cout << "Bringing existing editor to front for: " << plugin->getName() << std::endl;
-        return;
-    }
-    
-    // Create new editor window for Tracktion plugin
-    try 
-    {
-        auto editorWindow = std::make_unique<PluginEditorWindow>(plugin);
-        if (editorWindow)
-        {
-            editorWindow->setVisible(true);
-            openEditors[plugin] = std::move(editorWindow);
-            std::cout << "Opened Tracktion plugin editor for: " << plugin->getName() << std::endl;
-        }
-        else
-        {
-            std::cout << "Failed to create editor window for Tracktion plugin: " << plugin->getName() << std::endl;
-        }
-    }
-    catch (const std::exception& e)
-    {
-        std::cout << "Error creating Tracktion plugin editor: " << e.what() << std::endl;
     }
 }
 
@@ -506,8 +391,10 @@ void PluginChainEditor::addPluginsToMenu(juce::PopupMenu& menu)
     menu.addItem(11, "Delay");
     menu.addItem(12, "Low Pass Filter");
     
-    // Add external plugins from KnownPluginList
-    auto pluginTypes = knownPluginList.getTypes();
+    // Add external plugins from Engine's KnownPluginList
+    auto& audioEngine = covertracks::getAudioEngine();
+    auto& tracktionEngine = audioEngine.getTracktionEngine();
+    auto pluginTypes = tracktionEngine.getPluginManager().knownPluginList.getTypes();
     
     juce::Array<juce::PluginDescription> externalPlugins;
     for (const auto& desc : pluginTypes)
@@ -532,6 +419,9 @@ void PluginChainEditor::addPluginsToMenu(juce::PopupMenu& menu)
             juce::String menuText = desc.name;
             if (desc.manufacturerName.isNotEmpty())
                 menuText += " (" + desc.manufacturerName + ")";
+            
+            // Add format info to help identify plugin types
+            menuText += " [" + desc.pluginFormatName + "]";
                 
             menu.addItem(menuItemId, menuText);
             
@@ -603,270 +493,37 @@ std::optional<PluginDescriptionAndPreference> PluginChainEditor::getChosenType(i
 
 void PluginChainEditor::startPluginScan()
 {
-    // Load any previously scanned plugins
-    juce::File pluginListFile = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-                                    .getChildFile("Covertracks")
-                                    .getChildFile("PluginList.xml");
+    // Use the Engine's built-in plugin management system
+    auto& audioEngine = covertracks::getAudioEngine();
+    auto& tracktionEngine = audioEngine.getTracktionEngine();
     
-    if (pluginListFile.existsAsFile())
-    {
-        auto xml = juce::XmlDocument::parse(pluginListFile);
-        if (xml != nullptr)
-        {
-            knownPluginList.recreateFromXml(*xml);
-            std::cout << "Loaded " << knownPluginList.getNumTypes() << " previously scanned plugins" << std::endl;
-        }
-    }
+    auto& pluginManager = tracktionEngine.getPluginManager();
     
-    // Start background scanning for new plugins
-    std::cout << "Starting plugin scan..." << std::endl;
-    auto pluginFormats = formatManager.getFormats();
+    // Trigger scanning through the Engine's plugin system
+    std::cout << "Starting plugin scan using Tracktion Engine..." << std::endl;
+    auto pluginFormats = pluginManager.pluginFormatManager.getFormats();
     std::cout << "Found " << pluginFormats.size() << " plugin formats" << std::endl;
     
     for (auto* format : pluginFormats)
     {
         std::cout << "Scanning format: " << format->getName() << std::endl;
         auto defaultLocations = format->getDefaultLocationsToSearch();
-        std::cout << "  Search paths: " << defaultLocations.getNumPaths() << std::endl;
         
-        // Use JUCE's built-in scanner for better reliability
-        juce::PluginDirectoryScanner scanner(knownPluginList, *format, defaultLocations, true, juce::File());
+        // Use JUCE's built-in scanner with the Engine's KnownPluginList
+        juce::PluginDirectoryScanner scanner(pluginManager.knownPluginList, *format, defaultLocations, true, juce::File());
         
         juce::String pluginBeingScanned;
-        while (scanner.scanNextFile(false, pluginBeingScanned))
+        int numScanned = 0;
+        while (scanner.scanNextFile(false, pluginBeingScanned) && numScanned < 20)
         {
             std::cout << "  Scanning: " << pluginBeingScanned << std::endl;
+            numScanned++;
         }
         
         std::cout << "  Format scan complete" << std::endl;
     }
     
-    // Save the updated plugin list
-    pluginListFile.getParentDirectory().createDirectory();
-    auto xml = knownPluginList.createXml();
-    if (xml != nullptr)
-    {
-        xml->writeTo(pluginListFile);
-        std::cout << "Plugin scan complete. Found " << knownPluginList.getNumTypes() << " total plugins" << std::endl;
-        
-        // Debug: List found plugins
-        for (const auto& desc : knownPluginList.getTypes())
-        {
-            std::cout << "  Found: " << desc.name << " (" << desc.pluginFormatName << ")" << std::endl;
-        }
-    }
-}
-
-// =========================================================================
-// PluginEditorWindow Implementation
-// =========================================================================
-
-PluginEditorWindow::PluginEditorWindow(te::Plugin* p)
-    : juce::DocumentWindow(p ? p->getName() : "Plugin Editor", 
-                          juce::Colours::lightgrey, 
-                          juce::DocumentWindow::allButtons),
-      plugin(p)
-{
-    if (!plugin)
-    {
-        std::cout << "PluginEditorWindow: Invalid plugin pointer" << std::endl;
-        return;
-    }
-    
-    setUsingNativeTitleBar(true);
-    setResizable(true, false);
-    
-    createEditor();
-    
-    // Center on screen
-    centreWithSize(getWidth(), getHeight());
-}
-
-PluginEditorWindow::PluginEditorWindow(juce::AudioProcessor* proc)
-    : juce::DocumentWindow(proc ? proc->getName() : "Plugin Editor", 
-                          juce::Colours::lightgrey, 
-                          juce::DocumentWindow::allButtons),
-      processor(proc)
-{
-    if (!processor)
-    {
-        std::cout << "PluginEditorWindow: Invalid AudioProcessor pointer" << std::endl;
-        return;
-    }
-    
-    setUsingNativeTitleBar(true);
-    setResizable(true, false);
-    
-    createJuceEditor();
-    
-    // Center on screen
-    centreWithSize(getWidth(), getHeight());
-}
-
-PluginEditorWindow::~PluginEditorWindow()
-{
-    // Clean up editor before window is destroyed
-    setContentOwned(nullptr, false);
-    editor.reset();
-}
-
-void PluginEditorWindow::createEditor()
-{
-    if (!plugin)
-    {
-        std::cout << "PluginEditorWindow: No plugin available for editor creation" << std::endl;
-        return;
-    }
-    
-    // Try to get the plugin's AudioProcessor (for external plugins)
-    auto* processor = plugin->getWrappedAudioProcessor();
-    
-    std::cout << "PluginEditorWindow: Creating editor for " << plugin->getName() 
-              << " (wrapped processor: " << (processor ? "available" : "none") << ")" << std::endl;
-    
-    if (processor)
-    {
-        // External plugin - use JUCE AudioProcessor editor creation (same as GraphEditorPanel)
-        std::cout << "PluginEditorWindow: External plugin detected, using JUCE editor creation" << std::endl;
-        
-        juce::AudioProcessorEditor* ui = nullptr;
-        
-        // Try to create native editor first
-        if (processor->hasEditor())
-        {
-            std::cout << "PluginEditorWindow: Processor has editor, calling createEditorIfNeeded()" << std::endl;
-            try
-            {
-                ui = processor->createEditorIfNeeded();
-                if (ui)
-                {
-                    std::cout << "PluginEditorWindow: Native editor created successfully" << std::endl;
-                    setContentOwned(ui, true);
-                    setResizable(ui->isResizable(), false);
-                    
-                    // Size window to fit editor
-                    setSize(ui->getWidth(), ui->getHeight() + getTitleBarHeight());
-                    return;
-                }
-            }
-            catch (const std::exception& e)
-            {
-                std::cout << "PluginEditorWindow: Exception creating native editor: " << e.what() << std::endl;
-            }
-        }
-        
-        // Fallback to generic editor
-        std::cout << "PluginEditorWindow: Creating GenericAudioProcessorEditor for: " << plugin->getName() << std::endl;
-        try
-        {
-            auto* genericEditor = new juce::GenericAudioProcessorEditor(*processor);
-            genericEditor->setResizeLimits(200, 300, 1000, 800);
-            setContentOwned(genericEditor, true);
-            setResizable(true, false);
-            setSize(400, 300);
-            std::cout << "PluginEditorWindow: Generic editor created successfully" << std::endl;
-            return;
-        }
-        catch (const std::exception& e)
-        {
-            std::cout << "PluginEditorWindow: Exception creating generic editor: " << e.what() << std::endl;
-        }
-    }
-    
-    // Built-in Tracktion plugin or fallback case
-    std::cout << "PluginEditorWindow: Built-in Tracktion plugin or fallback case for: " << plugin->getName() << std::endl;
-    
-    // Create an informative display
-    auto infoComponent = std::make_unique<juce::Component>();
-    auto infoLabel = std::make_unique<juce::Label>();
-    
-    juce::String message;
-    if (processor)
-    {
-        message = "Plugin: " + plugin->getName() + "\n\nThis plugin doesn't provide a custom editor interface.\nGeneric parameter editor creation failed.";
-    }
-    else
-    {
-        message = "Plugin: " + plugin->getName() + "\n\nThis is a built-in Tracktion plugin.\nParameter editing interface will be available in a future update.";
-    }
-    
-    infoLabel->setText(message, juce::dontSendNotification);
-    infoLabel->setJustificationType(juce::Justification::centred);
-    infoLabel->setBounds(10, 10, 380, 280);
-    
-    infoComponent->addAndMakeVisible(infoLabel.release());
-    infoComponent->setSize(400, 300);
-    
-    setContentOwned(infoComponent.release(), true);
-    setSize(400, 350);
-}
-
-void PluginEditorWindow::createJuceEditor()
-{
-    if (!processor)
-    {
-        std::cout << "PluginEditorWindow: No AudioProcessor available for editor creation" << std::endl;
-        return;
-    }
-    
-    std::cout << "PluginEditorWindow: Creating JUCE editor for: " << processor->getName() << std::endl;
-    
-    juce::AudioProcessorEditor* ui = nullptr;
-    
-    // Try to create native editor first
-    if (processor->hasEditor())
-    {
-        std::cout << "PluginEditorWindow: AudioProcessor has editor, calling createEditorIfNeeded()" << std::endl;
-        try
-        {
-            ui = processor->createEditorIfNeeded();
-            if (ui)
-            {
-                std::cout << "PluginEditorWindow: Native editor created successfully" << std::endl;
-                setContentOwned(ui, true);
-                setResizable(ui->isResizable(), false);
-                
-                // Size window to fit editor
-                setSize(ui->getWidth(), ui->getHeight() + getTitleBarHeight());
-                return;
-            }
-        }
-        catch (const std::exception& e)
-        {
-            std::cout << "PluginEditorWindow: Exception creating native editor: " << e.what() << std::endl;
-        }
-    }
-    
-    // Fallback to generic editor
-    std::cout << "PluginEditorWindow: Creating GenericAudioProcessorEditor for: " << processor->getName() << std::endl;
-    try
-    {
-        auto* genericEditor = new juce::GenericAudioProcessorEditor(*processor);
-        genericEditor->setResizeLimits(200, 300, 1000, 800);
-        setContentOwned(genericEditor, true);
-        setResizable(true, false);
-        setSize(400, 300);
-        std::cout << "PluginEditorWindow: Generic editor created successfully" << std::endl;
-    }
-    catch (const std::exception& e)
-    {
-        std::cout << "PluginEditorWindow: Exception creating generic editor: " << e.what() << std::endl;
-        
-        // Final fallback
-        auto infoLabel = std::make_unique<juce::Label>();
-        infoLabel->setText("Failed to create editor for: " + processor->getName(), juce::dontSendNotification);
-        infoLabel->setJustificationType(juce::Justification::centred);
-        infoLabel->setSize(300, 100);
-        
-        setContentOwned(infoLabel.release(), true);
-        setSize(300, 150);
-    }
-}
-
-void PluginEditorWindow::closeButtonPressed()
-{
-    // Window will be cleaned up by the PluginChainEditor
-    setVisible(false);
+    std::cout << "Plugin scan complete. Total plugins found: " << pluginManager.knownPluginList.getNumTypes() << std::endl;
 }
 
 } // namespace covertracks

@@ -170,13 +170,10 @@ bool TracktionInstrument::addPlugin(const juce::PluginDescription& pluginDesc)
     }
     else
     {
-        // External plugin - use standard Tracktion approach but with proper xmlTypeName
-        std::cout << "TracktionInstrument: External plugin - using ExternalPlugin xmlTypeName" << std::endl;
-        std::cout << "TracktionInstrument: Plugin details - name: " << pluginDesc.name 
-                  << ", format: " << pluginDesc.pluginFormatName 
-                  << ", file: " << pluginDesc.fileOrIdentifier << std::endl;
+        // External plugin - use standard Tracktion approach (same as official examples)
+        std::cout << "TracktionInstrument: Creating external plugin: " << pluginDesc.name << std::endl;
         
-        // Create external plugin using proper Tracktion approach
+        // Create plugin using exact same method as official Tracktion examples
         auto plugin = currentEdit->getPluginCache().createNewPlugin(te::ExternalPlugin::xmlTypeName, pluginDesc);
         if (!plugin)
         {
@@ -184,22 +181,11 @@ bool TracktionInstrument::addPlugin(const juce::PluginDescription& pluginDesc)
             return false;
         }
         
-        std::cout << "TracktionInstrument: Successfully created external plugin: " << plugin->getName() << std::endl;
-        
-        // Add to track
+        // Add to track immediately (don't wait for async loading - let Tracktion handle it)
         if (auto* audioTrack = dynamic_cast<te::AudioTrack*>(myTrack))
         {
             audioTrack->pluginList.insertPlugin(plugin, -1, nullptr);
-            
-            // Check if this is an ExternalPlugin and verify AudioPluginInstance access
-            if (auto* externalPlugin = dynamic_cast<te::ExternalPlugin*>(plugin.get()))
-            {
-                auto* audioPluginInstance = externalPlugin->getAudioPluginInstance();
-                std::cout << "TracktionInstrument: ExternalPlugin AudioPluginInstance: " 
-                          << (audioPluginInstance ? audioPluginInstance->getName() : "none") << std::endl;
-            }
-            
-            std::cout << "TracktionInstrument: Added external plugin to track successfully" << std::endl;
+            std::cout << "TracktionInstrument: Added external plugin " << plugin->getName() << " to track" << std::endl;
             return true;
         }
         else
@@ -361,16 +347,17 @@ te::Plugin* TracktionInstrument::getPlugin(int index) const
 
 juce::AudioProcessor* TracktionInstrument::getJucePlugin(int index) const
 {
-    // Get the Tracktion plugin and check if it has an AudioPluginInstance
     if (auto* tracktionPlugin = getPlugin(index))
     {
-        // For external plugins, use getAudioPluginInstance() (the proper method)
+        // For external plugins, use getAudioPluginInstance()
         if (auto* externalPlugin = dynamic_cast<te::ExternalPlugin*>(tracktionPlugin))
         {
-            return externalPlugin->getAudioPluginInstance();
+            auto* instance = externalPlugin->getAudioPluginInstance();
+            // Don't log here as this is called frequently - async loading may take time
+            return instance;
         }
         
-        // For other plugins, try the wrapped processor method
+        // For other plugins, use the wrapped processor method
         return tracktionPlugin->getWrappedAudioProcessor();
     }
     

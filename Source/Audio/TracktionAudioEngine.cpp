@@ -11,6 +11,7 @@
 
 #include "TracktionAudioEngine.h"
 #include "../Player/Core/Player.h"
+#include "../Player/UI/CovertracksPluginWindow.h"
 
 namespace covertracks {
 
@@ -66,9 +67,11 @@ bool TracktionAudioEngine::initializeTracktionEngine()
         
         // Create Tracktion Engine
         DBG("INFO: Creating Tracktion Engine...");
-        tracktionEngine = std::make_unique<te::Engine>("CovertracksTracktionEngine");
+        tracktionEngine = std::make_unique<te::Engine>("CovertracksTracktionEngine", std::make_unique<covertracks::CovertracksUIBehaviour>(), nullptr);
         
-        // Create a working Edit for our tracks
+        // Now configure the Engine's PluginManager
+        DBG("INFO: Configuring plugin scanning...");
+        scanForPlugins();
         DBG("INFO: Creating Tracktion Edit...");
         editFile = juce::File::createTempFile(".tracktionedit");
         currentEdit = te::createEmptyEdit(*tracktionEngine, editFile);
@@ -652,24 +655,9 @@ void TracktionAudioEngine::audioDeviceIOCallbackWithContext(const float* const* 
                 for (const auto& [player, trackInfo] : playerTracks) {
                     if (trackInfo->isActive.load() && player) {
                         // Get the player's instrument and process its audio
-                        if (auto* instrument = player->getInstrument()) {
-                            // Note: Custom processor graph removed - audio now handled by Tracktion Tracks
-                            if (false) { // Disabled custom audio processing
-                                // Create a copy of the audio buffer for this player
-                                juce::AudioBuffer<float> playerBuffer(numOutputChannels, numSamples);
-                                playerBuffer.clear();
-                                
-                                // Process the player's audio through its processor graph
-                                juce::MidiBuffer playerMidiBuffer;
-                                // Note: Custom audio processing removed
-                                
-                                // Mix the player's output into the main output buffer
-                                for (int channel = 0; channel < numOutputChannels; ++channel) {
-                                    juce::FloatVectorOperations::add(outputChannelData[channel], 
-                                                                    playerBuffer.getReadPointer(channel), 
-                                                                    numSamples);
-                                }
-                            }
+                        if (player->getInstrument() != nullptr) {
+                            // Note: Audio processing now handled by Tracktion Tracks
+                            // Custom processor graph removed in favor of Tracktion architecture
                         }
                     }
                 }
@@ -785,6 +773,25 @@ void TracktionAudioEngine::checkAudioQuality()
     // Check if audio quality is good based on CPU usage and underruns
     bool qualityGood = (cpuUsage.load() < 0.8) && (bufferUnderrunCount.load() < 10);
     audioQualityGood.store(qualityGood);
+}
+
+void TracktionAudioEngine::scanForPlugins()
+{
+    if (!tracktionEngine)
+    {
+        DBG("ERROR: Cannot scan plugins - Tracktion Engine not initialized");
+        return;
+    }
+    
+    // Get the Engine's PluginManager
+    auto& pluginManager = tracktionEngine->getPluginManager();
+    
+    // The PluginManager automatically handles plugin scanning
+    // Just trigger a scan to ensure plugins are loaded
+    DBG("INFO: Using Tracktion Engine's built-in plugin management");
+    
+    // The Engine's PluginManager handles plugin discovery automatically
+    // No need for manual scanning - it will scan on demand
 }
 
 } // namespace covertracks

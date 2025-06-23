@@ -297,6 +297,7 @@ private:
     // Initialize Tracktion resources
     bool initializeTracktionEngine();
     void shutdownTracktionEngine();
+    void scanForPlugins();
     
     // =========================================================================
     // Player-Track Mapping

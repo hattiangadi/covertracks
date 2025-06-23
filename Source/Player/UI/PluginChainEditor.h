@@ -7,11 +7,6 @@
 #include <optional>
 #include <map>
 
-// Forward declare plugin editor window
-namespace covertracks {
-    class PluginEditorWindow;
-}
-
 namespace covertracks {
 
 /**
@@ -67,8 +62,7 @@ private:
     // External plugin mapping (for menu ID -> PluginDescription lookup)
     mutable std::map<int, juce::PluginDescription> externalPluginMap;
     
-    // Plugin editor windows (keep track of open editors)
-    std::map<te::Plugin*, std::unique_ptr<PluginEditorWindow>> openEditors;
+
     
     void refreshPluginList();
     void showPluginMenu();
@@ -86,32 +80,5 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PluginChainEditor)
 };
 
-/**
- * @brief Simple plugin editor window
- * 
- * Shows a plugin's editor UI in a resizable window
- */
-class PluginEditorWindow : public juce::DocumentWindow
-{
-public:
-    PluginEditorWindow(te::Plugin* plugin);
-    PluginEditorWindow(juce::AudioProcessor* processor);
-    ~PluginEditorWindow() override;
-    
-    // DocumentWindow overrides
-    void closeButtonPressed() override;
-    
-    te::Plugin* getPlugin() const { return plugin; }
-    
-private:
-    te::Plugin* plugin = nullptr;
-    juce::AudioProcessor* processor = nullptr;
-    std::unique_ptr<juce::AudioProcessorEditor> editor;
-    
-    void createEditor();
-    void createJuceEditor();
-    
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PluginEditorWindow)
-};
 
 } // namespace covertracks
