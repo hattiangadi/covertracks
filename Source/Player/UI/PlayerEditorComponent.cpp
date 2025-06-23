@@ -66,22 +66,10 @@ PlayerEditorComponent::PlayerEditorComponent(Player* playerToEdit, AudioEngineIm
     // Setup instrument capabilities UI
     setupCapabilitiesUI();
 
-    // Create a graph editor if we have a player
+    // Setup the new TracktionPlayer system instead of the old graph editor
     if (player != nullptr && audioEngine != nullptr)
     {
-        // Create GraphDocumentComponent with AudioEngine reference
-        graphEditor = std::make_unique<GraphDocumentComponent>(
-            audioEngine->getFormatManager(),
-            audioEngine->getKnownPluginList(),
-            *audioEngine);
-        
-        if (graphEditor->graphPanel)
-            graphEditor->graphPanel->setOwnerPlayerEditorComponent(this);
-        
-        addAndMakeVisible(graphEditor.get());
-        
-        // Load player for editing - wait to ensure audio device is initialized
-        startTimer(100);
+        setupNewTracktionPlayerSystem();
         
         // Update the UI from the player data
         auto& metadata = player->getMetadata();
@@ -420,16 +408,24 @@ void PlayerEditorComponent::handleIncomingMidiMessage(MidiInput* /*source*/, con
     // The AudioEngine will route them to the graph automatically
 }
 
-void PlayerEditorComponent::handleNoteOn(MidiKeyboardState* /*source*/, int /*midiChannel*/, int /*midiNoteNumber*/, float /*velocity*/)
+void PlayerEditorComponent::handleNoteOn(MidiKeyboardState* /*source*/, int midiChannel, int midiNoteNumber, float velocity)
 {
-    // GraphDocumentComponent now handles MIDI keyboard state directly
-    // No action needed here
+    if (tracktionPlayer)
+    {
+        auto message = juce::MidiMessage::noteOn(midiChannel, midiNoteNumber, velocity);
+        tracktionPlayer->processMidiMessage(message);
+        std::cout << "MIDI Note On: " << midiNoteNumber << " velocity: " << velocity << std::endl;
+    }
 }
 
-void PlayerEditorComponent::handleNoteOff(MidiKeyboardState* /*source*/, int /*midiChannel*/, int /*midiNoteNumber*/, float /*velocity*/)
+void PlayerEditorComponent::handleNoteOff(MidiKeyboardState* /*source*/, int midiChannel, int midiNoteNumber, float /*velocity*/)
 {
-    // GraphDocumentComponent now handles MIDI keyboard state directly
-    // No action needed here
+    if (tracktionPlayer)
+    {
+        auto message = juce::MidiMessage::noteOff(midiChannel, midiNoteNumber);
+        tracktionPlayer->processMidiMessage(message);
+        std::cout << "MIDI Note Off: " << midiNoteNumber << std::endl;
+    }
 }
 
 void PlayerEditorComponent::createPlugin(const PluginDescriptionAndPreference& desc, Point<int> pos)
@@ -598,9 +594,24 @@ void PlayerEditorComponent::resized()
     cancelButton.setBounds(sidePanel.getX() + panelMargin + buttonWidth + panelMargin, buttonY, buttonWidth, buttonHeight);
     loadGraphButton.setBounds(sidePanel.getX() + panelMargin + 2 * (buttonWidth + panelMargin), buttonY, buttonWidth, buttonHeight);
 
-    // --- Main area for graph editor ---
-    if (graphEditor != nullptr)
+    // --- Main area for plugin chain editor and MIDI keyboard ---
+    if (pluginChainEditor && midiKeyboard)
     {
+        // Split main area: MIDI keyboard at bottom, plugin editor above
+        const int keyboardHeight = 80;
+        auto keyboardArea = area.removeFromBottom(keyboardHeight);
+        
+        // Set MIDI keyboard bounds
+        midiKeyboard->setBounds(keyboardArea);
+        
+        // Set plugin chain editor bounds
+        pluginChainEditor->setBounds(area);
+        
+        std::cout << "Layout: PluginChainEditor=" << area.toString() << ", MidiKeyboard=" << keyboardArea.toString() << std::endl;
+    }
+    else if (graphEditor != nullptr)
+    {
+        // Fallback to old graph editor if new system not available
         graphEditor->setBounds(area);
         DBG("[PlayerEditorComponent::resized] graphEditor bounds: " << graphEditor->getBounds().toString());
     }
@@ -913,6 +924,64 @@ void PlayerEditorComponent::updateCapabilitiesInUI()
     }
     
     updateCapabilitiesUIVisibility();
+}
+
+void PlayerEditorComponent::setupNewTracktionPlayerSystem()
+{
+    std::cout << "PlayerEditorComponent: Setting up new TracktionPlayer system..." << std::endl;
+    
+    if (!audioEngine)
+    {
+        std::cout << "No audio engine available" << std::endl;
+        return;
+    }
+    
+    // Create a TracktionPlayer for this player's data
+    auto& metadata = player->getMetadata();
+    tracktionPlayer = std::make_unique<TracktionPlayer>(
+        metadata.name + "_TracktionPlayer", 
+        metadata.name,
+        audioEngine->getFormatManager(),
+        audioEngine->getKnownPluginList()
+    );
+    
+    if (!tracktionPlayer->initialize())
+    {
+        std::cout << "Failed to initialize TracktionPlayer" << std::endl;
+        return;
+    }
+    
+    // Create the plugin chain editor
+    pluginChainEditor = std::make_unique<PluginChainEditor>();
+    pluginChainEditor->setPlayer(tracktionPlayer.get());
+    addAndMakeVisible(pluginChainEditor.get());
+    
+    // Create MIDI keyboard to replace the tone generation buttons
+    midiKeyboard = std::make_unique<juce::MidiKeyboardComponent>(keyboardState, juce::MidiKeyboardComponent::horizontalKeyboard);
+    midiKeyboard->setName("MIDI Keyboard");
+    addAndMakeVisible(midiKeyboard.get());
+    
+    // Connect MIDI keyboard to the TracktionPlayer
+    keyboardState.addListener(this);
+    
+    std::cout << "TracktionPlayer system setup complete" << std::endl;
+}
+
+void PlayerEditorComponent::switchToPluginChainEditor()
+{
+    // Hide the old graph editor if it exists
+    if (graphEditor)
+    {
+        graphEditor->setVisible(false);
+    }
+    
+    // Show the new plugin chain editor
+    if (pluginChainEditor)
+    {
+        pluginChainEditor->setVisible(true);
+    }
+    
+    resized(); // Update layout
 }
 
 } // namespace covertracks

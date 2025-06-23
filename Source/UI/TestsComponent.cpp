@@ -1,5 +1,6 @@
 #include "TestsComponent.h"
 #include "../Tests/TestRunner.h"
+#include "../Player/UI/TracktionPlayerEditor.h"
 #include <sstream>
 #include <iostream>
 
@@ -48,6 +49,10 @@ TestsComponent::TestsComponent()
     stopAudioButton.addListener(this);
     addAndMakeVisible(stopAudioButton);
     
+    pluginEditorButton.setButtonText("Plugin Chain Editor");
+    pluginEditorButton.addListener(this);
+    addAndMakeVisible(pluginEditorButton);
+    
     // Audio status label
     audioStatusLabel.setText("Ready to test Tracktion Engine audio", juce::dontSendNotification);
     audioStatusLabel.setJustificationType(juce::Justification::centred);
@@ -68,6 +73,7 @@ TestsComponent::~TestsComponent()
     sineWaveButton.removeListener(this);
     twoTonesButton.removeListener(this);
     stopAudioButton.removeListener(this);
+    pluginEditorButton.removeListener(this);
 }
 
 void TestsComponent::paint(juce::Graphics& g)
@@ -123,6 +129,9 @@ void TestsComponent::resized()
     rightSection.removeFromTop(10);
     
     stopAudioButton.setBounds(rightSection.removeFromTop(40));
+    rightSection.removeFromTop(10);
+    
+    pluginEditorButton.setBounds(rightSection.removeFromTop(40));
     rightSection.removeFromTop(20);
     
     // Position audio status label
@@ -153,6 +162,10 @@ void TestsComponent::buttonClicked(juce::Button* button)
     {
         audioStatusLabel.setText("Stopping audio...", juce::dontSendNotification);
         stopAllAudio();
+    }
+    else if (button == &pluginEditorButton)
+    {
+        showPluginEditor();
     }
 }
 
@@ -369,6 +382,46 @@ void TestsComponent::stopAllAudio()
         audioStatusLabel.setText("ERROR stopping audio: " + juce::String(e.what()), juce::dontSendNotification);
         std::cerr << "TestsComponent::stopAllAudio error: " << e.what() << std::endl;
     }
+}
+
+void TestsComponent::showPluginEditor()
+{
+    std::cout << "TestsComponent: Creating test player for plugin editor..." << std::endl;
+    
+    // Create a test TracktionPlayer for demonstration
+    auto testPlayer = std::make_unique<TracktionPlayer>("TestPlayer_PluginDemo", "Plugin Demo Player", formatManager, knownPluginList);
+    
+    if (!testPlayer->initialize())
+    {
+        audioStatusLabel.setText("ERROR: Failed to initialize test player for plugin editor", juce::dontSendNotification);
+        std::cout << "ERROR: Failed to initialize test player" << std::endl;
+        return;
+    }
+    
+    std::cout << "TestsComponent: Test player initialized successfully" << std::endl;
+    
+    // Create and show the plugin editor window
+    auto* editorWindow = new juce::DocumentWindow("Plugin Chain Editor - " + testPlayer->getName(),
+                                                 juce::Colours::lightgrey,
+                                                 juce::DocumentWindow::allButtons);
+    
+    std::cout << "TestsComponent: Creating TracktionPlayerEditor..." << std::endl;
+    auto* editor = new TracktionPlayerEditor();
+    editor->setPlayer(testPlayer.release()); // Transfer ownership to editor
+    editor->setSize(600, 500);
+    
+    std::cout << "TestsComponent: TracktionPlayerEditor created, setting up window..." << std::endl;
+    
+    editorWindow->setContentOwned(editor, true);
+    editorWindow->setResizable(true, false);
+    editorWindow->setUsingNativeTitleBar(true);
+    editorWindow->setVisible(true);
+    
+    // Note: In a real application, you'd want to manage the window lifecycle properly
+    // For this demo, the window will be self-managing
+    
+    audioStatusLabel.setText("Plugin Chain Editor opened", juce::dontSendNotification);
+    std::cout << "TestsComponent: Plugin Chain Editor window opened successfully" << std::endl;
 }
 
 } // namespace covertracks

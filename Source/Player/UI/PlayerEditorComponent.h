@@ -5,6 +5,8 @@
 #include "../../UI/GraphEditorPanel.h"
 #include "../../Plugins/InternalPlugins.h"
 #include "../Core/Player.h"
+#include "../Core/TracktionPlayer.h"
+#include "PluginChainEditor.h"
 
 namespace covertracks {
 
@@ -91,8 +93,14 @@ Label soundMappingLabel;
 TextEditor soundMappingEditor;
 TextButton addPresetButton;
 
-// Graph editor
+// Graph editor (old system)
 std::unique_ptr<GraphDocumentComponent> graphEditor;
+
+// New TracktionPlayer system
+std::unique_ptr<TracktionPlayer> tracktionPlayer;
+std::unique_ptr<PluginChainEditor> pluginChainEditor;
+juce::MidiKeyboardState keyboardState;
+std::unique_ptr<juce::MidiKeyboardComponent> midiKeyboard;
 
 // Listeners
 ListenerList<Listener> listeners;
@@ -115,6 +123,8 @@ void timerCallback() override;
 
 // MIDI keyboard support
 void connectMidiKeyboardToGraph();
+void setupNewTracktionPlayerSystem();
+void switchToPluginChainEditor();
 
 // MidiInputCallback implementation
 void handleIncomingMidiMessage(MidiInput* source, const MidiMessage& message) override;

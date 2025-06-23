@@ -84,6 +84,21 @@ public:
     void clearPlugins();
     
     /**
+     * @brief Remove a plugin at specified index from this instrument's Track
+     * @param index Index of plugin to remove (0-based)
+     * @return true if plugin removed successfully
+     */
+    bool removePlugin(int index);
+    
+    /**
+     * @brief Move a plugin from one position to another in this instrument's Track
+     * @param fromIndex Current position of plugin (0-based)
+     * @param toIndex Target position of plugin (0-based)
+     * @return true if plugin moved successfully
+     */
+    bool movePlugin(int fromIndex, int toIndex);
+    
+    /**
      * @brief Get number of plugins on this instrument's Track
      * @return Plugin count
      */
@@ -94,6 +109,20 @@ public:
      * @return Array of plugin names
      */
     juce::StringArray getPluginNames() const;
+    
+    /**
+     * @brief Get plugin instance by index
+     * @param index Index of plugin to get (0-based)
+     * @return Pointer to plugin, or nullptr if index invalid
+     */
+    te::Plugin* getPlugin(int index) const;
+    
+    /**
+     * @brief Get JUCE AudioProcessor by index (for external plugins)
+     * @param index Index of plugin to get (0-based) 
+     * @return Pointer to AudioProcessor, or nullptr if not a JUCE plugin
+     */
+    juce::AudioProcessor* getJucePlugin(int index) const;
     
     // =========================================================================
     // MIDI Chart Playback (Complete Audio Control)
@@ -147,6 +176,7 @@ public:
      * @param callback Function to call on completion
      */
     void setPlaybackFinishedCallback(std::function<void()> callback);
+    
     
     // =========================================================================
     // MIDI Input Handling

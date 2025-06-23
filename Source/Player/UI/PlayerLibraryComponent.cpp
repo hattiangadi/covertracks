@@ -40,7 +40,7 @@ void PlayerLibraryComponent::paint(Graphics& g)
     g.fillAll(getLookAndFeel().findColour(ResizableWindow::backgroundColourId));
 }
 
-void PlayerLibraryComponent::playerSelected(Player* player)
+void PlayerLibraryComponent::playerSelected(Player* /*player*/)
 {
     // Handle player selection
 }
@@ -132,7 +132,7 @@ void PlayerLibraryComponent::playerEditorSaveRequested(PlayerEditorComponent* ed
     hidePlayerEditor();
 }
 
-void PlayerLibraryComponent::playerEditorCancelRequested(PlayerEditorComponent* editor)
+void PlayerLibraryComponent::playerEditorCancelRequested(PlayerEditorComponent* /*editor*/)
 {
     hidePlayerEditor();
 }

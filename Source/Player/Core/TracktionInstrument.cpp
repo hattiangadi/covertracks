@@ -92,6 +92,14 @@ bool TracktionInstrument::registerWithAudioEngine()
         std::cerr << "Error adding synthesizer to " << instrumentName << ": " << e.what() << std::endl;
     }
     
+    // Ensure the Edit transport is in a state that allows audio processing
+    auto& transport = currentEdit->getTransport();
+    if (!transport.isPlaying())
+    {
+        std::cout << "Starting Tracktion Edit transport for real-time audio processing..." << std::endl;
+        transport.play(false);  // Start playing (false = don't punch record)
+    }
+    
     DBG("TracktionInstrument " << instrumentName << " registered with Track: " << myTrack->getName());
     return true;
 }
@@ -136,21 +144,69 @@ bool TracktionInstrument::addPlugin(const juce::PluginDescription& pluginDesc)
         return false;
     }
     
-    // Create plugin using Tracktion's plugin cache
-    // Use the plugin format name and description
-    auto plugin = currentEdit->getPluginCache().createNewPlugin(pluginDesc.pluginFormatName, pluginDesc);
-    if (!plugin)
-    {
-        std::cerr << "Failed to create plugin: " << pluginDesc.name << std::endl;
-        return false;
-    }
+    std::cout << "TracktionInstrument: Adding plugin " << pluginDesc.name 
+              << " (format: " << pluginDesc.pluginFormatName << ")" << std::endl;
     
-    // Add plugin to this instrument's track
-    if (auto* audioTrack = dynamic_cast<te::AudioTrack*>(myTrack))
+    // Use different approaches for built-in vs external plugins
+    if (pluginDesc.pluginFormatName == te::PluginManager::builtInPluginFormatName)
     {
-        audioTrack->pluginList.insertPlugin(plugin, -1, nullptr);
-        DBG("Added plugin " << pluginDesc.name << " to " << instrumentName);
-        return true;
+        // Built-in Tracktion plugin - use standard approach
+        std::cout << "TracktionInstrument: Built-in plugin - using category: " << pluginDesc.category << std::endl;
+        
+        auto plugin = currentEdit->getPluginCache().createNewPlugin(pluginDesc.category, pluginDesc);
+        if (!plugin)
+        {
+            std::cerr << "Failed to create built-in plugin: " << pluginDesc.name << std::endl;
+            return false;
+        }
+        
+        // Add plugin to track
+        if (auto* audioTrack = dynamic_cast<te::AudioTrack*>(myTrack))
+        {
+            audioTrack->pluginList.insertPlugin(plugin, -1, nullptr);
+            DBG("Added built-in plugin " << pluginDesc.name << " to " << instrumentName);
+            return true;
+        }
+    }
+    else
+    {
+        // External plugin - use standard Tracktion approach but with proper xmlTypeName
+        std::cout << "TracktionInstrument: External plugin - using ExternalPlugin xmlTypeName" << std::endl;
+        std::cout << "TracktionInstrument: Plugin details - name: " << pluginDesc.name 
+                  << ", format: " << pluginDesc.pluginFormatName 
+                  << ", file: " << pluginDesc.fileOrIdentifier << std::endl;
+        
+        // Create external plugin using proper Tracktion approach
+        auto plugin = currentEdit->getPluginCache().createNewPlugin(te::ExternalPlugin::xmlTypeName, pluginDesc);
+        if (!plugin)
+        {
+            std::cerr << "Failed to create external plugin: " << pluginDesc.name << std::endl;
+            return false;
+        }
+        
+        std::cout << "TracktionInstrument: Successfully created external plugin: " << plugin->getName() << std::endl;
+        
+        // Add to track
+        if (auto* audioTrack = dynamic_cast<te::AudioTrack*>(myTrack))
+        {
+            audioTrack->pluginList.insertPlugin(plugin, -1, nullptr);
+            
+            // Check if this is an ExternalPlugin and verify AudioPluginInstance access
+            if (auto* externalPlugin = dynamic_cast<te::ExternalPlugin*>(plugin.get()))
+            {
+                auto* audioPluginInstance = externalPlugin->getAudioPluginInstance();
+                std::cout << "TracktionInstrument: ExternalPlugin AudioPluginInstance: " 
+                          << (audioPluginInstance ? audioPluginInstance->getName() : "none") << std::endl;
+            }
+            
+            std::cout << "TracktionInstrument: Added external plugin to track successfully" << std::endl;
+            return true;
+        }
+        else
+        {
+            std::cerr << "TracktionInstrument: Track is not an AudioTrack" << std::endl;
+            return false;
+        }
     }
     
     std::cerr << "Track is not an AudioTrack - cannot add plugins" << std::endl;
@@ -169,14 +225,98 @@ void TracktionInstrument::clearPlugins()
     }
 }
 
-int TracktionInstrument::getPluginCount() const
+bool TracktionInstrument::removePlugin(int index)
 {
     if (myTrack == nullptr)
-        return 0;
-        
+    {
+        std::cerr << "Cannot remove plugin: instrument not registered with audio engine" << std::endl;
+        return false;
+    }
+    
     if (auto* audioTrack = dynamic_cast<te::AudioTrack*>(myTrack))
     {
-        return audioTrack->pluginList.size();
+        if (index >= 0 && index < audioTrack->pluginList.size())
+        {
+            auto* plugin = audioTrack->pluginList[index];
+            juce::String pluginName = plugin ? plugin->getName() : "Unknown";
+            
+            // Use Tracktion's proper plugin removal API
+            plugin->deleteFromParent();
+            DBG("Removed plugin " << pluginName << " at index " << index << " from " << instrumentName);
+            return true;
+        }
+        else
+        {
+            std::cerr << "Invalid plugin index: " << index << " (track has " 
+                      << audioTrack->pluginList.size() << " plugins)" << std::endl;
+            return false;
+        }
+    }
+    
+    std::cerr << "Track is not an AudioTrack - cannot remove plugins" << std::endl;
+    return false;
+}
+
+bool TracktionInstrument::movePlugin(int fromIndex, int toIndex)
+{
+    if (myTrack == nullptr)
+    {
+        std::cerr << "Cannot move plugin: instrument not registered with audio engine" << std::endl;
+        return false;
+    }
+    
+    if (auto* audioTrack = dynamic_cast<te::AudioTrack*>(myTrack))
+    {
+        int pluginCount = audioTrack->pluginList.size();
+        
+        // Validate indices
+        if (fromIndex < 0 || fromIndex >= pluginCount)
+        {
+            std::cerr << "Invalid source index: " << fromIndex << " (track has " << pluginCount << " plugins)" << std::endl;
+            return false;
+        }
+        
+        if (toIndex < 0 || toIndex >= pluginCount)
+        {
+            std::cerr << "Invalid destination index: " << toIndex << " (track has " << pluginCount << " plugins)" << std::endl;
+            return false;
+        }
+        
+        if (fromIndex == toIndex)
+        {
+            return true; // Nothing to do
+        }
+        
+        // Get the plugin to move
+        auto* plugin = audioTrack->pluginList[fromIndex];
+        if (!plugin)
+        {
+            std::cerr << "Plugin at index " << fromIndex << " is null" << std::endl;
+            return false;
+        }
+        
+        juce::String pluginName = plugin->getName();
+        
+        // Use Tracktion's proper plugin move API - remove from parent, then re-insert
+        plugin->removeFromParent(); // Don't delete the plugin, just remove from list
+        audioTrack->pluginList.insertPlugin(plugin, toIndex, nullptr);
+        
+        DBG("Moved plugin " << pluginName << " from index " << fromIndex << " to " << toIndex << " in " << instrumentName);
+        return true;
+    }
+    
+    std::cerr << "Track is not an AudioTrack - cannot move plugins" << std::endl;
+    return false;
+}
+
+int TracktionInstrument::getPluginCount() const
+{
+    if (myTrack != nullptr)
+    {
+        if (auto* audioTrack = dynamic_cast<te::AudioTrack*>(myTrack))
+        {
+            return audioTrack->pluginList.size();
+        }
     }
     
     return 0;
@@ -186,19 +326,55 @@ juce::StringArray TracktionInstrument::getPluginNames() const
 {
     juce::StringArray names;
     
-    if (myTrack == nullptr)
-        return names;
-        
-    if (auto* audioTrack = dynamic_cast<te::AudioTrack*>(myTrack))
+    if (myTrack != nullptr)
     {
-        for (auto* plugin : audioTrack->pluginList)
+        if (auto* audioTrack = dynamic_cast<te::AudioTrack*>(myTrack))
         {
-            if (plugin)
-                names.add(plugin->getName());
+            for (auto* plugin : audioTrack->pluginList)
+            {
+                if (plugin)
+                    names.add(plugin->getName());
+            }
         }
     }
     
     return names;
+}
+
+te::Plugin* TracktionInstrument::getPlugin(int index) const
+{
+    if (myTrack == nullptr)
+        return nullptr;
+        
+    if (auto* audioTrack = dynamic_cast<te::AudioTrack*>(myTrack))
+    {
+        // Check if index is within Tracktion plugins range
+        if (index >= 0 && index < audioTrack->pluginList.size())
+        {
+            return audioTrack->pluginList[index];
+        }
+    }
+    
+    // Index might be for a JUCE plugin - those don't have te::Plugin* interface
+    return nullptr;
+}
+
+juce::AudioProcessor* TracktionInstrument::getJucePlugin(int index) const
+{
+    // Get the Tracktion plugin and check if it has an AudioPluginInstance
+    if (auto* tracktionPlugin = getPlugin(index))
+    {
+        // For external plugins, use getAudioPluginInstance() (the proper method)
+        if (auto* externalPlugin = dynamic_cast<te::ExternalPlugin*>(tracktionPlugin))
+        {
+            return externalPlugin->getAudioPluginInstance();
+        }
+        
+        // For other plugins, try the wrapped processor method
+        return tracktionPlugin->getWrappedAudioProcessor();
+    }
+    
+    return nullptr;
 }
 
 // =========================================================================
@@ -305,6 +481,7 @@ void TracktionInstrument::setPlaybackFinishedCallback(std::function<void()> call
 {
     onPlaybackFinished = callback;
 }
+
 
 // =========================================================================
 // MIDI Input Handling
@@ -420,6 +597,7 @@ void TracktionInstrument::timerCallback()
     {
         static int finishCounter = 0;
         finishCounter = 0; // Reset counter if still playing
+        (void)finishCounter; // Suppress unused variable warning
     }
 }
 

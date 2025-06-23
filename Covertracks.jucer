@@ -42,8 +42,6 @@
               file="Source/Tests/PatternGeneratorTests.cpp"/>
         <FILE id="N8oly3" name="PatternParserTests.cpp" compile="1" resource="0"
               file="Source/Tests/PatternParserTests.cpp"/>
-        <FILE id="TestRunner" name="TestRunner.cpp" compile="1" resource="0"
-              file="Source/Tests/TestRunner.cpp"/>
         <FILE id="TestRunnerH" name="TestRunner.h" compile="0" resource="0"
               file="Source/Tests/TestRunner.h"/>
         <FILE id="TracktionIntegrationTests" name="TracktionIntegrationTests.cpp"
@@ -255,6 +253,14 @@
                 file="Source/Player/UI/PlayerModeComponent.cpp"/>
           <FILE id="bAt8iK" name="PlayerModeComponent.h" compile="0" resource="0"
                 file="Source/Player/UI/PlayerModeComponent.h"/>
+          <FILE id="PluginChainEditor" name="PluginChainEditor.cpp" compile="1" resource="0"
+                file="Source/Player/UI/PluginChainEditor.cpp"/>
+          <FILE id="PluginChainEditorH" name="PluginChainEditor.h" compile="0" resource="0"
+                file="Source/Player/UI/PluginChainEditor.h"/>
+          <FILE id="TracktionPlayerEditor" name="TracktionPlayerEditor.cpp" compile="1" resource="0"
+                file="Source/Player/UI/TracktionPlayerEditor.cpp"/>
+          <FILE id="TracktionPlayerEditorH" name="TracktionPlayerEditor.h" compile="0" resource="0"
+                file="Source/Player/UI/TracktionPlayerEditor.h"/>
         </GROUP>
       </GROUP>
       <FILE id="OmIhwQ" name="HostStartup.cpp" compile="1" resource="0" file="Source/HostStartup.cpp"/>

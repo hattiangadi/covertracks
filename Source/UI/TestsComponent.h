@@ -36,6 +36,7 @@ private:
     juce::TextButton sineWaveButton;
     juce::TextButton twoTonesButton;
     juce::TextButton stopAudioButton;
+    juce::TextButton pluginEditorButton;
     juce::Label audioStatusLabel;
     
     // Test methods
@@ -45,6 +46,7 @@ private:
     void generateSineWave(float frequency, float duration);
     void generateTwoTones();
     void stopAllAudio();
+    void showPluginEditor();
     void updateAudioStatus(const juce::String& message);
     
     // New architecture components
