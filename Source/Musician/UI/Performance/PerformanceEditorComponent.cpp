@@ -1419,7 +1419,7 @@ void PerformanceEditorComponent::stopAllPlayers()
         currentPerformance->setStatusMessage(role.getName(), "Stopped");
     }
     
-    statusDisplay.setText("✅ All playback stopped!");
+    statusDisplay.setText("All playback stopped!");
     
     // Update the player table to reflect new status
     if (playerTable)
