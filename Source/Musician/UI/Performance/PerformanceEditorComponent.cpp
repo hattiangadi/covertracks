@@ -1165,30 +1165,92 @@ void PerformanceEditorComponent::loadAllCharts()
     
     statusDisplay.setText("Loading all charts...");
     
-    int loaded = 0;
-    int total = ensemble.size();
-    
-    for (int i = 0; i < ensemble.size(); ++i)
+    // Ensure EnsembleManager is created and populated (same as playAllPlayers)
+    if (!ensembleManager)
     {
-        const auto role = ensemble[i];
+        ensembleManager = std::make_unique<EnsembleManager>(playerManager);
         
-        // Check if chart is generated
-        auto chart = currentPerformance->getGeneratedChart(role.getName());
-        if (!chart.isVoid())
+        // Add TracktionPlayer roles from current ensemble
+        for (const auto& role : ensemble)
         {
-            // Load the chart for this player
-            loadChartForPlayer(i);
-            
-            // Check if it loaded successfully
-            String status = currentPerformance->getStatusMessage(role.getName());
-            if (status == "Chart Loaded")
+            if (role.player)
             {
-                loaded++;
+                // Create TracktionPlayer from Player for synchronized audio
+                auto tracktionPlayer = createTracktionPlayerFromPlayer(role.player);
+                if (tracktionPlayer)
+                {
+                    ensembleManager->addMusicianRole(role.getName(), role.getInstrumentName(), tracktionPlayer.release());
+                    DBG("Added TracktionPlayer role for loading: " << role.getName());
+                }
             }
         }
     }
     
-    statusDisplay.setText("Loaded " + String(loaded) + " of " + String(total) + " charts");
+    // Load prepped MIDI charts into EnsembleManager's TracktionPlayers
+    int loaded = 0;
+    int total = ensemble.size();
+    auto roles = ensembleManager->getMusicianRoles();
+    
+    for (auto& ensembleRole : roles)
+    {
+        for (const auto& perfRole : ensemble)
+        {
+            if (ensembleRole.name == perfRole.getName())
+            {
+                // Get the prepped MIDI chart (same logic as playAllPlayers)
+                var chart = currentPerformance->getMIDIChart(perfRole.getName());
+                if (chart.isVoid())
+                {
+                    chart = currentPerformance->getGeneratedChart(perfRole.getName());
+                }
+                
+                if (!chart.isVoid() && ensembleRole.tracktionPlayer)
+                {
+                    // Initialize TracktionPlayer
+                    if (!ensembleRole.tracktionPlayer->initialize())
+                    {
+                        DBG("Failed to initialize TracktionPlayer for role: " << perfRole.getName());
+                        currentPerformance->setStatusMessage(perfRole.getName(), "Init Failed");
+                        continue;
+                    }
+                    
+                    // Extract MIDI events from chart (same as individual playback)
+                    juce::var midiEvents;
+                    if (chart.isObject() && chart.hasProperty("events"))
+                    {
+                        midiEvents = chart["events"];
+                        DBG("Extracted " << (midiEvents.isArray() ? midiEvents.getArray()->size() : 0) << " MIDI events for ensemble role: " << perfRole.getName());
+                    }
+                    else
+                    {
+                        midiEvents = chart;
+                        DBG("Using chart directly as MIDI events for ensemble role: " << perfRole.getName());
+                    }
+                    
+                    // Pre-load chart for synchronized playback
+                    if (ensembleRole.tracktionPlayer->loadChart(midiEvents, 120.0))
+                    {
+                        loaded++;
+                        currentPerformance->setStatusMessage(perfRole.getName(), "Chart Loaded (Ensemble)");
+                        DBG("✅ Pre-loaded MIDI chart for ensemble role: " << perfRole.getName());
+                    }
+                    else
+                    {
+                        currentPerformance->setStatusMessage(perfRole.getName(), "Load Failed (Ensemble)");
+                        DBG("❌ Failed to load MIDI chart for ensemble role: " << perfRole.getName());
+                    }
+                }
+                else
+                {
+                    currentPerformance->setStatusMessage(perfRole.getName(), "No Chart/Player");
+                    DBG("No MIDI chart or TracktionPlayer for ensemble role: " << perfRole.getName());
+                }
+                break;
+            }
+        }
+    }
+    
+    statusDisplay.setText("Loaded " + String(loaded) + " of " + String(total) + " charts for ensemble");
     
     // Update the player table to reflect new status
     if (playerTable)
@@ -1238,7 +1300,7 @@ void PerformanceEditorComponent::playAllPlayers()
             }
         }
         
-        // Set patterns from current performance
+        // Load prepped MIDI charts into TracktionPlayers (Load→Play separation for ensemble)
         auto roles = ensembleManager->getMusicianRoles();
         for (auto& ensembleRole : roles)
         {
@@ -1246,16 +1308,46 @@ void PerformanceEditorComponent::playAllPlayers()
             {
                 if (ensembleRole.name == perfRole.getName())
                 {
-                    // Get the actual LLM pattern from performance
-                    String llmPattern = currentPerformance->getLLMPattern(perfRole.getName());
-                    if (llmPattern.isNotEmpty())
+                    // Get the prepped MIDI chart (instead of LLM pattern)
+                    var chart = currentPerformance->getMIDIChart(perfRole.getName());
+                    if (chart.isVoid())
                     {
-                        ensembleRole.pattern = llmPattern;
-                        DBG("Set LLM pattern for role: " << perfRole.getName() << " (length: " << llmPattern.length() << " chars)");
+                        chart = currentPerformance->getGeneratedChart(perfRole.getName());
+                    }
+                    
+                    if (!chart.isVoid() && ensembleRole.tracktionPlayer)
+                    {
+                        // Initialize TracktionPlayer
+                        if (!ensembleRole.tracktionPlayer->initialize())
+                        {
+                            DBG("Failed to initialize TracktionPlayer for role: " << perfRole.getName());
+                            continue;
+                        }
+                        
+                        // Extract MIDI events from chart (same as individual playback)
+                        juce::var midiEvents;
+                        if (chart.isObject() && chart.hasProperty("events"))
+                        {
+                            midiEvents = chart["events"];
+                        }
+                        else
+                        {
+                            midiEvents = chart;
+                        }
+                        
+                        // Pre-load chart for synchronized playback
+                        if (ensembleRole.tracktionPlayer->loadChart(midiEvents, 120.0))
+                        {
+                            DBG("✅ Pre-loaded MIDI chart for ensemble role: " << perfRole.getName());
+                        }
+                        else
+                        {
+                            DBG("❌ Failed to load MIDI chart for ensemble role: " << perfRole.getName());
+                        }
                     }
                     else
                     {
-                        DBG("No LLM pattern found for role: " << perfRole.getName());
+                        DBG("No MIDI chart or TracktionPlayer for role: " << perfRole.getName());
                     }
                     break;
                 }
@@ -1266,7 +1358,7 @@ void PerformanceEditorComponent::playAllPlayers()
     // Use EnsembleManager for synchronized playback (eliminates clicking issues)
     if (ensembleManager->playPatterns())
     {
-        statusDisplay.setText("✅ Synchronized ensemble playback started!");
+        statusDisplay.setText("Synchronized ensemble playback started!");
         
         // Update all role statuses
         for (const auto& role : ensemble)
@@ -1276,7 +1368,7 @@ void PerformanceEditorComponent::playAllPlayers()
     }
     else
     {
-        statusDisplay.setText("❌ Failed to start synchronized playback");
+        statusDisplay.setText("Failed to start synchronized playback");
         
         // Update status for failed roles
         for (const auto& role : ensemble)
