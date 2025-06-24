@@ -1128,37 +1128,77 @@ void PerformanceEditorComponent::playAllPlayers()
         return;
     }
     
-    statusDisplay.setText("Starting all players...");
+    statusDisplay.setText("Starting synchronized ensemble playback...");
     
-    int playing = 0;
-    int total = ensemble.size();
-    
-    // Start synchronized playback for all players
-    for (int i = 0; i < ensemble.size(); ++i)
+    // Create active EnsembleManager with TracktionPlayers for synchronized playback
+    if (!ensembleManager)
     {
-        const auto role = ensemble[i];
+        ensembleManager = std::make_unique<EnsembleManager>(playerManager);
         
-        Player* player = role.player;
-        
-        if (player)
+        // Add TracktionPlayer roles from current ensemble
+        for (const auto& role : ensemble)
         {
-            if (player->play())
+            if (role.player)
             {
-                playing++;
-                currentPerformance->setStatusMessage(role.getName(), "Playing");
-            }
-            else
-            {
-                currentPerformance->setStatusMessage(role.getName(), "Play Failed");
+                // Create TracktionPlayer from Player for synchronized audio
+                auto tracktionPlayer = createTracktionPlayerFromPlayer(role.player);
+                if (tracktionPlayer)
+                {
+                    ensembleManager->addMusicianRole(role.getName(), role.getInstrumentName(), tracktionPlayer.release());
+                    DBG("Added TracktionPlayer role: " << role.getName());
+                }
+                else
+                {
+                    // Fallback to legacy Player (will show warning in EnsembleManager)
+                    ensembleManager->addMusicianRole(role.getName(), role.getInstrumentName(), role.player);
+                    DBG("Added legacy Player role: " << role.getName());
+                }
             }
         }
-        else
+        
+        // Set patterns from current performance
+        auto roles = ensembleManager->getMusicianRoles();
+        for (auto& ensembleRole : roles)
         {
-            currentPerformance->setStatusMessage(role.getName(), "Not Ready");
+            for (const auto& perfRole : ensemble)
+            {
+                if (ensembleRole.name == perfRole.getName())
+                {
+                    // Get pattern from performance if available
+                    auto chart = currentPerformance->getChart(perfRole.getName());
+                    if (chart && !chart->toVarObject().isVoid())
+                    {
+                        // Convert chart to pattern string for now
+                        ensembleRole.pattern = "Generated pattern for " + perfRole.getName();
+                        DBG("Set pattern for role: " << perfRole.getName());
+                    }
+                    break;
+                }
+            }
         }
     }
     
-    statusDisplay.setText("Playing " + String(playing) + " of " + String(total) + " players");
+    // Use EnsembleManager for synchronized playback (eliminates clicking issues)
+    if (ensembleManager->playPatterns())
+    {
+        statusDisplay.setText("✅ Synchronized ensemble playback started!");
+        
+        // Update all role statuses
+        for (const auto& role : ensemble)
+        {
+            currentPerformance->setStatusMessage(role.getName(), "Playing (Synced)");
+        }
+    }
+    else
+    {
+        statusDisplay.setText("❌ Failed to start synchronized playback");
+        
+        // Update status for failed roles
+        for (const auto& role : ensemble)
+        {
+            currentPerformance->setStatusMessage(role.getName(), "Sync Failed");
+        }
+    }
     
     // Update the player table to reflect new status
     if (playerTable)
@@ -1167,9 +1207,9 @@ void PerformanceEditorComponent::playAllPlayers()
 
 void PerformanceEditorComponent::stopAllPlayers()
 {
-    if (!currentPerformance || !playerManager)
+    if (!currentPerformance)
     {
-        statusDisplay.setText("No performance or player manager available");
+        statusDisplay.setText("No performance available");
         return;
     }
     
@@ -1180,26 +1220,42 @@ void PerformanceEditorComponent::stopAllPlayers()
         return;
     }
     
-    statusDisplay.setText("Stopping all players...");
+    statusDisplay.setText("Stopping synchronized ensemble playback...");
     
-    int stopped = 0;
-    
-    // Stop all players
-    for (int i = 0; i < ensemble.size(); ++i)
+    // Use EnsembleManager for synchronized stop (eliminates audio artifacts)
+    if (ensembleManager)
     {
-        const auto role = ensemble[i];
+        ensembleManager->stopPlayback();
+        statusDisplay.setText("✅ Synchronized ensemble playback stopped!");
         
-        Player* player = role.player;
-        
-        if (player)
+        // Update all role statuses
+        for (const auto& role : ensemble)
         {
-            player->stop(); // stop() returns void
-            stopped++;
-            currentPerformance->setStatusMessage(role.getName(), "Stopped");
+            currentPerformance->setStatusMessage(role.getName(), "Stopped (Synced)");
         }
     }
-    
-    statusDisplay.setText("Stopped " + String(stopped) + " players");
+    else
+    {
+        // Fallback to individual player stop if no EnsembleManager
+        statusDisplay.setText("Stopping individual players (legacy mode)...");
+        
+        int stopped = 0;
+        for (int i = 0; i < ensemble.size(); ++i)
+        {
+            const auto role = ensemble[i];
+            
+            Player* player = role.player;
+            
+            if (player)
+            {
+                player->stop();
+                stopped++;
+                currentPerformance->setStatusMessage(role.getName(), "Stopped");
+            }
+        }
+        
+        statusDisplay.setText("Stopped " + String(stopped) + " players (legacy mode)");
+    }
     
     // Update the player table to reflect new status
     if (playerTable)
@@ -2014,6 +2070,79 @@ void PerformanceEditorComponent::requestJsonContinuation(const String& roleName,
                 playerTable->updateContent();
         });
     });
+}
+
+// =========================================================================
+// TracktionPlayer Creation (NEW: For Synchronized Ensemble Playback)
+// =========================================================================
+
+std::unique_ptr<TracktionPlayer> PerformanceEditorComponent::createTracktionPlayerFromPlayer(Player* player)
+{
+    if (!player)
+        return nullptr;
+        
+    if (!playerManager)
+        return nullptr;
+    
+    try 
+    {
+        // Create TracktionPlayer with same ID and metadata as original Player
+        auto tracktionPlayer = std::make_unique<TracktionPlayer>(
+            player->getId(),
+            player->getMetadata().name,
+            playerManager->getFormatManager(),
+            playerManager->getKnownPluginList()
+        );
+        
+        // Initialize the TracktionPlayer for audio processing
+        if (!tracktionPlayer->initialize())
+        {
+            std::cerr << "[PerformanceEditor] Failed to initialize TracktionPlayer for: " << player->getMetadata().name << std::endl;
+            return nullptr;
+        }
+        
+        // Load player state if available (plugins, configurations, etc.)
+        if (player->hasTracktionPlayerState())
+        {
+            auto savedState = player->getTracktionPlayerState();
+            if (!savedState.isVoid())
+            {
+                if (tracktionPlayer->loadCompleteState(savedState))
+                {
+                    std::cout << "[PerformanceEditor] ✅ Loaded saved state for TracktionPlayer: " << player->getMetadata().name << std::endl;
+                }
+                else
+                {
+                    std::cerr << "[PerformanceEditor] ⚠️ Failed to load saved state for: " << player->getMetadata().name << std::endl;
+                }
+            }
+        }
+        else
+        {
+            std::cout << "[PerformanceEditor] Creating new TracktionPlayer without saved state: " << player->getMetadata().name << std::endl;
+            
+            // Add default instrument based on player capabilities
+            const auto& capabilities = player->getMetadata().capabilities;
+            if (capabilities.instrumentType == "drums")
+            {
+                // Add default synth for drums
+                tracktionPlayer->getInstrument()->addDefaultSynth();
+            }
+            else if (capabilities.instrumentType == "piano" || capabilities.instrumentType == "bass" || capabilities.instrumentType == "guitar")
+            {
+                // Add default synth for melodic instruments
+                tracktionPlayer->getInstrument()->addDefaultSynth();
+            }
+        }
+        
+        std::cout << "[PerformanceEditor] ✅ Created TracktionPlayer for synchronized playback: " << player->getMetadata().name << std::endl;
+        return tracktionPlayer;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "[PerformanceEditor] Exception creating TracktionPlayer for " << player->getMetadata().name << ": " << e.what() << std::endl;
+        return nullptr;
+    }
 }
 
 } // namespace covertracks

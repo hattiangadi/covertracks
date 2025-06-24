@@ -7,6 +7,7 @@
 #include "../../Core/EnsembleManager.h"
 #include "../../Core/Song.h"
 #include "../../../Player/Core/PlayerManager.h"
+#include "../../../Player/Core/TracktionPlayer.h"
 #include "../../../LLM/Core/LLMClient.h"
 #include "../PatternEditorComponent.h"
 
@@ -216,6 +217,9 @@ private:
     
     // JSON continuation handling
     void requestJsonContinuation(const String& roleName, const String& incompleteJson);
+    
+    // TracktionPlayer creation
+    std::unique_ptr<TracktionPlayer> createTracktionPlayerFromPlayer(Player* player);
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PerformanceEditorComponent)
 };

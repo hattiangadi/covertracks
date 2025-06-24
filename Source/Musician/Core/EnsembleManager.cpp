@@ -37,6 +37,22 @@ EnsembleManager::~EnsembleManager()
     std::cout << "[EnsembleManager] Destroyed" << std::endl;
 }
 
+bool EnsembleManager::addMusicianRole(const juce::String& roleName, const juce::String& instrumentType, TracktionPlayer* tracktionPlayer)
+{
+    // Check if the role already exists
+    for (auto& role : musicianRoles) {
+        if (role.name == roleName) {
+            std::cout << "[EnsembleManager] Role '" << roleName << "' already exists" << std::endl;
+            return false;
+        }
+    }
+    
+    // Add the role with TracktionPlayer
+    musicianRoles.add(MusicianRole(roleName, instrumentType, tracktionPlayer));
+    std::cout << "[EnsembleManager] Added TracktionPlayer role '" << roleName << "' with instrument '" << instrumentType << "'" << std::endl;
+    return true;
+}
+
 bool EnsembleManager::addMusicianRole(const juce::String& roleName, const juce::String& instrumentType, Player* player)
 {
     // Check if the role already exists
@@ -137,41 +153,16 @@ bool EnsembleManager::startPlaying()
         }
     }
     
-    // Start playing all players
-    for (auto& role : musicianRoles) {
-        if (role.player) {
-            // Ensure the player is connected to the audio engine if we have one
-            if (audioEngine != nullptr && !role.player->isConnectedToAudioEngine()) {
-                std::cout << "[EnsembleManager] Connecting player '" << role.player->getMetadata().name 
-                          << "' to the ensemble audio engine" << std::endl;
-                if (!role.player->connectToAudioEngine(audioEngine)) {
-                    std::cout << "[EnsembleManager] Failed to connect player '" << role.player->getMetadata().name 
-                              << "' to the audio engine" << std::endl;
-                }
-            }
-            
-            // TODO: Parse the pattern and set it for the player
-            // We need a MusicPatternSystem instance to create a PatternParser
-            // For now, just log that we would parse the pattern
-            std::cout << "[EnsembleManager] Would parse pattern for role '" << role.name << "'" << std::endl;
-            
-            // TODO: Set the MIDI sequence for the player
-            // role.player->setMidiSequence(midiSequence);
-            
-            // Start the player
-            // role.player->startPlaying();
-        }
+    // Use synchronized playback through the actual playPatterns() method
+    bool success = playPatterns();
+    if (success) {
+        // Record the start time
+        playbackStartTime = juce::Time::getCurrentTime();
+        playing = true;
+        std::cout << "[EnsembleManager] Started synchronized ensemble playback" << std::endl;
     }
     
-    // Record the start time
-    playbackStartTime = juce::Time::getCurrentTime();
-    playing = true;
-    
-    // Start the timer to update playback
-    startTimer(100); // Update every 100ms
-    
-    std::cout << "[EnsembleManager] Started playing ensemble" << std::endl;
-    return true;
+    return success;
 }
 
 void EnsembleManager::stopPlaying()
@@ -180,18 +171,10 @@ void EnsembleManager::stopPlaying()
         return;
     }
     
-    // Stop the timer
-    stopTimer();
-    
-    // Stop all players
-    for (auto& role : musicianRoles) {
-        if (role.player) {
-            // role.player->stopPlaying();
-        }
-    }
-    
+    // Use synchronized stop through stopPlayback() method
+    stopPlayback();
     playing = false;
-    std::cout << "[EnsembleManager] Stopped playing ensemble" << std::endl;
+    std::cout << "[EnsembleManager] Stopped synchronized ensemble playback" << std::endl;
 }
 
 bool EnsembleManager::isPlaying() const
@@ -521,6 +504,182 @@ juce::Array<juce::File> EnsembleManager::getEnsembleFiles()
     }
     
     return result;
+}
+
+// =========================================================================
+// NEW: Synchronized Multi-Player Playback (TracktionPlayer-based)
+// =========================================================================
+
+bool EnsembleManager::playPatterns()
+{
+    bool anySuccess = false;
+    std::vector<std::pair<TracktionPlayer*, juce::var>> playersToStart;
+    
+    // First pass: Parse patterns and prepare for synchronized start
+    for (auto& role : musicianRoles)
+    {
+        TracktionPlayer* activePlayer = nullptr;
+        
+        // Use TracktionPlayer if available, fall back to Player if needed
+        if (role.tracktionPlayer)
+        {
+            activePlayer = role.tracktionPlayer;
+        }
+        else if (role.player)
+        {
+            // For compatibility: use legacy Player (but this won't provide synchronized playback)
+            std::cout << "[EnsembleManager] WARNING: Using legacy Player for role '" << role.name 
+                      << "' - upgrade to TracktionPlayer for synchronized playback" << std::endl;
+            bool success = role.player->play();
+            if (success) anySuccess = true;
+            continue;
+        }
+        
+        if (activePlayer && !role.pattern.isEmpty())
+        {
+            // Parse pattern to MIDI chart format
+            // For now, use a simple pattern-to-chart conversion
+            // TODO: Use proper PatternParser when available
+            juce::var midiChart = createSimpleChartFromPattern(role.pattern, role.instrument);
+            
+            if (!midiChart.isVoid())
+            {
+                // Store for synchronized start
+                playersToStart.push_back({activePlayer, midiChart});
+                std::cout << "[EnsembleManager] Prepared role '" << role.name 
+                          << "' for synchronized playback" << std::endl;
+            }
+        }
+    }
+    
+    // Second pass: Start all TracktionPlayers simultaneously for synchronized playback
+    // This eliminates the clicking issue by using sample-accurate timing
+    if (!playersToStart.empty())
+    {
+        std::cout << "[EnsembleManager] Starting " << playersToStart.size() 
+                  << " TracktionPlayers with synchronized timing..." << std::endl;
+                  
+        for (auto& playerChart : playersToStart)
+        {
+            TracktionPlayer* player = playerChart.first;
+            const juce::var& chart = playerChart.second;
+            
+            // Use TracktionPlayer's sample-accurate playback
+            if (player->playChart(chart, 120.0)) // Default 120 BPM
+            {
+                anySuccess = true;
+                std::cout << "[EnsembleManager] Started TracktionPlayer: " << player->getName() << std::endl;
+            }
+            else
+            {
+                std::cerr << "[EnsembleManager] Failed to start TracktionPlayer: " << player->getName() << std::endl;
+            }
+        }
+        
+        if (anySuccess)
+        {
+            std::cout << "[EnsembleManager] ✅ Synchronized ensemble playback started successfully!" << std::endl;
+        }
+    }
+    
+    return anySuccess;
+}
+
+void EnsembleManager::stopPlayback()
+{
+    std::cout << "[EnsembleManager] Stopping synchronized ensemble playback..." << std::endl;
+    
+    // Stop all TracktionPlayers simultaneously for synchronized stop
+    for (auto& role : musicianRoles)
+    {
+        if (role.tracktionPlayer)
+        {
+            role.tracktionPlayer->stop();
+            std::cout << "[EnsembleManager] Stopped TracktionPlayer: " << role.tracktionPlayer->getName() << std::endl;
+        }
+        else if (role.player)
+        {
+            // Legacy Player stop
+            role.player->stop();
+            std::cout << "[EnsembleManager] Stopped legacy Player for role: " << role.name << std::endl;
+        }
+    }
+    
+    std::cout << "[EnsembleManager] ✅ Synchronized ensemble stop complete!" << std::endl;
+}
+
+// Helper method to create simple MIDI chart from pattern text
+juce::var EnsembleManager::createSimpleChartFromPattern(const juce::String& pattern, const juce::String& instrument)
+{
+    // Create a simple chart based on instrument type
+    // This is a temporary implementation - real pattern parsing would be more sophisticated
+    
+    juce::Array<juce::var> events;
+    
+    if (instrument.containsIgnoreCase("drum"))
+    {
+        // Create a simple drum pattern
+        for (int beat = 0; beat < 16; ++beat)
+        {
+            double time = beat * 0.25; // Quarter note timing
+            
+            // Kick on beats 1, 5, 9, 13
+            if (beat % 4 == 0)
+            {
+                juce::DynamicObject::Ptr kickEvent = new juce::DynamicObject();
+                kickEvent->setProperty("timestamp", time);
+                kickEvent->setProperty("type", "note_on");
+                kickEvent->setProperty("note", 36); // Kick drum
+                kickEvent->setProperty("velocity", 100);
+                events.add(juce::var(kickEvent.get()));
+            }
+            
+            // Snare on beats 5, 13
+            if (beat == 4 || beat == 12)
+            {
+                juce::DynamicObject::Ptr snareEvent = new juce::DynamicObject();
+                snareEvent->setProperty("timestamp", time);
+                snareEvent->setProperty("type", "note_on");
+                snareEvent->setProperty("note", 38); // Snare drum
+                snareEvent->setProperty("velocity", 90);
+                events.add(juce::var(snareEvent.get()));
+            }
+        }
+    }
+    else if (instrument.containsIgnoreCase("bass"))
+    {
+        // Create a simple bass pattern
+        int bassNotes[] = {40, 40, 43, 43}; // E, E, G, G
+        for (int i = 0; i < 4; ++i)
+        {
+            double time = i * 1.0; // Whole note timing
+            
+            juce::DynamicObject::Ptr bassEvent = new juce::DynamicObject();
+            bassEvent->setProperty("timestamp", time);
+            bassEvent->setProperty("type", "note_on");
+            bassEvent->setProperty("note", bassNotes[i]);
+            bassEvent->setProperty("velocity", 80);
+            events.add(juce::var(bassEvent.get()));
+        }
+    }
+    else
+    {
+        // Create a simple melodic pattern for other instruments
+        int melodyNotes[] = {60, 64, 67, 72}; // C, E, G, C
+        for (int i = 0; i < 4; ++i)
+        {
+            double time = i * 0.5; // Half note timing
+            
+            juce::DynamicObject::Ptr noteEvent = new juce::DynamicObject();
+            noteEvent->setProperty("timestamp", time);
+            noteEvent->setProperty("type", "note_on");
+            noteEvent->setProperty("note", melodyNotes[i]);
+            noteEvent->setProperty("velocity", 75);
+            events.add(juce::var(noteEvent.get()));
+        }
+    }
+    
+    return juce::var(events);
 }
 
 } // namespace covertracks

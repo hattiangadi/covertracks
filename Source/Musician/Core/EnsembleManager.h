@@ -3,6 +3,7 @@
 #include <JuceHeader.h>
 #include "../../Player/Core/Player.h"
 #include "../../Player/Core/PlayerManager.h"
+#include "../../Player/Core/TracktionPlayer.h"
 #include "../../LLM/Core/LLMManager.h"
 #include "../../Audio/AudioEngineInterface.h"
 #include "MusicPatternSystem.h"
@@ -13,18 +14,23 @@ namespace covertracks {
  * @brief Represents a musician role in an ensemble
  */
 struct MusicianRole {
-    juce::String name;       // e.g., "Lead Guitar", "Bass", "Drums"
-    juce::String instrument; // Instrument type
-    Player* player;          // Associated player
-    juce::String pattern;    // Generated pattern for this role
-    float level;             // Volume level for this role (0.0 to 2.0, default 1.0)
+    juce::String name;              // e.g., "Lead Guitar", "Bass", "Drums"
+    juce::String instrument;        // Instrument type
+    TracktionPlayer* tracktionPlayer; // Associated TracktionPlayer (audio-capable)
+    Player* player;                 // Legacy Player (for compatibility during transition)
+    juce::String pattern;           // Generated pattern for this role
+    float level;                    // Volume level for this role (0.0 to 2.0, default 1.0)
     
     // Default constructor required for Array<MusicianRole>
     MusicianRole()
-        : name(""), instrument(""), player(nullptr), pattern(""), level(1.0f) {}
+        : name(""), instrument(""), tracktionPlayer(nullptr), player(nullptr), pattern(""), level(1.0f) {}
     
+    MusicianRole(const juce::String& roleName, const juce::String& instrumentType, TracktionPlayer* tracktionPlayerPtr)
+        : name(roleName), instrument(instrumentType), tracktionPlayer(tracktionPlayerPtr), player(nullptr), pattern(""), level(1.0f) {}
+        
+    // Legacy constructor for compatibility
     MusicianRole(const juce::String& roleName, const juce::String& instrumentType, Player* playerPtr)
-        : name(roleName), instrument(instrumentType), player(playerPtr), pattern(""), level(1.0f) {}
+        : name(roleName), instrument(instrumentType), tracktionPlayer(nullptr), player(playerPtr), pattern(""), level(1.0f) {}
         
     // Temporary methods to support PerformanceComponent
     juce::String getName() const { return name; }
@@ -106,11 +112,22 @@ public:
     }
     
     /**
-     * @brief Add a musician role to the ensemble
+     * @brief Add a musician role to the ensemble (NEW: TracktionPlayer version)
      * 
      * @param roleName The name of the role (e.g., "Lead Guitar")
      * @param instrumentType The type of instrument
-     * @param player The player to use for this role
+     * @param tracktionPlayer The TracktionPlayer to use for this role
+     * @return true If the role was added successfully
+     * @return false If the role could not be added
+     */
+    bool addMusicianRole(const juce::String& roleName, const juce::String& instrumentType, TracktionPlayer* tracktionPlayer);
+    
+    /**
+     * @brief Add a musician role to the ensemble (LEGACY: Player version)
+     * 
+     * @param roleName The name of the role (e.g., "Lead Guitar")
+     * @param instrumentType The type of instrument
+     * @param player The legacy Player to use for this role
      * @return true If the role was added successfully
      * @return false If the role could not be added
      */
@@ -270,6 +287,15 @@ private:
      */
     void timerCallback() override;
     
+    /**
+     * @brief Helper method to create simple MIDI chart from pattern text
+     * 
+     * @param pattern The pattern text
+     * @param instrument The instrument type
+     * @return juce::var The MIDI chart
+     */
+    juce::var createSimpleChartFromPattern(const juce::String& pattern, const juce::String& instrument);
+    
     // The player manager (needed for player access)
     PlayerManager* playerManager;
     
@@ -304,54 +330,17 @@ private:
     
 public:
     /**
-     * @brief Play all patterns in the ensemble
+     * @brief Play all patterns in the ensemble (synchronized with sample-accurate timing)
      * 
      * @return true If at least one player started playing successfully
      * @return false If no players could start playing
      */
-    bool playPatterns()
-    {
-        bool anySuccess = false;
-        
-        // Start playback for all players with patterns
-        for (auto& role : musicianRoles)
-        {
-            if (role.player)
-            {
-                // Use the player's play method to start playback
-                bool success = role.player->play();
-                if (success)
-                {
-                    anySuccess = true;
-                    std::cout << "EnsembleManager::playPatterns - Started playback for role: " 
-                              << role.name << std::endl;
-                }
-            }
-        }
-        
-        playing = anySuccess;
-        return anySuccess;
-    }
+    bool playPatterns();
     
     /**
-     * @brief Stop playback of all patterns
+     * @brief Stop playback of all patterns (synchronized)
      */
-    void stopPlayback()
-    {
-        // Stop playback for all players
-        for (auto& role : musicianRoles)
-        {
-            if (role.player)
-            {
-                // Use the player's stop method to stop playback
-                role.player->stop();
-                std::cout << "EnsembleManager::stopPlayback - Stopped playback for role: " 
-                          << role.name << std::endl;
-            }
-        }
-        
-        playing = false;
-    }
+    void stopPlayback();
     
     /**
      * @brief Temporary method to parse MIDI pattern from LLM response
