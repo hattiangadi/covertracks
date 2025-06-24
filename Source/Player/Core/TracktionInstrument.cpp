@@ -920,19 +920,22 @@ std::unique_ptr<juce::MidiMessageSequence> TracktionInstrument::convertChartToMi
         if (!eventObj)
             continue;
             
-        // Extract event properties
+        // Extract event properties - handle both formats
         double time = eventObj->getProperty("time");
+        if (time == 0.0) // Try alternative property name
+            time = eventObj->getProperty("timestamp");
+            
         juce::String type = eventObj->getProperty("type").toString();
         int note = eventObj->getProperty("note");
         int velocity = eventObj->getProperty("velocity");
         
-        // Create appropriate MIDI message
+        // Create appropriate MIDI message - handle both formats
         juce::MidiMessage message;
-        if (type == "noteOn" && velocity > 0)
+        if ((type == "noteOn" || type == "note_on") && velocity > 0)
         {
             message = juce::MidiMessage::noteOn(1, note, static_cast<juce::uint8>(velocity));
         }
-        else if (type == "noteOff" || (type == "noteOn" && velocity == 0))
+        else if (type == "noteOff" || type == "note_off" || ((type == "noteOn" || type == "note_on") && velocity == 0))
         {
             message = juce::MidiMessage::noteOff(1, note, static_cast<juce::uint8>(velocity));
         }
