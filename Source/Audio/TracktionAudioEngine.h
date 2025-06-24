@@ -9,7 +9,7 @@
    
    Key improvements:
    - Professional DAW audio routing and processing
-   - Per-Player Tracktion Track isolation
+   - Per-TracktionPlayer Tracktion Track isolation
    - Proper multi-track simultaneous playback
    - Professional buffer management and threading
    - Eliminates custom audio graph complexity
@@ -31,7 +31,7 @@ namespace te = tracktion;
 
 namespace covertracks {
     // Forward declarations
-    class Player;
+    class TracktionPlayer;
 }
 
 namespace covertracks {
@@ -40,12 +40,12 @@ namespace covertracks {
  * @brief Tracktion Engine-based singleton audio engine 
  * 
  * This singleton class replaces the original AudioEngine with a professional
- * DAW architecture using Tracktion Engine. Each Player gets its own Tracktion
+ * DAW architecture using Tracktion Engine. Each TracktionPlayer gets its own Tracktion
  * Track for proper isolation and professional audio routing.
  * 
  * Key Features:
  * - Professional DAW architecture with Tracktion Engine
- * - Per-Player Track isolation prevents audio conflicts
+ * - Per-TracktionPlayer Track isolation prevents audio conflicts
  * - Proper multi-track simultaneous playback
  * - Professional buffer management and threading
  * - Built-in audio quality monitoring
@@ -61,94 +61,94 @@ public:
     ~TracktionAudioEngine() override;
     
     // =========================================================================
-    // Player Lifecycle Management (Thread-Safe)
+    // TracktionPlayer Lifecycle Management (Thread-Safe)
     // =========================================================================
     
     /**
-     * @brief Register a Player with the TracktionAudioEngine
-     * Creates a dedicated Tracktion Track for the Player
-     * @param player Player to register (must not be null)
+     * @brief Register a TracktionPlayer with the TracktionAudioEngine
+     * Creates a dedicated Tracktion Track for the TracktionPlayer
+     * @param player TracktionPlayer to register (must not be null)
      * @return true if registration succeeded, false if already registered
      */
-    bool registerPlayer(Player* player);
+    bool registerTracktionPlayer(TracktionPlayer* player);
     
     /**
-     * @brief Unregister a Player from the TracktionAudioEngine
-     * Removes the Player's Tracktion Track from the Edit
-     * @param player Player to unregister
+     * @brief Unregister a TracktionPlayer from the TracktionAudioEngine
+     * Removes the TracktionPlayer's Tracktion Track from the Edit
+     * @param player TracktionPlayer to unregister
      */
-    void unregisterPlayer(Player* player);
+    void unregisterTracktionPlayer(TracktionPlayer* player);
     
     /**
-     * @brief Activate a Player for audio processing
-     * @param player Player to activate (must be registered first)
+     * @brief Activate a TracktionPlayer for audio processing
+     * @param player TracktionPlayer to activate (must be registered first)
      * @return true if activation succeeded
      */
-    bool activatePlayer(Player* player);
+    bool activateTracktionPlayer(TracktionPlayer* player);
     
     /**
-     * @brief Deactivate a Player from audio processing
-     * @param player Player to deactivate
+     * @brief Deactivate a TracktionPlayer from audio processing
+     * @param player TracktionPlayer to deactivate
      */
-    void deactivatePlayer(Player* player);
+    void deactivateTracktionPlayer(TracktionPlayer* player);
     
     /**
-     * @brief Check if Player is registered
-     * @param player Player to check
+     * @brief Check if TracktionPlayer is registered
+     * @param player TracktionPlayer to check
      * @return true if registered
      */
-    bool isPlayerRegistered(Player* player) const;
+    bool isTracktionPlayerRegistered(TracktionPlayer* player) const;
     
     /**
-     * @brief Check if Player is active
-     * @param player Player to check  
+     * @brief Check if TracktionPlayer is active
+     * @param player TracktionPlayer to check  
      * @return true if active
      */
-    bool isPlayerActive(Player* player) const;
+    bool isTracktionPlayerActive(TracktionPlayer* player) const;
     
     // =========================================================================
     // Tracktion Track Management
     // =========================================================================
     
     /**
-     * @brief Get the Tracktion Track for a Player
-     * @param player Player to get track for
+     * @brief Get the Tracktion Track for a TracktionPlayer
+     * @param player TracktionPlayer to get track for
      * @return Pointer to the track, or nullptr if not found
      */
-    te::Track* getPlayerTrack(Player* player);
+    te::Track* getTracktionPlayerTrack(TracktionPlayer* player);
     
     /**
-     * @brief Create a MIDI clip on the Player's track
-     * @param player Player to create clip for
+     * @brief Create a MIDI clip on the TracktionPlayer's track
+     * @param player TracktionPlayer to create clip for
      * @param clipName Name for the clip
      * @param startTime Start time in seconds
      * @param duration Duration in seconds
      * @return Pointer to created MIDI clip, or nullptr if failed
      */
-    te::MidiClip* createMidiClipForPlayer(Player* player, 
+    te::MidiClip* createMidiClipForTracktionPlayer(TracktionPlayer* player, 
                                           const juce::String& clipName,
                                           double startTime, 
                                           double duration);
     
     /**
-     * @brief Start playback for a specific Player's track
-     * @param player Player to start playback for
+     * @brief Start playback for a specific TracktionPlayer's track
+     * @param player TracktionPlayer to start playback for
      * @return true if playback started successfully
      */
-    bool startPlayerPlayback(Player* player);
+    bool startTracktionPlayerPlayback(TracktionPlayer* player);
     
     /**
-     * @brief Stop playback for a specific Player's track
-     * @param player Player to stop playback for
+     * @brief Stop playback for a specific TracktionPlayer's track
+     * @param player TracktionPlayer to stop playback for
      */
-    void stopPlayerPlayback(Player* player);
+    void stopTracktionPlayerPlayback(TracktionPlayer* player);
     
     /**
-     * @brief Check if a Player's track is playing
-     * @param player Player to check
+     * @brief Check if a TracktionPlayer's track is playing
+     * @param player TracktionPlayer to check
      * @return true if the player's track is playing
      */
-    bool isPlayerPlaying(Player* player) const;
+    bool isTracktionPlayerPlaying(TracktionPlayer* player) const;
     
     // =========================================================================
     // Tracktion Engine Access
@@ -177,24 +177,24 @@ public:
     // =========================================================================
     
     /**
-     * @brief Route MIDI message to specific Player's track
-     * @param player Target Player (must be active)
+     * @brief Route MIDI message to specific TracktionPlayer's track
+     * @param player Target TracktionPlayer (must be active)
      * @param message MIDI message to route
      */
-    void routeMidiToPlayer(Player* player, const juce::MidiMessage& message);
+    void routeMidiToTracktionPlayer(TracktionPlayer* player, const juce::MidiMessage& message);
     
     /**
-     * @brief Route MIDI message to all active Player tracks
+     * @brief Route MIDI message to all active TracktionPlayer tracks
      * @param message MIDI message to broadcast
      */
-    void routeMidiToAllActivePlayers(const juce::MidiMessage& message);
+    void routeMidiToAllActiveTracktionPlayers(const juce::MidiMessage& message);
     
     /**
-     * @brief Send MIDI message to a Player's track
-     * @param player Target Player
+     * @brief Send MIDI message to a TracktionPlayer's track
+     * @param player Target TracktionPlayer
      * @param message MIDI message to send
      */
-    void sendMidiToPlayerTrack(Player* player, const juce::MidiMessage& message);
+    void sendMidiToTracktionPlayerTrack(TracktionPlayer* player, const juce::MidiMessage& message);
     
     // =========================================================================
     // Resource Access (Thread-Safe)
@@ -250,9 +250,9 @@ public:
     // =========================================================================
     
     // All the methods from the original AudioEngine for drop-in replacement
-    bool addPlayerGraph(Player* player) { return activatePlayer(player); }
-    void removePlayerGraph(Player* player) { deactivatePlayer(player); }
-    bool isPlayerGraphIntegrated(Player* player) const { return isPlayerActive(player); }
+    bool addTracktionPlayerGraph(TracktionPlayer* player) { return activateTracktionPlayer(player); }
+    void removeTracktionPlayerGraph(TracktionPlayer* player) { deactivateTracktionPlayer(player); }
+    bool isTracktionPlayerGraphIntegrated(TracktionPlayer* player) const { return isTracktionPlayerActive(player); }
     void setMidiInputEnabled(bool enabled);
     bool isMidiInputEnabled() const;
     void sendMidiMessage(const juce::MidiMessage& message);
@@ -300,23 +300,23 @@ private:
     void scanForPlugins();
     
     // =========================================================================
-    // Player-Track Mapping
+    // TracktionPlayer-Track Mapping
     // =========================================================================
     
-    struct PlayerTrackInfo {
-        Player* player;
+    struct TracktionPlayerTrackInfo {
+        TracktionPlayer* player;
         te::Track* track;
         std::atomic<bool> isActive{false};
         std::atomic<bool> isPlaying{false};
         juce::String trackName;
         
-        PlayerTrackInfo(Player* p, te::Track* t, const juce::String& name) 
+        TracktionPlayerTrackInfo(TracktionPlayer* p, te::Track* t, const juce::String& name) 
             : player(p), track(t), trackName(name) {}
     };
     
     // Thread-safe player-track registry
     mutable juce::CriticalSection playerTrackMutex;
-    std::map<Player*, std::unique_ptr<PlayerTrackInfo>> playerTracks;
+    std::map<TracktionPlayer*, std::unique_ptr<TracktionPlayerTrackInfo>> playerTracks;
     
     // =========================================================================
     // Tracktion Engine Resources
@@ -369,10 +369,10 @@ private:
     // =========================================================================
     
     // Create a new track for a player
-    te::Track* createTrackForPlayer(Player* player);
+    te::Track* createTrackForTracktionPlayer(TracktionPlayer* player);
     
     // Remove a track for a player
-    void removeTrackForPlayer(Player* player);
+    void removeTrackForTracktionPlayer(TracktionPlayer* player);
     
     // Update quality metrics
     void updateQualityMetrics(double processingTime);

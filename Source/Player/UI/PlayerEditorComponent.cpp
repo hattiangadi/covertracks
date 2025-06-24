@@ -7,7 +7,7 @@
 namespace covertracks {
 
 // Constructor
-PlayerEditorComponent::PlayerEditorComponent(Player* playerToEdit, AudioEngineImpl* engine)
+PlayerEditorComponent::PlayerEditorComponent(TracktionPlayer* playerToEdit, AudioEngineImpl* engine)
     : player(playerToEdit),
       audioEngine(engine)
 {
@@ -98,7 +98,7 @@ PlayerEditorComponent::~PlayerEditorComponent()
 }
 
 // Add a static flag to track if we've already loaded this player for editing
-static std::unordered_map<Player*, bool> playerLoadedMap;
+static std::unordered_map<TracktionPlayer*, bool> playerLoadedMap;
 
 void PlayerEditorComponent::loadPlayerForEditing()
 {

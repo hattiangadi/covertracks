@@ -1,7 +1,7 @@
 // Source/Musician/Core/PatternParser.cpp
 #include "PatternParser.h"
 #include "MusicPatternSystem.h"
-#include "../../Player/Core/Player.h"
+// Legacy Player.h include removed - using TracktionPlayer
 #include <iostream>
 #include <sstream>
 #include <regex>

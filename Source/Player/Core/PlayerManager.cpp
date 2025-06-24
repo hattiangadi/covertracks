@@ -88,7 +88,7 @@ PlayerManager::~PlayerManager()
         std::cerr << "UNKNOWN EXCEPTION in PlayerManager destructor" << std::endl;
     }
 }
-void PlayerManager::activatePlayer(Player* player)
+void PlayerManager::activatePlayer(TracktionPlayer* player)
 {
     if (player == nullptr || player == activePlayer)
         return;
@@ -97,73 +97,35 @@ void PlayerManager::activatePlayer(Player* player)
     if (activePlayer != nullptr)
         deactivatePlayer(activePlayer);
     
-    // Prepare player for playback
-    player->prepareForPlayback();
-    
-    // Connect to AudioEngine singleton
-    if (!player->connectToAudioEngine(getAudioEnginePtr()))
-    {
-        std::cerr << "Failed to connect player to AudioEngine" << std::endl;
-        player->releaseResources();
-        return;
-    }
-    
-    // Add player's graph to the main processor graph in AudioEngine
-    if (auto* instrument = player->getInstrument())
-    {
-        // TODO: Update to use TracktionInstrument instead of PluginGraph
-        // if (auto* processorGraph = instrument->getProcessorGraph())
-        {
-            // Note: Old PluginGraph integration disabled - now using TracktionPlayer/TracktionInstrument
-            // Integrate player's graph into AudioEngine master graph
-            if (!getAudioEnginePtr()->addPlayerGraph(player))
-            {
-                std::cerr << "Warning: Could not integrate player graph for " << player->getMetadata().name << std::endl;
-            }
-        }
-    }
+    // TracktionPlayer manages its own audio connection through TracktionInstrument
+    // which registers with TracktionAudioEngine automatically
     
     // Set as active player
     activePlayer = player;
-    // std::cout << "Player " << player->getMetadata().name << " activated" << std::endl;
+    // std::cout << "Player " << player->getName() << " activated" << std::endl;
 }
 
-void PlayerManager::deactivatePlayer(Player* player)
+void PlayerManager::deactivatePlayer(TracktionPlayer* player)
 {
     if (player == nullptr || player != activePlayer)
         return;
     
-    // Remove player's graph from AudioEngine
-    if (auto* instrument = player->getInstrument())
-    {
-        // TODO: Update to use TracktionInstrument instead of PluginGraph
-        // if (auto* processorGraph = instrument->getProcessorGraph())
-        {
-            // Note: Old PluginGraph removal disabled - now using TracktionPlayer/TracktionInstrument
-            // Remove player's graph from AudioEngine master graph
-            getAudioEnginePtr()->removePlayerGraph(player);
-        }
-    }
-    
-    // Disconnect from AudioEngine
-    player->disconnectFromAudioEngine();
-    
-    // Release resources
-    player->releaseResources();
+    // TracktionPlayer/TracktionInstrument handles its own cleanup
+    // when destroyed or when playback stops
     
     // Clear active player
     activePlayer = nullptr;
-    // std::cout << "Player " << player->getMetadata().name << " deactivated" << std::endl;
+    // std::cout << "Player " << player->getName() << " deactivated" << std::endl;
 }
 
-bool PlayerManager::isPlayerActive(Player* player) const
+bool PlayerManager::isPlayerActive(TracktionPlayer* player) const
 {
     return player != nullptr && player == activePlayer;
 }
 
-Array<Player*> PlayerManager::getPlayers() const
+Array<TracktionPlayer*> PlayerManager::getPlayers() const
 {
-    Array<Player*> result;
+    Array<TracktionPlayer*> result;
     
     for (auto* player : players)
     {
@@ -192,16 +154,14 @@ void PlayerManager::addPlayer(std::unique_ptr<Player> player)
     }
 }
 
-bool PlayerManager::savePlayer(Player* player)
+bool PlayerManager::savePlayer(TracktionPlayer* player)
 {
     if (player == nullptr)
     {
         return false;
     }
     
-    // Update the last modified time
-    auto& metadata = player->getMetadata();
-    metadata.lastModified = Time::getCurrentTime();
+    // TracktionPlayer doesn't have metadata - skip metadata update
     
     // Make sure the player is in our list
     bool playerInList = false;
@@ -217,7 +177,7 @@ bool PlayerManager::savePlayer(Player* player)
     // If the player isn't in our list, add it
     if (!playerInList)
     {
-        // std::cout << "Adding player to manager: " << metadata.name << std::endl;
+        // std::cout << "Adding player to manager: " << player->getName() << std::endl;
         players.add(player);
         
         // Notify listeners that a player was added
@@ -225,14 +185,14 @@ bool PlayerManager::savePlayer(Player* player)
     }
     
     // Explicitly save the graph state to a file
-    bool graphSaved = player->saveGraphState();
+    bool graphSaved = player->saveState();
     if (graphSaved)
     {
-        // std::cout << "Graph state saved successfully for player: " << metadata.name << std::endl;
+        // std::cout << "Graph state saved successfully for player: " << player->getName() << std::endl;
     }
     
     // Convert to JSON
-    var playerJson = player->toVar();
+    var playerJson = player->saveCompleteState();
     
     // Get the file path - use player ID to avoid duplicates when renaming
     File playerFile = getPlayersDirectory().getChildFile(player->getId() + ".player");
@@ -254,7 +214,7 @@ bool PlayerManager::savePlayer(Player* player)
     return success;
 }
 
-bool PlayerManager::savePlayerAndTakeOwnership(std::unique_ptr<Player> player)
+bool PlayerManager::savePlayerAndTakeOwnership(std::unique_ptr<TracktionPlayer> player)
 {
     if (player == nullptr)
     {
@@ -262,17 +222,15 @@ bool PlayerManager::savePlayerAndTakeOwnership(std::unique_ptr<Player> player)
     }
     
     // Get a raw pointer to the player before we move it
-    Player* playerPtr = player.get();
+    TracktionPlayer* playerPtr = player.get();
     
-    // Update the last modified time
-    auto& metadata = playerPtr->getMetadata();
-    metadata.lastModified = Time::getCurrentTime();
+    // TracktionPlayer doesn't have metadata - skip metadata update
     
     // Explicitly save the graph state to a file
-    bool graphSaved = playerPtr->saveGraphState();
+    bool graphSaved = playerPtr->saveState();
     if (graphSaved)
     {
-        // std::cout << "Graph state saved successfully for player: " << metadata.name << std::endl;
+        // std::cout << "Graph state saved successfully for player: " << player->getName() << std::endl;
     }
     
     // Convert to JSON
@@ -312,34 +270,26 @@ bool PlayerManager::savePlayerAndTakeOwnership(std::unique_ptr<Player> player)
     return success;
 }
 
-std::unique_ptr<Player> PlayerManager::createPlayer()
+std::unique_ptr<TracktionPlayer> PlayerManager::createPlayer()
 {
     // Generate a unique ID
     String id = String::toHexString(Random::getSystemRandom().nextInt());
     
-    // Create a new player with default settings, using singleton AudioEngine
+    // Create a new TracktionPlayer with default settings, using singleton AudioEngine
     auto* audioEngine = getAudioEnginePtr();
-    auto player = std::make_unique<Player>(id, "New Player", audioEngine->getFormatManager(), audioEngine->getKnownPluginList());
-    player->initialize();
+    auto player = std::make_unique<TracktionPlayer>(id, "New Player", audioEngine->getFormatManager(), audioEngine->getKnownPluginList());
     
-    // Set default metadata
-    auto& metadata = player->getMetadata();
-    metadata.category = "Default";
-    metadata.description = "A new player";
-    metadata.created = Time::getCurrentTime();
-    metadata.lastModified = metadata.created;
-    
-    // Ensure the player is fully prepared for playback
-    if (!player->isReadyForPlayback())
+    // Initialize the player
+    if (!player->initialize())
     {
-        // std::cout << "Preparing new player for playback" << std::endl;
-        player->prepareForPlayback();
+        // std::cout << "Failed to initialize new TracktionPlayer" << std::endl;
+        return nullptr;
     }
     
     return player;
 }
 
-std::unique_ptr<Player> PlayerManager::loadPlayer(const File& file)
+std::unique_ptr<TracktionPlayer> PlayerManager::loadPlayer(const File& file)
 {
     if (!file.existsAsFile())
         return nullptr;
@@ -353,13 +303,13 @@ std::unique_ptr<Player> PlayerManager::loadPlayer(const File& file)
     {
         // Use the fromVar method to create a player with the singleton AudioEngine
         auto* audioEngine = getAudioEnginePtr();
-        return Player::fromVar(json, audioEngine->getFormatManager(), audioEngine->getKnownPluginList());
+        return TracktionPlayer::fromVar(json, audioEngine->getFormatManager(), audioEngine->getKnownPluginList());
     }
     
     return nullptr;
 }
 
-bool PlayerManager::deletePlayer(Player* player)
+bool PlayerManager::deletePlayer(TracktionPlayer* player)
 {
     if (player == nullptr)
     {
@@ -367,15 +317,13 @@ bool PlayerManager::deletePlayer(Player* player)
     }
     
     // Get the player file paths - check both old (.player) and new (.json) locations
-    auto& metadata = player->getMetadata();
-    
     // Primary location: ~/Library/Application Support/CovertTracks/Players/ (use ID)
     File playerFile = getPlayersDirectory().getChildFile(player->getId() + ".player");
     
     // Also check old Documents location (used by previous PlayerEditorComponent saves) - try both name and ID
     File documentsDir = File::getSpecialLocation(File::userDocumentsDirectory);
     File oldDocumentsDir = documentsDir.getChildFile("Covertracks").getChildFile("Players");
-    File oldDocumentsFileByName = oldDocumentsDir.getChildFile(metadata.name + ".json");
+    File oldDocumentsFileByName = oldDocumentsDir.getChildFile(player->getName() + ".json");
     File oldDocumentsFileById = oldDocumentsDir.getChildFile(player->getId() + ".json");
     
     // Graph file location
@@ -384,7 +332,7 @@ bool PlayerManager::deletePlayer(Player* player)
                       .getChildFile("Graphs")
                       .getChildFile(player->getId() + ".filtergraph");
     
-    std::cout << "Deleting player: " << metadata.name << " (ID: " << player->getId() << ")" << std::endl;
+    std::cout << "Deleting player: " << player->getName() << " (ID: " << player->getId() << ")" << std::endl;
     std::cout << "Checking player file: " << playerFile.getFullPathName() << std::endl;
     std::cout << "Checking old documents file (by name): " << oldDocumentsFileByName.getFullPathName() << std::endl;
     std::cout << "Checking old documents file (by ID): " << oldDocumentsFileById.getFullPathName() << std::endl;
@@ -494,7 +442,7 @@ void PlayerManager::loadAllPlayers()
     // std::cout << "Loaded " << players.size() << " players with minimal resources in total" << std::endl;
 }
 
-bool PlayerManager::playPattern(Player* player, const var& pattern, double tempo)
+bool PlayerManager::playPattern(TracktionPlayer* player, const var& pattern, double tempo)
 {
     if (player == nullptr)
     {
@@ -502,58 +450,10 @@ bool PlayerManager::playPattern(Player* player, const var& pattern, double tempo
         return false;
     }
     
-    // std::cout << "===== PLAYING PATTERN ON PLAYER: " << player->getMetadata().name << " =====" << std::endl;
+    // std::cout << "===== PLAYING PATTERN ON PLAYER: " << player->getName() << " =====" << std::endl;
     
-    // Make sure the player is prepared for playback
-    if (!player->isReadyForPlayback())
-    {
-        // std::cout << "Preparing player " << player->getMetadata().name << " for playback" << std::endl;
-        player->prepareForPlayback();
-    }
-    
-    // Connect to AudioEngine if not already connected
-    if (!player->isConnectedToAudioEngine())
-    {
-        // std::cout << "Connecting player " << player->getMetadata().name << " to AudioEngine" << std::endl;
-        if (!player->connectToAudioEngine(getAudioEnginePtr()))
-        {
-            std::cerr << "Failed to connect player to AudioEngine" << std::endl;
-            return false;
-        }
-    }
-    
-    // Ensure the player is activated in the AudioEngine
-    if (player != activePlayer)
-    {
-        // std::cout << "Activating player " << player->getMetadata().name << " in AudioEngine" << std::endl;
-        getAudioEnginePtr()->activatePlayer(player);
-    }
-    
-    // Make sure the player's processor is registered with the AudioEngine
-    if (auto* instrument = player->getInstrument())
-    {
-        // TODO: Update to use TracktionInstrument instead of PluginGraph
-        // if (auto* processorGraph = instrument->getProcessorGraph())
-        {
-            // Note: Old PluginGraph registration disabled - now using TracktionPlayer/TracktionInstrument
-            // std::cout << "Registering processor for player " << player->getMetadata().name << std::endl;
-            // Note: registerProcessor method not available in new AudioEngine
-            // Player registration handles this automatically
-        }
-        // else
-        // {
-        //     std::cerr << "Player " << player->getMetadata().name << " has no processor graph!" << std::endl;
-        //     return false;
-        // }
-    }
-    else
-    {
-        std::cerr << "Player " << player->getMetadata().name << " has no instrument!" << std::endl;
-        return false;
-    }
-    
-    // Load and play the chart
-    // std::cout << "Loading and playing chart on player: " << player->getMetadata().name << std::endl;
+    // TracktionPlayer handles its own audio engine connection through TracktionInstrument
+    // No need for manual connection or activation
     
     // Create a chart object with the pattern data
     DynamicObject* chartObj = new DynamicObject();
@@ -561,16 +461,16 @@ bool PlayerManager::playPattern(Player* player, const var& pattern, double tempo
     chartObj->setProperty("tempo", tempo);
     var chartVar(chartObj);
     
-    bool loaded = player->loadChart(chartVar);
-    bool result = loaded ? player->play() : false;
+    // Use TracktionPlayer's playChart method which loads and plays in one step
+    bool result = player->playChart(chartVar, tempo);
     
     if (result)
     {
-        // std::cout << "Successfully started pattern playback on player: " << player->getMetadata().name << std::endl;
+        // std::cout << "Successfully started pattern playback on player: " << player->getName() << std::endl;
     }
     else
     {
-        std::cerr << "Failed to start pattern playback on player: " << player->getMetadata().name << std::endl;
+        std::cerr << "Failed to start pattern playback on player: " << player->getName() << std::endl;
     }
     
     return result;
@@ -578,15 +478,13 @@ bool PlayerManager::playPattern(Player* player, const var& pattern, double tempo
 
 bool PlayerManager::playPatternOnAllActivePlayers(const var& pattern, double tempo)
 {
-    // Get all players that are active or ready for playback
-    Array<Player*> playersToUse;
+    // Get all players to use
+    Array<TracktionPlayer*> playersToUse;
     
     for (auto* player : players)
     {
-        if (player->isReadyForPlayback() || player == activePlayer)
-        {
-            playersToUse.add(player);
-        }
+        // TracktionPlayer is always ready after initialization
+        playersToUse.add(player);
     }
     
     if (playersToUse.isEmpty())
@@ -609,13 +507,13 @@ bool PlayerManager::playPatternOnAllActivePlayers(const var& pattern, double tem
     return anySuccess;
 }
 
-void PlayerManager::stopPlayback(Player* player)
+void PlayerManager::stopPlayback(TracktionPlayer* player)
 {
     if (player != nullptr)
     {
         // Stop playback for the specified player
-        // std::cout << "Stopping playback for player: " << player->getMetadata().name << std::endl;
-        player->stopPlayback();
+        // std::cout << "Stopping playback for player: " << player->getName() << std::endl;
+        player->stop();
     }
     else
     {
@@ -623,7 +521,7 @@ void PlayerManager::stopPlayback(Player* player)
         // std::cout << "Stopping playback for all players" << std::endl;
         for (auto* p : players)
         {
-            p->stopPlayback();
+            p->stop();
         }
     }
 }
@@ -672,7 +570,7 @@ void PlayerManager::setLLMApiKey(const String& apiKey)
     }
 }
 
-void PlayerManager::generatePatternForPlayer(Player* player, 
+void PlayerManager::generatePatternForPlayer(TracktionPlayer* player, 
                                           const var& parameters,
                                           std::function<void(bool success, const var& pattern)> callback)
 {
@@ -689,7 +587,7 @@ void PlayerManager::generatePatternForPlayer(Player* player,
     if (musician == nullptr)
     {
         // Create a musician for the player if it doesn't have one
-        player->setMusician(std::make_unique<Musician>(player->getId(), player->getMetadata().category));
+        player->setMusician(std::make_unique<Musician>(player->getId(), "Default"));
         musician = player->getMusician();
     }
     
@@ -709,7 +607,7 @@ void PlayerManager::generatePatternForPlayer(Player* player,
                 // Optionally auto-play the chart
                 if (loaded && chart.hasProperty("command") && chart["command"] == "play_pattern")
                 {
-                    player->play();
+                    player->playLoadedChart();
                 }
             }
             
@@ -729,15 +627,13 @@ void PlayerManager::generatePatternForPlayer(Player* player,
 void PlayerManager::generatePatternForAllPlayers(const var& parameters,
                                               std::function<void(bool success, const var& pattern)> callback)
 {
-    // Get all active players
-    Array<Player*> activePlayers;
+    // Get all players
+    Array<TracktionPlayer*> activePlayers;
     
     for (auto* player : players)
     {
-        if (player->isReadyForPlayback() || player == activePlayer)
-        {
-            activePlayers.add(player);
-        }
+        // TracktionPlayer is always ready after initialization
+        activePlayers.add(player);
     }
     
     if (activePlayers.isEmpty())

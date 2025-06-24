@@ -1,7 +1,7 @@
 // Source/Musician/Core/PatternGenerator.cpp
 #include "PatternGenerator.h"
 #include "PatternParser.h"
-#include "../../Player/Core/Player.h"
+// Legacy Player.h include removed - using TracktionPlayer
 #include <iostream>
 
 namespace covertracks {

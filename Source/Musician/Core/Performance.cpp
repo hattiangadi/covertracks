@@ -1,4 +1,7 @@
 #include "Performance.h"
+#include "../../Player/Core/PlayerManager.h"
+#include "../../Player/Core/TracktionPlayer.h"
+#include <iostream>
 
 namespace covertracks {
 
@@ -12,6 +15,9 @@ Performance::Performance(const juce::String& performanceName)
 
 Performance::~Performance()
 {
+    // Stop any active playback before cleanup
+    stopAll();
+    
     // Clear references to break potential reference cycles
     song = nullptr;
     chart = nullptr;
@@ -157,9 +163,8 @@ void Performance::refreshEnsembleCache()
             auto ensembleRoles = ensemble->getMusicianRoles();
             for (auto role : ensembleRoles)
             {
-                // Clear the player pointer - it will be resolved by PerformanceEditorComponent
+                // TracktionPlayer will be resolved by PerformanceEditorComponent
                 // when it needs to actually work with players
-                role.player = nullptr;
                 cachedEnsembleRoles.add(role);
             }
             ensembleCacheValid = true;
@@ -342,5 +347,356 @@ std::shared_ptr<Performance> Performance::fromVar(const juce::var& v)
     
     return nullptr;
 }
+
+// =========================================================================
+// Unified Playback System Implementation
+// =========================================================================
+
+bool Performance::play(PlayerManager* playerManager, const juce::StringArray& roleNames)
+{
+    if (!playerManager)
+    {
+        std::cerr << "[Performance] No PlayerManager provided for playback" << std::endl;
+        return false;
+    }
+    
+    // Stop any current playback
+    stopAll();
+    
+    // Filter roles to play
+    auto rolesToPlay = filterRolesToPlay(roleNames);
+    if (rolesToPlay.isEmpty())
+    {
+        std::cerr << "[Performance] No valid roles found to play" << std::endl;
+        return false;
+    }
+    
+    std::cout << "[Performance] Starting unified playback for " << rolesToPlay.size() << " roles..." << std::endl;
+    
+    // Load charts for all roles (Load phase)
+    if (!loadChartsForRoles(rolesToPlay, playerManager))
+    {
+        std::cerr << "[Performance] Failed to load charts for playback" << std::endl;
+        return false;
+    }
+    
+    // Start synchronized playback (Play phase)
+    if (!startPlaybackForLoadedRoles())
+    {
+        std::cerr << "[Performance] Failed to start synchronized playback" << std::endl;
+        return false;
+    }
+    
+    std::cout << "[Performance] Unified playback started successfully!" << std::endl;
+    return true;
+}
+
+bool Performance::play(PlayerManager* playerManager, const juce::String& roleName)
+{
+    juce::StringArray singleRole;
+    singleRole.add(roleName);
+    return play(playerManager, singleRole);
+}
+
+bool Performance::playWithEnsemble(PlayerManager* playerManager, const juce::Array<MusicianRole>& ensembleRoles, const juce::StringArray& roleNames)
+{
+    if (!playerManager)
+    {
+        std::cerr << "[Performance] No PlayerManager provided for playback" << std::endl;
+        return false;
+    }
+    
+    // Stop any current playback
+    stopAll();
+    
+    // Filter roles to play using provided ensemble
+    auto rolesToPlay = filterRolesToPlay(ensembleRoles, roleNames);
+    if (rolesToPlay.isEmpty())
+    {
+        std::cerr << "[Performance] No valid roles found to play" << std::endl;
+        return false;
+    }
+    
+    std::cout << "[Performance] Starting unified playback for " << rolesToPlay.size() << " roles..." << std::endl;
+    
+    // Load charts for all roles (Load phase)
+    if (!loadChartsForRoles(rolesToPlay, playerManager))
+    {
+        std::cerr << "[Performance] Failed to load charts for playback" << std::endl;
+        return false;
+    }
+    
+    // Start synchronized playback (Play phase)
+    if (!startPlaybackForLoadedRoles())
+    {
+        std::cerr << "[Performance] Failed to start synchronized playback" << std::endl;
+        return false;
+    }
+    
+    std::cout << "[Performance] Unified playback started successfully!" << std::endl;
+    return true;
+}
+
+int Performance::loadCharts(PlayerManager* playerManager, const juce::StringArray& roleNames)
+{
+    if (!playerManager)
+    {
+        std::cerr << "[Performance] No PlayerManager provided for loading" << std::endl;
+        return 0;
+    }
+    
+    // Filter roles to load
+    auto rolesToLoad = filterRolesToPlay(roleNames);
+    if (rolesToLoad.isEmpty())
+    {
+        std::cerr << "[Performance] No valid roles found to load" << std::endl;
+        return 0;
+    }
+    
+    std::cout << "[Performance] Loading charts for " << rolesToLoad.size() << " roles..." << std::endl;
+    
+    // Load charts without starting playback
+    loadChartsForRoles(rolesToLoad, playerManager);
+    
+    // Count successfully loaded roles
+    int loaded = 0;
+    for (const auto& role : rolesToLoad)
+    {
+        if (activeTracktionPlayerRefs.find(role.getName()) != activeTracktionPlayerRefs.end())
+        {
+            loaded++;
+        }
+    }
+    
+    std::cout << "[Performance] Loaded " << loaded << " of " << rolesToLoad.size() << " charts" << std::endl;
+    return loaded;
+}
+
+int Performance::loadChartsWithEnsemble(PlayerManager* playerManager, const juce::Array<MusicianRole>& ensembleRoles, const juce::StringArray& roleNames)
+{
+    if (!playerManager)
+    {
+        std::cerr << "[Performance] No PlayerManager provided for loading" << std::endl;
+        return 0;
+    }
+    
+    // Filter roles to load using provided ensemble
+    auto rolesToLoad = filterRolesToPlay(ensembleRoles, roleNames);
+    if (rolesToLoad.isEmpty())
+    {
+        std::cerr << "[Performance] No valid roles found to load" << std::endl;
+        return 0;
+    }
+    
+    std::cout << "[Performance] Loading charts for " << rolesToLoad.size() << " roles..." << std::endl;
+    
+    // Load charts without starting playback
+    loadChartsForRoles(rolesToLoad, playerManager);
+    
+    // Count successfully loaded roles
+    int loaded = 0;
+    for (const auto& role : rolesToLoad)
+    {
+        if (activeTracktionPlayerRefs.find(role.getName()) != activeTracktionPlayerRefs.end())
+        {
+            loaded++;
+        }
+    }
+    
+    std::cout << "[Performance] Loaded " << loaded << " of " << rolesToLoad.size() << " charts" << std::endl;
+    return loaded;
+}
+
+void Performance::stopAll()
+{
+    if (!activeTracktionPlayerRefs.empty())
+    {
+        std::cout << "[Performance] Stopping " << activeTracktionPlayerRefs.size() << " active TracktionPlayers" << std::endl;
+        
+        for (auto& pair : activeTracktionPlayerRefs)
+        {
+            if (pair.second)
+            {
+                pair.second->stop();
+                std::cout << "[Performance] Stopped TracktionPlayer: " << pair.first << std::endl;
+            }
+        }
+        
+        activeTracktionPlayerRefs.clear();
+        std::cout << "[Performance] All playback stopped and cleared" << std::endl;
+    }
+}
+
+bool Performance::isPlaying() const
+{
+    for (const auto& pair : activeTracktionPlayerRefs)
+    {
+        if (pair.second && pair.second->isPlaying())
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// =========================================================================
+// Helper Methods
+// =========================================================================
+
+juce::Array<MusicianRole> Performance::filterRolesToPlay(const juce::StringArray& roleNames)
+{
+    auto ensemble = getEnsemble();
+    juce::Array<MusicianRole> rolesToPlay;
+    
+    if (roleNames.isEmpty())
+    {
+        // Play all roles (ensemble playback)
+        rolesToPlay = ensemble;
+        std::cout << "[Performance] Playing all " << ensemble.size() << " roles in ensemble" << std::endl;
+    }
+    else
+    {
+        // Play only specified roles
+        for (const auto& role : ensemble)
+        {
+            if (roleNames.contains(role.getName()))
+            {
+                rolesToPlay.add(role);
+                std::cout << "[Performance] Added role for playback: " << role.getName() << std::endl;
+            }
+        }
+        std::cout << "[Performance] Playing " << rolesToPlay.size() << " of " << roleNames.size() << " requested roles" << std::endl;
+    }
+    
+    return rolesToPlay;
+}
+
+juce::Array<MusicianRole> Performance::filterRolesToPlay(const juce::Array<MusicianRole>& ensembleRoles, const juce::StringArray& roleNames)
+{
+    juce::Array<MusicianRole> rolesToPlay;
+    
+    if (roleNames.isEmpty())
+    {
+        // Play all roles (ensemble playback)
+        rolesToPlay = ensembleRoles;
+        std::cout << "[Performance] Playing all " << ensembleRoles.size() << " roles in provided ensemble" << std::endl;
+    }
+    else
+    {
+        // Play only specified roles
+        for (const auto& role : ensembleRoles)
+        {
+            if (roleNames.contains(role.getName()))
+            {
+                rolesToPlay.add(role);
+                std::cout << "[Performance] Added role for playback: " << role.getName() << std::endl;
+            }
+        }
+        std::cout << "[Performance] Playing " << rolesToPlay.size() << " of " << roleNames.size() << " requested roles" << std::endl;
+    }
+    
+    return rolesToPlay;
+}
+
+bool Performance::loadChartsForRoles(const juce::Array<MusicianRole>& roles, PlayerManager* playerManager)
+{
+    bool anySuccess = false;
+    
+    for (const auto& role : roles)
+    {
+        if (!role.tracktionPlayer)
+        {
+            std::cout << "[Performance] No TracktionPlayer available for role: " << role.getName() << std::endl;
+            continue;
+        }
+        
+        // Get the prepped MIDI chart
+        juce::var midiChart = getMIDIChart(role.getName());
+        if (midiChart.isVoid())
+        {
+            midiChart = getGeneratedChart(role.getName());
+        }
+        
+        if (midiChart.isVoid())
+        {
+            std::cerr << "[Performance] No chart available for role: " << role.getName() << std::endl;
+            
+            // Debug: Show what charts are actually available
+            auto availableRoles = getGeneratedChartRoleNames();
+            std::cout << "[Performance] Available chart roles: ";
+            for (const auto& availableRole : availableRoles)
+            {
+                std::cout << "'" << availableRole << "' ";
+            }
+            std::cout << std::endl;
+            
+            continue;
+        }
+        
+        // Use the TracktionPlayer directly from the role
+        auto* tracktionPlayer = role.tracktionPlayer;
+        if (!tracktionPlayer)
+        {
+            std::cerr << "[Performance] No TracktionPlayer available for role: " << role.getName() << std::endl;
+            continue;
+        }
+        
+        // Extract MIDI events from chart
+        juce::var midiEvents;
+        if (midiChart.isObject() && midiChart.hasProperty("events"))
+        {
+            midiEvents = midiChart["events"];
+        }
+        else
+        {
+            midiEvents = midiChart;
+        }
+        
+        // Load chart into TracktionPlayer
+        if (tracktionPlayer->loadChart(midiEvents, 120.0))
+        {
+            // Store reference to TracktionPlayer (not owned by Performance)
+            activeTracktionPlayerRefs[role.getName()] = tracktionPlayer;
+            anySuccess = true;
+            std::cout << "[Performance] Loaded chart for role: " << role.getName() << " using TracktionPlayer" << std::endl;
+        }
+        else
+        {
+            std::cerr << "[Performance] Failed to load chart for role: " << role.getName() << std::endl;
+        }
+    }
+    
+    return anySuccess;
+}
+
+bool Performance::startPlaybackForLoadedRoles()
+{
+    if (activeTracktionPlayerRefs.empty())
+    {
+        std::cerr << "[Performance] No loaded TracktionPlayers available for playback" << std::endl;
+        return false;
+    }
+    
+    bool anySuccess = false;
+    std::cout << "[Performance] Starting synchronized playback for " << activeTracktionPlayerRefs.size() << " loaded TracktionPlayers..." << std::endl;
+    
+    // Start all TracktionPlayers simultaneously for synchronized playback
+    for (auto& pair : activeTracktionPlayerRefs)
+    {
+        if (pair.second->playLoadedChart())
+        {
+            anySuccess = true;
+            std::cout << "[Performance] Started TracktionPlayer: " << pair.first << std::endl;
+        }
+        else
+        {
+            std::cerr << "[Performance] Failed to start TracktionPlayer: " << pair.first << std::endl;
+        }
+    }
+    
+    return anySuccess;
+}
+
+// Legacy method removed - TracktionPlayer is now provided directly in MusicianRole
 
 } // namespace covertracks

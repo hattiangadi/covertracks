@@ -4,7 +4,7 @@
 #include "../Core/PlayerManager.h"
 #include "../../UI/GraphEditorPanel.h"
 #include "../../Plugins/InternalPlugins.h"
-#include "../Core/Player.h"
+#include "../Core/TracktionPlayer.h"
 #include "../Core/TracktionPlayer.h"
 #include "PluginChainEditor.h"
 
@@ -19,7 +19,7 @@ namespace covertracks {
 {
 public:
 // Modified constructor with engine reference
-PlayerEditorComponent(Player* playerToEdit = nullptr, 
+PlayerEditorComponent(TracktionPlayer* playerToEdit = nullptr, 
 AudioEngineImpl* audioEngine = nullptr);
 ~PlayerEditorComponent() override;
 
@@ -39,7 +39,7 @@ void createPlugin(const PluginDescriptionAndPreference& desc, Point<int> pos);
 void addPluginsToMenu(PopupMenu& menu);
 
 // Player management
-Player* getPlayer() const { return player; }
+TracktionPlayer* getPlayer() const { return player; }
 GraphDocumentComponent* getGraphEditor() const { return graphEditor.get(); }
 std::optional<PluginDescriptionAndPreference> getChosenType(int menuID) const;
 void takeOwnershipOfPlayer(std::unique_ptr<Player> newPlayer);
@@ -60,7 +60,7 @@ void removeListener(Listener* listener);
 
 private:
 // State values
-Player* player = nullptr;
+TracktionPlayer* player = nullptr;
 std::unique_ptr<Player> ownedPlayer;
 
 // UI components

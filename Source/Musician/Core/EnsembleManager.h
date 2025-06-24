@@ -1,7 +1,6 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "../../Player/Core/Player.h"
 #include "../../Player/Core/PlayerManager.h"
 #include "../../Player/Core/TracktionPlayer.h"
 #include "../../LLM/Core/LLMManager.h"
@@ -17,20 +16,15 @@ struct MusicianRole {
     juce::String name;              // e.g., "Lead Guitar", "Bass", "Drums"
     juce::String instrument;        // Instrument type
     TracktionPlayer* tracktionPlayer; // Associated TracktionPlayer (audio-capable)
-    Player* player;                 // Legacy Player (for compatibility during transition)
     juce::String pattern;           // Generated pattern for this role
     float level;                    // Volume level for this role (0.0 to 2.0, default 1.0)
     
     // Default constructor required for Array<MusicianRole>
     MusicianRole()
-        : name(""), instrument(""), tracktionPlayer(nullptr), player(nullptr), pattern(""), level(1.0f) {}
+        : name(""), instrument(""), tracktionPlayer(nullptr), pattern(""), level(1.0f) {}
     
     MusicianRole(const juce::String& roleName, const juce::String& instrumentType, TracktionPlayer* tracktionPlayerPtr)
-        : name(roleName), instrument(instrumentType), tracktionPlayer(tracktionPlayerPtr), player(nullptr), pattern(""), level(1.0f) {}
-        
-    // Legacy constructor for compatibility
-    MusicianRole(const juce::String& roleName, const juce::String& instrumentType, Player* playerPtr)
-        : name(roleName), instrument(instrumentType), tracktionPlayer(nullptr), player(playerPtr), pattern(""), level(1.0f) {}
+        : name(roleName), instrument(instrumentType), tracktionPlayer(tracktionPlayerPtr), pattern(""), level(1.0f) {}
         
     // Temporary methods to support PerformanceComponent
     juce::String getName() const { return name; }
@@ -122,16 +116,6 @@ public:
      */
     bool addMusicianRole(const juce::String& roleName, const juce::String& instrumentType, TracktionPlayer* tracktionPlayer);
     
-    /**
-     * @brief Add a musician role to the ensemble (LEGACY: Player version)
-     * 
-     * @param roleName The name of the role (e.g., "Lead Guitar")
-     * @param instrumentType The type of instrument
-     * @param player The legacy Player to use for this role
-     * @return true If the role was added successfully
-     * @return false If the role could not be added
-     */
-    bool addMusicianRole(const juce::String& roleName, const juce::String& instrumentType, Player* player);
     
     /**
      * @brief Remove a musician role from the ensemble

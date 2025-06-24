@@ -56,8 +56,7 @@ private:
     TextEditor patternViewer;
     
     // Currently selected player and pattern
-    Player* selectedPlayer = nullptr;
-    std::unique_ptr<TracktionPlayer> tracktionPlayer = nullptr;  // NEW: Actual audio-capable player
+    TracktionPlayer* selectedTracktionPlayer = nullptr;  // Currently selected TracktionPlayer
     std::shared_ptr<Chart> currentChart = nullptr;
     var currentMidiChart;  // MIDI_EVENT_CHART format
     
@@ -83,7 +82,7 @@ private:
     void updatePlayerSelector();
     void updateCurrentChart();
     void updateButtonStates();
-    void setupTracktionPlayerForSelected();  // NEW: Create TracktionPlayer from selected Player
+    void updateSelectedTracktionPlayer();  // Update selected TracktionPlayer from PlayerManager
     juce::String getMidiNoteName(int midiNoteNumber);
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PlayerModeComponent)

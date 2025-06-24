@@ -5,7 +5,7 @@
 #include "../Core/Musician.h"
 #include "../Core/MusicPatternSystem.h"
 #include "../Core/PatternParser.h"
-#include "../../Player/Core/Player.h"
+// Legacy Player.h include removed - using TracktionPlayer
 #include "../../Player/Core/PlayerManager.h"
 
 namespace covertracks {

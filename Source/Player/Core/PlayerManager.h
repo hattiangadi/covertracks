@@ -3,8 +3,7 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "../Core/Player.h"
-#include "../../Plugins/PluginGraph.h"
+#include "../Core/TracktionPlayer.h"
 #include "../../Plugins/InternalPlugins.h"
 #include "../../Audio/AudioEngineInterface.h"
 #include "../../LLM/Core/LLMClient.h"
@@ -25,26 +24,26 @@ namespace covertracks {
         ~PlayerManager();
         
         // Get all players
-        Array<Player*> getPlayers() const;
+        Array<TracktionPlayer*> getPlayers() const;
         
         // Add a player to the manager
-        void addPlayer(std::unique_ptr<Player> player);
+        void addPlayer(std::unique_ptr<TracktionPlayer> player);
         
         // Save a player to disk
-        bool savePlayer(Player* player);
+        bool savePlayer(TracktionPlayer* player);
         
         // Save a player to disk and take ownership of it
         // This should be used when saving a player that is owned by another component
-        bool savePlayerAndTakeOwnership(std::unique_ptr<Player> player);
+        bool savePlayerAndTakeOwnership(std::unique_ptr<TracktionPlayer> player);
         
         // Create a new player with default settings
-        std::unique_ptr<Player> createPlayer();
+        std::unique_ptr<TracktionPlayer> createPlayer();
         
         // Load a player from a file
-        std::unique_ptr<Player> loadPlayer(const File& file);
+        std::unique_ptr<TracktionPlayer> loadPlayer(const File& file);
         
         // Delete a player
-        bool deletePlayer(Player* player);
+        bool deletePlayer(TracktionPlayer* player);
         
         // Get the audio engine (singleton)
         AudioEngineImpl* getAudioEngine() const { return &covertracks::getAudioEngine(); }
@@ -62,15 +61,15 @@ namespace covertracks {
         }
         
         // Player state management
-        void activatePlayer(Player* player);
-        void deactivatePlayer(Player* player);
-        bool isPlayerActive(Player* player) const;
-        Player* getActivePlayer() const { return activePlayer; }
+        void activatePlayer(TracktionPlayer* player);
+        void deactivatePlayer(TracktionPlayer* player);
+        bool isPlayerActive(TracktionPlayer* player) const;
+        TracktionPlayer* getActivePlayer() const { return activePlayer; }
         
         // Pattern playback management
-        bool playPattern(Player* player, const var& pattern, double tempo = 120.0);
+        bool playPattern(TracktionPlayer* player, const var& pattern, double tempo = 120.0);
         bool playPatternOnAllActivePlayers(const var& pattern, double tempo = 120.0);
-        void stopPlayback(Player* player = nullptr); // If nullptr, stops all players
+        void stopPlayback(TracktionPlayer* player = nullptr); // If nullptr, stops all players
 
         /**
      * @brief Create or get shared LLM client
@@ -94,7 +93,7 @@ namespace covertracks {
      * @param parameters Parameters for the pattern generation
      * @param callback Callback to be invoked when generation completes
      */
-    void generatePatternForPlayer(Player* player, 
+    void generatePatternForPlayer(TracktionPlayer* player, 
                                 const var& parameters,
                                 std::function<void(bool success, const var& pattern)> callback);
     
@@ -124,10 +123,10 @@ namespace covertracks {
         InternalPluginFormat* internalPluginFormat = nullptr;
         
         // Currently active player (if any)
-        Player* activePlayer = nullptr;
+        TracktionPlayer* activePlayer = nullptr;
         
         // List of managed players
-        OwnedArray<Player> players;
+        OwnedArray<TracktionPlayer> players;
 
         std::shared_ptr<LLMClient> llmClient;
         String llmApiKey;

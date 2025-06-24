@@ -53,21 +53,6 @@ bool EnsembleManager::addMusicianRole(const juce::String& roleName, const juce::
     return true;
 }
 
-bool EnsembleManager::addMusicianRole(const juce::String& roleName, const juce::String& instrumentType, Player* player)
-{
-    // Check if the role already exists
-    for (auto& role : musicianRoles) {
-        if (role.name == roleName) {
-            std::cout << "[EnsembleManager] Role '" << roleName << "' already exists" << std::endl;
-            return false;
-        }
-    }
-    
-    // Add the role
-    musicianRoles.add(MusicianRole(roleName, instrumentType, player));
-    std::cout << "[EnsembleManager] Added role '" << roleName << "' with instrument '" << instrumentType << "'" << std::endl;
-    return true;
-}
 
 bool EnsembleManager::removeMusicianRole(const juce::String& roleName)
 {
@@ -353,11 +338,6 @@ juce::var EnsembleManager::toVar() const
         roleObj->setProperty("pattern", role.pattern);
         roleObj->setProperty("level", role.level);
         
-        // Store player ID if available
-        if (role.player)
-        {
-            roleObj->setProperty("playerId", role.player->getId());
-        }
         
         rolesArray.add(roleObj);
     }
@@ -408,25 +388,25 @@ std::unique_ptr<EnsembleManager> EnsembleManager::fromVar(const juce::var& v, Pl
                     level = static_cast<float>(static_cast<double>(roleObj->getProperty("level")));
                 }
                 
-                // Find the player if available
-                Player* player = nullptr;
+                // Find the TracktionPlayer if available
+                TracktionPlayer* tracktionPlayer = nullptr;
                 if (roleObj->hasProperty("playerId") && playerManager)
                 {
                     juce::String playerId = roleObj->getProperty("playerId").toString();
-                    DBG("EnsembleManager: Looking for player with ID: " << playerId);
+                    DBG("EnsembleManager: Looking for TracktionPlayer with ID: " << playerId);
                     for (auto* p : playerManager->getPlayers())
                     {
-                        DBG("EnsembleManager: Found player with ID: " << p->getId() << " (name: " << p->getMetadata().name << ")");
+                        DBG("EnsembleManager: Found TracktionPlayer with ID: " << p->getId() << " (name: " << p->getName() << ")");
                         if (p->getId() == playerId)
                         {
-                            player = p;
-                            DBG("EnsembleManager: Matched player '" << p->getMetadata().name << "' to role '" << roleName << "'");
+                            tracktionPlayer = p;
+                            DBG("EnsembleManager: Matched TracktionPlayer '" << p->getName() << "' to role '" << roleName << "'");
                             break;
                         }
                     }
-                    if (!player)
+                    if (!tracktionPlayer)
                     {
-                        DBG("EnsembleManager: No player found with ID: " << playerId << " for role: " << roleName);
+                        DBG("EnsembleManager: No TracktionPlayer found with ID: " << playerId << " for role: " << roleName);
                     }
                 }
                 else
@@ -435,7 +415,7 @@ std::unique_ptr<EnsembleManager> EnsembleManager::fromVar(const juce::var& v, Pl
                 }
                 
                 // Add the role
-                if (ensemble->addMusicianRole(roleName, instrument, player))
+                if (ensemble->addMusicianRole(roleName, instrument, tracktionPlayer))
                 {
                     // Set the pattern and level
                     for (auto& role : ensemble->musicianRoles)
@@ -533,14 +513,6 @@ bool EnsembleManager::playPatterns()
                 std::cout << "[EnsembleManager] ⚠️ TracktionPlayer not initialized for role: " << role.name << std::endl;
             }
         }
-        else if (role.player)
-        {
-            // Fallback to legacy Player (but this won't provide synchronized playback)
-            std::cout << "[EnsembleManager] WARNING: Using legacy Player for role '" << role.name 
-                      << "' - upgrade to TracktionPlayer for synchronized playback" << std::endl;
-            bool success = role.player->play();
-            if (success) anySuccess = true;
-        }
         else
         {
             std::cout << "[EnsembleManager] ⚠️ No player available for role: " << role.name << std::endl;
@@ -592,12 +564,6 @@ void EnsembleManager::stopPlayback()
         {
             role.tracktionPlayer->stop();
             std::cout << "[EnsembleManager] Stopped TracktionPlayer: " << role.tracktionPlayer->getName() << std::endl;
-        }
-        else if (role.player)
-        {
-            // Legacy Player stop
-            role.player->stop();
-            std::cout << "[EnsembleManager] Stopped legacy Player for role: " << role.name << std::endl;
         }
     }
     

@@ -10,8 +10,8 @@
 */
 
 #include "TracktionAudioEngine.h"
-#include "../Player/Core/Player.h"
-#include "../Player/UI/CovertracksPluginWindow.h"
+#include "../TracktionPlayer/Core/TracktionTracktionPlayer.h"
+#include "../TracktionPlayer/UI/CovertracksPluginWindow.h"
 
 namespace covertracks {
 
@@ -119,7 +119,7 @@ void TracktionAudioEngine::shutdownTracktionEngine()
         juce::ScopedLock lock(playerTrackMutex);
         for (auto& [player, trackInfo] : playerTracks) {
             if (trackInfo->isActive.load()) {
-                deactivatePlayer(player);
+                deactivateTracktionPlayer(player);
             }
         }
         playerTracks.clear();
@@ -152,10 +152,10 @@ void TracktionAudioEngine::shutdownTracktionEngine()
 }
 
 //==============================================================================
-// Player Lifecycle Management
+// TracktionPlayer Lifecycle Management
 //==============================================================================
 
-bool TracktionAudioEngine::registerPlayer(Player* player)
+bool TracktionAudioEngine::registerTracktionPlayer(TracktionPlayer* player)
 {
     if (!player || !currentEdit) {
         return false;
@@ -165,29 +165,29 @@ bool TracktionAudioEngine::registerPlayer(Player* player)
     
     // Check if already registered
     if (playerTracks.find(player) != playerTracks.end()) {
-        DBG("INFO: Player already registered: " << player->getName());
+        DBG("INFO: TracktionPlayer already registered: " << player->getName());
         return false; // Already registered
     }
     
-    // Create a dedicated Tracktion Track for this Player
-    auto* track = createTrackForPlayer(player);
+    // Create a dedicated Tracktion Track for this TracktionPlayer
+    auto* track = createTrackForTracktionPlayer(player);
     if (!track) {
         DBG("ERROR: Failed to create track for player: " << player->getName());
         return false;
     }
     
-    // Create PlayerTrackInfo
-    juce::String trackName = "Player_" + player->getName() + "_Track";
-    auto trackInfo = std::make_unique<PlayerTrackInfo>(player, track, trackName);
+    // Create TracktionPlayerTrackInfo
+    juce::String trackName = "TracktionPlayer_" + player->getName() + "_Track";
+    auto trackInfo = std::make_unique<TracktionPlayerTrackInfo>(player, track, trackName);
     
     // Register the player
     playerTracks[player] = std::move(trackInfo);
     
-    DBG("INFO: Player registered successfully: " << player->getName() << " -> Track: " << trackName);
+    DBG("INFO: TracktionPlayer registered successfully: " << player->getName() << " -> Track: " << trackName);
     return true;
 }
 
-void TracktionAudioEngine::unregisterPlayer(Player* player)
+void TracktionAudioEngine::unregisterTracktionPlayer(TracktionPlayer* player)
 {
     if (!player) return;
     
@@ -197,19 +197,19 @@ void TracktionAudioEngine::unregisterPlayer(Player* player)
     if (it != playerTracks.end()) {
         // Deactivate first if active
         if (it->second->isActive.load()) {
-            deactivatePlayer(player);
+            deactivateTracktionPlayer(player);
         }
         
         // Remove the track from Tracktion Edit
-        removeTrackForPlayer(player);
+        removeTrackForTracktionPlayer(player);
         
         // Remove from registry
-        DBG("INFO: Player unregistered: " << player->getName());
+        DBG("INFO: TracktionPlayer unregistered: " << player->getName());
         playerTracks.erase(it);
     }
 }
 
-bool TracktionAudioEngine::activatePlayer(Player* player)
+bool TracktionAudioEngine::activateTracktionPlayer(TracktionPlayer* player)
 {
     if (!player || !currentEdit) {
         return false;
@@ -219,7 +219,7 @@ bool TracktionAudioEngine::activatePlayer(Player* player)
     
     auto it = playerTracks.find(player);
     if (it == playerTracks.end()) {
-        DBG("ERROR: Player not registered, cannot activate: " << player->getName());
+        DBG("ERROR: TracktionPlayer not registered, cannot activate: " << player->getName());
         return false;
     }
     
@@ -228,11 +228,11 @@ bool TracktionAudioEngine::activatePlayer(Player* player)
     // Mark as active
     trackInfo->isActive.store(true);
     
-    DBG("INFO: Player activated: " << player->getName());
+    DBG("INFO: TracktionPlayer activated: " << player->getName());
     return true;
 }
 
-void TracktionAudioEngine::deactivatePlayer(Player* player)
+void TracktionAudioEngine::deactivateTracktionPlayer(TracktionPlayer* player)
 {
     if (!player) return;
     
@@ -244,17 +244,17 @@ void TracktionAudioEngine::deactivatePlayer(Player* player)
         
         // Stop playback if playing
         if (trackInfo->isPlaying.load()) {
-            stopPlayerPlayback(player);
+            stopTracktionPlayerPlayback(player);
         }
         
         // Mark as inactive
         trackInfo->isActive.store(false);
         
-        DBG("INFO: Player deactivated: " << player->getName());
+        DBG("INFO: TracktionPlayer deactivated: " << player->getName());
     }
 }
 
-bool TracktionAudioEngine::isPlayerRegistered(Player* player) const
+bool TracktionAudioEngine::isTracktionPlayerRegistered(TracktionPlayer* player) const
 {
     if (!player) return false;
     
@@ -262,7 +262,7 @@ bool TracktionAudioEngine::isPlayerRegistered(Player* player) const
     return playerTracks.find(player) != playerTracks.end();
 }
 
-bool TracktionAudioEngine::isPlayerActive(Player* player) const
+bool TracktionAudioEngine::isTracktionPlayerActive(TracktionPlayer* player) const
 {
     if (!player) return false;
     
@@ -279,7 +279,7 @@ bool TracktionAudioEngine::isPlayerActive(Player* player) const
 // Tracktion Track Management
 //==============================================================================
 
-te::Track* TracktionAudioEngine::getPlayerTrack(Player* player)
+te::Track* TracktionAudioEngine::getTracktionPlayerTrack(TracktionPlayer* player)
 {
     if (!player) return nullptr;
     
@@ -292,12 +292,12 @@ te::Track* TracktionAudioEngine::getPlayerTrack(Player* player)
     return nullptr;
 }
 
-te::MidiClip* TracktionAudioEngine::createMidiClipForPlayer(Player* player, 
+te::MidiClip* TracktionAudioEngine::createMidiClipForTracktionPlayer(TracktionPlayer* player, 
                                                            const juce::String& clipName,
                                                            double startTime, 
                                                            double duration)
 {
-    auto* track = getPlayerTrack(player);
+    auto* track = getTracktionPlayerTrack(player);
     if (!track) {
         DBG("ERROR: No track found for player: " << (player ? player->getName() : "null"));
         return nullptr;
@@ -327,7 +327,7 @@ te::MidiClip* TracktionAudioEngine::createMidiClipForPlayer(Player* player,
     }
 }
 
-bool TracktionAudioEngine::startPlayerPlayback(Player* player)
+bool TracktionAudioEngine::startTracktionPlayerPlayback(TracktionPlayer* player)
 {
     if (!player || !currentEdit) {
         return false;
@@ -337,7 +337,7 @@ bool TracktionAudioEngine::startPlayerPlayback(Player* player)
     
     auto it = playerTracks.find(player);
     if (it == playerTracks.end() || !it->second->isActive.load()) {
-        DBG("ERROR: Player not registered or not active: " << player->getName());
+        DBG("ERROR: TracktionPlayer not registered or not active: " << player->getName());
         return false;
     }
     
@@ -362,7 +362,7 @@ bool TracktionAudioEngine::startPlayerPlayback(Player* player)
     }
 }
 
-void TracktionAudioEngine::stopPlayerPlayback(Player* player)
+void TracktionAudioEngine::stopTracktionPlayerPlayback(TracktionPlayer* player)
 {
     if (!player) return;
     
@@ -376,22 +376,22 @@ void TracktionAudioEngine::stopPlayerPlayback(Player* player)
         DBG("INFO: Stopped playback for player: " << player->getName());
         
         // Check if no other players are playing, then stop transport
-        bool anyPlayerPlaying = false;
-        for (const auto& [otherPlayer, otherTrackInfo] : playerTracks) {
+        bool anyTracktionPlayerPlaying = false;
+        for (const auto& [otherTracktionPlayer, otherTrackInfo] : playerTracks) {
             if (otherTrackInfo->isPlaying.load()) {
-                anyPlayerPlaying = true;
+                anyTracktionPlayerPlaying = true;
                 break;
             }
         }
         
-        if (!anyPlayerPlaying && currentEdit) {
+        if (!anyTracktionPlayerPlaying && currentEdit) {
             currentEdit->getTransport().stop(false, false);
             DBG("INFO: Stopped global transport (no players playing)");
         }
     }
 }
 
-bool TracktionAudioEngine::isPlayerPlaying(Player* player) const
+bool TracktionAudioEngine::isTracktionPlayerPlaying(TracktionPlayer* player) const
 {
     if (!player) return false;
     
@@ -427,25 +427,25 @@ te::TransportControl& TracktionAudioEngine::getTransport()
 // MIDI Routing
 //==============================================================================
 
-void TracktionAudioEngine::routeMidiToPlayer(Player* player, const juce::MidiMessage& message)
+void TracktionAudioEngine::routeMidiToTracktionPlayer(TracktionPlayer* player, const juce::MidiMessage& message)
 {
     // For now, delegate to the player's MIDI callback if it has one
     // In the future, this could route directly to the Tracktion track
-    sendMidiToPlayerTrack(player, message);
+    sendMidiToTracktionPlayerTrack(player, message);
 }
 
-void TracktionAudioEngine::routeMidiToAllActivePlayers(const juce::MidiMessage& message)
+void TracktionAudioEngine::routeMidiToAllActiveTracktionPlayers(const juce::MidiMessage& message)
 {
     juce::ScopedLock lock(playerTrackMutex);
     
     for (const auto& [player, trackInfo] : playerTracks) {
         if (trackInfo->isActive.load()) {
-            sendMidiToPlayerTrack(player, message);
+            sendMidiToTracktionPlayerTrack(player, message);
         }
     }
 }
 
-void TracktionAudioEngine::sendMidiToPlayerTrack(Player* player, const juce::MidiMessage& message)
+void TracktionAudioEngine::sendMidiToTracktionPlayerTrack(TracktionPlayer* player, const juce::MidiMessage& message)
 {
     // Route MIDI to the player's callback for now
     // In future iterations, this could write directly to MIDI clips
@@ -519,7 +519,7 @@ bool TracktionAudioEngine::isMidiInputEnabled() const
 
 void TracktionAudioEngine::sendMidiMessage(const juce::MidiMessage& message)
 {
-    routeMidiToAllActivePlayers(message);
+    routeMidiToAllActiveTracktionPlayers(message);
 }
 
 void TracktionAudioEngine::enableMidiInput(bool enabled)
@@ -649,7 +649,7 @@ void TracktionAudioEngine::audioDeviceIOCallbackWithContext(const float* const* 
                 }
             }
             
-            // Process all active Player audio processors
+            // Process all active TracktionPlayer audio processors
             {
                 juce::ScopedLock lock(playerTrackMutex);
                 for (const auto& [player, trackInfo] : playerTracks) {
@@ -709,7 +709,7 @@ void TracktionAudioEngine::changeListenerCallback(juce::ChangeBroadcaster* sourc
 // Tracktion Helpers
 //==============================================================================
 
-te::Track* TracktionAudioEngine::createTrackForPlayer(Player* player)
+te::Track* TracktionAudioEngine::createTrackForTracktionPlayer(TracktionPlayer* player)
 {
     if (!currentEdit || !player) {
         return nullptr;
@@ -721,7 +721,7 @@ te::Track* TracktionAudioEngine::createTrackForPlayer(Player* player)
         
         if (track) {
             // Set track name
-            juce::String trackName = "Player_" + player->getName();
+            juce::String trackName = "TracktionPlayer_" + player->getName();
             track->setName(trackName);
             
             DBG("INFO: Created Tracktion track: " << trackName);
@@ -735,14 +735,14 @@ te::Track* TracktionAudioEngine::createTrackForPlayer(Player* player)
     }
 }
 
-void TracktionAudioEngine::removeTrackForPlayer(Player* player)
+void TracktionAudioEngine::removeTrackForTracktionPlayer(TracktionPlayer* player)
 {
     if (!currentEdit || !player) {
         return;
     }
     
     // Find and remove the player's track
-    auto* track = getPlayerTrack(player);
+    auto* track = getTracktionPlayerTrack(player);
     if (track) {
         try {
             currentEdit->deleteTrack(track);

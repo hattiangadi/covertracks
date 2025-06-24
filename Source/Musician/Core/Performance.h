@@ -5,6 +5,12 @@
 #include "Song.h"
 #include "EnsembleManager.h"
 
+// Forward declarations for playback system
+namespace covertracks {
+    class PlayerManager;
+    class TracktionPlayer;
+}
+
 namespace covertracks {
 
 /**
@@ -279,6 +285,69 @@ public:
      */
     juce::String getUniqueID() const { return uniqueID; }
     
+    // =========================================================================
+    // Unified Playback System
+    // =========================================================================
+    
+    /**
+     * @brief Play this performance with specified roles (unified playback)
+     * 
+     * @param playerManager The player manager to use for TracktionPlayer creation
+     * @param roleNames Array of role names to play (empty = play all roles)
+     * @return bool true if playback started successfully
+     */
+    bool play(class PlayerManager* playerManager, const juce::StringArray& roleNames = {});
+    
+    /**
+     * @brief Play a single role (convenience method)
+     * 
+     * @param playerManager The player manager to use
+     * @param roleName Single role name to play
+     * @return bool true if playback started successfully
+     */
+    bool play(class PlayerManager* playerManager, const juce::String& roleName);
+    
+    /**
+     * @brief Play with provided ensemble roles (overrides cached ensemble)
+     * 
+     * @param playerManager The player manager to use
+     * @param ensembleRoles The actual ensemble roles with player pointers
+     * @param roleNames Array of role names to play (empty = play all roles)
+     * @return bool true if playback started successfully
+     */
+    bool playWithEnsemble(class PlayerManager* playerManager, const juce::Array<MusicianRole>& ensembleRoles, const juce::StringArray& roleNames = {});
+    
+    /**
+     * @brief Load charts for specified roles (preparation for synchronized playback)
+     * 
+     * @param playerManager The player manager to use
+     * @param roleNames Array of role names to load (empty = load all roles)
+     * @return int Number of charts successfully loaded
+     */
+    int loadCharts(class PlayerManager* playerManager, const juce::StringArray& roleNames = {});
+    
+    /**
+     * @brief Load charts with provided ensemble roles (overrides cached ensemble)
+     * 
+     * @param playerManager The player manager to use
+     * @param ensembleRoles The actual ensemble roles with player pointers
+     * @param roleNames Array of role names to load (empty = load all roles)
+     * @return int Number of charts successfully loaded
+     */
+    int loadChartsWithEnsemble(class PlayerManager* playerManager, const juce::Array<MusicianRole>& ensembleRoles, const juce::StringArray& roleNames = {});
+    
+    /**
+     * @brief Stop all active playback
+     */
+    void stopAll();
+    
+    /**
+     * @brief Check if any roles are currently playing
+     * 
+     * @return bool true if playback is active
+     */
+    bool isPlaying() const;
+    
 private:
     juce::String name;
     juce::String description;
@@ -308,6 +377,20 @@ private:
     // Cached ensemble roles to avoid repeated file loading
     mutable juce::Array<MusicianRole> cachedEnsembleRoles;
     mutable bool ensembleCacheValid = false;
+    
+    // =========================================================================
+    // Unified Playback System (Private Members)
+    // =========================================================================
+    
+    // Active TracktionPlayers for current playback session (references only, not owned)
+    std::map<juce::String, TracktionPlayer*> activeTracktionPlayerRefs;
+    
+    // Helper methods for unified playback
+    // Legacy method removed - TracktionPlayer is now provided directly in MusicianRole
+    juce::Array<MusicianRole> filterRolesToPlay(const juce::StringArray& roleNames);
+    juce::Array<MusicianRole> filterRolesToPlay(const juce::Array<MusicianRole>& ensembleRoles, const juce::StringArray& roleNames);
+    bool loadChartsForRoles(const juce::Array<MusicianRole>& roles, PlayerManager* playerManager);
+    bool startPlaybackForLoadedRoles();
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Performance)
 };

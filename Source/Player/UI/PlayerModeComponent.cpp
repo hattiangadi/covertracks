@@ -78,8 +78,14 @@ PlayerModeComponent::PlayerModeComponent(PlayerManager& pm)
     
     DBG("[PlayerModeComponent] Created pattern system without default instruments");
     
-    // Get drum capabilities from Player to use their sound mappings
-    auto drumCapabilities = Player::createDrumCapabilities();
+    // Create default drum capabilities 
+    InstrumentCapabilities drumCapabilities;
+    drumCapabilities.type = InstrumentCapabilityType::Mapping;
+    drumCapabilities.instrumentType = "drums";
+    drumCapabilities.soundMappings = {
+        {"kick", 36}, {"snare", 38}, {"hihat", 42}, {"openHihat", 46},
+        {"crash", 49}, {"ride", 51}, {"rimshot", 37}
+    };
     
     // Update the pattern system with the Player's drum sound mappings
     InstrumentDefinition drums("drums");
@@ -223,15 +229,13 @@ PlayerModeComponent::PlayerModeComponent(PlayerManager& pm)
     patternParser = std::make_unique<PatternParser>(*patternSystem);
     DBG("[PlayerModeComponent] Recreated PatternParser with updated instrument definitions");
     
-    // Register the Player's drum capabilities with the PatternParser
-    // This is the authoritative source for drum note mappings
-    auto playerDrumCapabilities = Player::createDrumCapabilities();
-    patternParser->registerInstrumentCapabilities("drums", playerDrumCapabilities);
-    DBG("[PlayerModeComponent] Registered Player's drum capabilities with PatternParser");
+    // Register the drum capabilities with the PatternParser
+    patternParser->registerInstrumentCapabilities("drums", drumCapabilities);
+    DBG("[PlayerModeComponent] Registered drum capabilities with PatternParser");
     
     // Debug output to verify the drum capabilities
-    DBG("[PlayerModeComponent] Player drum capabilities:");
-    for (const auto& mapping : playerDrumCapabilities.soundMappings)
+    DBG("[PlayerModeComponent] Drum capabilities:");
+    for (const auto& mapping : drumCapabilities.soundMappings)
     {
         DBG("  " + mapping.first + " = " + String(mapping.second));
     }
@@ -342,7 +346,7 @@ void PlayerModeComponent::buttonClicked(juce::Button* button)
         // Stop the current TracktionPlayer
         if (tracktionPlayer != nullptr)
         {
-            tracktionPlayer->stop();
+            selectedTracktionPlayer->stop();
             
             // Update button states
             playButton.setEnabled(true);   // Can still play the pattern again
@@ -365,11 +369,11 @@ void PlayerModeComponent::comboBoxChanged(juce::ComboBox* comboBox)
             auto players = playerManager.getPlayers();
             if (selectedId > 0 && selectedId <= players.size())
             {
-                selectedPlayer = players[selectedId - 1];
+                selectedTracktionPlayer = players[selectedId - 1];
             }
             
-            // NEW: Setup TracktionPlayer for the selected player
-            setupTracktionPlayerForSelected();
+            // Update selected TracktionPlayer
+            updateSelectedTracktionPlayer();
             
             // Update button states
             updateButtonStates();
@@ -377,7 +381,7 @@ void PlayerModeComponent::comboBoxChanged(juce::ComboBox* comboBox)
         else
         {
             // No player selected
-            selectedPlayer = nullptr;
+            selectedTracktionPlayer = nullptr;
             tracktionPlayer = nullptr;  // Clear TracktionPlayer too
             updateButtonStates();
         }
@@ -397,13 +401,13 @@ void PlayerModeComponent::changeListenerCallback(juce::ChangeBroadcaster* source
         updatePlayerSelector();
         
         // Check if the selected player is still valid
-        if (selectedPlayer != nullptr)
+        if (selectedTracktionPlayer != nullptr)
         {
             bool playerStillExists = false;
             
             for (auto* player : playerManager.getPlayers())
             {
-                if (player == selectedPlayer)
+                if (player == selectedTracktionPlayer)
                 {
                     playerStillExists = true;
                     break;
@@ -412,7 +416,7 @@ void PlayerModeComponent::changeListenerCallback(juce::ChangeBroadcaster* source
             
             if (!playerStillExists)
             {
-                selectedPlayer = nullptr;
+                selectedTracktionPlayer = nullptr;
                 updateButtonStates();
             }
         }
@@ -441,18 +445,18 @@ void PlayerModeComponent::updatePlayerSelector()
     if (currentSelectedId > 0 && currentSelectedId <= players.size())
     {
         playerSelector.setSelectedId(currentSelectedId, juce::dontSendNotification);
-        selectedPlayer = players[currentSelectedId - 1];
+        selectedTracktionPlayer = players[currentSelectedId - 1];
     }
     else if (players.size() > 0)
     {
         // Select the first player if available
         playerSelector.setSelectedId(1, juce::dontSendNotification);
-        selectedPlayer = players[0];
+        selectedTracktionPlayer = players[0];
     }
     else
     {
         // No players available
-        selectedPlayer = nullptr;
+        selectedTracktionPlayer = nullptr;
     }
     
     // NEW: Setup TracktionPlayer for the selected player
@@ -1554,10 +1558,10 @@ void PlayerModeComponent::updateCurrentChart()
     int instrumentType = instrumentTypeSelector.getSelectedId();
     bool autoDetectedInstrument = false;
     
-    if (selectedPlayer != nullptr)
+    if (selectedTracktionPlayer != nullptr)
     {
         // Get the player's metadata to check for instrument type
-        auto& metadata = selectedPlayer->getMetadata();
+        auto& metadata = selectedTracktionPlayer->getMetadata();
         juce::String category = metadata.category.toLowerCase();
         
         // Auto-detect instrument type if possible
@@ -1646,7 +1650,7 @@ void PlayerModeComponent::updateButtonStates()
 {
     bool hasChart = (currentChart != nullptr);
     bool hasMidiChart = !currentMidiChart.isVoid();
-    bool hasPlayer = (selectedPlayer != nullptr);
+    bool hasPlayer = (selectedTracktionPlayer != nullptr);
     bool hasTracktionPlayer = (tracktionPlayer != nullptr);
     
     // OLD WORKFLOW: Convert → Load → Play (for compatibility/testing)
@@ -1660,7 +1664,7 @@ void PlayerModeComponent::updateButtonStates()
 
 void PlayerModeComponent::convertToMidiChart()
 {
-    if (currentChart == nullptr || selectedPlayer == nullptr)
+    if (currentChart == nullptr || selectedTracktionPlayer == nullptr)
     {
         std::cerr << "PlayerMode::convertToMidiChart - No chart or player selected" << std::endl;
         return;
@@ -1786,7 +1790,7 @@ void PlayerModeComponent::convertToMidiChart()
 
 void PlayerModeComponent::loadMidiChart()
 {
-    if (currentMidiChart.isVoid() || selectedPlayer == nullptr)
+    if (currentMidiChart.isVoid() || selectedTracktionPlayer == nullptr)
     {
         std::cerr << "PlayerMode::loadMidiChart - No MIDI chart or player available" << std::endl;
         return;
@@ -1795,13 +1799,13 @@ void PlayerModeComponent::loadMidiChart()
     std::cout << "Loading MIDI_EVENT_CHART into player..." << std::endl;
     
     // Load the MIDI_EVENT_CHART into the selected player (same as Performance workflow)
-    if (selectedPlayer->loadChart(currentMidiChart))
+    if (selectedTracktionPlayer->loadChart(currentMidiChart))
     {
         // Update button states - chart is loaded, ready to play
         playButton.setEnabled(true);
         stopButton.setEnabled(false);
         
-        std::cout << "MIDI_EVENT_CHART loaded into player " << selectedPlayer->getMetadata().name << std::endl;
+        std::cout << "MIDI_EVENT_CHART loaded into player " << selectedTracktionPlayer->getMetadata().name << std::endl;
         
         // Update pattern viewer
         patternViewer.setText(patternViewer.getText() + "\n\nMIDI_EVENT_CHART successfully loaded into Player!");
@@ -1817,7 +1821,7 @@ void PlayerModeComponent::playLoadedChart()
 {
     std::cout << "🎵 PlayerModeComponent::playLoadedChart() called!" << std::endl;
     
-    if (selectedPlayer == nullptr)
+    if (selectedTracktionPlayer == nullptr)
     {
         std::cerr << "❌ PlayerMode::playLoadedChart - No player available" << std::endl;
         return;
@@ -1826,13 +1830,13 @@ void PlayerModeComponent::playLoadedChart()
     std::cout << "✅ Starting playback on player..." << std::endl;
     
     // Simply play the loaded chart (same as Performance workflow)
-    if (selectedPlayer->play())
+    if (selectedTracktionPlayer->play())
     {
         // Update button states
         playButton.setEnabled(false);
         stopButton.setEnabled(true);
         
-        std::cout << "Started playback on player " << selectedPlayer->getMetadata().name << std::endl;
+        std::cout << "Started playback on player " << selectedTracktionPlayer->getMetadata().name << std::endl;
         
         // Update pattern viewer
         patternViewer.setText(patternViewer.getText() + "\n\nPlayback started!");
@@ -1871,7 +1875,7 @@ void PlayerModeComponent::playPatternDirectly()
     }
     
     // Step 2: Use TracktionPlayer to play the pattern directly!
-    std::cout << "✅ Playing pattern on TracktionPlayer: " << tracktionPlayer->getName() << std::endl;
+    std::cout << "✅ Playing pattern on TracktionPlayer: " << selectedTracktionPlayer->getName() << std::endl;
     
     // Extract tempo and events from MIDI chart
     auto* chartObj = currentMidiChart.getDynamicObject();
@@ -1893,7 +1897,7 @@ void PlayerModeComponent::playPatternDirectly()
     std::cout << "🎵 Playing " << eventsVar.getArray()->size() << " MIDI events at " << tempo << " BPM" << std::endl;
     
     // Use TracktionPlayer's playChart method with the events array!
-    if (tracktionPlayer->playChart(eventsVar, tempo))
+    if (selectedTracktionPlayer->playChart(eventsVar, tempo))
     {
         // Update button states
         playButton.setEnabled(false);
@@ -1911,86 +1915,25 @@ void PlayerModeComponent::playPatternDirectly()
     }
 }
 
-void PlayerModeComponent::setupTracktionPlayerForSelected()
+void PlayerModeComponent::updateSelectedTracktionPlayer()
 {
     // Clear any existing TracktionPlayer
     tracktionPlayer = nullptr;
     
-    if (selectedPlayer == nullptr)
+    if (selectedTracktionPlayer == nullptr)
     {
         std::cout << "No player selected, clearing TracktionPlayer" << std::endl;
         return;
     }
     
-    std::cout << "🔧 Setting up TracktionPlayer for: " << selectedPlayer->getMetadata().name << std::endl;
-    
-    // Create a TracktionPlayer based on the selected Player's metadata
-    auto& metadata = selectedPlayer->getMetadata();
-    
-    try 
+    // Simple update - selectedTracktionPlayer is already set from PlayerManager
+    if (!selectedTracktionPlayer)
     {
-        // Create TracktionPlayer with the same name and get audio engine references
-        auto* audioEngine = playerManager.getAudioEngine();
-        if (!audioEngine)
-        {
-            std::cerr << "❌ No audio engine available" << std::endl;
-            return;
-        }
-        
-        tracktionPlayer = std::make_unique<TracktionPlayer>(
-            metadata.name + "_TracktionPlayer", 
-            metadata.name,
-            audioEngine->getFormatManager(),
-            audioEngine->getKnownPluginList()
-        );
-        
-        if (!tracktionPlayer->initialize())
-        {
-            std::cerr << "❌ Failed to initialize TracktionPlayer" << std::endl;
-            tracktionPlayer = nullptr;
-            return;
-        }
-        
-        // Load TracktionPlayer state from the Player if available
-        if (selectedPlayer->hasTracktionPlayerState())
-        {
-            std::cout << "📥 Loading TracktionPlayer state from saved Player" << std::endl;
-            auto savedState = selectedPlayer->getTracktionPlayerState();
-            
-            if (tracktionPlayer->loadCompleteState(savedState))
-            {
-                std::cout << "✅ TracktionPlayer state loaded successfully!" << std::endl;
-                std::cout << "🎛️ Plugin count: " << tracktionPlayer->getPluginCount() << std::endl;
-            }
-            else
-            {
-                std::cerr << "⚠️ Failed to load TracktionPlayer state, using empty configuration" << std::endl;
-            }
-        }
-        else
-        {
-            std::cout << "📝 No saved TracktionPlayer state found, using empty configuration" << std::endl;
-            
-            // Optional: Add a default synth based on player category
-            auto category = metadata.category.toLowerCase();
-            if (category.contains("piano") || category.contains("keyboard") || category.contains("synth"))
-            {
-                // Add a default synth for instrument players
-                if (auto* instrument = tracktionPlayer->getInstrument())
-                {
-                    instrument->addDefaultSynth();
-                    std::cout << "🎹 Added default synthesizer for " << category << " player" << std::endl;
-                }
-            }
-        }
-        
-        std::cout << "✅ TracktionPlayer setup complete for: " << metadata.name << std::endl;
+        std::cout << "No TracktionPlayer selected" << std::endl;
+        return;
     }
-    catch (const std::exception& e)
-    {
-        std::cerr << "❌ Exception setting up TracktionPlayer: " << e.what() << std::endl;
-        tracktionPlayer = nullptr;
-    }
+    
+    std::cout << "Using TracktionPlayer: " << selectedTracktionPlayer->getName() << std::endl;
 }
 
 
