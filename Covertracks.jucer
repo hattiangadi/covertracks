@@ -221,19 +221,16 @@
       </GROUP>
       <GROUP id="{A3F7F3C9-8C9E-4F3F-8D67-B2A810D057EF}" name="Player">
         <GROUP id="{B3F7F3C9-8C9E-4F3F-8D67-B2A810D057EF}" name="Core">
-          <FILE id="Vo5zcL" name="Player.cpp" compile="1" resource="0" file="Source/Player/Core/Player.cpp"/>
-          <FILE id="KEhS5x" name="TracktionInstrument.cpp" compile="1" resource="0"
-                file="Source/Player/Core/TracktionInstrument.cpp"/>
-          <FILE id="UTcgsf" name="TracktionInstrument.h" compile="0" resource="0"
-                file="Source/Player/Core/TracktionInstrument.h"/>
-          <FILE id="CPuVCI" name="TracktionPlayer.cpp" compile="1" resource="0"
-                file="Source/Player/Core/TracktionPlayer.cpp"/>
-          <FILE id="BK2fzD" name="TracktionPlayer.h" compile="0" resource="0"
-                file="Source/Player/Core/TracktionPlayer.h"/>
-          <FILE id="yTxmvb" name="Instrument.cpp" compile="1" resource="0" file="Source/Player/Core/Instrument.cpp"/>
+          <FILE id="KEhS5x" name="Instrument.cpp" compile="1" resource="0"
+                file="Source/Player/Core/Instrument.cpp"/>
+          <FILE id="UTcgsf" name="Instrument.h" compile="0" resource="0"
+                file="Source/Player/Core/Instrument.h"/>
+          <FILE id="CPuVCI" name="Player.cpp" compile="1" resource="0"
+                file="Source/Player/Core/Player.cpp"/>
+          <FILE id="BK2fzD" name="Player.h" compile="0" resource="0"
+                file="Source/Player/Core/Player.h"/>
           <FILE id="NEW_FILE_ID_1" name="PlayerManager.cpp" compile="1" resource="0"
                 file="Source/Player/Core/PlayerManager.cpp"/>
-          <FILE id="O9Wi3Q" name="Instrument.h" compile="0" resource="0" file="Source/Player/Core/Instrument.h"/>
           <FILE id="NEW_FILE_ID_2" name="PlayerManager.h" compile="0" resource="0"
                 file="Source/Player/Core/PlayerManager.h"/>
         </GROUP>
@@ -260,10 +257,10 @@
                 resource="0" file="Source/Player/UI/PluginChainEditor.cpp"/>
           <FILE id="PluginChainEditorH" name="PluginChainEditor.h" compile="0"
                 resource="0" file="Source/Player/UI/PluginChainEditor.h"/>
-          <FILE id="TracktionPlayerEditor" name="TracktionPlayerEditor.cpp" compile="1"
-                resource="0" file="Source/Player/UI/TracktionPlayerEditor.cpp"/>
-          <FILE id="TracktionPlayerEditorH" name="TracktionPlayerEditor.h" compile="0"
-                resource="0" file="Source/Player/UI/TracktionPlayerEditor.h"/>
+          <FILE id="TracktionPlayerEditor" name="PlayerEditor.cpp" compile="1"
+                resource="0" file="Source/Player/UI/PlayerEditor.cpp"/>
+          <FILE id="TracktionPlayerEditorH" name="PlayerEditor.h" compile="0"
+                resource="0" file="Source/Player/UI/PlayerEditor.h"/>
         </GROUP>
       </GROUP>
       <FILE id="OmIhwQ" name="HostStartup.cpp" compile="1" resource="0" file="Source/HostStartup.cpp"/>

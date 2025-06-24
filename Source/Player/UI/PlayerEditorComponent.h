@@ -4,8 +4,7 @@
 #include "../Core/PlayerManager.h"
 #include "../../UI/GraphEditorPanel.h"
 #include "../../Plugins/InternalPlugins.h"
-#include "../Core/TracktionPlayer.h"
-#include "../Core/TracktionPlayer.h"
+#include "../Core/Player.h"
 #include "PluginChainEditor.h"
 
 namespace covertracks {
@@ -19,7 +18,7 @@ namespace covertracks {
 {
 public:
 // Modified constructor with engine reference
-PlayerEditorComponent(TracktionPlayer* playerToEdit = nullptr, 
+PlayerEditorComponent(Player* playerToEdit = nullptr, 
 AudioEngineImpl* audioEngine = nullptr);
 ~PlayerEditorComponent() override;
 
@@ -39,7 +38,7 @@ void createPlugin(const PluginDescriptionAndPreference& desc, Point<int> pos);
 void addPluginsToMenu(PopupMenu& menu);
 
 // Player management
-TracktionPlayer* getPlayer() const { return player; }
+Player* getPlayer() const { return player; }
 GraphDocumentComponent* getGraphEditor() const { return graphEditor.get(); }
 std::optional<PluginDescriptionAndPreference> getChosenType(int menuID) const;
 void takeOwnershipOfPlayer(std::unique_ptr<Player> newPlayer);
@@ -60,7 +59,7 @@ void removeListener(Listener* listener);
 
 private:
 // State values
-TracktionPlayer* player = nullptr;
+Player* player = nullptr;
 std::unique_ptr<Player> ownedPlayer;
 
 // UI components
@@ -95,8 +94,8 @@ TextButton addPresetButton;
 // Graph editor (old system)
 std::unique_ptr<GraphDocumentComponent> graphEditor;
 
-// New TracktionPlayer system
-std::unique_ptr<TracktionPlayer> tracktionPlayer;
+// New Player system
+std::unique_ptr<Player> playerInstance;
 std::unique_ptr<PluginChainEditor> pluginChainEditor;
 juce::MidiKeyboardState keyboardState;
 std::unique_ptr<juce::MidiKeyboardComponent> midiKeyboard;
@@ -122,7 +121,7 @@ void timerCallback() override;
 
 // MIDI keyboard support
 void connectMidiKeyboardToGraph();
-void setupNewTracktionPlayerSystem();
+void setupNewPlayerSystem();
 void switchToPluginChainEditor();
 
 // MidiInputCallback implementation

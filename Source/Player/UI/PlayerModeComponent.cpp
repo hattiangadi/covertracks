@@ -259,9 +259,9 @@ PlayerModeComponent::~PlayerModeComponent()
     stopButton.removeListener(this);
     playerManager.removeChangeListener(this);
     
-    // Clear any references to patterns and TracktionPlayer
+    // Clear any references to patterns and Player
     currentChart = nullptr;
-    tracktionPlayer = nullptr;
+    selectedPlayer = nullptr;
 }
 
 void PlayerModeComponent::paint(juce::Graphics& g)
@@ -338,21 +338,21 @@ void PlayerModeComponent::buttonClicked(juce::Button* button)
     else if (button == &playButton)
     {
         std::cout << "🔘 Play button clicked!" << std::endl;
-        // NEW: Direct pattern playback with TracktionPlayer
+        // NEW: Direct pattern playback with Player
         playPatternDirectly();
     }
     else if (button == &stopButton)
     {
-        // Stop the current TracktionPlayer
-        if (tracktionPlayer != nullptr)
+        // Stop the current Player
+        if (selectedPlayer != nullptr)
         {
-            selectedTracktionPlayer->stop();
+            selectedPlayer->stop();
             
             // Update button states
             playButton.setEnabled(true);   // Can still play the pattern again
             stopButton.setEnabled(false);
             
-            std::cout << "⏹️ Stopped TracktionPlayer playback" << std::endl;
+            std::cout << "⏹️ Stopped Player playback" << std::endl;
         }
     }
 }
@@ -369,11 +369,11 @@ void PlayerModeComponent::comboBoxChanged(juce::ComboBox* comboBox)
             auto players = playerManager.getPlayers();
             if (selectedId > 0 && selectedId <= players.size())
             {
-                selectedTracktionPlayer = players[selectedId - 1];
+                selectedPlayer = players[selectedId - 1];
             }
             
-            // Update selected TracktionPlayer
-            updateSelectedTracktionPlayer();
+            // Update selected Player
+            updateSelectedPlayer();
             
             // Update button states
             updateButtonStates();
@@ -381,8 +381,7 @@ void PlayerModeComponent::comboBoxChanged(juce::ComboBox* comboBox)
         else
         {
             // No player selected
-            selectedTracktionPlayer = nullptr;
-            tracktionPlayer = nullptr;  // Clear TracktionPlayer too
+            selectedPlayer = nullptr;
             updateButtonStates();
         }
     }
@@ -401,13 +400,13 @@ void PlayerModeComponent::changeListenerCallback(juce::ChangeBroadcaster* source
         updatePlayerSelector();
         
         // Check if the selected player is still valid
-        if (selectedTracktionPlayer != nullptr)
+        if (selectedPlayer != nullptr)
         {
             bool playerStillExists = false;
             
             for (auto* player : playerManager.getPlayers())
             {
-                if (player == selectedTracktionPlayer)
+                if (player == selectedPlayer)
                 {
                     playerStillExists = true;
                     break;
@@ -416,7 +415,7 @@ void PlayerModeComponent::changeListenerCallback(juce::ChangeBroadcaster* source
             
             if (!playerStillExists)
             {
-                selectedTracktionPlayer = nullptr;
+                selectedPlayer = nullptr;
                 updateButtonStates();
             }
         }
@@ -445,22 +444,22 @@ void PlayerModeComponent::updatePlayerSelector()
     if (currentSelectedId > 0 && currentSelectedId <= players.size())
     {
         playerSelector.setSelectedId(currentSelectedId, juce::dontSendNotification);
-        selectedTracktionPlayer = players[currentSelectedId - 1];
+        selectedPlayer = players[currentSelectedId - 1];
     }
     else if (players.size() > 0)
     {
         // Select the first player if available
         playerSelector.setSelectedId(1, juce::dontSendNotification);
-        selectedTracktionPlayer = players[0];
+        selectedPlayer = players[0];
     }
     else
     {
         // No players available
-        selectedTracktionPlayer = nullptr;
+        selectedPlayer = nullptr;
     }
     
-    // NEW: Setup TracktionPlayer for the selected player
-    setupTracktionPlayerForSelected();
+    // Update selected Player
+    updateSelectedPlayer();
     
     // Update button states
     updateButtonStates();
@@ -1558,10 +1557,10 @@ void PlayerModeComponent::updateCurrentChart()
     int instrumentType = instrumentTypeSelector.getSelectedId();
     bool autoDetectedInstrument = false;
     
-    if (selectedTracktionPlayer != nullptr)
+    if (selectedPlayer != nullptr)
     {
         // Get the player's metadata to check for instrument type
-        auto& metadata = selectedTracktionPlayer->getMetadata();
+        auto& metadata = selectedPlayer->getMetadata();
         juce::String category = metadata.category.toLowerCase();
         
         // Auto-detect instrument type if possible
@@ -1650,21 +1649,20 @@ void PlayerModeComponent::updateButtonStates()
 {
     bool hasChart = (currentChart != nullptr);
     bool hasMidiChart = !currentMidiChart.isVoid();
-    bool hasPlayer = (selectedTracktionPlayer != nullptr);
-    bool hasTracktionPlayer = (tracktionPlayer != nullptr);
+    bool hasPlayer = (selectedPlayer != nullptr);
     
     // OLD WORKFLOW: Convert → Load → Play (for compatibility/testing)
     convertButton.setEnabled(hasChart && hasPlayer);
     loadButton.setEnabled(hasMidiChart && hasPlayer);
     
-    // NEW SIMPLIFIED WORKFLOW: Just Play (uses TracktionPlayer directly)
-    playButton.setEnabled(hasChart && hasTracktionPlayer);  // NEW: Can play directly if we have chart and TracktionPlayer!
+    // NEW SIMPLIFIED WORKFLOW: Just Play (uses Player directly)
+    playButton.setEnabled(hasChart && hasPlayer);  // NEW: Can play directly if we have chart and Player!
     stopButton.setEnabled(false);
 }
 
 void PlayerModeComponent::convertToMidiChart()
 {
-    if (currentChart == nullptr || selectedTracktionPlayer == nullptr)
+    if (currentChart == nullptr || selectedPlayer == nullptr)
     {
         std::cerr << "PlayerMode::convertToMidiChart - No chart or player selected" << std::endl;
         return;
@@ -1790,7 +1788,7 @@ void PlayerModeComponent::convertToMidiChart()
 
 void PlayerModeComponent::loadMidiChart()
 {
-    if (currentMidiChart.isVoid() || selectedTracktionPlayer == nullptr)
+    if (currentMidiChart.isVoid() || selectedPlayer == nullptr)
     {
         std::cerr << "PlayerMode::loadMidiChart - No MIDI chart or player available" << std::endl;
         return;
@@ -1799,13 +1797,13 @@ void PlayerModeComponent::loadMidiChart()
     std::cout << "Loading MIDI_EVENT_CHART into player..." << std::endl;
     
     // Load the MIDI_EVENT_CHART into the selected player (same as Performance workflow)
-    if (selectedTracktionPlayer->loadChart(currentMidiChart))
+    if (selectedPlayer->loadChart(currentMidiChart))
     {
         // Update button states - chart is loaded, ready to play
         playButton.setEnabled(true);
         stopButton.setEnabled(false);
         
-        std::cout << "MIDI_EVENT_CHART loaded into player " << selectedTracktionPlayer->getMetadata().name << std::endl;
+        std::cout << "MIDI_EVENT_CHART loaded into player " << selectedPlayer->getMetadata().name << std::endl;
         
         // Update pattern viewer
         patternViewer.setText(patternViewer.getText() + "\n\nMIDI_EVENT_CHART successfully loaded into Player!");
@@ -1821,7 +1819,7 @@ void PlayerModeComponent::playLoadedChart()
 {
     std::cout << "🎵 PlayerModeComponent::playLoadedChart() called!" << std::endl;
     
-    if (selectedTracktionPlayer == nullptr)
+    if (selectedPlayer == nullptr)
     {
         std::cerr << "❌ PlayerMode::playLoadedChart - No player available" << std::endl;
         return;
@@ -1830,13 +1828,13 @@ void PlayerModeComponent::playLoadedChart()
     std::cout << "✅ Starting playback on player..." << std::endl;
     
     // Simply play the loaded chart (same as Performance workflow)
-    if (selectedTracktionPlayer->play())
+    if (selectedPlayer->play())
     {
         // Update button states
         playButton.setEnabled(false);
         stopButton.setEnabled(true);
         
-        std::cout << "Started playback on player " << selectedTracktionPlayer->getMetadata().name << std::endl;
+        std::cout << "Started playback on player " << selectedPlayer->getMetadata().name << std::endl;
         
         // Update pattern viewer
         patternViewer.setText(patternViewer.getText() + "\n\nPlayback started!");
@@ -1852,9 +1850,9 @@ void PlayerModeComponent::playPatternDirectly()
 {
     std::cout << "🎵 PlayerModeComponent::playPatternDirectly() - NEW TRACKTIONPLAYER APPROACH!" << std::endl;
     
-    if (tracktionPlayer == nullptr)
+    if (selectedPlayer == nullptr)
     {
-        std::cerr << "❌ No TracktionPlayer available" << std::endl;
+        std::cerr << "❌ No Player available" << std::endl;
         return;
     }
     
@@ -1864,7 +1862,7 @@ void PlayerModeComponent::playPatternDirectly()
         return;
     }
     
-    // NEW WORKFLOW: Direct pattern → TracktionPlayer playback
+    // NEW WORKFLOW: Direct pattern → Player playback
     // Step 1: Convert chart to MIDI_EVENT_CHART format
     convertToMidiChart();
     
@@ -1874,8 +1872,8 @@ void PlayerModeComponent::playPatternDirectly()
         return;
     }
     
-    // Step 2: Use TracktionPlayer to play the pattern directly!
-    std::cout << "✅ Playing pattern on TracktionPlayer: " << selectedTracktionPlayer->getName() << std::endl;
+    // Step 2: Use Player to play the pattern directly!
+    std::cout << "✅ Playing pattern on Player: " << selectedPlayer->getName() << std::endl;
     
     // Extract tempo and events from MIDI chart
     auto* chartObj = currentMidiChart.getDynamicObject();
@@ -1896,44 +1894,44 @@ void PlayerModeComponent::playPatternDirectly()
     
     std::cout << "🎵 Playing " << eventsVar.getArray()->size() << " MIDI events at " << tempo << " BPM" << std::endl;
     
-    // Use TracktionPlayer's playChart method with the events array!
-    if (selectedTracktionPlayer->playChart(eventsVar, tempo))
+    // Use Player's playChart method with the events array!
+    if (selectedPlayer->playChart(eventsVar, tempo))
     {
         // Update button states
         playButton.setEnabled(false);
         stopButton.setEnabled(true);
         
-        std::cout << "✅ Started TracktionPlayer pattern playback!" << std::endl;
+        std::cout << "✅ Started Player pattern playback!" << std::endl;
         
         // Update pattern viewer
         patternViewer.setText(patternViewer.getText() + "\n\n🎵 TRACKTIONPLAYER PLAYBACK STARTED!");
     }
     else
     {
-        std::cerr << "❌ Failed to start TracktionPlayer pattern playback" << std::endl;
-        patternViewer.setText(patternViewer.getText() + "\n\n❌ ERROR: Failed to start TracktionPlayer playback!");
+        std::cerr << "❌ Failed to start Player pattern playback" << std::endl;
+        patternViewer.setText(patternViewer.getText() + "\n\n❌ ERROR: Failed to start Player playback!");
     }
 }
 
-void PlayerModeComponent::updateSelectedTracktionPlayer()
+void PlayerModeComponent::updateSelectedPlayer()
 {
-    // Clear any existing TracktionPlayer
-    tracktionPlayer = nullptr;
+    // Clear any existing Player
+    selectedPlayer = nullptr;
     
-    if (selectedTracktionPlayer == nullptr)
+    if (selectedPlayer == nullptr)
     {
-        std::cout << "No player selected, clearing TracktionPlayer" << std::endl;
+        std::cout << "No player selected, clearing Player" << std::endl;
         return;
     }
     
-    // Simple update - selectedTracktionPlayer is already set from PlayerManager
-    if (!selectedTracktionPlayer)
+    // Simple update - selectedPlayer is already set from PlayerManager
+    if (!selectedPlayer)
     {
-        std::cout << "No TracktionPlayer selected" << std::endl;
+        std::cout << "No Player selected" << std::endl;
         return;
     }
     
-    std::cout << "Using TracktionPlayer: " << selectedTracktionPlayer->getName() << std::endl;
+    std::cout << "Using Player: " << selectedPlayer->getName() << std::endl;
 }
 
 

@@ -8,7 +8,7 @@
 // Forward declarations for playback system
 namespace covertracks {
     class PlayerManager;
-    class TracktionPlayer;
+    class Player;
 }
 
 namespace covertracks {
@@ -292,7 +292,7 @@ public:
     /**
      * @brief Play this performance with specified roles (unified playback)
      * 
-     * @param playerManager The player manager to use for TracktionPlayer creation
+     * @param playerManager The player manager to use for Player creation
      * @param roleNames Array of role names to play (empty = play all roles)
      * @return bool true if playback started successfully
      */
@@ -382,11 +382,11 @@ private:
     // Unified Playback System (Private Members)
     // =========================================================================
     
-    // Active TracktionPlayers for current playback session (references only, not owned)
-    std::map<juce::String, TracktionPlayer*> activeTracktionPlayerRefs;
+    // Active Players for current playback session (references only, not owned)
+    std::map<juce::String, Player*> activePlayerRefs;
     
     // Helper methods for unified playback
-    // Legacy method removed - TracktionPlayer is now provided directly in MusicianRole
+    // Legacy method removed - Player is now provided directly in MusicianRole
     juce::Array<MusicianRole> filterRolesToPlay(const juce::StringArray& roleNames);
     juce::Array<MusicianRole> filterRolesToPlay(const juce::Array<MusicianRole>& ensembleRoles, const juce::StringArray& roleNames);
     bool loadChartsForRoles(const juce::Array<MusicianRole>& roles, PlayerManager* playerManager);

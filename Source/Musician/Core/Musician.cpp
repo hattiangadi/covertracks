@@ -4,7 +4,7 @@
 #include "PatternGenerator.h"
 #include "PatternParser.h"
 #include "../../LLM/Core/PromptManager.h"
-#include "../../Player/Core/TracktionPlayer.h"
+#include "../../Player/Core/Player.h"
 #include <iostream>
 
 namespace covertracks {
@@ -123,10 +123,10 @@ void Musician::generateChart(const var& parameters,
 }
 
 void Musician::generateChartWithPlayer(const var& parameters,
-                                      TracktionPlayer* player,
+                                      Player* player,
                                       std::function<void(bool success, const var& midiEventChart)> callback)
 {
-    DBG("DEBUG: Musician::generateChartWithPlayer called with TracktionPlayer capabilities");
+    DBG("DEBUG: Musician::generateChartWithPlayer called with Player capabilities");
     
     if (!patternGenerator || !llmClient)
     {

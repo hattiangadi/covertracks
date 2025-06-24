@@ -2,7 +2,7 @@
 
 #include <JuceHeader.h>
 #include "../Core/PlayerManager.h"
-#include "../Core/TracktionPlayer.h"
+#include "../Core/Player.h"
 #include "../../Musician/Core/MusicPatternSystem.h"
 #include "../../Musician/Core/PatternParser.h"
 #include "../../Musician/Core/MusicPatternComponents.h"
@@ -56,7 +56,7 @@ private:
     TextEditor patternViewer;
     
     // Currently selected player and pattern
-    TracktionPlayer* selectedTracktionPlayer = nullptr;  // Currently selected TracktionPlayer
+    Player* selectedPlayer = nullptr;  // Currently selected Player
     std::shared_ptr<Chart> currentChart = nullptr;
     var currentMidiChart;  // MIDI_EVENT_CHART format
     
@@ -82,7 +82,7 @@ private:
     void updatePlayerSelector();
     void updateCurrentChart();
     void updateButtonStates();
-    void updateSelectedTracktionPlayer();  // Update selected TracktionPlayer from PlayerManager
+    void updateSelectedPlayer();  // Update selected Player from PlayerManager
     juce::String getMidiNoteName(int midiNoteNumber);
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PlayerModeComponent)

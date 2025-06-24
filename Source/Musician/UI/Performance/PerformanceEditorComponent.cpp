@@ -806,19 +806,19 @@ void PerformanceEditorComponent::loadChartForPlayer(int playerIndex)
     // Apply the role's level setting to the player
     player->setLevel(role.level);
     
-    // Create TracktionPlayer for proper Load→Play separation
-    auto tracktionPlayer = createTracktionPlayerFromPlayer(player);
-    if (!tracktionPlayer)
+    // Create Player for proper Load→Play separation
+    auto playerInstance = createPlayerFromPlayer(player);
+    if (!playerInstance)
     {
-        statusDisplay.setText("Failed to create TracktionPlayer for " + role.getName());
-        currentPerformance->setStatusMessage(role.getName(), "TracktionPlayer creation failed");
+        statusDisplay.setText("Failed to create Player for " + role.getName());
+        currentPerformance->setStatusMessage(role.getName(), "Player creation failed");
         return;
     }
     
-    // Initialize TracktionPlayer
-    if (!tracktionPlayer->initialize())
+    // Initialize Player
+    if (!playerInstance->initialize())
     {
-        statusDisplay.setText("Failed to initialize TracktionPlayer for " + role.getName());
+        statusDisplay.setText("Failed to initialize Player for " + role.getName());
         currentPerformance->setStatusMessage(role.getName(), "Initialization failed");
         return;
     }
@@ -838,13 +838,13 @@ void PerformanceEditorComponent::loadChartForPlayer(int playerIndex)
     }
     
     // Load chart for later synchronized playback (pre-converts MIDI for instant start)
-    if (tracktionPlayer->loadChart(midiEvents, 120.0))
+    if (player->loadChart(midiEvents, 120.0))
     {
         statusDisplay.setText("Chart loaded for " + role.getName() + " (level: " + String(role.level, 1) + "x)");
         currentPerformance->setStatusMessage(role.getName(), "Chart Loaded (Ready for Sync)");
         
-        // Store TracktionPlayer for synchronized playback
-        // TODO: Add member variable to store loaded TracktionPlayers per role
+        // Store Player for synchronized playback
+        // TODO: Add member variable to store loaded Players per role
     }
     else
     {
@@ -1169,14 +1169,14 @@ void PerformanceEditorComponent::stopAllPlayers()
     // Use unified Performance stop system
     currentPerformance->stopAll();
     
-    // Also stop individual TracktionPlayers (legacy support)
-    if (!activeTracktionPlayers.empty())
+    // Also stop individual Players (legacy support)
+    if (!activePlayers.empty())
     {
-        for (auto& pair : activeTracktionPlayers)
+        for (auto& pair : activePlayers)
         {
             pair.second->stop();
         }
-        activeTracktionPlayers.clear();
+        activePlayers.clear();
     }
     
     // Stop EnsembleManager if active (legacy support)
@@ -2003,10 +2003,10 @@ void PerformanceEditorComponent::requestJsonContinuation(const String& roleName,
 }
 
 // =========================================================================
-// TracktionPlayer Creation (NEW: For Synchronized Ensemble Playback)
+// Player Creation (NEW: For Synchronized Ensemble Playback)
 // =========================================================================
 
-std::unique_ptr<TracktionPlayer> PerformanceEditorComponent::createTracktionPlayerFromPlayer(Player* player)
+std::unique_ptr<Player> PerformanceEditorComponent::createPlayerFromPlayer(Player* player)
 {
     if (!player)
         return nullptr;
@@ -2016,30 +2016,30 @@ std::unique_ptr<TracktionPlayer> PerformanceEditorComponent::createTracktionPlay
     
     try 
     {
-        // Create TracktionPlayer with same ID and metadata as original Player
-        auto tracktionPlayer = std::make_unique<TracktionPlayer>(
+        // Create Player with same ID and metadata as original Player
+        auto newPlayer = std::make_unique<Player>(
             player->getId(),
             player->getMetadata().name,
             playerManager->getFormatManager(),
             playerManager->getKnownPluginList()
         );
         
-        // Initialize the TracktionPlayer for audio processing
-        if (!tracktionPlayer->initialize())
+        // Initialize the Player for audio processing
+        if (!newPlayer->initialize())
         {
-            std::cerr << "[PerformanceEditor] Failed to initialize TracktionPlayer for: " << player->getMetadata().name << std::endl;
+            std::cerr << "[PerformanceEditor] Failed to initialize Player for: " << player->getMetadata().name << std::endl;
             return nullptr;
         }
         
         // Load player state if available (plugins, configurations, etc.)
-        if (player->hasTracktionPlayerState())
+        if (player->hasPlayerState())
         {
-            auto savedState = player->getTracktionPlayerState();
+            auto savedState = player->getPlayerState();
             if (!savedState.isVoid())
             {
-                if (tracktionPlayer->loadCompleteState(savedState))
+                if (newPlayer->loadCompleteState(savedState))
                 {
-                    std::cout << "[PerformanceEditor] ✅ Loaded saved state for TracktionPlayer: " << player->getMetadata().name << std::endl;
+                    std::cout << "[PerformanceEditor] ✅ Loaded saved state for Player: " << player->getMetadata().name << std::endl;
                 }
                 else
                 {
@@ -2049,28 +2049,28 @@ std::unique_ptr<TracktionPlayer> PerformanceEditorComponent::createTracktionPlay
         }
         else
         {
-            std::cout << "[PerformanceEditor] Creating new TracktionPlayer without saved state: " << player->getMetadata().name << std::endl;
+            std::cout << "[PerformanceEditor] Creating new Player without saved state: " << player->getMetadata().name << std::endl;
             
             // Add default instrument based on player capabilities
-            const auto& capabilities = player->getMetadata().capabilities;
+            const auto& capabilities = player->getInstrumentCapabilities();
             if (capabilities.instrumentType == "drums")
             {
                 // Add default synth for drums
-                tracktionPlayer->getInstrument()->addDefaultSynth();
+                newPlayer->getInstrument()->addDefaultSynth();
             }
             else if (capabilities.instrumentType == "piano" || capabilities.instrumentType == "bass" || capabilities.instrumentType == "guitar")
             {
                 // Add default synth for melodic instruments
-                tracktionPlayer->getInstrument()->addDefaultSynth();
+                newPlayer->getInstrument()->addDefaultSynth();
             }
         }
         
-        std::cout << "[PerformanceEditor] ✅ Created TracktionPlayer for synchronized playback: " << player->getMetadata().name << std::endl;
-        return tracktionPlayer;
+        std::cout << "[PerformanceEditor] ✅ Created Player for synchronized playback: " << player->getMetadata().name << std::endl;
+        return newPlayer;
     }
     catch (const std::exception& e)
     {
-        std::cerr << "[PerformanceEditor] Exception creating TracktionPlayer for " << player->getMetadata().name << ": " << e.what() << std::endl;
+        std::cerr << "[PerformanceEditor] Exception creating Player for " << player->getMetadata().name << ": " << e.what() << std::endl;
         return nullptr;
     }
 }

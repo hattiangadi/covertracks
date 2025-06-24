@@ -1,6 +1,6 @@
 #include <JuceHeader.h>
 #include "../Audio/AudioEngineInterface.h"
-#include "../Player/Core/TracktionPlayer.h"
+#include "../Player/Core/Player.h"
 #include "../Player/Core/PlayerManager.h"
 #include "../Musician/Core/Performance.h"
 
@@ -47,12 +47,12 @@ private:
         auto& audioEngine = getAudioEngine();
         
         // Create a typical ensemble: drums, bass, guitar, piano, strings, vocals
-        std::vector<std::unique_ptr<TracktionPlayer>> ensemble;
+        std::vector<std::unique_ptr<Player>> ensemble;
         std::vector<String> instruments = {"Drums", "Bass", "Guitar", "Piano", "Strings", "Vocals"};
         
         for (const auto& instrumentName : instruments)
         {
-            auto player = std::make_unique<TracktionPlayer>(
+            auto player = std::make_unique<Player>(
                 "test_" + instrumentName.toLowerCase(),
                 instrumentName,
                 audioEngine.getFormatManager(),
@@ -110,7 +110,7 @@ private:
         
         for (int i = 0; i < 4; ++i)
         {
-            auto player = std::make_unique<TracktionPlayer>(
+            auto player = std::make_unique<Player>(
                 "simul_test_" + String(i),
                 "SimulTest" + String(i),
                 audioEngine.getFormatManager(),
@@ -235,7 +235,7 @@ private:
         
         for (int i = 0; i < 8; ++i)
         {
-            auto player = std::make_unique<TracktionPlayer>(
+            auto player = std::make_unique<Player>(
                 "load_test_" + String(i),
                 "LoadTest" + String(i),
                 audioEngine.getFormatManager(),
@@ -299,7 +299,7 @@ private:
         
         for (int i = 0; i < 4; ++i)
         {
-            auto player = std::make_unique<TracktionPlayer>(
+            auto player = std::make_unique<Player>(
                 "cpu_test_" + String(i),
                 "CpuTest" + String(i),
                 audioEngine.getFormatManager(),
@@ -396,7 +396,7 @@ private:
         
         for (const auto& role : roles)
         {
-            auto player = std::make_unique<TracktionPlayer>(
+            auto player = std::make_unique<Player>(
                 "perf_" + role.toLowerCase(),
                 "Performance" + role,
                 audioEngine.getFormatManager(),
@@ -509,7 +509,7 @@ private:
         for (int loadLevel = 1; loadLevel <= 5; ++loadLevel)
         {
             // Add another player to increase load
-            auto player = std::make_unique<TracktionPlayer>(
+            auto player = std::make_unique<Player>(
                 "quality_test_" + String(loadLevel),
                 "QualityTest" + String(loadLevel),
                 audioEngine.getFormatManager(),

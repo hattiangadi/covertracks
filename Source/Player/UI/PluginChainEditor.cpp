@@ -59,14 +59,14 @@ PluginChainEditor::~PluginChainEditor()
     pluginListBox.setModel(nullptr);
 }
 
-void PluginChainEditor::setPlayer(TracktionPlayer* player)
+void PluginChainEditor::setPlayer(Player* player)
 {
     currentPlayer = player;
     currentInstrument = player ? player->getInstrument() : nullptr;
     refreshPluginList();
 }
 
-void PluginChainEditor::setInstrument(TracktionInstrument* instrument)
+void PluginChainEditor::setInstrument(Instrument* instrument)
 {
     currentInstrument = instrument;
     currentPlayer = nullptr; // Direct instrument editing

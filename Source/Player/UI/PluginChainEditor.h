@@ -1,8 +1,8 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "../Core/TracktionInstrument.h"
-#include "../Core/TracktionPlayer.h"
+#include "../Core/Instrument.h"
+#include "../Core/Player.h"
 #include "../../Plugins/PluginGraph.h"  // For PluginDescriptionAndPreference
 #include <optional>
 #include <map>
@@ -10,7 +10,7 @@
 namespace covertracks {
 
 /**
- * @brief Simple plugin chain editor for TracktionInstrument
+ * @brief Simple plugin chain editor for Instrument
  * 
  * Displays plugins as a vertical list (chain) rather than a complex graph.
  * Automatically handles MIDI In -> Plugin Chain -> Audio Out flow.
@@ -23,9 +23,9 @@ public:
     PluginChainEditor();
     ~PluginChainEditor() override;
     
-    // Set the TracktionPlayer/TracktionInstrument to edit
-    void setPlayer(TracktionPlayer* player);
-    void setInstrument(TracktionInstrument* instrument);
+    // Set the Player/Instrument to edit
+    void setPlayer(Player* player);
+    void setInstrument(Instrument* instrument);
     
     // Component overrides
     void paint(juce::Graphics& g) override;
@@ -42,8 +42,8 @@ public:
     
 private:
     // Data
-    TracktionPlayer* currentPlayer = nullptr;
-    TracktionInstrument* currentInstrument = nullptr;
+    Player* currentPlayer = nullptr;
+    Instrument* currentInstrument = nullptr;
     
     // UI Components
     juce::Label titleLabel;

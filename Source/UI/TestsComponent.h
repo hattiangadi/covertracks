@@ -2,8 +2,8 @@
 
 #include <JuceHeader.h>
 #include "../Audio/AudioEngineInterface.h"
-#include "../Player/Core/TracktionPlayer.h"
-#include "../Player/Core/TracktionInstrument.h"
+#include "../Player/Core/Player.h"
+#include "../Player/Core/Instrument.h"
 
 namespace covertracks {
 
@@ -42,7 +42,7 @@ private:
     // Test methods
     void runTests();
     
-    // Audio test methods using new TracktionPlayer/TracktionInstrument architecture
+    // Audio test methods using new Player/Instrument architecture
     void generateSineWave(float frequency, float duration);
     void generateTwoTones();
     void stopAllAudio();
@@ -50,9 +50,9 @@ private:
     void updateAudioStatus(const juce::String& message);
     
     // New architecture components
-    std::unique_ptr<TracktionInstrument> testInstrument;
-    std::unique_ptr<TracktionPlayer> testPlayer1;
-    std::unique_ptr<TracktionPlayer> testPlayer2;
+    std::unique_ptr<Instrument> testInstrument;
+    std::unique_ptr<Player> testPlayer1;
+    std::unique_ptr<Player> testPlayer2;
     
     // Shared plugin format manager and known plugin list for new architecture
     juce::AudioPluginFormatManager formatManager;

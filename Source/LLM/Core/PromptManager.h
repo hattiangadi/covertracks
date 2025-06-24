@@ -6,7 +6,7 @@
 namespace covertracks {
 
 // Forward declarations
-class TracktionPlayer;
+class Player;
 struct InstrumentCapabilities;
 
 /**
@@ -46,7 +46,7 @@ public:
      * @return String The generated prompt
      */
     String createMusicGenerationPrompt(const String& style,
-                                     const std::vector<TracktionPlayer*>& players,
+                                     const std::vector<Player*>& players,
                                      int tempo,
                                      const String& description);
     
@@ -81,7 +81,7 @@ public:
      */
     String createMusicGenerationPrompt(const String& style,
                                      const String& character,
-                                     TracktionPlayer* player,
+                                     Player* player,
                                      const String& instrumentRoleDefinition,
                                      int tempo,
                                      const String& description);
@@ -140,7 +140,7 @@ private:
     void loadInstrumentDefinitions();
     
     // Helper method to convert Player capabilities to instrument definitions
-    String createInstrumentDefinitionsFromPlayers(const std::vector<TracktionPlayer*>& players);
+    String createInstrumentDefinitionsFromPlayers(const std::vector<Player*>& players);
     
     // Helper method to replace template variables
     String processTemplate(const String& templateText, 
@@ -153,7 +153,7 @@ private:
     String getInstrumentDefinition(const String& instrument);
     
     // Helper method to get instrument definition from Player capabilities
-    String getInstrumentDefinitionFromPlayer(TracktionPlayer* player);
+    String getInstrumentDefinitionFromPlayer(Player* player);
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PromptManager)
 };

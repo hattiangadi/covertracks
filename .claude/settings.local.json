@@ -37,7 +37,13 @@
       "Bash(g++:*)",
       "Bash(./verify_tracktion.sh)",
       "Bash(mv:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(projucer:*)",
+      "Bash(git checkout:*)",
+      "Bash(for:*)",
+      "Bash(do echo:*)",
+      "Bash(done)",
+      "Bash(jq:*)"
     ],
     "deny": []
   }

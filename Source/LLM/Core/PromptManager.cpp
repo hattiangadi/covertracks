@@ -1,6 +1,6 @@
 // Source/LLM/Core/PromptManager.cpp
 #include "PromptManager.h"
-#include "../../Player/Core/TracktionPlayer.h"
+#include "../../Player/Core/Player.h"
 
 namespace covertracks {
 
@@ -63,7 +63,7 @@ String PromptManager::createMusicGenerationPrompt(const String& style,
 
 String PromptManager::createMusicGenerationPrompt(const String& style,
                                                 const String& character, 
-                                                TracktionPlayer* player,
+                                                Player* player,
                                                 const String& instrumentRoleDefinition,
                                                 int /*tempo*/, 
                                                 const String& description)
@@ -91,7 +91,7 @@ String PromptManager::createMusicGenerationPrompt(const String& style,
 }
 
 String PromptManager::createMusicGenerationPrompt(const String& style,
-                                                 const std::vector<TracktionPlayer*>& players,
+                                                 const std::vector<Player*>& players,
                                                  int tempo,
                                                  const String& description)
 {
@@ -663,7 +663,7 @@ String PromptManager::processTemplate(const String& templateText,
     return result;
 }
 
-String PromptManager::createInstrumentDefinitionsFromPlayers(const std::vector<TracktionPlayer*>& players)
+String PromptManager::createInstrumentDefinitionsFromPlayers(const std::vector<Player*>& players)
 {
     String instrumentDefs = "Available Instrument Primitives:\n";
     
@@ -766,7 +766,7 @@ String PromptManager::getInstrumentDefinition(const String& instrument)
     return instrument + ": Standard instrument capabilities";
 }
 
-String PromptManager::getInstrumentDefinitionFromPlayer(TracktionPlayer* player)
+String PromptManager::getInstrumentDefinitionFromPlayer(Player* player)
 {
     if (!player)
         return "Unknown instrument: No player provided";

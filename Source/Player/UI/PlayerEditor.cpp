@@ -1,12 +1,12 @@
-#include "TracktionPlayerEditor.h"
+#include "PlayerEditor.h"
 #include <iostream>
 
 namespace covertracks {
 
-TracktionPlayerEditor::TracktionPlayerEditor()
+PlayerEditor::PlayerEditor()
 {
     // Set up title
-    titleLabel.setText("TracktionPlayer Editor", juce::dontSendNotification);
+    titleLabel.setText("Player Editor", juce::dontSendNotification);
     titleLabel.setFont(juce::Font(18.0f, juce::Font::bold));
     titleLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(titleLabel);
@@ -63,10 +63,10 @@ TracktionPlayerEditor::TracktionPlayerEditor()
     pluginChainEditor = std::make_unique<PluginChainEditor>();
     addAndMakeVisible(pluginChainEditor.get());
     
-    std::cout << "TracktionPlayerEditor initialized" << std::endl;
+    std::cout << "PlayerEditor initialized" << std::endl;
 }
 
-TracktionPlayerEditor::~TracktionPlayerEditor()
+PlayerEditor::~PlayerEditor()
 {
     saveButton.removeListener(this);
     cancelButton.removeListener(this);
@@ -74,7 +74,7 @@ TracktionPlayerEditor::~TracktionPlayerEditor()
     categoryCombo.removeListener(this);
 }
 
-void TracktionPlayerEditor::setPlayer(TracktionPlayer* player)
+void PlayerEditor::setPlayer(Player* player)
 {
     currentPlayer = player;
     
@@ -87,10 +87,10 @@ void TracktionPlayerEditor::setPlayer(TracktionPlayer* player)
     // Update UI from player
     updateUIFromPlayer();
     
-    std::cout << "TracktionPlayerEditor: Set player " << (player ? player->getName().toStdString() : "nullptr") << std::endl;
+    std::cout << "PlayerEditor: Set player " << (player ? player->getName().toStdString() : "nullptr") << std::endl;
 }
 
-void TracktionPlayerEditor::paint(juce::Graphics& g)
+void PlayerEditor::paint(juce::Graphics& g)
 {
     g.fillAll(getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId));
     
@@ -106,7 +106,7 @@ void TracktionPlayerEditor::paint(juce::Graphics& g)
     g.drawHorizontalLine(metadataHeight, 10, getWidth() - 10);
 }
 
-void TracktionPlayerEditor::resized()
+void PlayerEditor::resized()
 {
     auto area = getLocalBounds().reduced(10);
     
@@ -150,16 +150,16 @@ void TracktionPlayerEditor::resized()
     }
 }
 
-void TracktionPlayerEditor::buttonClicked(juce::Button* button)
+void PlayerEditor::buttonClicked(juce::Button* button)
 {
     if (button == &saveButton)
     {
         updatePlayerFromUI();
-        listeners.call([this](Listener& l) { l.tracktionPlayerEditorSaveRequested(this); });
+        listeners.call([this](Listener& l) { l.playerEditorSaveRequested(this); });
     }
     else if (button == &cancelButton)
     {
-        listeners.call([this](Listener& l) { l.tracktionPlayerEditorCancelRequested(this); });
+        listeners.call([this](Listener& l) { l.playerEditorCancelRequested(this); });
     }
     else if (button == &testPlayerButton)
     {
@@ -167,7 +167,7 @@ void TracktionPlayerEditor::buttonClicked(juce::Button* button)
     }
 }
 
-void TracktionPlayerEditor::comboBoxChanged(juce::ComboBox* comboBox)
+void PlayerEditor::comboBoxChanged(juce::ComboBox* comboBox)
 {
     if (comboBox == &categoryCombo)
     {
@@ -176,17 +176,17 @@ void TracktionPlayerEditor::comboBoxChanged(juce::ComboBox* comboBox)
     }
 }
 
-void TracktionPlayerEditor::addListener(Listener* listener)
+void PlayerEditor::addListener(Listener* listener)
 {
     listeners.add(listener);
 }
 
-void TracktionPlayerEditor::removeListener(Listener* listener)
+void PlayerEditor::removeListener(Listener* listener)
 {
     listeners.remove(listener);
 }
 
-void TracktionPlayerEditor::updateUIFromPlayer()
+void PlayerEditor::updateUIFromPlayer()
 {
     if (!currentPlayer)
     {
@@ -213,7 +213,7 @@ void TracktionPlayerEditor::updateUIFromPlayer()
         categoryCombo.setSelectedId(10); // Other
     
     // Set description
-    juce::String description = "TracktionPlayer: " + currentPlayer->getName();
+    juce::String description = "Player: " + currentPlayer->getName();
     if (auto* instrument = currentPlayer->getInstrument())
     {
         description += "\nPlugins: " + juce::String(instrument->getPluginCount());
@@ -222,21 +222,21 @@ void TracktionPlayerEditor::updateUIFromPlayer()
     descriptionEditor.setText(description);
 }
 
-void TracktionPlayerEditor::updatePlayerFromUI()
+void PlayerEditor::updatePlayerFromUI()
 {
     if (!currentPlayer)
         return;
         
-    // Note: TracktionPlayer doesn't have setters for metadata yet
+    // Note: Player doesn't have setters for metadata yet
     // This is where we'd update the player's metadata from the UI
     
-    std::cout << "TracktionPlayerEditor: Updated player metadata (setters not yet implemented)" << std::endl;
+    std::cout << "PlayerEditor: Updated player metadata (setters not yet implemented)" << std::endl;
     std::cout << "  Name: " << nameEditor.getText().toStdString() << std::endl;
     std::cout << "  Category: " << categoryCombo.getText().toStdString() << std::endl;
     std::cout << "  Description: " << descriptionEditor.getText().substring(0, 50).toStdString() << "..." << std::endl;
 }
 
-void TracktionPlayerEditor::testPlayer()
+void PlayerEditor::testPlayer()
 {
     if (!currentPlayer)
     {
@@ -244,7 +244,7 @@ void TracktionPlayerEditor::testPlayer()
         return;
     }
     
-    std::cout << "Testing TracktionPlayer: " << currentPlayer->getName().toStdString() << std::endl;
+    std::cout << "Testing Player: " << currentPlayer->getName().toStdString() << std::endl;
     
     // Create a simple test chart
     juce::Array<juce::var> midiEventsArray;

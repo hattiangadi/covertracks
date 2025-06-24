@@ -1,39 +1,80 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "TracktionInstrument.h"
+#include "Instrument.h"
 #include "../../Musician/Core/Musician.h"
 
 namespace covertracks {
 
 /**
- * @brief Orchestration layer - coordinates Musician and TracktionInstrument
+ * @brief Instrument capability types
+ */
+enum class InstrumentCapabilityType {
+    NoteRange,    // Has min/max MIDI note range (e.g., Piano: C2-G5)
+    Mapping       // Has specific note-to-sound mappings (e.g., Drums: kick=36, snare=38)
+};
+
+/**
+ * @brief Instrument capabilities for LLM integration
+ */
+struct InstrumentCapabilities {
+    InstrumentCapabilityType type;
+    juce::String instrumentType;  // "drums", "piano", "bass", "guitar", etc.
+    
+    // For NoteRange type
+    int minNote = 0;        // Minimum MIDI note number
+    int maxNote = 127;      // Maximum MIDI note number
+    
+    // For Mapping type  
+    std::map<juce::String, int> soundMappings;  // sound name -> MIDI note (e.g., "kick" -> 36)
+};
+
+/**
+ * @brief Player metadata structure
+ */
+struct PlayerMetadata {
+    juce::String name;           // Player display name
+    juce::String id;            // Unique player identifier
+    juce::String instrumentType; // Type of instrument (drums, piano, etc.)
+    juce::String category;       // Instrument category (Keyboard, Drums, Bass, Guitar, Other)
+    juce::String description;    // Player description
+    juce::Time created;         // Creation timestamp
+    juce::Time lastModified;    // Last modification timestamp
+    
+    PlayerMetadata() = default;
+    PlayerMetadata(const juce::String& playerName, const juce::String& playerId, const juce::String& instType = "general")
+        : name(playerName), id(playerId), instrumentType(instType), category("Other"), description(""),
+          created(juce::Time::getCurrentTime()), lastModified(juce::Time::getCurrentTime()) {}
+};
+
+/**
+ * @brief Orchestration layer - coordinates Musician and Instrument
  * 
- * TracktionPlayer is a thin orchestration layer that:
- * - Coordinates between Musician (chart generation) and TracktionInstrument (audio playback)
+ * Player is a thin orchestration layer that:
+ * - Coordinates between Musician (chart generation) and Instrument (audio playback)
  * - Handles persistence (save/load player configurations and states)
  * - Provides high-level player operations (generateAndPlay, addPlugin, etc.)
- * - Delegates all audio concerns to TracktionInstrument
+ * - Delegates all audio concerns to Instrument
  * 
  * This class represents the "conductor" that coordinates musical generation
  * and audio playback, keeping these concerns properly separated.
  */
-class TracktionPlayer
+class Player
 {
 public:
     /**
-     * @brief Create a TracktionPlayer
+     * @brief Create a Player
      * @param id Unique player identifier
      * @param name Display name for this player
      * @param formatManager Reference to shared plugin format manager
      * @param knownPluginList Reference to shared plugin list
      */
-    TracktionPlayer(const juce::String& id,
-                   const juce::String& name,
-                   juce::AudioPluginFormatManager& formatManager,
-                   juce::KnownPluginList& knownPluginList);
+    Player(const juce::String& id,
+           const juce::String& name,
+           juce::AudioPluginFormatManager& formatManager,
+           juce::KnownPluginList& knownPluginList);
     
-    ~TracktionPlayer();
+    ~Player();
     
     // =========================================================================
     // Player Identity & Metadata
@@ -57,13 +98,31 @@ public:
      */
     void setName(const juce::String& name) { playerName = name; }
     
+    /**
+     * @brief Get player metadata
+     * @return Player metadata structure
+     */
+    PlayerMetadata getMetadata() const;
+    
+    /**
+     * @brief Get mutable player metadata
+     * @return Reference to player metadata structure
+     */
+    PlayerMetadata& getMetadata();
+    
+    /**
+     * @brief Set player metadata
+     * @param newMetadata New metadata to set
+     */
+    void setMetadata(const PlayerMetadata& newMetadata);
+    
     // =========================================================================
     // High-Level Orchestration (Musician ↔ Instrument)
     // =========================================================================
     
     /**
      * @brief Generate a musical chart and immediately play it
-     * Coordinates Musician chart generation → TracktionInstrument playback
+     * Coordinates Musician chart generation → Instrument playback
      * @param parameters Chart generation parameters
      * @param callback Completion callback (success/failure)
      */
@@ -107,12 +166,12 @@ public:
     const juce::var& getLastChart() const { return lastGeneratedChart; }
     
     // =========================================================================
-    // Audio Delegation (Pass-through to TracktionInstrument)
+    // Audio Delegation (Pass-through to Instrument)
     // =========================================================================
     
     /**
      * @brief Add a plugin to this player's instrument
-     * Delegates to TracktionInstrument::addPlugin()
+     * Delegates to Instrument::addPlugin()
      * @param pluginDesc Plugin to add
      * @return true if added successfully
      */
@@ -120,7 +179,7 @@ public:
     
     /**
      * @brief Clear all plugins from this player's instrument
-     * Delegates to TracktionInstrument::clearPlugins()
+     * Delegates to Instrument::clearPlugins()
      */
     void clearPlugins();
     
@@ -138,9 +197,15 @@ public:
     
     /**
      * @brief Stop current playback
-     * Delegates to TracktionInstrument::stopPlayback()
+     * Delegates to Instrument::stopPlayback()
      */
     void stop();
+    
+    /**
+     * @brief Start playback of loaded chart
+     * @return true if playback started successfully
+     */
+    bool play();
     
     // =========================================================================
     // State Persistence (Complete Player + Instrument + Plugin Configurations)
@@ -188,13 +253,13 @@ public:
     
     /**
      * @brief Pause current playback
-     * Delegates to TracktionInstrument::pausePlayback()
+     * Delegates to Instrument::pausePlayback()
      */
     void pause();
     
     /**
      * @brief Resume paused playback
-     * Delegates to TracktionInstrument::resumePlayback()
+     * Delegates to Instrument::resumePlayback()
      */
     void resume();
     
@@ -212,7 +277,7 @@ public:
     
     /**
      * @brief Process incoming MIDI message
-     * Delegates to TracktionInstrument for real-time playing
+     * Delegates to Instrument for real-time playing
      * @param message MIDI message to process
      */
     void processMidiMessage(const juce::MidiMessage& message);
@@ -222,10 +287,10 @@ public:
     // =========================================================================
     
     /**
-     * @brief Get the TracktionInstrument component
+     * @brief Get the Instrument component
      * @return Pointer to instrument (not owned by caller)
      */
-    TracktionInstrument* getInstrument() { return instrument.get(); }
+    Instrument* getInstrument() { return instrument.get(); }
     
     /**
      * @brief Get the Musician component
@@ -253,6 +318,103 @@ public:
      * @return juce::var The MIDI chart with success flag
      */
     juce::var convertPatternStringToChart(const juce::String& patternString, double tempo = 120.0);
+    
+    /**
+     * @brief Get instrument capabilities for LLM integration
+     * @return Instrument capabilities structure
+     */
+    const InstrumentCapabilities& getInstrumentCapabilities() const;
+    
+    /**
+     * @brief Set instrument capabilities for LLM integration
+     * @param capabilities New instrument capabilities
+     */
+    void setInstrumentCapabilities(const InstrumentCapabilities& capabilities);
+    
+    // =========================================================================
+    // Legacy Player Compatibility Methods (for PlayerEditorComponent)
+    // =========================================================================
+    
+    /**
+     * @brief Prepare player for editing (legacy compatibility)
+     */
+    void prepareForEditing();
+    
+    /**
+     * @brief Get plugin graph state (legacy compatibility)
+     * @return Plugin graph state as XML
+     */
+    std::unique_ptr<juce::XmlElement> getPluginGraphState() const;
+    
+    /**
+     * @brief Check if connected to audio engine (legacy compatibility)
+     * @return true if connected
+     */
+    bool isConnectedToAudioEngine() const;
+    
+    /**
+     * @brief Disconnect from audio engine (legacy compatibility)
+     */
+    void disconnectFromAudioEngine();
+    
+    /**
+     * @brief Release audio resources (legacy compatibility)
+     */
+    void releaseResources();
+    
+    /**
+     * @brief Load plugin graph from XML (legacy compatibility)
+     * @param graphXml XML containing plugin graph
+     */
+    void loadPluginGraph(const juce::XmlElement& graphXml);
+    
+    /**
+     * @brief Set player state for persistence (legacy compatibility)
+     * @param state State data to store
+     */
+    void setPlayerState(const juce::var& state);
+    
+    /**
+     * @brief Get stored player state (legacy compatibility)
+     * @return Stored state data
+     */
+    juce::var getPlayerState() const;
+    
+    /**
+     * @brief Check if player has stored state (legacy compatibility)
+     * @return true if state is stored
+     */
+    bool hasPlayerState() const;
+    
+    /**
+     * @brief Create drum capabilities (legacy compatibility)
+     * @return Default drum instrument capabilities
+     */
+    static InstrumentCapabilities createDrumCapabilities();
+    
+    /**
+     * @brief Create piano capabilities (legacy compatibility)
+     * @return Default piano instrument capabilities
+     */
+    static InstrumentCapabilities createPianoCapabilities();
+    
+    /**
+     * @brief Create bass capabilities (legacy compatibility)
+     * @return Default bass instrument capabilities
+     */
+    static InstrumentCapabilities createBassCapabilities();
+    
+    /**
+     * @brief Create guitar capabilities (legacy compatibility)
+     * @return Default guitar instrument capabilities
+     */
+    static InstrumentCapabilities createGuitarCapabilities();
+    
+    /**
+     * @brief Set player level/volume (legacy compatibility)
+     * @param level Volume level (0.0 to 1.0)
+     */
+    void setLevel(float level);
     
     // =========================================================================
     // Persistence (Player State Management)
@@ -297,9 +459,9 @@ public:
      * @param knownPluginList Plugin list
      * @return Created player, or nullptr if failed
      */
-    static std::unique_ptr<TracktionPlayer> fromVar(const juce::var& data,
-                                                   juce::AudioPluginFormatManager& formatManager,
-                                                   juce::KnownPluginList& knownPluginList);
+    static std::unique_ptr<Player> fromVar(const juce::var& data,
+                                           juce::AudioPluginFormatManager& formatManager,
+                                           juce::KnownPluginList& knownPluginList);
     
     // =========================================================================
     // Lifecycle Management
@@ -328,7 +490,7 @@ private:
     juce::String playerName;
     
     // Components (owned)
-    std::unique_ptr<TracktionInstrument> instrument;
+    std::unique_ptr<Instrument> instrument;
     std::unique_ptr<Musician> musician;
     
     // Plugin environment references (not owned)
@@ -343,11 +505,20 @@ private:
     // Pre-converted MIDI sequence for instant synchronized playback
     std::unique_ptr<juce::MidiMessageSequence> preloadedSequence;
     
+    // Instrument capabilities for LLM integration
+    InstrumentCapabilities instrumentCapabilities;
+    
+    // Player metadata
+    PlayerMetadata metadata;
+    
+    // Legacy player state storage
+    juce::var storedPlayerState;
+    
     // Helper methods
     juce::File getStateFile() const;
     void setupDefaultMusician();
     
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TracktionPlayer)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Player)
 };
 
 } // namespace covertracks

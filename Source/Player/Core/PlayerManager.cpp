@@ -88,7 +88,7 @@ PlayerManager::~PlayerManager()
         std::cerr << "UNKNOWN EXCEPTION in PlayerManager destructor" << std::endl;
     }
 }
-void PlayerManager::activatePlayer(TracktionPlayer* player)
+void PlayerManager::activatePlayer(Player* player)
 {
     if (player == nullptr || player == activePlayer)
         return;
@@ -97,7 +97,7 @@ void PlayerManager::activatePlayer(TracktionPlayer* player)
     if (activePlayer != nullptr)
         deactivatePlayer(activePlayer);
     
-    // TracktionPlayer manages its own audio connection through TracktionInstrument
+    // Player manages its own audio connection through Instrument
     // which registers with TracktionAudioEngine automatically
     
     // Set as active player
@@ -105,12 +105,12 @@ void PlayerManager::activatePlayer(TracktionPlayer* player)
     // std::cout << "Player " << player->getName() << " activated" << std::endl;
 }
 
-void PlayerManager::deactivatePlayer(TracktionPlayer* player)
+void PlayerManager::deactivatePlayer(Player* player)
 {
     if (player == nullptr || player != activePlayer)
         return;
     
-    // TracktionPlayer/TracktionInstrument handles its own cleanup
+    // Player/Instrument handles its own cleanup
     // when destroyed or when playback stops
     
     // Clear active player
@@ -118,14 +118,14 @@ void PlayerManager::deactivatePlayer(TracktionPlayer* player)
     // std::cout << "Player " << player->getName() << " deactivated" << std::endl;
 }
 
-bool PlayerManager::isPlayerActive(TracktionPlayer* player) const
+bool PlayerManager::isPlayerActive(Player* player) const
 {
     return player != nullptr && player == activePlayer;
 }
 
-Array<TracktionPlayer*> PlayerManager::getPlayers() const
+Array<Player*> PlayerManager::getPlayers() const
 {
-    Array<TracktionPlayer*> result;
+    Array<Player*> result;
     
     for (auto* player : players)
     {
@@ -154,14 +154,14 @@ void PlayerManager::addPlayer(std::unique_ptr<Player> player)
     }
 }
 
-bool PlayerManager::savePlayer(TracktionPlayer* player)
+bool PlayerManager::savePlayer(Player* player)
 {
     if (player == nullptr)
     {
         return false;
     }
     
-    // TracktionPlayer doesn't have metadata - skip metadata update
+    // Player doesn't have metadata - skip metadata update
     
     // Make sure the player is in our list
     bool playerInList = false;
@@ -214,7 +214,7 @@ bool PlayerManager::savePlayer(TracktionPlayer* player)
     return success;
 }
 
-bool PlayerManager::savePlayerAndTakeOwnership(std::unique_ptr<TracktionPlayer> player)
+bool PlayerManager::savePlayerAndTakeOwnership(std::unique_ptr<Player> player)
 {
     if (player == nullptr)
     {
@@ -222,9 +222,9 @@ bool PlayerManager::savePlayerAndTakeOwnership(std::unique_ptr<TracktionPlayer> 
     }
     
     // Get a raw pointer to the player before we move it
-    TracktionPlayer* playerPtr = player.get();
+    Player* playerPtr = player.get();
     
-    // TracktionPlayer doesn't have metadata - skip metadata update
+    // Player doesn't have metadata - skip metadata update
     
     // Explicitly save the graph state to a file
     bool graphSaved = playerPtr->saveState();
@@ -234,7 +234,7 @@ bool PlayerManager::savePlayerAndTakeOwnership(std::unique_ptr<TracktionPlayer> 
     }
     
     // Convert to JSON
-    var playerJson = playerPtr->toVar();
+    var playerJson = playerPtr->saveCompleteState();
     
     // Get the file path - use player ID to avoid duplicates when renaming
     File playerFile = getPlayersDirectory().getChildFile(playerPtr->getId() + ".player");
@@ -270,26 +270,26 @@ bool PlayerManager::savePlayerAndTakeOwnership(std::unique_ptr<TracktionPlayer> 
     return success;
 }
 
-std::unique_ptr<TracktionPlayer> PlayerManager::createPlayer()
+std::unique_ptr<Player> PlayerManager::createPlayer()
 {
     // Generate a unique ID
     String id = String::toHexString(Random::getSystemRandom().nextInt());
     
-    // Create a new TracktionPlayer with default settings, using singleton AudioEngine
+    // Create a new Player with default settings, using singleton AudioEngine
     auto* audioEngine = getAudioEnginePtr();
-    auto player = std::make_unique<TracktionPlayer>(id, "New Player", audioEngine->getFormatManager(), audioEngine->getKnownPluginList());
+    auto player = std::make_unique<Player>(id, "New Player", audioEngine->getFormatManager(), audioEngine->getKnownPluginList());
     
     // Initialize the player
     if (!player->initialize())
     {
-        // std::cout << "Failed to initialize new TracktionPlayer" << std::endl;
+        // std::cout << "Failed to initialize new Player" << std::endl;
         return nullptr;
     }
     
     return player;
 }
 
-std::unique_ptr<TracktionPlayer> PlayerManager::loadPlayer(const File& file)
+std::unique_ptr<Player> PlayerManager::loadPlayer(const File& file)
 {
     if (!file.existsAsFile())
         return nullptr;
@@ -301,15 +301,49 @@ std::unique_ptr<TracktionPlayer> PlayerManager::loadPlayer(const File& file)
     
     if (result.wasOk() && json.isObject())
     {
-        // Use the fromVar method to create a player with the singleton AudioEngine
+        // Extract basic info to create the player
+        auto* obj = json.getDynamicObject();
+        if (!obj)
+            return nullptr;
+            
+        auto id = obj->getProperty("id").toString();
+        auto name = obj->getProperty("name").toString();
+        
+        if (id.isEmpty() || name.isEmpty())
+        {
+            std::cerr << "Player file missing required id or name fields" << std::endl;
+            return nullptr;
+        }
+        
+        // Create a new player with the singleton AudioEngine
         auto* audioEngine = getAudioEnginePtr();
-        return TracktionPlayer::fromVar(json, audioEngine->getFormatManager(), audioEngine->getKnownPluginList());
+        auto player = std::make_unique<Player>(id, name, audioEngine->getFormatManager(), audioEngine->getKnownPluginList());
+        
+        // Initialize the player
+        if (!player->initialize())
+        {
+            std::cerr << "Failed to initialize loaded player" << std::endl;
+            return nullptr;
+        }
+        
+        // Load the complete state (metadata, capabilities, plugins, etc.)
+        if (!player->loadCompleteState(json))
+        {
+            std::cerr << "Failed to load complete state for player" << std::endl;
+            return nullptr;
+        }
+        
+        // Store the loaded state for the editor to use
+        // This ensures PlayerEditorComponent can access the loaded plugin state
+        player->setPlayerState(json);
+        
+        return player;
     }
     
     return nullptr;
 }
 
-bool PlayerManager::deletePlayer(TracktionPlayer* player)
+bool PlayerManager::deletePlayer(Player* player)
 {
     if (player == nullptr)
     {
@@ -379,10 +413,17 @@ File PlayerManager::getPlayersDirectory()
     File appDir = File::getSpecialLocation(File::userApplicationDataDirectory)
                     .getChildFile("Covertracks");
     
+    std::cout << "PlayerManager::getPlayersDirectory() - userApplicationDataDirectory: " 
+              << File::getSpecialLocation(File::userApplicationDataDirectory).getFullPathName() << std::endl;
+    std::cout << "PlayerManager::getPlayersDirectory() - appDir: " << appDir.getFullPathName() << std::endl;
+    
     // Create the directory if it doesn't exist
     appDir.createDirectory();
     
-    return appDir.getChildFile("Players");
+    auto playersDir = appDir.getChildFile("Players");
+    std::cout << "PlayerManager::getPlayersDirectory() - final path: " << playersDir.getFullPathName() << std::endl;
+    
+    return playersDir;
 }
 
 void PlayerManager::loadAllPlayers()
@@ -392,7 +433,7 @@ void PlayerManager::loadAllPlayers()
     
     // Get the players directory
     File playersDir = getPlayersDirectory();
-    // std::cout << "Loading players with minimal resources from directory: " << playersDir.getFullPathName() << std::endl;
+    std::cout << "Loading players from directory: " << playersDir.getFullPathName() << std::endl;
     
     // Create the directory if it doesn't exist
     if (!playersDir.exists())
@@ -407,7 +448,7 @@ void PlayerManager::loadAllPlayers()
     
     // Try both .player and .json extensions since we might have old files
     playersDir.findChildFiles(playerFiles, File::findFiles, false, "*.player");
-    // std::cout << "Found " << playerFiles.size() << " .player files" << std::endl;
+    std::cout << "Found " << playerFiles.size() << " .player files" << std::endl;
     
     // Also look for .json files and add them to the array
     Array<File> jsonFiles;
@@ -426,23 +467,23 @@ void PlayerManager::loadAllPlayers()
     // Load each player file with minimal resources
     for (auto& file : playerFiles)
     {
-        // std::cout << "Loading player with minimal resources from file: " << file.getFileName() << std::endl;
+        std::cout << "Loading player from file: " << file.getFileName() << std::endl;
         auto player = loadPlayer(file);
         if (player != nullptr)
         {
-            // std::cout << "Successfully loaded player with minimal resources: " << player->getMetadata().name << std::endl;
+            std::cout << "Successfully loaded player: " << player->getMetadata().name << std::endl;
             addPlayer(std::move(player));
         }
         else
         {
-            // std::cout << "Failed to load player from file: " << file.getFileName() << std::endl;
+            std::cout << "Failed to load player from file: " << file.getFileName() << std::endl;
         }
     }
     
-    // std::cout << "Loaded " << players.size() << " players with minimal resources in total" << std::endl;
+    std::cout << "Loaded " << players.size() << " players in total" << std::endl;
 }
 
-bool PlayerManager::playPattern(TracktionPlayer* player, const var& pattern, double tempo)
+bool PlayerManager::playPattern(Player* player, const var& pattern, double tempo)
 {
     if (player == nullptr)
     {
@@ -452,7 +493,7 @@ bool PlayerManager::playPattern(TracktionPlayer* player, const var& pattern, dou
     
     // std::cout << "===== PLAYING PATTERN ON PLAYER: " << player->getName() << " =====" << std::endl;
     
-    // TracktionPlayer handles its own audio engine connection through TracktionInstrument
+    // Player handles its own audio engine connection through Instrument
     // No need for manual connection or activation
     
     // Create a chart object with the pattern data
@@ -461,7 +502,7 @@ bool PlayerManager::playPattern(TracktionPlayer* player, const var& pattern, dou
     chartObj->setProperty("tempo", tempo);
     var chartVar(chartObj);
     
-    // Use TracktionPlayer's playChart method which loads and plays in one step
+    // Use Player's playChart method which loads and plays in one step
     bool result = player->playChart(chartVar, tempo);
     
     if (result)
@@ -479,11 +520,11 @@ bool PlayerManager::playPattern(TracktionPlayer* player, const var& pattern, dou
 bool PlayerManager::playPatternOnAllActivePlayers(const var& pattern, double tempo)
 {
     // Get all players to use
-    Array<TracktionPlayer*> playersToUse;
+    Array<Player*> playersToUse;
     
     for (auto* player : players)
     {
-        // TracktionPlayer is always ready after initialization
+        // Player is always ready after initialization
         playersToUse.add(player);
     }
     
@@ -507,7 +548,7 @@ bool PlayerManager::playPatternOnAllActivePlayers(const var& pattern, double tem
     return anySuccess;
 }
 
-void PlayerManager::stopPlayback(TracktionPlayer* player)
+void PlayerManager::stopPlayback(Player* player)
 {
     if (player != nullptr)
     {
@@ -570,7 +611,7 @@ void PlayerManager::setLLMApiKey(const String& apiKey)
     }
 }
 
-void PlayerManager::generatePatternForPlayer(TracktionPlayer* player, 
+void PlayerManager::generatePatternForPlayer(Player* player, 
                                           const var& parameters,
                                           std::function<void(bool success, const var& pattern)> callback)
 {
@@ -628,11 +669,11 @@ void PlayerManager::generatePatternForAllPlayers(const var& parameters,
                                               std::function<void(bool success, const var& pattern)> callback)
 {
     // Get all players
-    Array<TracktionPlayer*> activePlayers;
+    Array<Player*> activePlayers;
     
     for (auto* player : players)
     {
-        // TracktionPlayer is always ready after initialization
+        // Player is always ready after initialization
         activePlayers.add(player);
     }
     

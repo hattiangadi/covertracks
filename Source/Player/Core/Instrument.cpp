@@ -1,10 +1,10 @@
-#include "TracktionInstrument.h"
+#include "Instrument.h"
 #include "../../Audio/AudioEngineInterface.h"
 #include <iostream>
 
 namespace covertracks {
 
-TracktionInstrument::TracktionInstrument(const juce::String& name,
+Instrument::Instrument(const juce::String& name,
                                        juce::AudioPluginFormatManager& fm,
                                        juce::KnownPluginList& kpl)
     : instrumentName(name)
@@ -14,27 +14,27 @@ TracktionInstrument::TracktionInstrument(const juce::String& name,
     // Start timer for MIDI playback timing (50Hz = 20ms intervals)
     startTimer(20);
     
-    DBG("TracktionInstrument created: " << name);
+    DBG("Instrument created: " << name);
 }
 
-TracktionInstrument::~TracktionInstrument()
+Instrument::~Instrument()
 {
     stopTimer();
     stopPlayback();
     unregisterFromAudioEngine();
     
-    DBG("TracktionInstrument destroyed: " << instrumentName);
+    DBG("Instrument destroyed: " << instrumentName);
 }
 
 // =========================================================================
 // Audio Engine Integration (Self-Managed)
 // =========================================================================
 
-bool TracktionInstrument::registerWithAudioEngine()
+bool Instrument::registerWithAudioEngine()
 {
     if (myTrack != nullptr)
     {
-        DBG("TracktionInstrument " << instrumentName << " already registered");
+        DBG("Instrument " << instrumentName << " already registered");
         return true; // Already registered
     }
     
@@ -65,7 +65,7 @@ bool TracktionInstrument::registerWithAudioEngine()
     
     // Note: No default plugins added automatically
     // Users can add plugins through the UI or by loading saved state
-    DBG("TracktionInstrument " << instrumentName << " created with empty plugin chain");
+    DBG("Instrument " << instrumentName << " created with empty plugin chain");
     
     // Ensure the Edit transport is in a state that allows audio processing
     auto& transport = currentEdit->getTransport();
@@ -75,11 +75,11 @@ bool TracktionInstrument::registerWithAudioEngine()
         transport.play(false);  // Start playing (false = don't punch record)
     }
     
-    DBG("TracktionInstrument " << instrumentName << " registered with Track: " << myTrack->getName());
+    DBG("Instrument " << instrumentName << " registered with Track: " << myTrack->getName());
     return true;
 }
 
-void TracktionInstrument::unregisterFromAudioEngine()
+void Instrument::unregisterFromAudioEngine()
 {
     if (myTrack == nullptr)
         return;
@@ -96,14 +96,14 @@ void TracktionInstrument::unregisterFromAudioEngine()
     }
     
     myTrack = nullptr;
-    DBG("TracktionInstrument " << instrumentName << " unregistered from audio engine");
+    DBG("Instrument " << instrumentName << " unregistered from audio engine");
 }
 
 // =========================================================================
 // Plugin Management (Complete Ownership)
 // =========================================================================
 
-bool TracktionInstrument::addPlugin(const juce::PluginDescription& pluginDesc)
+bool Instrument::addPlugin(const juce::PluginDescription& pluginDesc)
 {
     if (myTrack == nullptr)
     {
@@ -119,14 +119,14 @@ bool TracktionInstrument::addPlugin(const juce::PluginDescription& pluginDesc)
         return false;
     }
     
-    std::cout << "TracktionInstrument: Adding plugin " << pluginDesc.name 
+    std::cout << "Instrument: Adding plugin " << pluginDesc.name 
               << " (format: " << pluginDesc.pluginFormatName << ")" << std::endl;
     
     // Use different approaches for built-in vs external plugins
     if (pluginDesc.pluginFormatName == te::PluginManager::builtInPluginFormatName)
     {
         // Built-in Tracktion plugin - use standard approach
-        std::cout << "TracktionInstrument: Built-in plugin - using category: " << pluginDesc.category << std::endl;
+        std::cout << "Instrument: Built-in plugin - using category: " << pluginDesc.category << std::endl;
         
         auto plugin = currentEdit->getPluginCache().createNewPlugin(pluginDesc.category, pluginDesc);
         if (!plugin)
@@ -146,7 +146,7 @@ bool TracktionInstrument::addPlugin(const juce::PluginDescription& pluginDesc)
     else
     {
         // External plugin - use standard Tracktion approach (same as official examples)
-        std::cout << "TracktionInstrument: Creating external plugin: " << pluginDesc.name << std::endl;
+        std::cout << "Instrument: Creating external plugin: " << pluginDesc.name << std::endl;
         
         // Create plugin using exact same method as official Tracktion examples
         auto plugin = currentEdit->getPluginCache().createNewPlugin(te::ExternalPlugin::xmlTypeName, pluginDesc);
@@ -160,12 +160,12 @@ bool TracktionInstrument::addPlugin(const juce::PluginDescription& pluginDesc)
         if (auto* audioTrack = dynamic_cast<te::AudioTrack*>(myTrack))
         {
             audioTrack->pluginList.insertPlugin(plugin, -1, nullptr);
-            std::cout << "TracktionInstrument: Added external plugin " << plugin->getName() << " to track" << std::endl;
+            std::cout << "Instrument: Added external plugin " << plugin->getName() << " to track" << std::endl;
             return true;
         }
         else
         {
-            std::cerr << "TracktionInstrument: Track is not an AudioTrack" << std::endl;
+            std::cerr << "Instrument: Track is not an AudioTrack" << std::endl;
             return false;
         }
     }
@@ -174,7 +174,7 @@ bool TracktionInstrument::addPlugin(const juce::PluginDescription& pluginDesc)
     return false;
 }
 
-void TracktionInstrument::clearPlugins()
+void Instrument::clearPlugins()
 {
     if (myTrack == nullptr)
         return;
@@ -186,7 +186,7 @@ void TracktionInstrument::clearPlugins()
     }
 }
 
-bool TracktionInstrument::addDefaultSynth()
+bool Instrument::addDefaultSynth()
 {
     if (myTrack == nullptr)
     {
@@ -217,7 +217,7 @@ bool TracktionInstrument::addDefaultSynth()
             if (auto* audioTrack = dynamic_cast<te::AudioTrack*>(myTrack))
             {
                 audioTrack->pluginList.insertPlugin(synthPlugin, -1, nullptr);
-                DBG("TracktionInstrument " << instrumentName << " added default synthesizer: " << synthDesc.name);
+                DBG("Instrument " << instrumentName << " added default synthesizer: " << synthDesc.name);
                 return true;
             }
         }
@@ -234,7 +234,7 @@ bool TracktionInstrument::addDefaultSynth()
     return false;
 }
 
-bool TracktionInstrument::removePlugin(int index)
+bool Instrument::removePlugin(int index)
 {
     if (myTrack == nullptr)
     {
@@ -266,7 +266,7 @@ bool TracktionInstrument::removePlugin(int index)
     return false;
 }
 
-bool TracktionInstrument::movePlugin(int fromIndex, int toIndex)
+bool Instrument::movePlugin(int fromIndex, int toIndex)
 {
     if (myTrack == nullptr)
     {
@@ -318,7 +318,7 @@ bool TracktionInstrument::movePlugin(int fromIndex, int toIndex)
     return false;
 }
 
-int TracktionInstrument::getPluginCount() const
+int Instrument::getPluginCount() const
 {
     if (myTrack != nullptr)
     {
@@ -331,7 +331,7 @@ int TracktionInstrument::getPluginCount() const
     return 0;
 }
 
-juce::StringArray TracktionInstrument::getPluginNames() const
+juce::StringArray Instrument::getPluginNames() const
 {
     juce::StringArray names;
     
@@ -350,7 +350,7 @@ juce::StringArray TracktionInstrument::getPluginNames() const
     return names;
 }
 
-te::Plugin* TracktionInstrument::getPlugin(int index) const
+te::Plugin* Instrument::getPlugin(int index) const
 {
     if (myTrack == nullptr)
         return nullptr;
@@ -368,7 +368,7 @@ te::Plugin* TracktionInstrument::getPlugin(int index) const
     return nullptr;
 }
 
-juce::AudioProcessor* TracktionInstrument::getJucePlugin(int index) const
+juce::AudioProcessor* Instrument::getJucePlugin(int index) const
 {
     if (auto* tracktionPlugin = getPlugin(index))
     {
@@ -391,7 +391,7 @@ juce::AudioProcessor* TracktionInstrument::getJucePlugin(int index) const
 // MIDI Chart Playback (Complete Audio Control)
 // =========================================================================
 
-bool TracktionInstrument::playChart(const juce::var& chart, double tempo)
+bool Instrument::playChart(const juce::var& chart, double tempo)
 {
     auto sequence = convertChartToMidiSequence(chart);
     if (!sequence)
@@ -403,7 +403,7 @@ bool TracktionInstrument::playChart(const juce::var& chart, double tempo)
     return playMidiSequence(*sequence, tempo);
 }
 
-bool TracktionInstrument::playMidiSequence(const juce::MidiMessageSequence& sequence, double tempo)
+bool Instrument::playMidiSequence(const juce::MidiMessageSequence& sequence, double tempo)
 {
     if (myTrack == nullptr)
     {
@@ -430,19 +430,19 @@ bool TracktionInstrument::playMidiSequence(const juce::MidiMessageSequence& sequ
         auto& transport = currentEdit->getTransport();
         transport.setPosition(te::TimePosition::fromSeconds(0.0));
         transport.play(false);
-        DBG("TracktionInstrument " << instrumentName << " started Edit transport for audio processing");
+        DBG("Instrument " << instrumentName << " started Edit transport for audio processing");
     }
     
     // Start the timer to process MIDI events (20ms intervals for smooth playback)
     startTimer(20);
     
-    DBG("TracktionInstrument " << instrumentName << " started MIDI playback with " 
+    DBG("Instrument " << instrumentName << " started MIDI playback with " 
         << currentSequence->getNumEvents() << " events at " << tempo << " BPM");
     
     return true;
 }
 
-void TracktionInstrument::stopPlayback()
+void Instrument::stopPlayback()
 {
     if (isPlaybackActive)
     {
@@ -463,7 +463,7 @@ void TracktionInstrument::stopPlayback()
         {
             auto& transport = currentEdit->getTransport();
             transport.stop(false, false);
-            DBG("TracktionInstrument " << instrumentName << " stopped Edit transport");
+            DBG("Instrument " << instrumentName << " stopped Edit transport");
         }
         
         // Call completion callback if set
@@ -472,29 +472,29 @@ void TracktionInstrument::stopPlayback()
             onPlaybackFinished();
         }
         
-        DBG("TracktionInstrument " << instrumentName << " stopped playback");
+        DBG("Instrument " << instrumentName << " stopped playback");
     }
 }
 
-void TracktionInstrument::pausePlayback()
+void Instrument::pausePlayback()
 {
     if (isPlaybackActive && !isPlaybackPaused)
     {
         isPlaybackPaused = true;
-        DBG("TracktionInstrument " << instrumentName << " paused playback");
+        DBG("Instrument " << instrumentName << " paused playback");
     }
 }
 
-void TracktionInstrument::resumePlayback()
+void Instrument::resumePlayback()
 {
     if (isPlaybackActive && isPlaybackPaused)
     {
         isPlaybackPaused = false;
-        DBG("TracktionInstrument " << instrumentName << " resumed playback");
+        DBG("Instrument " << instrumentName << " resumed playback");
     }
 }
 
-void TracktionInstrument::setPlaybackFinishedCallback(std::function<void()> callback)
+void Instrument::setPlaybackFinishedCallback(std::function<void()> callback)
 {
     onPlaybackFinished = callback;
 }
@@ -504,13 +504,13 @@ void TracktionInstrument::setPlaybackFinishedCallback(std::function<void()> call
 // MIDI Input Handling
 // =========================================================================
 
-void TracktionInstrument::handleIncomingMidiMessage(juce::MidiInput* /*source*/, 
+void Instrument::handleIncomingMidiMessage(juce::MidiInput* /*source*/, 
                                                    const juce::MidiMessage& message)
 {
     processMidiMessage(message);
 }
 
-void TracktionInstrument::processMidiMessage(const juce::MidiMessage& message)
+void Instrument::processMidiMessage(const juce::MidiMessage& message)
 {
     sendMidiToTrack(message);
 }
@@ -519,9 +519,9 @@ void TracktionInstrument::processMidiMessage(const juce::MidiMessage& message)
 // State Management
 // =========================================================================
 
-std::unique_ptr<juce::XmlElement> TracktionInstrument::getPluginState() const
+std::unique_ptr<juce::XmlElement> Instrument::getPluginState() const
 {
-    auto state = std::make_unique<juce::XmlElement>("TracktionInstrumentState");
+    auto state = std::make_unique<juce::XmlElement>("InstrumentState");
     state->setAttribute("name", instrumentName);
     state->setAttribute("pluginCount", getPluginCount());
     
@@ -572,11 +572,11 @@ std::unique_ptr<juce::XmlElement> TracktionInstrument::getPluginState() const
     return state;
 }
 
-bool TracktionInstrument::restorePluginState(const juce::XmlElement& state)
+bool Instrument::restorePluginState(const juce::XmlElement& state)
 {
-    if (state.getTagName() != "TracktionInstrumentState")
+    if (state.getTagName() != "InstrumentState")
     {
-        std::cerr << "Invalid state XML for TracktionInstrument" << std::endl;
+        std::cerr << "Invalid state XML for Instrument" << std::endl;
         return false;
     }
     
@@ -593,11 +593,11 @@ bool TracktionInstrument::restorePluginState(const juce::XmlElement& state)
             << storedName << " vs " << instrumentName);
     }
     
-    DBG("TracktionInstrument " << instrumentName << " state restored");
+    DBG("Instrument " << instrumentName << " state restored");
     return true;
 }
 
-juce::var TracktionInstrument::saveInstrumentState() const
+juce::var Instrument::saveInstrumentState() const
 {
     juce::DynamicObject::Ptr obj = new juce::DynamicObject();
     
@@ -676,7 +676,7 @@ juce::var TracktionInstrument::saveInstrumentState() const
     return juce::var(obj.get());
 }
 
-bool TracktionInstrument::loadInstrumentState(const juce::var& state)
+bool Instrument::loadInstrumentState(const juce::var& state)
 {
     if (!state.isObject())
     {
@@ -821,7 +821,7 @@ bool TracktionInstrument::loadInstrumentState(const juce::var& state)
         }
     }
     
-    DBG("TracktionInstrument " << instrumentName << " state loaded successfully");
+    DBG("Instrument " << instrumentName << " state loaded successfully");
     return true;
 }
 
@@ -829,7 +829,7 @@ bool TracktionInstrument::loadInstrumentState(const juce::var& state)
 // Timer Implementation (for MIDI playback timing)
 // =========================================================================
 
-void TracktionInstrument::timerCallback()
+void Instrument::timerCallback()
 {
     if (!isPlaybackActive || isPlaybackPaused || !currentSequence)
         return;
@@ -877,14 +877,14 @@ void TracktionInstrument::timerCallback()
 // Helper Methods
 // =========================================================================
 
-void TracktionInstrument::updatePlaybackPosition()
+void Instrument::updatePlaybackPosition()
 {
     // Update playback time based on tempo
     double deltaTime = 0.02; // 20ms timer interval
     currentPlaybackTime += deltaTime;
 }
 
-void TracktionInstrument::sendMidiToTrack(const juce::MidiMessage& message)
+void Instrument::sendMidiToTrack(const juce::MidiMessage& message)
 {
     if (myTrack == nullptr)
         return;
@@ -901,13 +901,13 @@ void TracktionInstrument::sendMidiToTrack(const juce::MidiMessage& message)
         // Note: The actual audio processing happens during the Edit's render cycle
         audioTrack->injectLiveMidiMessage(message, true);
         
-        DBG("TracktionInstrument " << instrumentName << " sent MIDI to track: " 
+        DBG("Instrument " << instrumentName << " sent MIDI to track: " 
             << (message.isNoteOn() ? "NoteOn" : message.isNoteOff() ? "NoteOff" : "Other")
             << " Note=" << message.getNoteNumber() << " Vel=" << message.getVelocity());
     }
 }
 
-std::unique_ptr<juce::MidiMessageSequence> TracktionInstrument::convertChartToMidiSequence(const juce::var& chart)
+std::unique_ptr<juce::MidiMessageSequence> Instrument::convertChartToMidiSequence(const juce::var& chart)
 {
     auto sequence = std::make_unique<juce::MidiMessageSequence>();
     

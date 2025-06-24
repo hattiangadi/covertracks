@@ -1,42 +1,51 @@
-#include "TracktionPlayer.h"
+#include "Player.h"
 #include <iostream>
 
 namespace covertracks {
 
-TracktionPlayer::TracktionPlayer(const juce::String& id,
-                                const juce::String& name,
-                                juce::AudioPluginFormatManager& fm,
-                                juce::KnownPluginList& kpl)
+Player::Player(const juce::String& id,
+               const juce::String& name,
+               juce::AudioPluginFormatManager& fm,
+               juce::KnownPluginList& kpl)
     : playerId(id)
     , playerName(name)
     , formatManager(fm)
     , knownPluginList(kpl)
 {
-    // Create TracktionInstrument - it owns all audio concerns
-    instrument = std::make_unique<TracktionInstrument>(name + "_Instrument", formatManager, knownPluginList);
+    // Create Instrument - it owns all audio concerns
+    instrument = std::make_unique<Instrument>(name + "_Instrument", formatManager, knownPluginList);
     
     // Setup default musician for chart generation
     setupDefaultMusician();
     
-    DBG("TracktionPlayer created: " << name << " (ID: " << id << ")");
+    // Initialize default instrument capabilities (can be customized later)
+    instrumentCapabilities.type = InstrumentCapabilityType::NoteRange;
+    instrumentCapabilities.instrumentType = "general";
+    instrumentCapabilities.minNote = 0;
+    instrumentCapabilities.maxNote = 127;
+    
+    // Initialize metadata
+    metadata = PlayerMetadata(name, id, "general");
+    
+    DBG("Player created: " << name << " (ID: " << id << ")");
 }
 
-TracktionPlayer::~TracktionPlayer()
+Player::~Player()
 {
     shutdown();
-    DBG("TracktionPlayer destroyed: " << playerName);
+    DBG("Player destroyed: " << playerName);
 }
 
 // =========================================================================
 // High-Level Orchestration (Musician ↔ Instrument)
 // =========================================================================
 
-void TracktionPlayer::generateAndPlay(const juce::var& parameters, 
+void Player::generateAndPlay(const juce::var& parameters, 
                                      std::function<void(bool success)> callback)
 {
     if (!initialized)
     {
-        std::cerr << "TracktionPlayer not initialized" << std::endl;
+        std::cerr << "Player not initialized" << std::endl;
         if (callback) callback(false);
         return;
     }
@@ -50,7 +59,7 @@ void TracktionPlayer::generateAndPlay(const juce::var& parameters,
             return;
         }
         
-        // Step 2: Play chart using TracktionInstrument
+        // Step 2: Play chart using Instrument
         bool playSuccess = instrument->playChart(chart);
         if (!playSuccess)
         {
@@ -61,11 +70,11 @@ void TracktionPlayer::generateAndPlay(const juce::var& parameters,
     });
 }
 
-bool TracktionPlayer::loadChart(const juce::var& chart, double tempo)
+bool Player::loadChart(const juce::var& chart, double tempo)
 {
     if (!initialized || !instrument)
     {
-        std::cerr << "TracktionPlayer not initialized" << std::endl;
+        std::cerr << "Player not initialized" << std::endl;
         return false;
     }
     
@@ -85,16 +94,16 @@ bool TracktionPlayer::loadChart(const juce::var& chart, double tempo)
     // Store the pre-converted sequence
     preloadedSequence = std::move(sequence);
     
-    DBG("TracktionPlayer " << playerName << " loaded chart with " 
+    DBG("Player " << playerName << " loaded chart with " 
         << preloadedSequence->getNumEvents() << " MIDI events");
     return true;
 }
 
-bool TracktionPlayer::playChart(const juce::var& chart, double tempo)
+bool Player::playChart(const juce::var& chart, double tempo)
 {
     if (!initialized || !instrument)
     {
-        std::cerr << "TracktionPlayer not initialized" << std::endl;
+        std::cerr << "Player not initialized" << std::endl;
         return false;
     }
     
@@ -103,11 +112,11 @@ bool TracktionPlayer::playChart(const juce::var& chart, double tempo)
     return instrument->playChart(chart, tempo);
 }
 
-bool TracktionPlayer::playLoadedChart()
+bool Player::playLoadedChart()
 {
     if (!initialized || !instrument)
     {
-        std::cerr << "TracktionPlayer not initialized" << std::endl;
+        std::cerr << "Player not initialized" << std::endl;
         return false;
     }
     
@@ -122,14 +131,14 @@ bool TracktionPlayer::playLoadedChart()
     
     if (result)
     {
-        DBG("TracktionPlayer " << playerName << " playing pre-loaded chart with " 
+        DBG("Player " << playerName << " playing pre-loaded chart with " 
             << preloadedSequence->getNumEvents() << " events");
     }
     
     return result;
 }
 
-void TracktionPlayer::generateChart(const juce::var& parameters,
+void Player::generateChart(const juce::var& parameters,
                                    std::function<void(bool success, const juce::var& chart)> callback)
 {
     if (!musician)
@@ -144,7 +153,7 @@ void TracktionPlayer::generateChart(const juce::var& parameters,
         if (success)
         {
             lastGeneratedChart = chart;
-            DBG("TracktionPlayer " << playerName << " generated chart with " 
+            DBG("Player " << playerName << " generated chart with " 
                 << (chart.isArray() ? chart.getArray()->size() : 0) << " events");
         }
         
@@ -153,10 +162,10 @@ void TracktionPlayer::generateChart(const juce::var& parameters,
 }
 
 // =========================================================================
-// Audio Delegation (Pass-through to TracktionInstrument)
+// Audio Delegation (Pass-through to Instrument)
 // =========================================================================
 
-bool TracktionPlayer::addPlugin(const juce::PluginDescription& pluginDesc)
+bool Player::addPlugin(const juce::PluginDescription& pluginDesc)
 {
     if (!instrument)
         return false;
@@ -164,51 +173,51 @@ bool TracktionPlayer::addPlugin(const juce::PluginDescription& pluginDesc)
     return instrument->addPlugin(pluginDesc);
 }
 
-void TracktionPlayer::clearPlugins()
+void Player::clearPlugins()
 {
     if (instrument)
         instrument->clearPlugins();
 }
 
-int TracktionPlayer::getPluginCount() const
+int Player::getPluginCount() const
 {
     return instrument ? instrument->getPluginCount() : 0;
 }
 
-juce::StringArray TracktionPlayer::getPluginNames() const
+juce::StringArray Player::getPluginNames() const
 {
     return instrument ? instrument->getPluginNames() : juce::StringArray{};
 }
 
-void TracktionPlayer::stop()
+void Player::stop()
 {
     if (instrument)
         instrument->stopPlayback();
 }
 
-void TracktionPlayer::pause()
+void Player::pause()
 {
     if (instrument)
         instrument->pausePlayback();
 }
 
-void TracktionPlayer::resume()
+void Player::resume()
 {
     if (instrument)
         instrument->resumePlayback();
 }
 
-bool TracktionPlayer::isPlaying() const
+bool Player::isPlaying() const
 {
     return instrument ? instrument->isPlaying() : false;
 }
 
-bool TracktionPlayer::isPaused() const
+bool Player::isPaused() const
 {
     return instrument ? instrument->isPaused() : false;
 }
 
-void TracktionPlayer::processMidiMessage(const juce::MidiMessage& message)
+void Player::processMidiMessage(const juce::MidiMessage& message)
 {
     if (instrument)
         instrument->processMidiMessage(message);
@@ -218,18 +227,18 @@ void TracktionPlayer::processMidiMessage(const juce::MidiMessage& message)
 // Component Access (for advanced use)
 // =========================================================================
 
-void TracktionPlayer::setMusician(std::unique_ptr<Musician> newMusician)
+void Player::setMusician(std::unique_ptr<Musician> newMusician)
 {
     musician = std::move(newMusician);
-    DBG("TracktionPlayer " << playerName << " musician updated");
+    DBG("Player " << playerName << " musician updated");
 }
 
-void TracktionPlayer::setLLMClient(std::shared_ptr<LLMClient> client)
+void Player::setLLMClient(std::shared_ptr<LLMClient> client)
 {
     if (musician)
     {
         musician->setLLMClient(client);
-        DBG("TracktionPlayer " << playerName << " LLM client set");
+        DBG("Player " << playerName << " LLM client set");
     }
 }
 
@@ -237,7 +246,7 @@ void TracktionPlayer::setLLMClient(std::shared_ptr<LLMClient> client)
 // Persistence (Player State Management)
 // =========================================================================
 
-bool TracktionPlayer::saveState()
+bool Player::saveState()
 {
     auto stateFile = getStateFile();
     auto state = exportState();
@@ -254,7 +263,7 @@ bool TracktionPlayer::saveState()
     // Write XML to file
     if (state->writeTo(stateFile))
     {
-        DBG("TracktionPlayer " << playerName << " state saved to: " << stateFile.getFullPathName());
+        DBG("Player " << playerName << " state saved to: " << stateFile.getFullPathName());
         return true;
     }
     else
@@ -264,7 +273,7 @@ bool TracktionPlayer::saveState()
     }
 }
 
-bool TracktionPlayer::loadState()
+bool Player::loadState()
 {
     auto stateFile = getStateFile();
     
@@ -284,15 +293,15 @@ bool TracktionPlayer::loadState()
     bool success = importState(*stateXml);
     if (success)
     {
-        DBG("TracktionPlayer " << playerName << " state loaded from: " << stateFile.getFullPathName());
+        DBG("Player " << playerName << " state loaded from: " << stateFile.getFullPathName());
     }
     
     return success;
 }
 
-std::unique_ptr<juce::XmlElement> TracktionPlayer::exportState() const
+std::unique_ptr<juce::XmlElement> Player::exportState() const
 {
-    auto state = std::make_unique<juce::XmlElement>("TracktionPlayerState");
+    auto state = std::make_unique<juce::XmlElement>("PlayerState");
     
     // Player metadata
     state->setAttribute("id", playerId);
@@ -328,11 +337,11 @@ std::unique_ptr<juce::XmlElement> TracktionPlayer::exportState() const
     return state;
 }
 
-bool TracktionPlayer::importState(const juce::XmlElement& state)
+bool Player::importState(const juce::XmlElement& state)
 {
-    if (state.getTagName() != "TracktionPlayerState")
+    if (state.getTagName() != "PlayerState")
     {
-        std::cerr << "Invalid state XML for TracktionPlayer" << std::endl;
+        std::cerr << "Invalid state XML for Player" << std::endl;
         return false;
     }
     
@@ -352,7 +361,7 @@ bool TracktionPlayer::importState(const juce::XmlElement& state)
     }
     
     // Restore instrument state
-    auto* instrumentStateElement = state.getChildByName("TracktionInstrumentState");
+    auto* instrumentStateElement = state.getChildByName("InstrumentState");
     if (instrumentStateElement && instrument)
     {
         instrument->restorePluginState(*instrumentStateElement);
@@ -361,11 +370,11 @@ bool TracktionPlayer::importState(const juce::XmlElement& state)
     // TODO: Restore musician state when supported
     // TODO: Restore last chart when needed
     
-    DBG("TracktionPlayer " << playerName << " state imported");
+    DBG("Player " << playerName << " state imported");
     return true;
 }
 
-juce::var TracktionPlayer::toVar() const
+juce::var Player::toVar() const
 {
     juce::DynamicObject::Ptr obj = new juce::DynamicObject();
     
@@ -386,7 +395,7 @@ juce::var TracktionPlayer::toVar() const
     return juce::var(obj.get());
 }
 
-std::unique_ptr<TracktionPlayer> TracktionPlayer::fromVar(const juce::var& data,
+std::unique_ptr<Player> Player::fromVar(const juce::var& data,
                                                          juce::AudioPluginFormatManager& formatManager,
                                                          juce::KnownPluginList& knownPluginList)
 {
@@ -403,7 +412,7 @@ std::unique_ptr<TracktionPlayer> TracktionPlayer::fromVar(const juce::var& data,
     if (id.isEmpty() || name.isEmpty())
         return nullptr;
         
-    auto player = std::make_unique<TracktionPlayer>(id, name, formatManager, knownPluginList);
+    auto player = std::make_unique<Player>(id, name, formatManager, knownPluginList);
     
     // TODO: Restore additional state when needed
     
@@ -414,7 +423,7 @@ std::unique_ptr<TracktionPlayer> TracktionPlayer::fromVar(const juce::var& data,
 // Lifecycle Management
 // =========================================================================
 
-bool TracktionPlayer::initialize()
+bool Player::initialize()
 {
     if (initialized)
         return true;
@@ -433,11 +442,11 @@ bool TracktionPlayer::initialize()
     }
     
     initialized = true;
-    DBG("TracktionPlayer " << playerName << " initialized successfully");
+    DBG("Player " << playerName << " initialized successfully");
     return true;
 }
 
-void TracktionPlayer::shutdown()
+void Player::shutdown()
 {
     if (!initialized)
         return;
@@ -450,14 +459,14 @@ void TracktionPlayer::shutdown()
     }
     
     initialized = false;
-    DBG("TracktionPlayer " << playerName << " shutdown");
+    DBG("Player " << playerName << " shutdown");
 }
 
 // =========================================================================
 // Comprehensive State Persistence (NEW)
 // =========================================================================
 
-juce::var TracktionPlayer::saveCompleteState() const
+juce::var Player::saveCompleteState() const
 {
     juce::DynamicObject::Ptr obj = new juce::DynamicObject();
     
@@ -467,6 +476,33 @@ juce::var TracktionPlayer::saveCompleteState() const
     obj->setProperty("initialized", initialized);
     obj->setProperty("version", "1.0");
     obj->setProperty("timestamp", juce::Time::getCurrentTime().toISO8601(true));
+    
+    // Save PlayerMetadata
+    juce::DynamicObject::Ptr metadataObj = new juce::DynamicObject();
+    metadataObj->setProperty("name", metadata.name);
+    metadataObj->setProperty("id", metadata.id);
+    metadataObj->setProperty("instrumentType", metadata.instrumentType);
+    metadataObj->setProperty("category", metadata.category);
+    metadataObj->setProperty("description", metadata.description);
+    metadataObj->setProperty("created", metadata.created.toISO8601(true));
+    metadataObj->setProperty("lastModified", metadata.lastModified.toISO8601(true));
+    obj->setProperty("metadata", juce::var(metadataObj.get()));
+    
+    // Save InstrumentCapabilities
+    juce::DynamicObject::Ptr capabilitiesObj = new juce::DynamicObject();
+    capabilitiesObj->setProperty("type", (int)instrumentCapabilities.type);
+    capabilitiesObj->setProperty("instrumentType", instrumentCapabilities.instrumentType);
+    capabilitiesObj->setProperty("minNote", instrumentCapabilities.minNote);
+    capabilitiesObj->setProperty("maxNote", instrumentCapabilities.maxNote);
+    
+    // Save sound mappings
+    juce::DynamicObject::Ptr mappingsObj = new juce::DynamicObject();
+    for (const auto& mapping : instrumentCapabilities.soundMappings)
+    {
+        mappingsObj->setProperty(mapping.first, mapping.second);
+    }
+    capabilitiesObj->setProperty("soundMappings", juce::var(mappingsObj.get()));
+    obj->setProperty("instrumentCapabilities", juce::var(capabilitiesObj.get()));
     
     // Instrument state (includes complete plugin chain + configurations)
     if (instrument)
@@ -483,7 +519,7 @@ juce::var TracktionPlayer::saveCompleteState() const
     return juce::var(obj.get());
 }
 
-bool TracktionPlayer::loadCompleteState(const juce::var& state)
+bool Player::loadCompleteState(const juce::var& state)
 {
     if (!state.isObject())
     {
@@ -503,6 +539,58 @@ bool TracktionPlayer::loadCompleteState(const juce::var& state)
     if (version.isEmpty())
     {
         std::cerr << "Warning: No version in player state, assuming legacy format" << std::endl;
+    }
+    
+    // Load PlayerMetadata
+    auto metadataVar = obj->getProperty("metadata");
+    if (!metadataVar.isVoid() && metadataVar.isObject())
+    {
+        auto* metadataObj = metadataVar.getDynamicObject();
+        if (metadataObj)
+        {
+            metadata.name = metadataObj->getProperty("name").toString();
+            metadata.id = metadataObj->getProperty("id").toString();
+            metadata.instrumentType = metadataObj->getProperty("instrumentType").toString();
+            metadata.category = metadataObj->getProperty("category").toString();
+            metadata.description = metadataObj->getProperty("description").toString();
+            
+            auto createdStr = metadataObj->getProperty("created").toString();
+            if (createdStr.isNotEmpty())
+                metadata.created = juce::Time::fromISO8601(createdStr);
+                
+            auto lastModifiedStr = metadataObj->getProperty("lastModified").toString();
+            if (lastModifiedStr.isNotEmpty())
+                metadata.lastModified = juce::Time::fromISO8601(lastModifiedStr);
+        }
+    }
+    
+    // Load InstrumentCapabilities
+    auto capabilitiesVar = obj->getProperty("instrumentCapabilities");
+    if (!capabilitiesVar.isVoid() && capabilitiesVar.isObject())
+    {
+        auto* capabilitiesObj = capabilitiesVar.getDynamicObject();
+        if (capabilitiesObj)
+        {
+            instrumentCapabilities.type = (InstrumentCapabilityType)(int)capabilitiesObj->getProperty("type");
+            instrumentCapabilities.instrumentType = capabilitiesObj->getProperty("instrumentType").toString();
+            instrumentCapabilities.minNote = (int)capabilitiesObj->getProperty("minNote");
+            instrumentCapabilities.maxNote = (int)capabilitiesObj->getProperty("maxNote");
+            
+            // Load sound mappings
+            auto mappingsVar = capabilitiesObj->getProperty("soundMappings");
+            if (!mappingsVar.isVoid() && mappingsVar.isObject())
+            {
+                auto* mappingsObj = mappingsVar.getDynamicObject();
+                if (mappingsObj)
+                {
+                    instrumentCapabilities.soundMappings.clear();
+                    for (const auto& prop : mappingsObj->getProperties())
+                    {
+                        instrumentCapabilities.soundMappings[prop.name.toString()] = prop.value;
+                    }
+                }
+            }
+        }
     }
     
     // Load instrument state
@@ -530,11 +618,11 @@ bool TracktionPlayer::loadCompleteState(const juce::var& state)
         lastGeneratedChart = lastChartVar;
     }
     
-    DBG("TracktionPlayer " << playerName << " complete state loaded successfully");
+    DBG("Player " << playerName << " complete state loaded successfully");
     return true;
 }
 
-juce::var TracktionPlayer::savePluginChain() const
+juce::var Player::savePluginChain() const
 {
     if (!instrument)
         return juce::var();
@@ -548,7 +636,7 @@ juce::var TracktionPlayer::savePluginChain() const
     return juce::var();
 }
 
-bool TracktionPlayer::loadPluginChain(const juce::var& pluginChainState)
+bool Player::loadPluginChain(const juce::var& pluginChainState)
 {
     if (!instrument)
     {
@@ -564,14 +652,14 @@ bool TracktionPlayer::loadPluginChain(const juce::var& pluginChainState)
     return instrument->loadInstrumentState(juce::var(tempState.get()));
 }
 
-bool TracktionPlayer::exportAsPreset(const juce::File& file) const
+bool Player::exportAsPreset(const juce::File& file) const
 {
     auto state = saveCompleteState();
     
     // Add preset metadata
     if (auto* obj = state.getDynamicObject())
     {
-        obj->setProperty("type", "TracktionPlayerPreset");
+        obj->setProperty("type", "PlayerPreset");
         obj->setProperty("exportedAt", juce::Time::getCurrentTime().toISO8601(true));
         obj->setProperty("application", "Covertracks");
     }
@@ -581,7 +669,7 @@ bool TracktionPlayer::exportAsPreset(const juce::File& file) const
     
     if (file.replaceWithText(json))
     {
-        DBG("TracktionPlayer preset exported to: " << file.getFullPathName());
+        DBG("Player preset exported to: " << file.getFullPathName());
         return true;
     }
     else
@@ -591,7 +679,7 @@ bool TracktionPlayer::exportAsPreset(const juce::File& file) const
     }
 }
 
-bool TracktionPlayer::importFromPreset(const juce::File& file)
+bool Player::importFromPreset(const juce::File& file)
 {
     if (!file.existsAsFile())
     {
@@ -617,7 +705,7 @@ bool TracktionPlayer::importFromPreset(const juce::File& file)
     if (auto* obj = state.getDynamicObject())
     {
         auto type = obj->getProperty("type").toString();
-        if (type != "TracktionPlayerPreset")
+        if (type != "PlayerPreset")
         {
             std::cerr << "Invalid preset type: " << type << std::endl;
             return false;
@@ -626,7 +714,7 @@ bool TracktionPlayer::importFromPreset(const juce::File& file)
     
     if (loadCompleteState(state))
     {
-        DBG("TracktionPlayer preset imported from: " << file.getFullPathName());
+        DBG("Player preset imported from: " << file.getFullPathName());
         return true;
     }
     else
@@ -640,7 +728,7 @@ bool TracktionPlayer::importFromPreset(const juce::File& file)
 // Helper Methods
 // =========================================================================
 
-juce::File TracktionPlayer::getStateFile() const
+juce::File Player::getStateFile() const
 {
     auto appDataDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
                         .getChildFile("Covertracks")
@@ -649,7 +737,7 @@ juce::File TracktionPlayer::getStateFile() const
     return appDataDir.getChildFile(playerId + ".tracktionplayer");
 }
 
-juce::var TracktionPlayer::convertPatternStringToChart(const juce::String& patternString, double tempo)
+juce::var Player::convertPatternStringToChart(const juce::String& patternString, double tempo)
 {
     if (musician)
     {
@@ -665,13 +753,161 @@ juce::var TracktionPlayer::convertPatternStringToChart(const juce::String& patte
     return juce::var(result.get());
 }
 
-void TracktionPlayer::setupDefaultMusician()
+const InstrumentCapabilities& Player::getInstrumentCapabilities() const
+{
+    return instrumentCapabilities;
+}
+
+void Player::setInstrumentCapabilities(const InstrumentCapabilities& capabilities)
+{
+    instrumentCapabilities = capabilities;
+}
+
+PlayerMetadata Player::getMetadata() const
+{
+    return metadata;
+}
+
+PlayerMetadata& Player::getMetadata()
+{
+    return metadata;
+}
+
+void Player::setMetadata(const PlayerMetadata& newMetadata)
+{
+    metadata = newMetadata;
+}
+
+bool Player::play()
+{
+    return playLoadedChart();
+}
+
+// =========================================================================
+// Legacy Player Compatibility Methods (for PlayerEditorComponent)
+// =========================================================================
+
+void Player::prepareForEditing()
+{
+    // Initialize if not already done
+    if (!initialized)
+    {
+        initialize();
+    }
+}
+
+std::unique_ptr<juce::XmlElement> Player::getPluginGraphState() const
+{
+    // Delegate to instrument to get plugin state
+    if (instrument)
+    {
+        return instrument->getPluginState();
+    }
+    return std::make_unique<juce::XmlElement>("PluginGraph");
+}
+
+bool Player::isConnectedToAudioEngine() const
+{
+    return initialized;
+}
+
+void Player::disconnectFromAudioEngine()
+{
+    // Delegate to instrument
+    if (instrument)
+    {
+        instrument->unregisterFromAudioEngine();
+    }
+}
+
+void Player::releaseResources()
+{
+    if (instrument)
+    {
+        instrument->unregisterFromAudioEngine();
+    }
+}
+
+void Player::loadPluginGraph(const juce::XmlElement& graphXml)
+{
+    // Delegate to instrument
+    if (instrument)
+    {
+        instrument->restorePluginState(graphXml);
+    }
+}
+
+void Player::setPlayerState(const juce::var& state)
+{
+    storedPlayerState = state;
+}
+
+juce::var Player::getPlayerState() const
+{
+    return storedPlayerState;
+}
+
+bool Player::hasPlayerState() const
+{
+    return !storedPlayerState.isVoid();
+}
+
+InstrumentCapabilities Player::createDrumCapabilities()
+{
+    InstrumentCapabilities caps;
+    caps.type = InstrumentCapabilityType::Mapping;
+    caps.instrumentType = "drums";
+    caps.soundMappings = {
+        {"kick", 36}, {"snare", 38}, {"hihat", 42}, {"openHihat", 46},
+        {"crash", 49}, {"ride", 51}, {"rimshot", 37}
+    };
+    return caps;
+}
+
+InstrumentCapabilities Player::createPianoCapabilities()
+{
+    InstrumentCapabilities caps;
+    caps.type = InstrumentCapabilityType::NoteRange;
+    caps.instrumentType = "piano";
+    caps.minNote = 21;  // A0
+    caps.maxNote = 108; // C8
+    return caps;
+}
+
+InstrumentCapabilities Player::createBassCapabilities()
+{
+    InstrumentCapabilities caps;
+    caps.type = InstrumentCapabilityType::NoteRange;
+    caps.instrumentType = "bass";
+    caps.minNote = 28;  // E1
+    caps.maxNote = 67;  // G4
+    return caps;
+}
+
+InstrumentCapabilities Player::createGuitarCapabilities()
+{
+    InstrumentCapabilities caps;
+    caps.type = InstrumentCapabilityType::NoteRange;
+    caps.instrumentType = "guitar";
+    caps.minNote = 40;  // E2
+    caps.maxNote = 84;  // C6
+    return caps;
+}
+
+void Player::setLevel(float level)
+{
+    // Store level in metadata for now (legacy compatibility)
+    // In a real implementation, this might adjust the instrument's volume
+    (void)level; // Suppress unused parameter warning
+}
+
+void Player::setupDefaultMusician()
 {
     // Create a basic musician for chart generation
     // TODO: Initialize with proper LLM client when available
     musician = std::make_unique<Musician>(playerName + "_Musician");
     
-    DBG("TracktionPlayer " << playerName << " default musician created");
+    DBG("Player " << playerName << " default musician created");
 }
 
 } // namespace covertracks

@@ -12,7 +12,7 @@ namespace covertracks {
 /**
  * @brief Complete audio system - owns Tracktion Track, plugins, and playback
  * 
- * TracktionInstrument is a self-contained audio system that:
+ * Instrument is a self-contained audio system that:
  * - Registers itself with TracktionAudioEngine 
  * - Owns and manages its dedicated Tracktion Track
  * - Handles plugin management (add/remove/clear plugins)
@@ -20,23 +20,23 @@ namespace covertracks {
  * - Handles all audio concerns independently
  * 
  * This class represents the "audio engine" part of a Player, completely
- * separated from the orchestration concerns handled by TracktionPlayer.
+ * separated from the orchestration concerns handled by Player.
  */
-class TracktionInstrument : public juce::Timer,
-                           public juce::MidiInputCallback
+class Instrument : public juce::Timer,
+                   public juce::MidiInputCallback
 {
 public:
     /**
-     * @brief Create a TracktionInstrument
+     * @brief Create an Instrument
      * @param name Instrument name (used for Track naming)
      * @param formatManager Reference to shared plugin format manager
      * @param knownPluginList Reference to shared plugin list
      */
-    TracktionInstrument(const juce::String& name,
-                       juce::AudioPluginFormatManager& formatManager,
-                       juce::KnownPluginList& knownPluginList);
+    Instrument(const juce::String& name,
+               juce::AudioPluginFormatManager& formatManager,
+               juce::KnownPluginList& knownPluginList);
     
-    ~TracktionInstrument() override;
+    ~Instrument() override;
     
     // =========================================================================
     // Audio Engine Integration (Self-Managed)
@@ -275,7 +275,7 @@ private:
     void updatePlaybackPosition();
     void sendMidiToTrack(const juce::MidiMessage& message);
     
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TracktionInstrument)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Instrument)
 };
 
 } // namespace covertracks

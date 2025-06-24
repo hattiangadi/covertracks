@@ -36,7 +36,7 @@ namespace covertracks {
 class PatternGenerator;
 class MusicPatternSystem;
 class PromptManager;
-class TracktionPlayer;
+class Player;
 
 /**
  * @brief Core class for generating and managing musical patterns
@@ -82,11 +82,11 @@ public:
      * @brief Generate a musical chart from LLM using Player capabilities
      * 
      * @param parameters Parameters for chart generation (var object)
-     * @param player TracktionPlayer pointer to use for instrument capabilities
-     * @param callback Callback with MIDI_EVENT_CHART (TracktionPlayer-compatible format)
+     * @param player Player pointer to use for instrument capabilities
+     * @param callback Callback with MIDI_EVENT_CHART (Player-compatible format)
      */
     void generateChartWithPlayer(const var& parameters,
-                                TracktionPlayer* player,
+                                Player* player,
                                 std::function<void(bool success, const var& midiEventChart)> callback);
     
     /**

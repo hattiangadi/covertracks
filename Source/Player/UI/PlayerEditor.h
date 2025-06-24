@@ -1,31 +1,31 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "../Core/TracktionPlayer.h"
-#include "../Core/TracktionInstrument.h"
+#include "../Core/Player.h"
+#include "../Core/Instrument.h"
 #include "PluginChainEditor.h"
 
 namespace covertracks {
 
 /**
- * @brief Simple editor for TracktionPlayer/TracktionInstrument
+ * @brief Simple editor for Player/Instrument
  * 
  * Focuses on the new clean architecture:
- * - TracktionPlayer metadata and orchestration settings
- * - TracktionInstrument plugin chain editing
+ * - Player metadata and orchestration settings
+ * - Instrument plugin chain editing
  * - Simple, workable UI without complex graph editor
  */
-class TracktionPlayerEditor : public juce::Component,
+class PlayerEditor : public juce::Component,
                              public juce::Button::Listener,
                              public juce::ComboBox::Listener
 {
 public:
-    TracktionPlayerEditor();
-    ~TracktionPlayerEditor() override;
+    PlayerEditor();
+    ~PlayerEditor() override;
     
-    // Set the TracktionPlayer to edit
-    void setPlayer(TracktionPlayer* player);
-    TracktionPlayer* getPlayer() const { return currentPlayer; }
+    // Set the Player to edit
+    void setPlayer(Player* player);
+    Player* getPlayer() const { return currentPlayer; }
     
     // Component overrides
     void paint(juce::Graphics& g) override;
@@ -42,8 +42,8 @@ public:
     {
     public:
         virtual ~Listener() = default;
-        virtual void tracktionPlayerEditorSaveRequested(TracktionPlayerEditor* editor) = 0;
-        virtual void tracktionPlayerEditorCancelRequested(TracktionPlayerEditor* editor) = 0;
+        virtual void playerEditorSaveRequested(PlayerEditor* editor) = 0;
+        virtual void playerEditorCancelRequested(PlayerEditor* editor) = 0;
     };
     
     void addListener(Listener* listener);
@@ -51,7 +51,7 @@ public:
     
 private:
     // Data
-    TracktionPlayer* currentPlayer = nullptr;
+    Player* currentPlayer = nullptr;
     
     // UI Components - Player metadata
     juce::Label titleLabel;
@@ -78,7 +78,7 @@ private:
     void updatePlayerFromUI();
     void testPlayer();
     
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TracktionPlayerEditor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PlayerEditor)
 };
 
 } // namespace covertracks

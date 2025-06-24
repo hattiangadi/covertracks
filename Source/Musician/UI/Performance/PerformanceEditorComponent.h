@@ -7,7 +7,7 @@
 #include "../../Core/EnsembleManager.h"
 #include "../../Core/Song.h"
 #include "../../../Player/Core/PlayerManager.h"
-#include "../../../Player/Core/TracktionPlayer.h"
+#include "../../../Player/Core/Player.h"
 #include "../../../LLM/Core/LLMClient.h"
 #include "../PatternEditorComponent.h"
 
@@ -176,8 +176,8 @@ private:
     // Pattern editor for editing LLM patterns
     std::unique_ptr<PatternEditorComponent> patternEditor;
     
-    // Active TracktionPlayers for individual playback (keeps them alive during playback)
-    std::map<juce::String, std::unique_ptr<TracktionPlayer>> activeTracktionPlayers;
+    // Active Players for individual playback (keeps them alive during playback)
+    std::map<juce::String, std::unique_ptr<Player>> activePlayers;
     
     // Helper methods
     void createNewPerformance();
@@ -221,8 +221,8 @@ private:
     // JSON continuation handling
     void requestJsonContinuation(const String& roleName, const String& incompleteJson);
     
-    // TracktionPlayer creation
-    std::unique_ptr<TracktionPlayer> createTracktionPlayerFromPlayer(Player* player);
+    // Player creation
+    std::unique_ptr<Player> createPlayerFromPlayer(Player* player);
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PerformanceEditorComponent)
 };

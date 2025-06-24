@@ -1,18 +1,18 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "../Player/Core/TracktionPlayer.h"
-#include "../Player/Core/TracktionInstrument.h"
+#include "../Player/Core/Player.h"
+#include "../Player/Core/Instrument.h"
 #include "../Audio/AudioEngineInterface.h"
 
 namespace covertracks {
 
 /**
- * @brief Simple test component for verifying TracktionInstrument and TracktionPlayer functionality
+ * @brief Simple test component for verifying Instrument and Player functionality
  * 
  * This test demonstrates the new clean architecture where:
- * - TracktionInstrument owns all audio responsibilities
- * - TracktionPlayer handles orchestration between Musician and Instrument
+ * - Instrument owns all audio responsibilities
+ * - Player handles orchestration between Musician and Instrument
  * - Simple audio generation without plugin complexity
  */
 class TracktionAudioTest : public juce::Component,
@@ -28,7 +28,7 @@ public:
     
 private:
     void testBasicInstrument();
-    void testTracktionPlayer();
+    void testPlayer();
     void testSimultaneousPlayers();
     void stopAllTests();
     void updateStatus(const juce::String& message);
@@ -42,10 +42,10 @@ private:
     juce::Label statusLabel;
     
     // Test components using new architecture
-    std::unique_ptr<TracktionInstrument> testInstrument1;
-    std::unique_ptr<TracktionInstrument> testInstrument2;
-    std::unique_ptr<TracktionPlayer> testPlayer1;
-    std::unique_ptr<TracktionPlayer> testPlayer2;
+    std::unique_ptr<Instrument> testInstrument1;
+    std::unique_ptr<Instrument> testInstrument2;
+    std::unique_ptr<Player> testPlayer1;
+    std::unique_ptr<Player> testPlayer2;
     
     // Shared plugin format manager and known plugin list
     juce::AudioPluginFormatManager formatManager;

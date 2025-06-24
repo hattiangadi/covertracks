@@ -6,17 +6,17 @@ namespace covertracks {
 TracktionAudioTest::TracktionAudioTest()
 {
     // Set up title
-    titleLabel.setText("New Architecture Audio Test - TracktionInstrument & TracktionPlayer", juce::dontSendNotification);
+    titleLabel.setText("New Architecture Audio Test - Instrument & Player", juce::dontSendNotification);
     titleLabel.setFont(juce::Font(juce::FontOptions(16.0f).withStyle("bold")));
     titleLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(titleLabel);
     
     // Set up test buttons
-    basicInstrumentButton.setButtonText("Test Basic TracktionInstrument (440Hz Sine)");
+    basicInstrumentButton.setButtonText("Test Basic Instrument (440Hz Sine)");
     basicInstrumentButton.addListener(this);
     addAndMakeVisible(basicInstrumentButton);
     
-    tracktionPlayerButton.setButtonText("Test TracktionPlayer (Chart Generation + Play)");
+    tracktionPlayerButton.setButtonText("Test Player (Chart Generation + Play)");
     tracktionPlayerButton.addListener(this);
     addAndMakeVisible(tracktionPlayerButton);
     
@@ -29,7 +29,7 @@ TracktionAudioTest::TracktionAudioTest()
     addAndMakeVisible(stopButton);
     
     // Status label
-    statusLabel.setText("Ready to test new architecture (TracktionInstrument owns audio, TracktionPlayer orchestrates)", juce::dontSendNotification);
+    statusLabel.setText("Ready to test new architecture (Instrument owns audio, Player orchestrates)", juce::dontSendNotification);
     statusLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(statusLabel);
     
@@ -58,11 +58,11 @@ void TracktionAudioTest::paint(juce::Graphics& g)
     g.setColour(juce::Colours::darkgrey);
     g.setFont(juce::Font(juce::FontOptions(12.0f)));
     
-    g.drawText("Architecture: TracktionPlayer → TracktionInstrument → TracktionEngine → Audio", 
+    g.drawText("Architecture: Player → Instrument → TracktionEngine → Audio", 
                area.removeFromTop(20), juce::Justification::centred);
-    g.drawText("• TracktionInstrument: Owns Track, Plugins, Audio Generation", 
+    g.drawText("• Instrument: Owns Track, Plugins, Audio Generation", 
                area.removeFromTop(20), juce::Justification::centredLeft);
-    g.drawText("• TracktionPlayer: Orchestrates Musician ↔ Instrument interaction", 
+    g.drawText("• Player: Orchestrates Musician ↔ Instrument interaction", 
                area.removeFromTop(20), juce::Justification::centredLeft);
     g.drawText("• Clean separation: Audio ownership vs. orchestration", 
                area.removeFromTop(20), juce::Justification::centredLeft);
@@ -94,17 +94,17 @@ void TracktionAudioTest::buttonClicked(juce::Button* button)
 {
     if (button == &basicInstrumentButton)
     {
-        updateStatus("Testing basic TracktionInstrument audio generation...");
+        updateStatus("Testing basic Instrument audio generation...");
         testBasicInstrument();
     }
     else if (button == &tracktionPlayerButton)
     {
-        updateStatus("Testing TracktionPlayer chart generation and playback...");
-        testTracktionPlayer();
+        updateStatus("Testing Player chart generation and playback...");
+        testPlayer();
     }
     else if (button == &simultaneousButton)
     {
-        updateStatus("Testing simultaneous TracktionPlayers...");
+        updateStatus("Testing simultaneous Players...");
         testSimultaneousPlayers();
     }
     else if (button == &stopButton)
@@ -118,13 +118,13 @@ void TracktionAudioTest::testBasicInstrument()
 {
     try 
     {
-        std::cout << "🧪 Testing basic TracktionInstrument functionality" << std::endl;
+        std::cout << "🧪 Testing basic Instrument functionality" << std::endl;
         
         // Stop any existing tests
         stopAllTests();
         
-        // Create a TracktionInstrument
-        testInstrument1 = std::make_unique<TracktionInstrument>("TestInstrument1", formatManager, knownPluginList);
+        // Create a Instrument
+        testInstrument1 = std::make_unique<Instrument>("TestInstrument1", formatManager, knownPluginList);
         
         if (!testInstrument1->registerWithAudioEngine())
         {
@@ -132,7 +132,7 @@ void TracktionAudioTest::testBasicInstrument()
             return;
         }
         
-        std::cout << "✅ TracktionInstrument registered with audio engine" << std::endl;
+        std::cout << "✅ Instrument registered with audio engine" << std::endl;
         
         // Create a simple MIDI chart with a 440Hz note
         juce::Array<juce::var> midiEventsArray;
@@ -164,16 +164,16 @@ void TracktionAudioTest::testBasicInstrument()
         // Play the chart
         if (testInstrument1->playChart(chart, 120.0))
         {
-            updateStatus("✅ TracktionInstrument: Playing 440Hz note (A4) for 2 seconds");
+            updateStatus("✅ Instrument: Playing 440Hz note (A4) for 2 seconds");
             
             // Schedule completion status update
             juce::Timer::callAfterDelay(2500, [this]() {
-                updateStatus("✅ Basic TracktionInstrument test completed successfully");
+                updateStatus("✅ Basic Instrument test completed successfully");
             });
         }
         else
         {
-            updateStatus("❌ ERROR: Failed to play chart on TracktionInstrument");
+            updateStatus("❌ ERROR: Failed to play chart on Instrument");
         }
     }
     catch (const std::exception& e)
@@ -183,25 +183,25 @@ void TracktionAudioTest::testBasicInstrument()
     }
 }
 
-void TracktionAudioTest::testTracktionPlayer()
+void TracktionAudioTest::testPlayer()
 {
     try 
     {
-        std::cout << "🧪 Testing TracktionPlayer orchestration functionality" << std::endl;
+        std::cout << "🧪 Testing Player orchestration functionality" << std::endl;
         
         // Stop any existing tests
         stopAllTests();
         
-        // Create a TracktionPlayer (which internally creates a TracktionInstrument)
-        testPlayer1 = std::make_unique<TracktionPlayer>("TestPlayer1", "Test Player 1", formatManager, knownPluginList);
+        // Create a Player (which internally creates a Instrument)
+        testPlayer1 = std::make_unique<Player>("TestPlayer1", "Test Player 1", formatManager, knownPluginList);
         
         if (!testPlayer1->initialize())
         {
-            updateStatus("❌ ERROR: Failed to initialize TracktionPlayer");
+            updateStatus("❌ ERROR: Failed to initialize Player");
             return;
         }
         
-        std::cout << "✅ TracktionPlayer initialized and registered" << std::endl;
+        std::cout << "✅ Player initialized and registered" << std::endl;
         
         // Create a simple chord chart (C major chord)
         juce::Array<juce::var> midiEventsArray;
@@ -234,25 +234,25 @@ void TracktionAudioTest::testTracktionPlayer()
         
         std::cout << "🎵 Playing C major chord (3 notes) for 3 seconds" << std::endl;
         
-        // Use TracktionPlayer to play the chart (demonstrates orchestration)
+        // Use Player to play the chart (demonstrates orchestration)
         if (testPlayer1->playChart(chart, 120.0))
         {
-            updateStatus("✅ TracktionPlayer: Playing C major chord (C-E-G) for 3 seconds");
+            updateStatus("✅ Player: Playing C major chord (C-E-G) for 3 seconds");
             
             // Schedule completion status update
             juce::Timer::callAfterDelay(3500, [this]() {
-                updateStatus("✅ TracktionPlayer orchestration test completed successfully");
+                updateStatus("✅ Player orchestration test completed successfully");
             });
         }
         else
         {
-            updateStatus("❌ ERROR: TracktionPlayer failed to play chart");
+            updateStatus("❌ ERROR: Player failed to play chart");
         }
     }
     catch (const std::exception& e)
     {
-        updateStatus("❌ ERROR in TracktionPlayer test: " + juce::String(e.what()));
-        std::cerr << "TracktionAudioTest::testTracktionPlayer error: " << e.what() << std::endl;
+        updateStatus("❌ ERROR in Player test: " + juce::String(e.what()));
+        std::cerr << "TracktionAudioTest::testPlayer error: " << e.what() << std::endl;
     }
 }
 
@@ -260,22 +260,22 @@ void TracktionAudioTest::testSimultaneousPlayers()
 {
     try 
     {
-        std::cout << "🧪 Testing simultaneous TracktionPlayers" << std::endl;
+        std::cout << "🧪 Testing simultaneous Players" << std::endl;
         
         // Stop any existing tests
         stopAllTests();
         
-        // Create two TracktionPlayers
-        testPlayer1 = std::make_unique<TracktionPlayer>("TestPlayer1", "Player 1 (440Hz)", formatManager, knownPluginList);
-        testPlayer2 = std::make_unique<TracktionPlayer>("TestPlayer2", "Player 2 (660Hz)", formatManager, knownPluginList);
+        // Create two Players
+        testPlayer1 = std::make_unique<Player>("TestPlayer1", "Player 1 (440Hz)", formatManager, knownPluginList);
+        testPlayer2 = std::make_unique<Player>("TestPlayer2", "Player 2 (660Hz)", formatManager, knownPluginList);
         
         if (!testPlayer1->initialize() || !testPlayer2->initialize())
         {
-            updateStatus("❌ ERROR: Failed to initialize TracktionPlayers");
+            updateStatus("❌ ERROR: Failed to initialize Players");
             return;
         }
         
-        std::cout << "✅ Two TracktionPlayers initialized" << std::endl;
+        std::cout << "✅ Two Players initialized" << std::endl;
         
         // Create chart for first player (440Hz = A4)
         juce::Array<juce::var> events1Array;
@@ -331,7 +331,7 @@ void TracktionAudioTest::testSimultaneousPlayers()
             
             // Schedule completion status update
             juce::Timer::callAfterDelay(4500, [this]() {
-                updateStatus("✅ Simultaneous TracktionPlayers test completed - Clean architecture works!");
+                updateStatus("✅ Simultaneous Players test completed - Clean architecture works!");
             });
         }
         else

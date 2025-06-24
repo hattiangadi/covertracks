@@ -7,7 +7,7 @@
 namespace covertracks {
 
 // Constructor
-PlayerEditorComponent::PlayerEditorComponent(TracktionPlayer* playerToEdit, AudioEngineImpl* engine)
+PlayerEditorComponent::PlayerEditorComponent(Player* playerToEdit, AudioEngineImpl* engine)
     : player(playerToEdit),
       audioEngine(engine)
 {
@@ -63,10 +63,10 @@ PlayerEditorComponent::PlayerEditorComponent(TracktionPlayer* playerToEdit, Audi
     // Setup instrument capabilities UI
     setupCapabilitiesUI();
 
-    // Setup the new TracktionPlayer system instead of the old graph editor
+    // Setup the new Player system instead of the old graph editor
     if (player != nullptr && audioEngine != nullptr)
     {
-        setupNewTracktionPlayerSystem();
+        setupNewPlayerSystem();
         
         // Update the UI from the player data
         auto& metadata = player->getMetadata();
@@ -98,7 +98,7 @@ PlayerEditorComponent::~PlayerEditorComponent()
 }
 
 // Add a static flag to track if we've already loaded this player for editing
-static std::unordered_map<TracktionPlayer*, bool> playerLoadedMap;
+static std::unordered_map<Player*, bool> playerLoadedMap;
 
 void PlayerEditorComponent::loadPlayerForEditing()
 {
@@ -234,7 +234,7 @@ void PlayerEditorComponent::saveAndReleaseResources()
                           << " connections (MIDI: " << midiConnections 
                           << ", Audio: " << audioConnections << ")" << std::endl;
                 
-                // TODO: Update to use TracktionPlayer plugin state saving
+                // TODO: Update to use Player plugin state saving
                 // Save directly to the player's graph file
                 // player->savePluginGraphToFile(*graphState);
             }
@@ -282,7 +282,36 @@ void PlayerEditorComponent::updatePlayerFromUI()
         // Update capabilities from UI
         updateCapabilitiesFromUI();
         
-        // Update graph state
+        // Transfer plugin state from playerInstance to player (NEW SYSTEM)
+        // Note: PlayerEditorComponent uses a dual-player architecture:
+        // - `player`: Original Player object from PlayerManager (for persistence)
+        // - `playerInstance`: Working copy for editing plugins/capabilities
+        // Plugin changes are made to playerInstance, then transferred back to player for saving
+        if (playerInstance != nullptr && playerInstance->getInstrument() != nullptr)
+        {
+            std::cout << "Transferring plugin state from playerInstance to player..." << std::endl;
+            
+            // Get the complete instrument state from playerInstance
+            auto instrumentState = playerInstance->getInstrument()->saveInstrumentState();
+            
+            if (!instrumentState.isVoid() && player->getInstrument() != nullptr)
+            {
+                // Load this state into the main player's instrument
+                bool success = player->getInstrument()->loadInstrumentState(instrumentState);
+                
+                if (success)
+                {
+                    std::cout << "Plugin state transfer successful! Plugin count: " 
+                              << player->getInstrument()->getPluginCount() << std::endl;
+                }
+                else
+                {
+                    std::cerr << "Failed to transfer plugin state to main player" << std::endl;
+                }
+            }
+        }
+        
+        // Update graph state (LEGACY SYSTEM - for backwards compatibility)
         if (graphEditor != nullptr && graphEditor->graph != nullptr)
         {
             auto graphXml = graphEditor->graph->createXml();
@@ -406,20 +435,20 @@ void PlayerEditorComponent::handleIncomingMidiMessage(MidiInput* /*source*/, con
 
 void PlayerEditorComponent::handleNoteOn(MidiKeyboardState* /*source*/, int midiChannel, int midiNoteNumber, float velocity)
 {
-    if (tracktionPlayer)
+    if (playerInstance)
     {
         auto message = juce::MidiMessage::noteOn(midiChannel, midiNoteNumber, velocity);
-        tracktionPlayer->processMidiMessage(message);
+        playerInstance->processMidiMessage(message);
         std::cout << "MIDI Note On: " << midiNoteNumber << " velocity: " << velocity << std::endl;
     }
 }
 
 void PlayerEditorComponent::handleNoteOff(MidiKeyboardState* /*source*/, int midiChannel, int midiNoteNumber, float /*velocity*/)
 {
-    if (tracktionPlayer)
+    if (playerInstance)
     {
         auto message = juce::MidiMessage::noteOff(midiChannel, midiNoteNumber);
-        tracktionPlayer->processMidiMessage(message);
+        playerInstance->processMidiMessage(message);
         std::cout << "MIDI Note Off: " << midiNoteNumber << std::endl;
     }
 }
@@ -458,23 +487,23 @@ void PlayerEditorComponent::buttonClicked(Button* button)
             metadata.name = newName;
         }
         
-        // Transfer TracktionPlayer state back to the main Player object
-        if (tracktionPlayer && player)
+        // Transfer Player state back to the main Player object
+        if (player)
         {
-            // Update TracktionPlayer name to match the UI
+            // Update Player name to match the UI
             if (newName.isNotEmpty())
             {
-                tracktionPlayer->setName(newName);
+                player->setName(newName);
             }
             
-            // Save the TracktionPlayer's complete state and store it in the main Player
-            auto completeState = tracktionPlayer->saveCompleteState();
+            // Save the Player's complete state and store it in the main Player
+            auto completeState = player->saveCompleteState();
             
             // Store this state in the Player object so PlayerManager can save it
-            player->setTracktionPlayerState(completeState);
+            player->setPlayerState(completeState);
             
-            std::cout << "TracktionPlayer state transferred to Player object for persistence" << std::endl;
-            std::cout << "Plugin count: " << tracktionPlayer->getPluginCount() << std::endl;
+            std::cout << "Player state transferred to Player object for persistence" << std::endl;
+            std::cout << "Plugin count: " << player->getPluginCount() << std::endl;
             
             // Also update the capabilities from the UI (this is already done in updatePlayerFromUI())
             auto& capabilities = player->getInstrumentCapabilities();
@@ -913,9 +942,9 @@ void PlayerEditorComponent::updateCapabilitiesInUI()
     updateCapabilitiesUIVisibility();
 }
 
-void PlayerEditorComponent::setupNewTracktionPlayerSystem()
+void PlayerEditorComponent::setupNewPlayerSystem()
 {
-    std::cout << "PlayerEditorComponent: Setting up new TracktionPlayer system..." << std::endl;
+    std::cout << "PlayerEditorComponent: Setting up new Player system..." << std::endl;
     
     if (!audioEngine)
     {
@@ -923,48 +952,48 @@ void PlayerEditorComponent::setupNewTracktionPlayerSystem()
         return;
     }
     
-    // Create a TracktionPlayer for this player's data
+    // Create a Player for this player's data
     auto& metadata = player->getMetadata();
-    tracktionPlayer = std::make_unique<TracktionPlayer>(
-        metadata.name + "_TracktionPlayer", 
+    playerInstance = std::make_unique<Player>(
+        metadata.name + "_Player", 
         metadata.name,
         audioEngine->getFormatManager(),
         audioEngine->getKnownPluginList()
     );
     
-    if (!tracktionPlayer->initialize())
+    if (!playerInstance->initialize())
     {
-        std::cout << "Failed to initialize TracktionPlayer" << std::endl;
+        std::cout << "Failed to initialize Player" << std::endl;
         return;
     }
     
     // Try to load existing state from the Player object (via PlayerManager)
     auto playerName = metadata.name;
     
-    // Check if the Player has stored TracktionPlayer state
-    if (player && player->hasTracktionPlayerState())
+    // Check if the Player has stored Player state
+    if (player && player->hasPlayerState())
     {
-        std::cout << "Loading TracktionPlayer state from Player object..." << std::endl;
-        auto storedState = player->getTracktionPlayerState();
+        std::cout << "Loading Player state from Player object..." << std::endl;
+        auto storedState = player->getPlayerState();
         
-        if (tracktionPlayer->loadCompleteState(storedState))
+        if (playerInstance->loadCompleteState(storedState))
         {
-            std::cout << "TracktionPlayer state loaded successfully from Player object!" << std::endl;
+            std::cout << "Player state loaded successfully from Player object!" << std::endl;
         }
         else
         {
-            std::cerr << "Failed to load TracktionPlayer state from Player object" << std::endl;
+            std::cerr << "Failed to load Player state from Player object" << std::endl;
         }
     }
     else
     {
-        std::cout << "No stored TracktionPlayer state found in Player object" << std::endl;
+        std::cout << "No stored Player state found in Player object" << std::endl;
         std::cout << "Starting with empty plugin configuration" << std::endl;
     }
     
     // Create the plugin chain editor
     pluginChainEditor = std::make_unique<PluginChainEditor>();
-    pluginChainEditor->setPlayer(tracktionPlayer.get());
+    pluginChainEditor->setPlayer(playerInstance.get());
     addAndMakeVisible(pluginChainEditor.get());
     
     // Create MIDI keyboard to replace the tone generation buttons
@@ -972,15 +1001,15 @@ void PlayerEditorComponent::setupNewTracktionPlayerSystem()
     midiKeyboard->setName("MIDI Keyboard");
     addAndMakeVisible(midiKeyboard.get());
     
-    // Connect MIDI keyboard to the TracktionPlayer
+    // Connect MIDI keyboard to the Player
     keyboardState.addListener(this);
     
-    std::cout << "TracktionPlayer system setup complete" << std::endl;
-    std::cout << "Current plugin count: " << (tracktionPlayer->getInstrument() ? tracktionPlayer->getInstrument()->getPluginCount() : 0) << std::endl;
+    std::cout << "Player system setup complete" << std::endl;
+    std::cout << "Current plugin count: " << (playerInstance->getInstrument() ? playerInstance->getInstrument()->getPluginCount() : 0) << std::endl;
     
     // Debug: Show current capabilities
-    if (player) {
-        auto& capabilities = player->getInstrumentCapabilities();
+    if (playerInstance) {
+        auto& capabilities = playerInstance->getInstrumentCapabilities();
         std::cout << "Loaded capabilities: type=" << (int)capabilities.type 
                   << ", instrumentType=" << capabilities.instrumentType
                   << ", soundMappings.size()=" << capabilities.soundMappings.size() << std::endl;

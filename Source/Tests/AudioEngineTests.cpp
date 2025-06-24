@@ -1,6 +1,6 @@
 #include <JuceHeader.h>
 #include "../Audio/AudioEngineInterface.h"
-#include "../Player/Core/TracktionPlayer.h"
+#include "../Player/Core/Player.h"
 
 namespace covertracks {
 
@@ -8,7 +8,7 @@ namespace covertracks {
  * @brief Comprehensive test suite for the new AudioEngine architecture
  * 
  * Tests the centralized AudioEngine singleton that manages all audio resources
- * and coordinates multiple TracktionPlayers without conflicts.
+ * and coordinates multiple Players without conflicts.
  */
 class AudioEngineTests : public juce::UnitTest
 {

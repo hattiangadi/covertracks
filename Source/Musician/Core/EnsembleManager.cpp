@@ -37,7 +37,7 @@ EnsembleManager::~EnsembleManager()
     std::cout << "[EnsembleManager] Destroyed" << std::endl;
 }
 
-bool EnsembleManager::addMusicianRole(const juce::String& roleName, const juce::String& instrumentType, TracktionPlayer* tracktionPlayer)
+bool EnsembleManager::addMusicianRole(const juce::String& roleName, const juce::String& instrumentType, Player* player)
 {
     // Check if the role already exists
     for (auto& role : musicianRoles) {
@@ -47,9 +47,9 @@ bool EnsembleManager::addMusicianRole(const juce::String& roleName, const juce::
         }
     }
     
-    // Add the role with TracktionPlayer
-    musicianRoles.add(MusicianRole(roleName, instrumentType, tracktionPlayer));
-    std::cout << "[EnsembleManager] Added TracktionPlayer role '" << roleName << "' with instrument '" << instrumentType << "'" << std::endl;
+    // Add the role with Player
+    musicianRoles.add(MusicianRole(roleName, instrumentType, player));
+    std::cout << "[EnsembleManager] Added Player role '" << roleName << "' with instrument '" << instrumentType << "'" << std::endl;
     return true;
 }
 
@@ -388,25 +388,25 @@ std::unique_ptr<EnsembleManager> EnsembleManager::fromVar(const juce::var& v, Pl
                     level = static_cast<float>(static_cast<double>(roleObj->getProperty("level")));
                 }
                 
-                // Find the TracktionPlayer if available
-                TracktionPlayer* tracktionPlayer = nullptr;
+                // Find the Player if available
+                Player* player = nullptr;
                 if (roleObj->hasProperty("playerId") && playerManager)
                 {
                     juce::String playerId = roleObj->getProperty("playerId").toString();
-                    DBG("EnsembleManager: Looking for TracktionPlayer with ID: " << playerId);
+                    DBG("EnsembleManager: Looking for Player with ID: " << playerId);
                     for (auto* p : playerManager->getPlayers())
                     {
-                        DBG("EnsembleManager: Found TracktionPlayer with ID: " << p->getId() << " (name: " << p->getName() << ")");
+                        DBG("EnsembleManager: Found Player with ID: " << p->getId() << " (name: " << p->getName() << ")");
                         if (p->getId() == playerId)
                         {
-                            tracktionPlayer = p;
-                            DBG("EnsembleManager: Matched TracktionPlayer '" << p->getName() << "' to role '" << roleName << "'");
+                            player = p;
+                            DBG("EnsembleManager: Matched Player '" << p->getName() << "' to role '" << roleName << "'");
                             break;
                         }
                     }
-                    if (!tracktionPlayer)
+                    if (!player)
                     {
-                        DBG("EnsembleManager: No TracktionPlayer found with ID: " << playerId << " for role: " << roleName);
+                        DBG("EnsembleManager: No Player found with ID: " << playerId << " for role: " << roleName);
                     }
                 }
                 else
@@ -415,7 +415,7 @@ std::unique_ptr<EnsembleManager> EnsembleManager::fromVar(const juce::var& v, Pl
                 }
                 
                 // Add the role
-                if (ensemble->addMusicianRole(roleName, instrument, tracktionPlayer))
+                if (ensemble->addMusicianRole(roleName, instrument, player))
                 {
                     // Set the pattern and level
                     for (auto& role : ensemble->musicianRoles)
@@ -487,30 +487,30 @@ juce::Array<juce::File> EnsembleManager::getEnsembleFiles()
 }
 
 // =========================================================================
-// NEW: Synchronized Multi-Player Playback (TracktionPlayer-based)
+// NEW: Synchronized Multi-Player Playback (Player-based)
 // =========================================================================
 
 bool EnsembleManager::playPatterns()
 {
     bool anySuccess = false;
-    std::vector<TracktionPlayer*> readyPlayers;
+    std::vector<Player*> readyPlayers;
     
-    // Find TracktionPlayers that are already loaded and ready to play
-    std::cout << "[EnsembleManager] Phase 1: Finding pre-loaded TracktionPlayers..." << std::endl;
+    // Find Players that are already loaded and ready to play
+    std::cout << "[EnsembleManager] Phase 1: Finding pre-loaded Players..." << std::endl;
     
     for (auto& role : musicianRoles)
     {
-        if (role.tracktionPlayer)
+        if (role.player)
         {
-            // Check if TracktionPlayer is initialized and has a loaded chart
-            if (role.tracktionPlayer->isInitialized())
+            // Check if Player is initialized and has a loaded chart
+            if (role.player->isInitialized())
             {
-                readyPlayers.push_back(role.tracktionPlayer);
-                std::cout << "[EnsembleManager] ✅ Found pre-loaded TracktionPlayer: " << role.name << std::endl;
+                readyPlayers.push_back(role.player);
+                std::cout << "[EnsembleManager] ✅ Found pre-loaded Player: " << role.name << std::endl;
             }
             else
             {
-                std::cout << "[EnsembleManager] ⚠️ TracktionPlayer not initialized for role: " << role.name << std::endl;
+                std::cout << "[EnsembleManager] ⚠️ Player not initialized for role: " << role.name << std::endl;
             }
         }
         else
@@ -519,11 +519,11 @@ bool EnsembleManager::playPatterns()
         }
     }
     
-    // Phase 2: Start all pre-loaded TracktionPlayers simultaneously for perfectly synchronized playback
+    // Phase 2: Start all pre-loaded Players simultaneously for perfectly synchronized playback
     if (!readyPlayers.empty())
     {
         std::cout << "[EnsembleManager] Phase 2: Starting " << readyPlayers.size() 
-                  << " pre-loaded TracktionPlayers with perfect synchronization..." << std::endl;
+                  << " pre-loaded Players with perfect synchronization..." << std::endl;
                   
         for (auto* player : readyPlayers)
         {
@@ -546,7 +546,7 @@ bool EnsembleManager::playPatterns()
     }
     else
     {
-        std::cout << "[EnsembleManager] ❌ No pre-loaded TracktionPlayers ready for synchronized playback" << std::endl;
+        std::cout << "[EnsembleManager] ❌ No pre-loaded Players ready for synchronized playback" << std::endl;
         std::cout << "[EnsembleManager] 💡 Make sure to 'Load All Charts' before playing ensemble" << std::endl;
     }
     
@@ -557,13 +557,13 @@ void EnsembleManager::stopPlayback()
 {
     std::cout << "[EnsembleManager] Stopping synchronized ensemble playback..." << std::endl;
     
-    // Stop all TracktionPlayers simultaneously for synchronized stop
+    // Stop all Players simultaneously for synchronized stop
     for (auto& role : musicianRoles)
     {
-        if (role.tracktionPlayer)
+        if (role.player)
         {
-            role.tracktionPlayer->stop();
-            std::cout << "[EnsembleManager] Stopped TracktionPlayer: " << role.tracktionPlayer->getName() << std::endl;
+            role.player->stop();
+            std::cout << "[EnsembleManager] Stopped Player: " << role.player->getName() << std::endl;
         }
     }
     

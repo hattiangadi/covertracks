@@ -1,7 +1,7 @@
 // Source/Musician/Core/PatternParser.cpp
 #include "PatternParser.h"
 #include "MusicPatternSystem.h"
-// Legacy Player.h include removed - using TracktionPlayer
+#include "../../Player/Core/Player.h"  // For InstrumentCapabilities definition
 #include <iostream>
 #include <sstream>
 #include <regex>
@@ -22,7 +22,22 @@ int covertracks::PatternParser::findNoteFromCapabilities(const String& instrumen
     if (it != registeredCapabilities.end())
     {
         const InstrumentCapabilities& capabilities = it->second;
-        return capabilities.findNote(noteName);
+        
+        if (capabilities.type == InstrumentCapabilityType::Mapping)
+        {
+            // Look up the note name in the sound mappings
+            auto noteIt = capabilities.soundMappings.find(noteName);
+            if (noteIt != capabilities.soundMappings.end())
+            {
+                return noteIt->second;
+            }
+        }
+        else if (capabilities.type == InstrumentCapabilityType::NoteRange)
+        {
+            // For range-based instruments, we'd need to parse the note name
+            // For now, return -1 to indicate not supported in this context
+            return -1;
+        }
     }
     return -1; // Note not found
 }
