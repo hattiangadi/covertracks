@@ -513,9 +513,11 @@ juce::Array<juce::File> EnsembleManager::getEnsembleFiles()
 bool EnsembleManager::playPatterns()
 {
     bool anySuccess = false;
-    std::vector<std::pair<TracktionPlayer*, juce::var>> playersToStart;
+    std::vector<TracktionPlayer*> readyPlayers;
     
-    // First pass: Parse patterns and prepare for synchronized start
+    // First pass: Load charts into all TracktionPlayers (pre-conversion for synchronized timing)
+    std::cout << "[EnsembleManager] Phase 1: Loading charts into TracktionPlayers..." << std::endl;
+    
     for (auto& role : musicianRoles)
     {
         TracktionPlayer* activePlayer = nullptr;
@@ -537,49 +539,113 @@ bool EnsembleManager::playPatterns()
         
         if (activePlayer && !role.pattern.isEmpty())
         {
-            // Parse pattern to MIDI chart format
-            // For now, use a simple pattern-to-chart conversion
-            // TODO: Use proper PatternParser when available
-            juce::var midiChart = createSimpleChartFromPattern(role.pattern, role.instrument);
+            // Initialize TracktionPlayer
+            if (!activePlayer->initialize())
+            {
+                std::cerr << "[EnsembleManager] Failed to initialize TracktionPlayer for role: " << role.name << std::endl;
+                continue;
+            }
+            
+            // Convert LLM pattern to MIDI chart using the same method as PerformanceEditorComponent
+            juce::var midiChart;
+            
+            if (role.player)
+            {
+                // Use the legacy Player's conversion method (same as "Prep" step)
+                midiChart = role.player->convertPatternStringToChart(role.pattern, 120.0);
+                
+                // Check if conversion succeeded and extract MIDI events
+                if (midiChart.hasProperty("success") && static_cast<bool>(midiChart["success"]))
+                {
+                    std::cout << "[EnsembleManager] ✅ Successfully converted LLM pattern to MIDI chart for role: " << role.name << std::endl;
+                    
+                    // Extract the MIDI events array from the chart object
+                    if (midiChart.hasProperty("events"))
+                    {
+                        juce::var events = midiChart["events"];
+                        if (events.isArray())
+                        {
+                            midiChart = events; // Replace chart object with events array
+                            std::cout << "[EnsembleManager] Extracted " << events.getArray()->size() << " MIDI events for role: " << role.name << std::endl;
+                        }
+                        else
+                        {
+                            std::cerr << "[EnsembleManager] Events property is not an array for role: " << role.name << std::endl;
+                            midiChart = juce::var(); // Clear invalid chart
+                        }
+                    }
+                    else
+                    {
+                        std::cerr << "[EnsembleManager] No events property in chart for role: " << role.name << std::endl;
+                        midiChart = juce::var(); // Clear invalid chart
+                    }
+                }
+                else
+                {
+                    std::cerr << "[EnsembleManager] ❌ Failed to convert LLM pattern to MIDI chart for role: " << role.name << std::endl;
+                    std::cerr << "  Pattern length: " << role.pattern.length() << " chars" << std::endl;
+                    std::cerr << "  Chart result: " << juce::JSON::toString(midiChart, true) << std::endl;
+                    midiChart = juce::var(); // Clear failed chart
+                }
+            }
+            
+            // Fallback to simple chart if conversion failed
+            if (midiChart.isVoid())
+            {
+                std::cout << "[EnsembleManager] Using fallback simple chart for role: " << role.name << std::endl;
+                midiChart = createSimpleChartFromPattern(role.pattern, role.instrument);
+            }
             
             if (!midiChart.isVoid())
             {
-                // Store for synchronized start
-                playersToStart.push_back({activePlayer, midiChart});
-                std::cout << "[EnsembleManager] Prepared role '" << role.name 
-                          << "' for synchronized playback" << std::endl;
+                // Load chart for synchronized playback (pre-converts MIDI for instant start)
+                if (activePlayer->loadChart(midiChart, 120.0))
+                {
+                    readyPlayers.push_back(activePlayer);
+                    std::cout << "[EnsembleManager] ✅ Loaded chart for role '" << role.name 
+                              << "' - ready for synchronized start" << std::endl;
+                }
+                else
+                {
+                    std::cerr << "[EnsembleManager] ❌ Failed to load chart for role: " << role.name << std::endl;
+                }
+            }
+            else
+            {
+                std::cerr << "[EnsembleManager] Failed to create any chart for role: " << role.name << std::endl;
             }
         }
     }
     
-    // Second pass: Start all TracktionPlayers simultaneously for synchronized playback
-    // This eliminates the clicking issue by using sample-accurate timing
-    if (!playersToStart.empty())
+    // Second pass: Start all loaded TracktionPlayers simultaneously for perfectly synchronized playback
+    // This eliminates clicking issues by ensuring all instruments start at exactly the same time
+    if (!readyPlayers.empty())
     {
-        std::cout << "[EnsembleManager] Starting " << playersToStart.size() 
-                  << " TracktionPlayers with synchronized timing..." << std::endl;
+        std::cout << "[EnsembleManager] Phase 2: Starting " << readyPlayers.size() 
+                  << " loaded TracktionPlayers with perfect synchronization..." << std::endl;
                   
-        for (auto& playerChart : playersToStart)
+        for (auto* player : readyPlayers)
         {
-            TracktionPlayer* player = playerChart.first;
-            const juce::var& chart = playerChart.second;
-            
-            // Use TracktionPlayer's sample-accurate playback
-            if (player->playChart(chart, 120.0)) // Default 120 BPM
+            // Use preloaded chart for instant synchronized start
+            if (player->playLoadedChart())
             {
                 anySuccess = true;
-                std::cout << "[EnsembleManager] Started TracktionPlayer: " << player->getName() << std::endl;
+                std::cout << "[EnsembleManager] ✅ Instant start: " << player->getName() << std::endl;
             }
             else
             {
-                std::cerr << "[EnsembleManager] Failed to start TracktionPlayer: " << player->getName() << std::endl;
+                std::cerr << "[EnsembleManager] ❌ Failed instant start: " << player->getName() << std::endl;
             }
         }
         
         if (anySuccess)
         {
-            std::cout << "[EnsembleManager] ✅ Synchronized ensemble playback started successfully!" << std::endl;
+            std::cout << "[EnsembleManager] 🎵 Perfect synchronized ensemble playback started! (Load→Play timing)" << std::endl;
         }
+    }
+    else
+    {
+        std::cout << "[EnsembleManager] ❌ No TracktionPlayers ready for synchronized playback" << std::endl;
     }
     
     return anySuccess;

@@ -176,6 +176,9 @@ private:
     // Pattern editor for editing LLM patterns
     std::unique_ptr<PatternEditorComponent> patternEditor;
     
+    // Active TracktionPlayers for individual playback (keeps them alive during playback)
+    std::map<juce::String, std::unique_ptr<TracktionPlayer>> activeTracktionPlayers;
+    
     // Helper methods
     void createNewPerformance();
     void updateUI();

@@ -236,6 +236,13 @@ public:
      */
     const juce::String& getName() const { return instrumentName; }
     
+    /**
+     * @brief Convert MIDI chart to sequence for pre-loading
+     * @param chart MIDI chart data (JSON format)
+     * @return MIDI message sequence, or nullptr if conversion failed
+     */
+    std::unique_ptr<juce::MidiMessageSequence> convertChartToMidiSequence(const juce::var& chart);
+    
     // =========================================================================
     // Timer Implementation (for MIDI playback timing)
     // =========================================================================
@@ -265,7 +272,6 @@ private:
     std::function<void()> onPlaybackFinished;
     
     // Helper methods
-    std::unique_ptr<juce::MidiMessageSequence> convertChartToMidiSequence(const juce::var& chart);
     void updatePlaybackPosition();
     void sendMidiToTrack(const juce::MidiMessage& message);
     

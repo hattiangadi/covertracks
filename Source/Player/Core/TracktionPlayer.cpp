@@ -61,6 +61,35 @@ void TracktionPlayer::generateAndPlay(const juce::var& parameters,
     });
 }
 
+bool TracktionPlayer::loadChart(const juce::var& chart, double tempo)
+{
+    if (!initialized || !instrument)
+    {
+        std::cerr << "TracktionPlayer not initialized" << std::endl;
+        return false;
+    }
+    
+    // Store chart for later playback - this pre-converts MIDI for instant playback
+    lastGeneratedChart = chart;
+    lastTempo = tempo;
+    
+    // Pre-convert the chart to MIDI sequence for instant playback later
+    // This ensures all instruments finish their conversion before any start playing
+    auto sequence = instrument->convertChartToMidiSequence(chart);
+    if (!sequence || sequence->getNumEvents() == 0)
+    {
+        std::cerr << "Failed to convert chart to MIDI sequence for loading" << std::endl;
+        return false;
+    }
+    
+    // Store the pre-converted sequence
+    preloadedSequence = std::move(sequence);
+    
+    DBG("TracktionPlayer " << playerName << " loaded chart with " 
+        << preloadedSequence->getNumEvents() << " MIDI events");
+    return true;
+}
+
 bool TracktionPlayer::playChart(const juce::var& chart, double tempo)
 {
     if (!initialized || !instrument)
@@ -72,6 +101,32 @@ bool TracktionPlayer::playChart(const juce::var& chart, double tempo)
     // Store chart and delegate to instrument
     lastGeneratedChart = chart;
     return instrument->playChart(chart, tempo);
+}
+
+bool TracktionPlayer::playLoadedChart()
+{
+    if (!initialized || !instrument)
+    {
+        std::cerr << "TracktionPlayer not initialized" << std::endl;
+        return false;
+    }
+    
+    if (!preloadedSequence || preloadedSequence->getNumEvents() == 0)
+    {
+        std::cerr << "No chart loaded for instant playback" << std::endl;
+        return false;
+    }
+    
+    // Play the pre-converted sequence - this should be instant
+    bool result = instrument->playMidiSequence(*preloadedSequence, lastTempo);
+    
+    if (result)
+    {
+        DBG("TracktionPlayer " << playerName << " playing pre-loaded chart with " 
+            << preloadedSequence->getNumEvents() << " events");
+    }
+    
+    return result;
 }
 
 void TracktionPlayer::generateChart(const juce::var& parameters,
@@ -592,6 +647,22 @@ juce::File TracktionPlayer::getStateFile() const
                         .getChildFile("Players");
                         
     return appDataDir.getChildFile(playerId + ".tracktionplayer");
+}
+
+juce::var TracktionPlayer::convertPatternStringToChart(const juce::String& patternString, double tempo)
+{
+    if (musician)
+    {
+        // Use the musician's conversion method (same as working Player_OLD.cpp)
+        return musician->convertNotationToMidiEvents(patternString, tempo);
+    }
+    
+    // Return failure result if no musician available
+    juce::DynamicObject::Ptr result = new juce::DynamicObject();
+    result->setProperty("success", false);
+    result->setProperty("tempo", tempo);
+    result->setProperty("events", juce::Array<juce::var>());
+    return juce::var(result.get());
 }
 
 void TracktionPlayer::setupDefaultMusician()

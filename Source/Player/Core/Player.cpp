@@ -112,7 +112,20 @@ int Player::getTracktionPluginCount() const { return 0; }
 void Player::generateNewChart(const var&, std::function<void(bool)>) {}
 bool Player::loadChart(const var&) { return false; }
 bool Player::loadChartFromMusician() { return false; }
-var Player::convertPatternStringToChart(const String&, double) { return var{}; }
+var Player::convertPatternStringToChart(const String& patternString, double tempo) { 
+    if (musician != nullptr)
+    {
+        // Use the musician's conversion method (same as working Player_OLD.cpp)
+        return musician->convertNotationToMidiEvents(patternString, tempo);
+    }
+    
+    // Return failure result if no musician available
+    juce::DynamicObject::Ptr result = new juce::DynamicObject();
+    result->setProperty("success", false);
+    result->setProperty("tempo", tempo);
+    result->setProperty("events", juce::Array<juce::var>());
+    return juce::var(result.get());
+}
 void Player::generateChart(const var&, std::function<void(bool, const var&)> callback) { 
     if (callback) callback(false, var{});
 }

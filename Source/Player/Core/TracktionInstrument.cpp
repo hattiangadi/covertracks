@@ -433,6 +433,9 @@ bool TracktionInstrument::playMidiSequence(const juce::MidiMessageSequence& sequ
         DBG("TracktionInstrument " << instrumentName << " started Edit transport for audio processing");
     }
     
+    // Start the timer to process MIDI events (20ms intervals for smooth playback)
+    startTimer(20);
+    
     DBG("TracktionInstrument " << instrumentName << " started MIDI playback with " 
         << currentSequence->getNumEvents() << " events at " << tempo << " BPM");
     
@@ -445,6 +448,10 @@ void TracktionInstrument::stopPlayback()
     {
         isPlaybackActive = false;
         isPlaybackPaused = false;
+        
+        // Stop the timer first
+        stopTimer();
+        
         currentSequence.reset();
         currentPlaybackTime = 0.0;
         nextEventIndex = 0;
@@ -927,20 +934,30 @@ std::unique_ptr<juce::MidiMessageSequence> TracktionInstrument::convertChartToMi
             
         juce::String type = eventObj->getProperty("type").toString();
         int note = eventObj->getProperty("note");
-        int velocity = eventObj->getProperty("velocity");
+        
+        // Handle velocity properly - convert float (0.0-1.0) to MIDI velocity (1-127)
+        double velocityFloat = eventObj->getProperty("velocity");
+        int velocity = static_cast<int>(velocityFloat * 127.0);
+        velocity = juce::jlimit(1, 127, velocity); // Ensure non-zero velocity for NoteOn
+        
+        // Debug: Log the MIDI event details
+        DBG("MIDI Event: type='" << type << "' note=" << note << " velocity=" << velocityFloat << " (MIDI: " << velocity << ") time=" << time);
         
         // Create appropriate MIDI message - handle both formats
         juce::MidiMessage message;
         if ((type == "noteOn" || type == "note_on") && velocity > 0)
         {
             message = juce::MidiMessage::noteOn(1, note, static_cast<juce::uint8>(velocity));
+            DBG("Created NoteOn: Note=" << note << " Vel=" << velocity);
         }
         else if (type == "noteOff" || type == "note_off" || ((type == "noteOn" || type == "note_on") && velocity == 0))
         {
             message = juce::MidiMessage::noteOff(1, note, static_cast<juce::uint8>(velocity));
+            DBG("Created NoteOff: Note=" << note << " Vel=" << velocity);
         }
         else
         {
+            DBG("Skipped unknown event type: '" << type << "'");
             continue; // Skip unknown event types
         }
         

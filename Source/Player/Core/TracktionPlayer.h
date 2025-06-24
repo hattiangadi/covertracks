@@ -71,12 +71,26 @@ public:
                         std::function<void(bool success)> callback = nullptr);
     
     /**
+     * @brief Load a chart for later playback (pre-conversion for synchronized timing)
+     * @param chart MIDI chart data to load
+     * @param tempo Playback tempo (default: 120 BPM)
+     * @return true if chart loaded successfully
+     */
+    bool loadChart(const juce::var& chart, double tempo = 120.0);
+    
+    /**
      * @brief Load and play a pre-generated chart
      * @param chart MIDI chart data to play
      * @param tempo Playback tempo (default: 120 BPM)
      * @return true if playback started successfully
      */
     bool playChart(const juce::var& chart, double tempo = 120.0);
+    
+    /**
+     * @brief Play the previously loaded chart (instant start for synchronized timing)
+     * @return true if playback started successfully
+     */
+    bool playLoadedChart();
     
     /**
      * @brief Generate a new chart using the Musician
@@ -231,6 +245,15 @@ public:
      */
     void setLLMClient(std::shared_ptr<LLMClient> client);
     
+    /**
+     * @brief Convert LLM pattern string to MIDI chart (same as legacy Player)
+     * 
+     * @param patternString The LLM JSON pattern string
+     * @param tempo The tempo for the pattern
+     * @return juce::var The MIDI chart with success flag
+     */
+    juce::var convertPatternStringToChart(const juce::String& patternString, double tempo = 120.0);
+    
     // =========================================================================
     // Persistence (Player State Management)
     // =========================================================================
@@ -315,6 +338,10 @@ private:
     // State
     bool initialized = false;
     juce::var lastGeneratedChart;
+    double lastTempo = 120.0;
+    
+    // Pre-converted MIDI sequence for instant synchronized playback
+    std::unique_ptr<juce::MidiMessageSequence> preloadedSequence;
     
     // Helper methods
     juce::File getStateFile() const;

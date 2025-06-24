@@ -806,12 +806,45 @@ void PerformanceEditorComponent::loadChartForPlayer(int playerIndex)
     // Apply the role's level setting to the player
     player->setLevel(role.level);
     
-    // The chart is already in the correct format from Musician
-    // Load the chart into the player
-    if (player->loadChart(chart))
+    // Create TracktionPlayer for proper Load→Play separation
+    auto tracktionPlayer = createTracktionPlayerFromPlayer(player);
+    if (!tracktionPlayer)
+    {
+        statusDisplay.setText("Failed to create TracktionPlayer for " + role.getName());
+        currentPerformance->setStatusMessage(role.getName(), "TracktionPlayer creation failed");
+        return;
+    }
+    
+    // Initialize TracktionPlayer
+    if (!tracktionPlayer->initialize())
+    {
+        statusDisplay.setText("Failed to initialize TracktionPlayer for " + role.getName());
+        currentPerformance->setStatusMessage(role.getName(), "Initialization failed");
+        return;
+    }
+    
+    // Extract MIDI events from chart object (chart has structure: {success, tempo, events})
+    juce::var midiEvents;
+    if (chart.isObject() && chart.hasProperty("events"))
+    {
+        midiEvents = chart["events"];
+        DBG("Extracted " << (midiEvents.isArray() ? midiEvents.getArray()->size() : 0) << " MIDI events for loading");
+    }
+    else
+    {
+        // Fallback: assume chart is already the events array
+        midiEvents = chart;
+        DBG("Using chart directly as MIDI events array for loading");
+    }
+    
+    // Load chart for later synchronized playback (pre-converts MIDI for instant start)
+    if (tracktionPlayer->loadChart(midiEvents, 120.0))
     {
         statusDisplay.setText("Chart loaded for " + role.getName() + " (level: " + String(role.level, 1) + "x)");
-        currentPerformance->setStatusMessage(role.getName(), "Chart Loaded");
+        currentPerformance->setStatusMessage(role.getName(), "Chart Loaded (Ready for Sync)");
+        
+        // Store TracktionPlayer for synchronized playback
+        // TODO: Add member variable to store loaded TracktionPlayers per role
     }
     else
     {
@@ -845,16 +878,65 @@ void PerformanceEditorComponent::playPlayer(int playerIndex)
         return;
     }
     
-    // Start playing - Player::play() returns bool
-    if (player->play())
+    // Create TracktionPlayer for individual playback (same approach as ensemble)
+    auto tracktionPlayer = createTracktionPlayerFromPlayer(player);
+    if (!tracktionPlayer)
     {
-        statusDisplay.setText("Playing " + role.getName());
-        currentPerformance->setStatusMessage(role.getName(), "Playing");
+        statusDisplay.setText("Failed to create TracktionPlayer for " + role.getName());
+        currentPerformance->setStatusMessage(role.getName(), "TracktionPlayer creation failed");
+        return;
+    }
+    
+    // Get the MIDI chart for this role (same as loadChartForPlayer)
+    var chart = currentPerformance->getMIDIChart(role.getName());
+    if (chart.isVoid())
+    {
+        chart = currentPerformance->getGeneratedChart(role.getName());
+    }
+    
+    if (chart.isVoid())
+    {
+        statusDisplay.setText("No chart available for " + role.getName() + " - prep first");
+        currentPerformance->setStatusMessage(role.getName(), "No chart");
+        return;
+    }
+    
+    // Initialize TracktionPlayer for audio
+    if (!tracktionPlayer->initialize())
+    {
+        statusDisplay.setText("Failed to initialize TracktionPlayer for " + role.getName());
+        currentPerformance->setStatusMessage(role.getName(), "Initialization failed");
+        return;
+    }
+    
+    // Extract MIDI events from chart object (chart has structure: {success, tempo, events})
+    juce::var midiEvents;
+    if (chart.isObject() && chart.hasProperty("events"))
+    {
+        midiEvents = chart["events"];
+        DBG("Extracted " << (midiEvents.isArray() ? midiEvents.getArray()->size() : 0) << " MIDI events from chart");
     }
     else
     {
-        statusDisplay.setText("Failed to start playing " + role.getName());
-        currentPerformance->setStatusMessage(role.getName(), "Play Failed");
+        // Fallback: assume chart is already the events array
+        midiEvents = chart;
+        DBG("Using chart directly as MIDI events array");
+    }
+    
+    // Start playing with TracktionPlayer using extracted MIDI events
+    if (tracktionPlayer->playChart(midiEvents, 120.0))
+    {
+        statusDisplay.setText("Playing " + role.getName() + " with TracktionPlayer");
+        currentPerformance->setStatusMessage(role.getName(), "Playing (TracktionPlayer)");
+        
+        // Store the TracktionPlayer to keep it alive during playback
+        activeTracktionPlayers[role.getName()] = std::move(tracktionPlayer);
+        DBG("Stored TracktionPlayer for role: " << role.getName() << " (total active: " << activeTracktionPlayers.size() << ")");
+    }
+    else
+    {
+        statusDisplay.setText("Failed to start TracktionPlayer playback for " + role.getName());
+        currentPerformance->setStatusMessage(role.getName(), "TracktionPlayer play failed");
     }
 }
 
@@ -1164,13 +1246,16 @@ void PerformanceEditorComponent::playAllPlayers()
             {
                 if (ensembleRole.name == perfRole.getName())
                 {
-                    // Get pattern from performance if available
-                    auto chart = currentPerformance->getChart(perfRole.getName());
-                    if (chart && !chart->toVarObject().isVoid())
+                    // Get the actual LLM pattern from performance
+                    String llmPattern = currentPerformance->getLLMPattern(perfRole.getName());
+                    if (llmPattern.isNotEmpty())
                     {
-                        // Convert chart to pattern string for now
-                        ensembleRole.pattern = "Generated pattern for " + perfRole.getName();
-                        DBG("Set pattern for role: " << perfRole.getName());
+                        ensembleRole.pattern = llmPattern;
+                        DBG("Set LLM pattern for role: " << perfRole.getName() << " (length: " << llmPattern.length() << " chars)");
+                    }
+                    else
+                    {
+                        DBG("No LLM pattern found for role: " << perfRole.getName());
                     }
                     break;
                 }
@@ -1213,49 +1298,36 @@ void PerformanceEditorComponent::stopAllPlayers()
         return;
     }
     
-    auto ensemble = getPerformanceEnsemble();
-    if (ensemble.isEmpty())
+    statusDisplay.setText("Stopping all playback...");
+    
+    // Stop individual TracktionPlayers first
+    if (!activeTracktionPlayers.empty())
     {
-        statusDisplay.setText("No ensemble selected");
-        return;
+        DBG("Stopping " << activeTracktionPlayers.size() << " active TracktionPlayers");
+        for (auto& pair : activeTracktionPlayers)
+        {
+            pair.second->stop();
+            DBG("Stopped TracktionPlayer for role: " << pair.first);
+        }
+        activeTracktionPlayers.clear();
+        DBG("Cleared all active TracktionPlayers");
     }
     
-    statusDisplay.setText("Stopping synchronized ensemble playback...");
-    
-    // Use EnsembleManager for synchronized stop (eliminates audio artifacts)
+    // Stop EnsembleManager synchronized playback if active
     if (ensembleManager)
     {
         ensembleManager->stopPlayback();
-        statusDisplay.setText("✅ Synchronized ensemble playback stopped!");
-        
-        // Update all role statuses
-        for (const auto& role : ensemble)
-        {
-            currentPerformance->setStatusMessage(role.getName(), "Stopped (Synced)");
-        }
+        DBG("Stopped EnsembleManager synchronized playback");
     }
-    else
+    
+    // Update status for all roles
+    auto ensemble = getPerformanceEnsemble();
+    for (const auto& role : ensemble)
     {
-        // Fallback to individual player stop if no EnsembleManager
-        statusDisplay.setText("Stopping individual players (legacy mode)...");
-        
-        int stopped = 0;
-        for (int i = 0; i < ensemble.size(); ++i)
-        {
-            const auto role = ensemble[i];
-            
-            Player* player = role.player;
-            
-            if (player)
-            {
-                player->stop();
-                stopped++;
-                currentPerformance->setStatusMessage(role.getName(), "Stopped");
-            }
-        }
-        
-        statusDisplay.setText("Stopped " + String(stopped) + " players (legacy mode)");
+        currentPerformance->setStatusMessage(role.getName(), "Stopped");
     }
+    
+    statusDisplay.setText("✅ All playback stopped!");
     
     // Update the player table to reflect new status
     if (playerTable)

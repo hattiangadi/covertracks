@@ -976,19 +976,23 @@ bool Player::convertChartToMidi(const var& chart)
                 velocity = velocity * outputLevel;
                 velocity = juce::jlimit(0.0f, 1.0f, velocity); // Re-clamp after scaling
                 
+                // Convert float velocity (0.0-1.0) to MIDI velocity (1-127)
+                int midiVelocity = static_cast<int>(velocity * 127.0f);
+                midiVelocity = juce::jlimit(1, 127, midiVelocity); // Ensure non-zero velocity for NoteOn
+                
                 // Create note on message
-                juce::MidiMessage noteOn = juce::MidiMessage::noteOn(channel, note, velocity);
+                juce::MidiMessage noteOn = juce::MidiMessage::noteOn(channel, note, static_cast<juce::uint8>(midiVelocity));
                 noteOn.setTimeStamp(timestamp);
                 sequence->addEvent(noteOn);
                 
                 // std::cout << "Added note_on event: channel=" << channel 
     //                       << ", note=" << note 
-    //                       << ", velocity=" << velocity 
+    //                       << ", velocity=" << midiVelocity 
     //                       << ", timestamp=" << timestamp << std::endl;
                 
                 // Create corresponding note off message based on duration
                 double noteOffTimestamp = timestamp + duration;
-                juce::MidiMessage noteOff = juce::MidiMessage::noteOff(channel, note, velocity);
+                juce::MidiMessage noteOff = juce::MidiMessage::noteOff(channel, note, static_cast<juce::uint8>(64)); // Standard NoteOff velocity
                 noteOff.setTimeStamp(noteOffTimestamp);
                 sequence->addEvent(noteOff);
                 
