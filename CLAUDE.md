@@ -68,6 +68,20 @@
 - **Better error handling** - each step can fail independently
 - **Easier debugging** - clear step-by-step progression
 
+#### Important Fix: Editor → Player Mode Resource Conflicts
+**Problem Discovered**: Players that were previously used in Editor Mode fail to play in Player Mode due to resource conflicts.
+
+**Root Cause**: Editor Mode takes control of Tracktion tracks/audio resources, leaving them in inconsistent state for Player Mode.
+
+**Solution**: Force clean re-initialization in Player Mode for any previously-used players:
+```cpp
+// In PlayerModeComponent::playLoadedChart()
+selectedPlayer->shutdown();    // Clean up editor-mode resources
+selectedPlayer->initialize();  // Fresh initialization for player mode
+```
+
+This ensures clean state transitions between Editor Mode and Player Mode.
+
 ### New Unified Architecture (Tracktion-Based)
 - **Tracktion Core**: TracktionAudioEngine singleton (✅ working)
 - **Track-per-Player**: Each Player = One Tracktion track with te::Track::pluginList

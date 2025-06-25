@@ -1490,6 +1490,10 @@ void PlayerModeComponent::playLoadedChart()
         return;
     }
     
+    // Debug: Check initialization status
+    std::cout << "Player " << selectedPlayer->getName() << " initialization status: " 
+              << (selectedPlayer->isInitialized() ? "INITIALIZED" : "NOT INITIALIZED") << std::endl;
+    
     // Ensure player is initialized before playback
     if (!selectedPlayer->isInitialized())
     {
@@ -1500,12 +1504,30 @@ void PlayerModeComponent::playLoadedChart()
             patternViewer.setText(patternViewer.getText() + "\n\nERROR: Failed to initialize player!");
             return;
         }
+        std::cout << "Player initialized successfully" << std::endl;
     }
     
     std::cout << "✅ Starting playback on player..." << std::endl;
     
-    // Simply play the loaded chart
-    if (selectedPlayer->play())
+    // Try to play the loaded chart
+    bool playbackStarted = selectedPlayer->play();
+    
+    // If playback failed and player was initialized, try re-initializing once (editor conflict fix)
+    if (!playbackStarted && selectedPlayer->isInitialized())
+    {
+        std::cout << "Playback failed - attempting re-initialization to resolve potential editor conflicts..." << std::endl;
+        selectedPlayer->shutdown();
+        if (selectedPlayer->initialize())
+        {
+            playbackStarted = selectedPlayer->play();
+            if (playbackStarted)
+            {
+                std::cout << "Re-initialization resolved the issue!" << std::endl;
+            }
+        }
+    }
+    
+    if (playbackStarted)
     {
         // Update button states
         playButton.setEnabled(false);

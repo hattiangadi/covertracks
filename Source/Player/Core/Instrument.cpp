@@ -405,10 +405,24 @@ bool Instrument::playChart(const juce::var& chart, double tempo)
 
 bool Instrument::playMidiSequence(const juce::MidiMessageSequence& sequence, double tempo)
 {
+    DBG("Instrument::playMidiSequence() - myTrack: " << (myTrack ? "present" : "null") 
+        << ", events: " << sequence.getNumEvents());
+    
     if (myTrack == nullptr)
     {
         std::cerr << "Cannot play sequence: instrument not registered with audio engine" << std::endl;
         return false;
+    }
+    
+    // Ensure track has a sound-generating plugin
+    if (getPluginCount() == 0)
+    {
+        DBG("Instrument " << instrumentName << " has no plugins - adding default synth");
+        if (!addDefaultSynth())
+        {
+            std::cerr << "Failed to add default synth to empty track" << std::endl;
+            return false;
+        }
     }
     
     // Stop any current playback

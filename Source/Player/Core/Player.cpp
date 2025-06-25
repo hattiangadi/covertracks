@@ -207,6 +207,8 @@ bool Player::playChart(const juce::var& chart, double tempo)
 
 bool Player::playLoadedChart()
 {
+    DBG("Player::playLoadedChart() - initialized: " << (initialized ? "true" : "false") << ", instrument: " << (instrument ? "present" : "null"));
+    
     if (!initialized || !instrument)
     {
         std::cerr << "Player not initialized" << std::endl;
@@ -218,6 +220,8 @@ bool Player::playLoadedChart()
         std::cerr << "No chart loaded for instant playback" << std::endl;
         return false;
     }
+    
+    DBG("Player::playLoadedChart() - About to play " << preloadedSequence->getNumEvents() << " events");
     
     // Play the pre-converted sequence - this should be instant
     bool result = instrument->playMidiSequence(*preloadedSequence, lastTempo);
