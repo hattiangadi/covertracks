@@ -206,6 +206,7 @@ private:
     // Ensemble selection
     void updateEnsembleSelector();
     void ensembleSelectionChanged();
+    void handleEnsembleSwitch(const String& newEnsembleName);
     
     // Ensemble caching with PlayerManager
     void refreshPerformanceEnsembleCache();

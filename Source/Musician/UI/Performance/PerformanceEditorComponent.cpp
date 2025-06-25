@@ -1334,9 +1334,8 @@ void PerformanceEditorComponent::ensembleSelectionChanged()
         statusDisplay.setText("Selected ensemble: " + selectedEnsemble);
         if (currentPerformance)
         {
-            currentPerformance->setEnsembleName(selectedEnsemble);
-            // Refresh the ensemble cache since we changed ensembles, but do it here with PlayerManager
-            refreshPerformanceEnsembleCache();
+            // Handle pattern preservation when switching ensembles
+            handleEnsembleSwitch(selectedEnsemble);
         }
         else
         {
@@ -1348,6 +1347,71 @@ void PerformanceEditorComponent::ensembleSelectionChanged()
     // Update the player table to show the new ensemble
     if (playerTable)
         playerTable->updateContent();
+}
+
+void PerformanceEditorComponent::handleEnsembleSwitch(const String& newEnsembleName)
+{
+    if (!currentPerformance)
+        return;
+        
+    statusDisplay.setText("Switching to ensemble: " + newEnsembleName);
+    
+    // Step 1: Preserve existing LLM patterns by role name
+    std::map<String, String> preservedPatterns;
+    auto currentEnsemble = getPerformanceEnsemble();
+    for (const auto& role : currentEnsemble)
+    {
+        String pattern = currentPerformance->getLLMPattern(role.getName());
+        if (pattern.isNotEmpty())
+        {
+            preservedPatterns[role.getName()] = pattern;
+            DBG("Preserving pattern for role: " << role.getName());
+        }
+    }
+    
+    // Step 2: Clear MIDI charts since they're player-specific
+    for (const auto& role : currentEnsemble)
+    {
+        currentPerformance->setMIDIChart(role.getName(), juce::var());
+        currentPerformance->setStatusMessage(role.getName(), "");
+        DBG("Cleared MIDI chart for role: " << role.getName());
+    }
+    
+    // Step 3: Set the new ensemble name and refresh cache
+    currentPerformance->setEnsembleName(newEnsembleName);
+    refreshPerformanceEnsembleCache();
+    
+    // Step 4: Restore patterns for matching role names in new ensemble
+    auto newEnsemble = getPerformanceEnsemble();
+    int restoredCount = 0;
+    for (const auto& role : newEnsemble)
+    {
+        auto it = preservedPatterns.find(role.getName());
+        if (it != preservedPatterns.end())
+        {
+            currentPerformance->setLLMPattern(role.getName(), it->second);
+            currentPerformance->setStatusMessage(role.getName(), "Pattern Preserved");
+            restoredCount++;
+            DBG("Restored pattern for role: " << role.getName());
+        }
+        else
+        {
+            currentPerformance->setStatusMessage(role.getName(), "New Role - No Pattern");
+            DBG("New role (no pattern to restore): " << role.getName());
+        }
+    }
+    
+    // Step 5: Update status message
+    if (restoredCount > 0)
+    {
+        statusDisplay.setText("Ensemble switched. Preserved " + String(restoredCount) + " patterns, cleared MIDI charts.");
+    }
+    else
+    {
+        statusDisplay.setText("Ensemble switched. No patterns to preserve, cleared MIDI charts.");
+    }
+    
+    DBG("Ensemble switch complete. Preserved " << restoredCount << " patterns from " << preservedPatterns.size() << " total.");
 }
 
 // PlayerTable implementation
@@ -1378,11 +1442,11 @@ int PerformanceEditorComponent::PlayerTable::getNumRows()
 {
     if (!parent) return 0;
     
-    // Get the number of players from the selected ensemble
+    // Use the cached ensemble roles that have proper player assignments
     if (parent->currentPerformance)
     {
-        auto ensemble = parent->currentPerformance->getEnsemble();
-        return ensemble.size();
+        // Use the cached roles from PerformanceEditorComponent which have PlayerManager assignments
+        return parent->cachedEnsembleRoles.size();
     }
     else if (parent->isNewPerformance && parent->pendingEnsembleName.isNotEmpty())
     {
@@ -1411,7 +1475,8 @@ void PerformanceEditorComponent::PlayerTable::paintCell(Graphics& g, int rowNumb
     // Get actual ensemble data if available
     if (parent && parent->currentPerformance)
     {
-        auto ensemble = parent->currentPerformance->getEnsemble();
+        // Use the cached ensemble roles that have proper player assignments
+        const auto& ensemble = parent->cachedEnsembleRoles;
         if (rowNumber < ensemble.size())
         {
             const auto& role = ensemble[rowNumber];
