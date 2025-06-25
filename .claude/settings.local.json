@@ -43,7 +43,8 @@
       "Bash(for:*)",
       "Bash(do echo:*)",
       "Bash(done)",
-      "Bash(jq:*)"
+      "Bash(jq:*)",
+      "Bash(cp:*)"
     ],
     "deny": []
   }

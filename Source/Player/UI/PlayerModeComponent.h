@@ -57,7 +57,7 @@ private:
     
     // Currently selected player and pattern
     Player* selectedPlayer = nullptr;  // Currently selected Player
-    std::shared_ptr<Chart> currentChart = nullptr;
+    juce::String currentPatternJson;   // JSON pattern string (like LLM output)
     var currentMidiChart;  // MIDI_EVENT_CHART format
     
     // Pattern system for managing hierarchical patterns
@@ -68,13 +68,12 @@ private:
     
     // Helper methods
     void createDefaultPatterns();
-    std::shared_ptr<Chart> createTestPattern(const juce::String& testType, const juce::String& instrument);
+    juce::String createTestPattern(const juce::String& testType, const juce::String& instrument);
     
     void updatePatternViewer();
     void convertToMidiChart();      // Chart → MIDI_EVENT_CHART  
     void loadMidiChart();           // MIDI_EVENT_CHART → Player
-    void playLoadedChart();         // Player::play() (OLD WORKFLOW)
-    void playPatternDirectly();     // NEW: Direct pattern → PlayerManager playback
+    void playLoadedChart();         // Player::play()
     
 
     

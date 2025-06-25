@@ -37,6 +37,99 @@ Player::~Player()
 }
 
 // =========================================================================
+// State Machine Workflow Methods
+// =========================================================================
+
+bool Player::preparePattern(const juce::String& patternJson)
+{
+    if (patternJson.isEmpty())
+    {
+        std::cerr << "Player::preparePattern - Empty pattern" << std::endl;
+        return false;
+    }
+    
+    // Store the pattern for later conversion
+    preparedPatternJson = patternJson;
+    
+    // Clear any previously converted data
+    convertedMidiSequence.reset();
+    preparedMidiChart = juce::var();
+    
+    DBG("Player " << playerName << " prepared pattern for conversion");
+    return true;
+}
+
+bool Player::convertToMidi()
+{
+    if (preparedPatternJson.isEmpty())
+    {
+        std::cerr << "Player::convertToMidi - No pattern prepared" << std::endl;
+        return false;
+    }
+    
+    if (!musician)
+    {
+        std::cerr << "Player::convertToMidi - No musician available" << std::endl;
+        return false;
+    }
+    
+    // Use musician to convert pattern to MIDI events
+    auto midiResult = musician->convertNotationToMidiEvents(preparedPatternJson, lastTempo);
+    
+    if (!midiResult.isObject())
+    {
+        std::cerr << "Player::convertToMidi - Invalid MIDI result from musician" << std::endl;
+        return false;
+    }
+    
+    auto* resultObj = midiResult.getDynamicObject();
+    if (!resultObj || !resultObj->getProperty("success"))
+    {
+        std::cerr << "Player::convertToMidi - Musician conversion failed" << std::endl;
+        return false;
+    }
+    
+    // Store the converted MIDI chart
+    preparedMidiChart = resultObj->getProperty("events");
+    lastTempo = resultObj->getProperty("tempo");
+    
+    if (!preparedMidiChart.isArray())
+    {
+        std::cerr << "Player::convertToMidi - No events array in result" << std::endl;
+        return false;
+    }
+    
+    DBG("Player " << playerName << " converted pattern to " 
+        << preparedMidiChart.getArray()->size() << " MIDI events at " << lastTempo << " BPM");
+    return true;
+}
+
+bool Player::loadPreparedMidi()
+{
+    if (!preparedMidiChart.isArray() || !instrument)
+    {
+        std::cerr << "Player::loadPreparedMidi - No MIDI data or instrument" << std::endl;
+        return false;
+    }
+    
+    // Convert MIDI chart to sequence for instant playback
+    auto sequence = instrument->convertChartToMidiSequence(preparedMidiChart);
+    if (!sequence || sequence->getNumEvents() == 0)
+    {
+        std::cerr << "Player::loadPreparedMidi - Failed to convert to MIDI sequence" << std::endl;
+        return false;
+    }
+    
+    // Store the pre-converted sequence
+    preloadedSequence = std::move(sequence);
+    lastGeneratedChart = preparedMidiChart;
+    
+    DBG("Player " << playerName << " loaded " 
+        << preloadedSequence->getNumEvents() << " MIDI events for instant playback");
+    return true;
+}
+
+// =========================================================================
 // High-Level Orchestration (Musician ↔ Instrument)
 // =========================================================================
 

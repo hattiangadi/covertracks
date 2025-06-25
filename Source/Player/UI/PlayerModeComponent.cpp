@@ -260,7 +260,7 @@ PlayerModeComponent::~PlayerModeComponent()
     playerManager.removeChangeListener(this);
     
     // Clear any references to patterns and Player
-    currentChart = nullptr;
+    currentPatternJson = "";
     selectedPlayer = nullptr;
 }
 
@@ -338,8 +338,8 @@ void PlayerModeComponent::buttonClicked(juce::Button* button)
     else if (button == &playButton)
     {
         std::cout << "🔘 Play button clicked!" << std::endl;
-        // NEW: Direct pattern playback with Player
-        playPatternDirectly();
+        // Play the loaded chart
+        playLoadedChart();
     }
     else if (button == &stopButton)
     {
@@ -467,107 +467,8 @@ void PlayerModeComponent::updatePlayerSelector()
 
 void PlayerModeComponent::createDefaultPatterns()
 {
-    // Create progressive test cases for hierarchical pattern system
-    // Each test case progressively builds complexity
-    
-    // T1: Basic note patterns for each instrument
-    auto drumsT1 = createTestPattern("T1_Notes", "drums");
-    auto bassT1 = createTestPattern("T1_Notes", "bass");
-    auto pianoT1 = createTestPattern("T1_Notes", "piano");
-    auto guitarT1 = createTestPattern("T1_Notes", "guitar");
-    
-    patternSystem->addChart("drums_T1_Notes", drumsT1);
-    patternSystem->addChart("bass_T1_Notes", bassT1);
-    patternSystem->addChart("piano_T1_Notes", pianoT1);
-    patternSystem->addChart("guitar_T1_Notes", guitarT1);
-    
-    // T2: Multi-bar patterns
-    auto drumsT2 = createTestPattern("T2_MultiBars", "drums");
-    auto bassT2 = createTestPattern("T2_MultiBars", "bass");
-    auto pianoT2 = createTestPattern("T2_MultiBars", "piano");
-    auto guitarT2 = createTestPattern("T2_MultiBars", "guitar");
-    
-    patternSystem->addChart("drums_T2_MultiBars", drumsT2);
-    patternSystem->addChart("bass_T2_MultiBars", bassT2);
-    patternSystem->addChart("piano_T2_MultiBars", pianoT2);
-    patternSystem->addChart("guitar_T2_MultiBars", guitarT2);
-    
-    // T3: Chord definitions and usage
-    auto drumsT3 = createTestPattern("T3_Chords", "drums");
-    auto bassT3 = createTestPattern("T3_Chords", "bass");
-    auto pianoT3 = createTestPattern("T3_Chords", "piano");
-    auto guitarT3 = createTestPattern("T3_Chords", "guitar");
-    
-    patternSystem->addChart("drums_T3_Chords", drumsT3);
-    patternSystem->addChart("bass_T3_Chords", bassT3);
-    patternSystem->addChart("piano_T3_Chords", pianoT3);
-    patternSystem->addChart("guitar_T3_Chords", guitarT3);
-    
-    // T4: Rhythmic layers
-    auto drumsT4 = createTestPattern("T4_Layers", "drums");
-    auto bassT4 = createTestPattern("T4_Layers", "bass");
-    auto pianoT4 = createTestPattern("T4_Layers", "piano");
-    auto guitarT4 = createTestPattern("T4_Layers", "guitar");
-    
-    patternSystem->addChart("drums_T4_Layers", drumsT4);
-    patternSystem->addChart("bass_T4_Layers", bassT4);
-    patternSystem->addChart("piano_T4_Layers", pianoT4);
-    patternSystem->addChart("guitar_T4_Layers", guitarT4);
-    
-    // T5: Layers + chords combined
-    auto drumsT5 = createTestPattern("T5_LayersChords", "drums");
-    auto bassT5 = createTestPattern("T5_LayersChords", "bass");
-    auto pianoT5 = createTestPattern("T5_LayersChords", "piano");
-    auto guitarT5 = createTestPattern("T5_LayersChords", "guitar");
-    
-    patternSystem->addChart("drums_T5_LayersChords", drumsT5);
-    patternSystem->addChart("bass_T5_LayersChords", bassT5);
-    patternSystem->addChart("piano_T5_LayersChords", pianoT5);
-    patternSystem->addChart("guitar_T5_LayersChords", guitarT5);
-    
-    // T6: Phrase/section structure
-    auto drumsT6 = createTestPattern("T6_Sections", "drums");
-    auto bassT6 = createTestPattern("T6_Sections", "bass");
-    auto pianoT6 = createTestPattern("T6_Sections", "piano");
-    auto guitarT6 = createTestPattern("T6_Sections", "guitar");
-    
-    patternSystem->addChart("drums_T6_Sections", drumsT6);
-    patternSystem->addChart("bass_T6_Sections", bassT6);
-    patternSystem->addChart("piano_T6_Sections", pianoT6);
-    patternSystem->addChart("guitar_T6_Sections", guitarT6);
-    
-    // T7: Pattern references and copying
-    auto drumsT7 = createTestPattern("T7_References", "drums");
-    auto bassT7 = createTestPattern("T7_References", "bass");
-    auto pianoT7 = createTestPattern("T7_References", "piano");
-    auto guitarT7 = createTestPattern("T7_References", "guitar");
-    
-    patternSystem->addChart("drums_T7_References", drumsT7);
-    patternSystem->addChart("bass_T7_References", bassT7);
-    patternSystem->addChart("piano_T7_References", pianoT7);
-    patternSystem->addChart("guitar_T7_References", guitarT7);
-    
-    // T8: Exceptions and modifications
-    auto drumsT8 = createTestPattern("T8_Exceptions", "drums");
-    auto bassT8 = createTestPattern("T8_Exceptions", "bass");
-    auto pianoT8 = createTestPattern("T8_Exceptions", "piano");
-    auto guitarT8 = createTestPattern("T8_Exceptions", "guitar");
-    
-    patternSystem->addChart("drums_T8_Exceptions", drumsT8);
-    patternSystem->addChart("bass_T8_Exceptions", bassT8);
-    patternSystem->addChart("piano_T8_Exceptions", pianoT8);
-    patternSystem->addChart("guitar_T8_Exceptions", guitarT8);
-    
-    // Integration: Complete integration charts for each instrument
-    auto drumsIntegration = createTestPattern("Integration", "drums");
-    auto bassIntegration = createTestPattern("Integration", "bass");
-    auto pianoIntegration = createTestPattern("Integration", "piano");
-    auto guitarIntegration = createTestPattern("Integration", "guitar");
-    
-    patternSystem->addChart("drums_Integration", drumsIntegration);
-    patternSystem->addChart("bass_Integration", bassIntegration);
-    patternSystem->addChart("piano_Integration", pianoIntegration);
-    patternSystem->addChart("guitar_Integration", guitarIntegration);
+    // We no longer need to pre-create patterns since we'll generate them on-demand
+    // as JSON strings and pass them directly to the Player (like LLM workflow)
     
     // Select the first instrument and pattern by default
     if (instrumentTypeSelector.getNumItems() > 0)
@@ -584,10 +485,9 @@ void PlayerModeComponent::createDefaultPatterns()
     }
 }
 
-std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String& testType, const juce::String& instrument)
+juce::String PlayerModeComponent::createTestPattern(const juce::String& testType, const juce::String& instrument)
 {
     String jsonPattern = "";
-    String patternName = testType + " - " + instrument;
     
     if (testType == "T1_Notes")
     {
@@ -1380,160 +1280,20 @@ std::shared_ptr<Chart> PlayerModeComponent::createTestPattern(const juce::String
         })";
     }
     
-    // Parse the JSON pattern using the PatternParser
-    std::cout << "JSON pattern for " << patternName << ":\n" << jsonPattern << std::endl;
-    
-    // Make sure we have the latest pattern parser that knows about our drum mappings
-    if (!patternParser)
-    {
-        DBG("WARNING: PatternParser is null in createTestPattern! Creating a new one.");
-        patternParser = std::make_unique<PatternParser>(*patternSystem);
-    }
-    
-    // Debug output all drum primitives before parsing
-    if (instrument == "drums")
-    {
-        DBG("Available drum primitives before parsing " + patternName + ":");
-        if (patternSystem->hasInstrumentDefinition("drums"))
-        {
-            auto& drumDef = patternSystem->getInstrumentDefinition("drums");
-            auto allPrimitives = drumDef.getPrimitives();
-            for (const auto& primitivePair : allPrimitives)
-            {
-                DBG("  " + primitivePair.first + " = " + String(primitivePair.second.midiNote));
-            }
-        }
-        else
-        {
-            DBG("  No drums instrument definition found!");
-        }
-    }
-    
-    // Parse the JSON pattern using the PatternParser
-    auto chart = patternParser->parseChart(jsonPattern);
-    
-    // Log parsing success/failure
-    if (chart == nullptr || chart->getNumSections() == 0)
-    {
-        std::cout << "JSON pattern parsing failed for: " << patternName << std::endl;
-        // Return empty chart - we're no longer using fallback patterns
-        return std::make_shared<Chart>(patternName, 120.0);
-    }
-    else
-    {
-        std::cout << "JSON pattern parsing succeeded: " << patternName << std::endl;
-    }
-    
-    return chart;
+    return jsonPattern;
 }
 
 void PlayerModeComponent::updatePatternViewer()
 {
-    if (currentChart == nullptr)
+    if (currentPatternJson.isEmpty())
     {
         patternViewer.setText("No pattern selected");
         return;
     }
     
-    // Create a text representation of the chart structure
-    juce::String text = juce::String("Chart: ") + currentChart->getTitle() + juce::String("\n");
-    text += juce::String("Tempo: ") + juce::String(currentChart->getTempo()) + juce::String(" BPM\n\n");
-    
-    // Get the MIDI sequence for the chart
-    auto midiSequence = currentChart->toMidiSequence();
-    text += "Total MIDI events: " + juce::String(midiSequence->getNumEvents()) + "\n";
-    text += "Duration: " + juce::String(midiSequence->getEndTime()) + " ticks\n\n";
-    
-    // Add sections with detailed note information
-    for (int i = 0; i < currentChart->getNumSections(); ++i)
-    {
-        auto section = currentChart->getSection(i);
-        text += "Section: " + section->getName() + "\n";
-        
-        // Add phrases
-        for (int j = 0; j < section->getNumPhrases(); ++j)
-        {
-            auto phrase = section->getPhrase(j);
-            text += "  Phrase: " + phrase->getName() + "\n";
-            
-            // Add bars with note details
-            for (int k = 0; k < phrase->getNumBars(); ++k)
-            {
-                auto bar = phrase->getBar(k);
-                text += "    Bar " + juce::String(k+1) + " (" + juce::String(bar->getTimeSignatureNumerator()) + "/" 
-                      + juce::String(bar->getTimeSignatureDenominator()) + ")\n";
-                
-                // We can't directly access the notes in a bar, so we'll convert to MIDI
-                // and show the MIDI events for this bar
-                auto barMidiSequence = bar->toMidiSequence();
-                text += "      Events: " + juce::String(barMidiSequence->getNumEvents()) + "\n";
-                
-                // Show up to 5 events per bar to avoid overwhelming the display
-                int maxEventsToShow = 5;
-                int eventsShown = 0;
-                
-                for (int n = 0; n < barMidiSequence->getNumEvents() && eventsShown < maxEventsToShow; ++n)
-                {
-                    auto event = barMidiSequence->getEventPointer(n);
-                    
-                    if (event->message.isNoteOn())
-                    {
-                        text += "        Note On: MIDI " + juce::String(event->message.getNoteNumber()) 
-                              + " (" + getMidiNoteName(event->message.getNoteNumber()) + ")" 
-                              + " vel: " + juce::String(static_cast<int>(event->message.getVelocity() * 127)) 
-                              + " ch: " + juce::String(event->message.getChannel()) + "\n";
-                        eventsShown++;
-                    }
-                    else if (event->message.isNoteOff())
-                    {
-                        text += "        Note Off: MIDI " + juce::String(event->message.getNoteNumber()) 
-                              + " (" + getMidiNoteName(event->message.getNoteNumber()) + ")" 
-                              + " ch: " + juce::String(event->message.getChannel()) + "\n";
-                        eventsShown++;
-                    }
-                }
-                
-                if (barMidiSequence->getNumEvents() > maxEventsToShow)
-                {
-                    text += "        ... and " + juce::String(barMidiSequence->getNumEvents() - maxEventsToShow) + " more events\n";
-                }
-            }
-        }
-        
-        text += "\n";
-    }
-    
-    // Add raw MIDI event information
-    text += "\nRaw MIDI Events:\n";
-    int maxEventsToShow = 20; // Limit the number of events shown to avoid overwhelming the viewer
-    int eventsShown = 0;
-    
-    for (int i = 0; i < midiSequence->getNumEvents() && eventsShown < maxEventsToShow; ++i)
-    {
-        auto event = midiSequence->getEventPointer(i);
-        if (event->message.isNoteOn())
-        {
-            text += "  Note On: Ch" + juce::String(event->message.getChannel()) 
-                  + " Note" + juce::String(event->message.getNoteNumber()) 
-                  + " (" + getMidiNoteName(event->message.getNoteNumber()) + ")" 
-                  + " Vel" + juce::String(static_cast<int>(event->message.getVelocity() * 127)) 
-                  + " Time" + juce::String(event->message.getTimeStamp()) + "\n";
-            eventsShown++;
-        }
-        else if (event->message.isNoteOff())
-        {
-            text += "  Note Off: Ch" + juce::String(event->message.getChannel()) 
-                  + " Note" + juce::String(event->message.getNoteNumber()) 
-                  + " (" + getMidiNoteName(event->message.getNoteNumber()) + ")" 
-                  + " Time" + juce::String(event->message.getTimeStamp()) + "\n";
-            eventsShown++;
-        }
-    }
-    
-    if (midiSequence->getNumEvents() > maxEventsToShow)
-    {
-        text += "  ... and " + juce::String(midiSequence->getNumEvents() - maxEventsToShow) + " more events\n";
-    }
+    // Show the JSON pattern (like LLM output)
+    juce::String text = "Pattern JSON (like LLM output):\n\n";
+    text += currentPatternJson;
     
     patternViewer.setText(text);
 }
@@ -1550,8 +1310,8 @@ juce::String PlayerModeComponent::getMidiNoteName(int midiNoteNumber)
 
 void PlayerModeComponent::updateCurrentChart()
 {
-    // Default to nullptr
-    currentChart = nullptr;
+    // Clear current pattern
+    currentPatternJson = "";
     
     // Try to detect instrument type from player if one is selected
     int instrumentType = instrumentTypeSelector.getSelectedId();
@@ -1600,43 +1360,36 @@ void PlayerModeComponent::updateCurrentChart()
     
     // Get the selected pattern type
     int patternType = patternSelector.getSelectedId();
-    juce::String patternSuffix;
+    juce::String testType;
     
     switch (patternType)
     {
-        case 1: patternSuffix = "_T1_Notes"; break;
-        case 2: patternSuffix = "_T2_MultiBars"; break;
-        case 3: patternSuffix = "_T3_Chords"; break;
-        case 4: patternSuffix = "_T4_Layers"; break;
-        case 5: patternSuffix = "_T5_LayersChords"; break;
-        case 6: patternSuffix = "_T6_Sections"; break;
-        case 7: patternSuffix = "_T7_References"; break;
-        case 8: patternSuffix = "_T8_Exceptions"; break;
-        case 9: patternSuffix = "_Integration"; break;
-        default: patternSuffix = "_T1_Notes"; break;
+        case 1: testType = "T1_Notes"; break;
+        case 2: testType = "T2_MultiBars"; break;
+        case 3: testType = "T3_Chords"; break;
+        case 4: testType = "T4_Layers"; break;
+        case 5: testType = "T5_LayersChords"; break;
+        case 6: testType = "T6_Sections"; break;
+        case 7: testType = "T7_References"; break;
+        case 8: testType = "T8_Exceptions"; break;
+        case 9: testType = "Integration"; break;
+        default: testType = "T1_Notes"; break;
     }
     
-    // Select the appropriate chart based on the instrument and pattern type
-    juce::String chartName;
-    
+    // Get the instrument name
+    juce::String instrumentName;
     switch (instrumentType)
     {
-        case 1: chartName = "drums" + patternSuffix; break;
-        case 2: chartName = "bass" + patternSuffix; break;
-        case 3: chartName = "piano" + patternSuffix; break;
-        case 4: chartName = "guitar" + patternSuffix; break;
+        case 1: instrumentName = "drums"; break;
+        case 2: instrumentName = "bass"; break;
+        case 3: instrumentName = "piano"; break;
+        case 4: instrumentName = "guitar"; break;
         case 5: // Other/Unknown - default to piano
-        default: chartName = "piano" + patternSuffix; break;
+        default: instrumentName = "piano"; break;
     }
     
-    currentChart = patternSystem->getChart(chartName);
-    
-    // If the chart doesn't exist, fall back to T1_Notes pattern
-    if (currentChart == nullptr && patternSuffix != "_T1_Notes")
-    {
-        chartName = chartName.replace(patternSuffix, "_T1_Notes");
-        currentChart = patternSystem->getChart(chartName);
-    }
+    // Generate the JSON pattern on-demand
+    currentPatternJson = createTestPattern(testType, instrumentName);
     
     // Update the pattern viewer
     updatePatternViewer();
@@ -1647,140 +1400,54 @@ void PlayerModeComponent::updateCurrentChart()
 
 void PlayerModeComponent::updateButtonStates()
 {
-    bool hasChart = (currentChart != nullptr);
+    bool hasPattern = !currentPatternJson.isEmpty();
     bool hasMidiChart = !currentMidiChart.isVoid();
     bool hasPlayer = (selectedPlayer != nullptr);
     
     // OLD WORKFLOW: Convert → Load → Play (for compatibility/testing)
-    convertButton.setEnabled(hasChart && hasPlayer);
+    convertButton.setEnabled(hasPattern && hasPlayer);
     loadButton.setEnabled(hasMidiChart && hasPlayer);
     
-    // NEW SIMPLIFIED WORKFLOW: Just Play (uses Player directly)
-    playButton.setEnabled(hasChart && hasPlayer);  // NEW: Can play directly if we have chart and Player!
-    stopButton.setEnabled(false);
+    // Play button is only enabled when chart is loaded
+    playButton.setEnabled(hasMidiChart && hasPlayer && selectedPlayer->isInitialized());
+    stopButton.setEnabled(hasPlayer && selectedPlayer && selectedPlayer->isPlaying());
 }
 
 void PlayerModeComponent::convertToMidiChart()
 {
-    if (currentChart == nullptr || selectedPlayer == nullptr)
+    if (currentPatternJson.isEmpty() || selectedPlayer == nullptr)
     {
-        std::cerr << "PlayerMode::convertToMidiChart - No chart or player selected" << std::endl;
+        std::cerr << "PlayerMode::convertToMidiChart - No pattern or player selected" << std::endl;
         return;
     }
     
-    std::cout << "Converting Chart to MIDI_EVENT_CHART format..." << std::endl;
+    std::cout << "Step 1: Preparing pattern..." << std::endl;
     
-    // Convert the chart to a MIDI sequence
-    auto midiSequence = currentChart->toMidiSequence();
-    
-    // Create the MIDI_EVENT_CHART var object
-    juce::DynamicObject* chartObj = new juce::DynamicObject();
-    juce::Array<juce::var> events;
-    
-    // Convert MIDI sequence to the expected format
-    for (int i = 0; i < midiSequence->getNumEvents(); ++i)
+    // Step 1: Prepare the pattern
+    if (!selectedPlayer->preparePattern(currentPatternJson))
     {
-        auto event = midiSequence->getEventPointer(i);
-        
-        if (event->message.isNoteOn())
-        {
-            juce::DynamicObject* noteOn = new juce::DynamicObject();
-            noteOn->setProperty("type", "note_on");
-            noteOn->setProperty("channel", event->message.getChannel());
-            noteOn->setProperty("note", event->message.getNoteNumber());
-            noteOn->setProperty("velocity", static_cast<int>(event->message.getVelocity() * 127));
-            noteOn->setProperty("timestamp", (event->message.getTimeStamp() / 960.0) * (60.0 / currentChart->getTempo())); // Convert from ticks to seconds at correct tempo
-            events.add(juce::var(noteOn));
-        }
-        else if (event->message.isNoteOff())
-        {
-            juce::DynamicObject* noteOff = new juce::DynamicObject();
-            noteOff->setProperty("type", "note_off");
-            noteOff->setProperty("channel", event->message.getChannel());
-            noteOff->setProperty("note", event->message.getNoteNumber());
-            noteOff->setProperty("timestamp", (event->message.getTimeStamp() / 960.0) * (60.0 / currentChart->getTempo())); // Convert from ticks to seconds at correct tempo
-            events.add(juce::var(noteOff));
-        }
-        else if (event->message.isController())
-        {
-            juce::DynamicObject* controller = new juce::DynamicObject();
-            controller->setProperty("type", "controller");
-            controller->setProperty("channel", event->message.getChannel());
-            controller->setProperty("controller", event->message.getControllerNumber());
-            controller->setProperty("value", event->message.getControllerValue());
-            controller->setProperty("timestamp", (event->message.getTimeStamp() / 960.0) * (60.0 / currentChart->getTempo())); // Convert from ticks to seconds at correct tempo
-            events.add(juce::var(controller));
-        }
+        std::cerr << "Failed to prepare pattern" << std::endl;
+        patternViewer.setText(patternViewer.getText() + "\n\nERROR: Failed to prepare pattern!");
+        return;
     }
     
-    // Add an all-notes-off event at the end to ensure clean playback
-    if (!events.isEmpty())
+    std::cout << "Step 2: Converting to MIDI..." << std::endl;
+    
+    // Step 2: Convert to MIDI (handled internally by Player)
+    if (!selectedPlayer->convertToMidi())
     {
-        // Find the maximum timestamp
-        double maxTimestamp = 0.0;
-        for (int i = 0; i < events.size(); ++i)
-        {
-            if (auto* obj = events[i].getDynamicObject())
-            {
-                double timestamp = obj->getProperty("timestamp");
-                maxTimestamp = std::max(maxTimestamp, timestamp);
-            }
-        }
-        
-        // Add all-notes-off controller message
-        juce::DynamicObject* allNotesOff = new juce::DynamicObject();
-        allNotesOff->setProperty("type", "controller");
-        allNotesOff->setProperty("channel", 1);
-        allNotesOff->setProperty("controller", 123); // All notes off
-        allNotesOff->setProperty("value", 0);
-        allNotesOff->setProperty("timestamp", maxTimestamp + 0.5); // 0.5 seconds after the last note
-        events.add(juce::var(allNotesOff));
+        std::cerr << "Failed to convert to MIDI" << std::endl;
+        patternViewer.setText(patternViewer.getText() + "\n\nERROR: Failed to convert to MIDI!");
+        return;
     }
     
-    chartObj->setProperty("events", events);
-    chartObj->setProperty("tempo", currentChart->getTempo());
-    chartObj->setProperty("success", true);
-    
-    // Store the MIDI_EVENT_CHART
-    currentMidiChart = juce::var(chartObj);
+    // Mark that we have a MIDI chart ready
+    currentMidiChart = juce::var(true); // Just a flag to enable the load button
     
     // Update the pattern viewer to show conversion results
-    juce::String text = juce::String("Converted ") + currentChart->getTitle() + juce::String(" to MIDI_EVENT_CHART:\n");
-    text += juce::String("Tempo: ") + juce::String(currentChart->getTempo()) + juce::String(" BPM\n");
-    text += juce::String("Total events: ") + juce::String(events.size()) + juce::String("\n\n");
+    patternViewer.setText("Pattern successfully converted to MIDI!\n\nClick 'Load' to prepare for playback.");
     
-    // Show a few events for reference
-    int eventsToShow = std::min(10, events.size());
-    for (int i = 0; i < eventsToShow; ++i)
-    {
-        if (auto* obj = events[i].getDynamicObject())
-        {
-            juce::String type = obj->getProperty("type").toString();
-            if (type == "note_on")
-            {
-                int note = static_cast<int>(obj->getProperty("note"));
-                double timestamp = static_cast<double>(obj->getProperty("timestamp"));
-                text += juce::String("Note On: ") + getMidiNoteName(note) + juce::String(" (") + juce::String(note) + juce::String(") at ") + 
-                        juce::String(timestamp, 2) + juce::String("s\n");
-            }
-            else if (type == "note_off")
-            {
-                int note = static_cast<int>(obj->getProperty("note"));
-                double timestamp = static_cast<double>(obj->getProperty("timestamp"));
-                text += juce::String("Note Off: ") + getMidiNoteName(note) + juce::String(" (") + juce::String(note) + juce::String(") at ") + 
-                        juce::String(timestamp, 2) + juce::String("s\n");
-            }
-        }
-    }
-    
-    if (events.size() > eventsToShow)
-    {
-        text += juce::String("... and ") + juce::String(events.size() - eventsToShow) + juce::String(" more events\n");
-    }
-    
-    patternViewer.setText(text);
-    
-    std::cout << "Chart converted to MIDI_EVENT_CHART with " << events.size() << " events" << std::endl;
+    std::cout << "Conversion successful - ready to load" << std::endl;
     
     // Update button states
     updateButtonStates();
@@ -1794,25 +1461,23 @@ void PlayerModeComponent::loadMidiChart()
         return;
     }
     
-    std::cout << "Loading MIDI_EVENT_CHART into player..." << std::endl;
+    std::cout << "Step 3: Loading MIDI into instrument..." << std::endl;
     
-    // Load the MIDI_EVENT_CHART into the selected player (same as Performance workflow)
-    if (selectedPlayer->loadChart(currentMidiChart))
+    // Step 3: Load the prepared MIDI (handled internally by Player)
+    if (!selectedPlayer->loadPreparedMidi())
     {
-        // Update button states - chart is loaded, ready to play
-        playButton.setEnabled(true);
-        stopButton.setEnabled(false);
-        
-        std::cout << "MIDI_EVENT_CHART loaded into player " << selectedPlayer->getMetadata().name << std::endl;
-        
-        // Update pattern viewer
-        patternViewer.setText(patternViewer.getText() + "\n\nMIDI_EVENT_CHART successfully loaded into Player!");
+        std::cerr << "Failed to load MIDI" << std::endl;
+        patternViewer.setText(patternViewer.getText() + "\n\nERROR: Failed to load MIDI!");
+        return;
     }
-    else
-    {
-        std::cerr << "Failed to load MIDI_EVENT_CHART into player" << std::endl;
-        patternViewer.setText(patternViewer.getText() + "\n\nERROR: Failed to load MIDI_EVENT_CHART into Player!");
-    }
+    
+    // Update pattern viewer
+    patternViewer.setText(patternViewer.getText() + "\n\nMIDI loaded successfully! Click 'Play' to start.");
+    
+    std::cout << "MIDI loaded - ready to play" << std::endl;
+    
+    // Update button states
+    updateButtonStates();
 }
 
 void PlayerModeComponent::playLoadedChart()
@@ -1825,9 +1490,21 @@ void PlayerModeComponent::playLoadedChart()
         return;
     }
     
+    // Ensure player is initialized before playback
+    if (!selectedPlayer->isInitialized())
+    {
+        std::cout << "Initializing player..." << std::endl;
+        if (!selectedPlayer->initialize())
+        {
+            std::cerr << "Failed to initialize player" << std::endl;
+            patternViewer.setText(patternViewer.getText() + "\n\nERROR: Failed to initialize player!");
+            return;
+        }
+    }
+    
     std::cout << "✅ Starting playback on player..." << std::endl;
     
-    // Simply play the loaded chart (same as Performance workflow)
+    // Simply play the loaded chart
     if (selectedPlayer->play())
     {
         // Update button states
@@ -1846,88 +1523,14 @@ void PlayerModeComponent::playLoadedChart()
     }
 }
 
-void PlayerModeComponent::playPatternDirectly()
-{
-    std::cout << "🎵 PlayerModeComponent::playPatternDirectly() - NEW TRACKTIONPLAYER APPROACH!" << std::endl;
-    
-    if (selectedPlayer == nullptr)
-    {
-        std::cerr << "❌ No Player available" << std::endl;
-        return;
-    }
-    
-    if (currentChart == nullptr)
-    {
-        std::cerr << "❌ No pattern selected" << std::endl;
-        return;
-    }
-    
-    // NEW WORKFLOW: Direct pattern → Player playback
-    // Step 1: Convert chart to MIDI_EVENT_CHART format
-    convertToMidiChart();
-    
-    if (currentMidiChart.isVoid())
-    {
-        std::cerr << "❌ Failed to convert pattern to MIDI" << std::endl;
-        return;
-    }
-    
-    // Step 2: Use Player to play the pattern directly!
-    std::cout << "✅ Playing pattern on Player: " << selectedPlayer->getName() << std::endl;
-    
-    // Extract tempo and events from MIDI chart
-    auto* chartObj = currentMidiChart.getDynamicObject();
-    if (!chartObj)
-    {
-        std::cerr << "❌ Invalid MIDI chart format" << std::endl;
-        return;
-    }
-    
-    double tempo = chartObj->getProperty("tempo");
-    auto eventsVar = chartObj->getProperty("events");
-    
-    if (!eventsVar.isArray())
-    {
-        std::cerr << "❌ MIDI chart events is not an array" << std::endl;
-        return;
-    }
-    
-    std::cout << "🎵 Playing " << eventsVar.getArray()->size() << " MIDI events at " << tempo << " BPM" << std::endl;
-    
-    // Use Player's playChart method with the events array!
-    if (selectedPlayer->playChart(eventsVar, tempo))
-    {
-        // Update button states
-        playButton.setEnabled(false);
-        stopButton.setEnabled(true);
-        
-        std::cout << "✅ Started Player pattern playback!" << std::endl;
-        
-        // Update pattern viewer
-        patternViewer.setText(patternViewer.getText() + "\n\n🎵 TRACKTIONPLAYER PLAYBACK STARTED!");
-    }
-    else
-    {
-        std::cerr << "❌ Failed to start Player pattern playback" << std::endl;
-        patternViewer.setText(patternViewer.getText() + "\n\n❌ ERROR: Failed to start Player playback!");
-    }
-}
+// Removed playPatternDirectly method - using state machine workflow
 
 void PlayerModeComponent::updateSelectedPlayer()
 {
-    // Clear any existing Player
-    selectedPlayer = nullptr;
-    
+    // Check if we have a selected player
     if (selectedPlayer == nullptr)
     {
-        std::cout << "No player selected, clearing Player" << std::endl;
-        return;
-    }
-    
-    // Simple update - selectedPlayer is already set from PlayerManager
-    if (!selectedPlayer)
-    {
-        std::cout << "No Player selected" << std::endl;
+        std::cout << "No player selected" << std::endl;
         return;
     }
     

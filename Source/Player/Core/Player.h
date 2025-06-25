@@ -121,6 +121,30 @@ public:
     // =========================================================================
     
     /**
+     * @brief State Machine Workflow - cleaner approach for pattern playback
+     * These methods manage internal state transitions without data passing
+     */
+    
+    /**
+     * @brief Step 1: Prepare a pattern for playback
+     * @param patternJson JSON string containing the pattern
+     * @return true if pattern prepared successfully
+     */
+    bool preparePattern(const juce::String& patternJson);
+    
+    /**
+     * @brief Step 2: Convert prepared pattern to MIDI
+     * @return true if conversion successful
+     */
+    bool convertToMidi();
+    
+    /**
+     * @brief Step 3: Load converted MIDI into instrument
+     * @return true if loading successful
+     */
+    bool loadPreparedMidi();
+    
+    /**
      * @brief Generate a musical chart and immediately play it
      * Coordinates Musician chart generation → Instrument playback
      * @param parameters Chart generation parameters
@@ -504,6 +528,11 @@ private:
     
     // Pre-converted MIDI sequence for instant synchronized playback
     std::unique_ptr<juce::MidiMessageSequence> preloadedSequence;
+    
+    // State Machine Workflow - internal state
+    juce::String preparedPatternJson;
+    std::unique_ptr<juce::MidiMessageSequence> convertedMidiSequence;
+    juce::var preparedMidiChart;
     
     // Instrument capabilities for LLM integration
     InstrumentCapabilities instrumentCapabilities;
