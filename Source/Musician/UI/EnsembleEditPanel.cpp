@@ -4,8 +4,8 @@
 namespace covertracks {
 
 // RolesTableModel implementation
-EnsembleEditPanel::RolesTableModel::RolesTableModel(EnsembleManager* manager)
-    : ensembleManager(manager)
+EnsembleEditPanel::RolesTableModel::RolesTableModel(EnsembleManager* manager, EnsembleEditPanel* panel)
+    : ensembleManager(manager), parentPanel(panel)
 {
 }
 
@@ -58,6 +58,17 @@ void EnsembleEditPanel::RolesTableModel::paintCell(juce::Graphics& g, int rowNum
     }
     
     g.drawText(text, 2, 0, width - 4, height, juce::Justification::centredLeft);
+}
+
+void EnsembleEditPanel::RolesTableModel::cellClicked(int rowNumber, int columnId, const juce::MouseEvent& event)
+{
+    juce::ignoreUnused(rowNumber, columnId, event);
+    
+    // Notify the parent panel about the selection change
+    if (parentPanel)
+    {
+        parentPanel->updateUI();
+    }
 }
 
 // EnsembleEditPanel implementation
@@ -113,7 +124,7 @@ EnsembleEditPanel::EnsembleEditPanel(PlayerManager* playerManagerPtr, EnsembleMa
     addAndMakeVisible(rolesLabel);
     
     // Set up the roles table
-    rolesTableModel = std::make_unique<RolesTableModel>(ensembleManager);
+    rolesTableModel = std::make_unique<RolesTableModel>(ensembleManager, this);
     rolesTable.setModel(rolesTableModel.get());
     
     rolesTable.getHeader().addColumn("Role", 1, 150);
@@ -124,6 +135,8 @@ EnsembleEditPanel::EnsembleEditPanel(PlayerManager* playerManagerPtr, EnsembleMa
     rolesTable.setHeaderHeight(24);
     rolesTable.setRowHeight(24);
     rolesTable.setMultipleSelectionEnabled(false);
+    rolesTable.setClickingTogglesRowSelection(true);
+    rolesTable.setRowSelectedOnMouseDown(true);
     addAndMakeVisible(rolesTable);
     
     // Set up the role management controls
@@ -133,6 +146,7 @@ EnsembleEditPanel::EnsembleEditPanel(PlayerManager* playerManagerPtr, EnsembleMa
     
     removeRoleButton.setButtonText("Remove Role");
     removeRoleButton.addListener(this);
+    removeRoleButton.setEnabled(false); // Start disabled until a row is selected
     addAndMakeVisible(removeRoleButton);
     
     // Set up the role selection controls
@@ -191,7 +205,7 @@ void EnsembleEditPanel::setEnsemble(EnsembleManager* ensembleManagerPtr)
     }
     
     // Update the roles table model
-    rolesTableModel = std::make_unique<RolesTableModel>(ensembleManager);
+    rolesTableModel = std::make_unique<RolesTableModel>(ensembleManager, this);
     rolesTable.setModel(rolesTableModel.get());
     
     // Update the UI
@@ -279,6 +293,7 @@ void EnsembleEditPanel::comboBoxChanged(juce::ComboBox* comboBox)
         }
     }
 }
+
 void EnsembleEditPanel::updateUI()
 {
     // Update the roles table

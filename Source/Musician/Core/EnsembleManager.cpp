@@ -338,6 +338,15 @@ juce::var EnsembleManager::toVar() const
         roleObj->setProperty("pattern", role.pattern);
         roleObj->setProperty("level", role.level);
         
+        // Save player ID to restore the player reference later
+        if (role.player != nullptr)
+        {
+            roleObj->setProperty("playerId", role.player->getId());
+        }
+        else
+        {
+            roleObj->setProperty("playerId", ""); // Empty string for no player
+        }
         
         rolesArray.add(roleObj);
     }
