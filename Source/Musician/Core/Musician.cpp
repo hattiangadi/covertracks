@@ -550,7 +550,16 @@ var Musician::midiMessageSequenceToVar(const MidiMessageSequence& sequence, doub
                 }
             }
             
-            // Note: We don't add note_off events to the output since we now have duration in note_on events
+            // Add note_off events for playback systems that need separate on/off events
+            DynamicObject* noteOffObj = new DynamicObject();
+            noteOffObj->setProperty("type", "note_off");
+            noteOffObj->setProperty("channel", event->message.getChannel());
+            noteOffObj->setProperty("note", event->message.getNoteNumber());
+            noteOffObj->setProperty("velocity", 0.0f); // Note off velocity
+            noteOffObj->setProperty("timestamp", normalizedTimestamp);
+            noteOffObj->setProperty("source", currentSource);
+            
+            events.add(var(noteOffObj));
         }
         else if (event->message.isController())
         {

@@ -93,26 +93,9 @@ std::unique_ptr<MidiMessageSequence> Bar::toMidiSequence() const
                 noteOn.setTimeStamp(tickPosition);
                 sequence->addEvent(noteOn);
                 
-                // Note off with bar boundary guardrail
-                double requestedNoteOffPosition = tickPosition + (event.duration * beatsPerQuarterNote * TICKS_PER_QUARTER_NOTE);
-                
-                // Calculate the end of this bar in ticks
-                // For 4/4 time: 4 beats * 960 ticks = 3840 ticks (beats 1.0-4.99)
-                double barEndTick = (timeSignatureNumerator * (4.0 / timeSignatureDenominator)) * TICKS_PER_QUARTER_NOTE;
-                
-                // Clamp note-off to not extend beyond the bar boundary  
-                // Use a tiny buffer (0.1 ticks) instead of a full tick to prevent timing gaps
-                double noteOffPosition = jmin(requestedNoteOffPosition, barEndTick - 0.1);
-                
-                // Debug warning if note was clamped (check against the actual bar end, not our buffer)
-                if (requestedNoteOffPosition > barEndTick)
-                {
-                    double requestedBeats = event.duration;
-                    double clampedBeats = (noteOffPosition - tickPosition) / (beatsPerQuarterNote * TICKS_PER_QUARTER_NOTE);
-                    DBG("WARNING: Note duration clamped from " + String(requestedBeats, 2) + " beats to " + 
-                        String(clampedBeats, 2) + " beats to stay within bar boundary. " + 
-                        "Note: " + String(event.noteNumber) + ", Beat: " + String(event.beat, 2));
-                }
+                // Note off - allow cross-bar slurs/ties
+                // Duration is already in beats, so we only need to convert to ticks directly
+                double noteOffPosition = tickPosition + (event.duration * TICKS_PER_QUARTER_NOTE);
                 
                 MidiMessage noteOff = MidiMessage::noteOff(event.channel + 1, 
                                                          event.noteNumber);

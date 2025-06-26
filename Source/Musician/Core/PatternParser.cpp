@@ -392,11 +392,32 @@ std::shared_ptr<covertracks::Section> covertracks::PatternParser::parseSectionFr
                                     double offsetBeat = originalBeat + beatOffset;
                                     offsetEventArray.add(var(offsetBeat));
                                     
-                                    // Copy other event properties
-                                    for (int i = 1; i < patternEvent.size(); ++i)
+                                    // Copy note and velocity
+                                    offsetEventArray.add(patternEvent[1]); // note
+                                    if (patternEvent.size() >= 3)
+                                        offsetEventArray.add(patternEvent[2]); // velocity
+                                    else
+                                        offsetEventArray.add(var(0.8f)); // default velocity
+                                    
+                                    // Handle duration - apply automatic assignment if not specified
+                                    if (patternEvent.size() >= 4)
                                     {
-                                        offsetEventArray.add(patternEvent[i]);
+                                        offsetEventArray.add(patternEvent[3]); // explicit duration
                                     }
+                                    else
+                                    {
+                                        // Default to 1 beat (quarter note) for all notes missing duration
+                                        float autoDuration = 1.0f;
+                                        offsetEventArray.add(var(autoDuration));
+                                        
+                                        DBG("Auto-assigned default duration 1.0 beat for pattern event");
+                                    }
+                                    
+                                    // Copy source if present, otherwise add pattern source
+                                    if (patternEvent.size() >= 5)
+                                        offsetEventArray.add(patternEvent[4]);
+                                    else
+                                        offsetEventArray.add(var("pattern:" + basePatternName));
                                     
                                     layerEvents.add(var(offsetEventArray));
                                 }
@@ -728,26 +749,26 @@ std::shared_ptr<covertracks::Bar> covertracks::PatternParser::parseBarFromJsonWi
                 duration = static_cast<float>(static_cast<double>(durationVar));
             }
         }
+        
+        // Automatic duration assignment if no duration was specified
+        bool durationWasSpecified = (eventArray->size() >= 4);
+        if (!durationWasSpecified)
+        {
+            // Default to 1 beat (quarter note) for all notes missing duration
+            duration = 1.0f;
+            DBG("Auto-assigned default duration 1.0 beat for direct layer event");
+        }
             
         // Optional fifth element for source metadata
         if (eventArray->size() >= 5)
             source = (*eventArray)[4].toString();
         
-        // Validate timing before adding notes
-        // Check if note starts outside the bar boundary (assuming 4/4 time signature: beats 1.0 to just before 5.0)
-        if (beat < 1.0 || beat >= 5.0)
+        // Allow notes to extend across bar boundaries for musical slurs/ties
+        // Only skip notes that start before beat 1.0 (invalid timing)
+        if (beat < 1.0)
         {
-            DBG("WARNING: Note at beat " + String(beat, 2) + " is outside bar boundary (1.0-4.99) - skipping note");
+            DBG("WARNING: Note at beat " + String(beat, 2) + " starts before beat 1.0 - skipping note");
             continue; // Skip this note entirely
-        }
-        
-        double noteEndBeat = beat + duration;
-        if (noteEndBeat > 5.0) // Check if note extends beyond bar boundary
-        {
-            double originalDuration = duration;
-            duration = jmax(0.1f, 5.0f - static_cast<float>(beat)); // Clamp to bar boundary, minimum 0.1 beats
-            DBG("WARNING: Note duration at beat " + String(beat, 2) + " clamped from " + 
-                String(originalDuration, 2) + " to " + String(duration, 2) + " beats to stay within bar boundary");
         }
         
         // Handle note data
