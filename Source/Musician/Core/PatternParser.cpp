@@ -695,12 +695,30 @@ std::shared_ptr<covertracks::Bar> covertracks::PatternParser::parseBarFromJsonWi
         // Handle note data
         if (noteData.isString())
         {
-            // Simple note: [1.0, "C4"]
             String noteName = noteData.toString();
-            int midiNote = findMidiNoteForPrimitive(noteName, primitives);
-            int channel = getChannelForPrimitive(noteName, primitives);
-            bar->addNote(static_cast<float>(beat), channel, midiNote, velocity, duration, source);
-            DBG("Added note: " + noteName + " at beat " + String(beat) + " (MIDI " + String(midiNote) + ") from " + source);
+            
+            // Check for combined primitives (e.g., "kick+snare")
+            if (noteName.contains("+"))
+            {
+                // Split on "+" and create multiple notes
+                StringArray primitiveNames = StringArray::fromTokens(noteName, "+", "");
+                for (const String& primitiveName : primitiveNames)
+                {
+                    String trimmedName = primitiveName.trim();
+                    int midiNote = findMidiNoteForPrimitive(trimmedName, primitives);
+                    int channel = getChannelForPrimitive(trimmedName, primitives);
+                    bar->addNote(static_cast<float>(beat), channel, midiNote, velocity, duration, source);
+                    DBG("Added combined note: " + trimmedName + " at beat " + String(beat) + " (MIDI " + String(midiNote) + ") from " + source);
+                }
+            }
+            else
+            {
+                // Simple note: [1.0, "C4"]
+                int midiNote = findMidiNoteForPrimitive(noteName, primitives);
+                int channel = getChannelForPrimitive(noteName, primitives);
+                bar->addNote(static_cast<float>(beat), channel, midiNote, velocity, duration, source);
+                DBG("Added note: " + noteName + " at beat " + String(beat) + " (MIDI " + String(midiNote) + ") from " + source);
+            }
         }
         else if (noteData.isObject() && noteData.hasProperty("chord"))
         {
