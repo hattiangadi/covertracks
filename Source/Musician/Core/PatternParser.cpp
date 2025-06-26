@@ -277,8 +277,68 @@ std::shared_ptr<covertracks::Section> covertracks::PatternParser::parseSectionFr
             // Get the layers object once before the loop
             auto* layersObj = layersJson.getDynamicObject();
             
-            // First, collect all events from all layers with their absolute beat positions
-            Array<var> allEventsAllLayers;
+            // First, check for section-level basePattern + variations
+            Array<var> sectionPatternEvents;
+            if (sectionJson.hasProperty("basePattern"))
+            {
+                String basePatternName = sectionJson["basePattern"].toString();
+                var variationsJson = sectionJson.getProperty("variations", var());
+                
+                auto basePatternIt = patterns.find(basePatternName);
+                if (basePatternIt != patterns.end())
+                {
+                    Array<var> basePattern = basePatternIt->second;
+                    
+                    // Apply basePattern + variations to generate events for each bar
+                    for (int barIndex = 0; barIndex < numBars; ++barIndex)
+                    {
+                        Array<var> barEvents = basePattern;  // Start with base pattern
+                        
+                        // Check for variation for this bar
+                        String barKey = "bar" + String(barIndex + 1);  // bar1, bar2, etc.
+                        if (variationsJson.isObject() && variationsJson.hasProperty(barKey))
+                        {
+                            var variationVar = variationsJson.getProperty(barKey, var());
+                            if (variationVar.isString())
+                            {
+                                // Variation is a pattern name reference
+                                String variationPatternName = variationVar.toString();
+                                auto variationIt = patterns.find(variationPatternName);
+                                if (variationIt != patterns.end())
+                                {
+                                    barEvents = variationIt->second;  // Use variation pattern
+                                    DBG("Bar " + String(barIndex + 1) + " using variation pattern: " + variationPatternName);
+                                }
+                            }
+                        }
+                        
+                        // Offset events for this bar
+                        double beatOffset = barIndex * 4.0; // Each bar is 4 beats
+                        for (const auto& patternEvent : barEvents)
+                        {
+                            if (patternEvent.isArray() && patternEvent.size() >= 2)
+                            {
+                                Array<var> offsetEventArray;
+                                double originalBeat = static_cast<double>(patternEvent[0]);
+                                double offsetBeat = originalBeat + beatOffset;
+                                offsetEventArray.add(var(offsetBeat));
+                                
+                                // Copy other event properties
+                                for (int i = 1; i < patternEvent.size(); ++i)
+                                {
+                                    offsetEventArray.add(patternEvent[i]);
+                                }
+                                
+                                sectionPatternEvents.add(var(offsetEventArray));
+                            }
+                        }
+                    }
+                    DBG("Generated " + String(sectionPatternEvents.size()) + " events from section basePattern + variations");
+                }
+            }
+            
+            // Start with section pattern events, then collect all events from all layers with their absolute beat positions
+            Array<var> allEventsAllLayers = sectionPatternEvents;
             
             for (auto& layerProp : layersObj->getProperties())
             {
