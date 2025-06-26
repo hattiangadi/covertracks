@@ -641,19 +641,27 @@ bool Performance::loadChartsForRoles(const juce::Array<MusicianRole>& roles, Pla
             continue;
         }
         
-        // Extract MIDI events from chart
+        // Extract MIDI events and tempo from chart
         juce::var midiEvents;
+        double tempo = 120.0; // Default tempo
+        
         if (midiChart.isObject() && midiChart.hasProperty("events"))
         {
             midiEvents = midiChart["events"];
+            // Extract tempo if available
+            if (midiChart.hasProperty("tempo"))
+            {
+                tempo = static_cast<double>(midiChart["tempo"]);
+                std::cout << "[Performance] Using tempo " << tempo << " BPM for role: " << role.getName() << std::endl;
+            }
         }
         else
         {
             midiEvents = midiChart;
         }
         
-        // Load chart into Player
-        if (player->loadChart(midiEvents, 120.0))
+        // Load chart into Player with correct tempo
+        if (player->loadChart(midiEvents, tempo))
         {
             // Store reference to Player (not owned by Performance)
             activePlayerRefs[role.getName()] = player;

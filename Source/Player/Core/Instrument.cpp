@@ -894,8 +894,14 @@ void Instrument::timerCallback()
 void Instrument::updatePlaybackPosition()
 {
     // Update playback time based on tempo
-    double deltaTime = 0.02; // 20ms timer interval
-    currentPlaybackTime += deltaTime;
+    double deltaTimeSeconds = 0.02; // 20ms timer interval
+    
+    // Convert elapsed time to beats using the current tempo
+    // BPM = beats per minute, so beats per second = BPM / 60
+    double beatsPerSecond = playbackTempo / 60.0;
+    double deltaTimeBeats = deltaTimeSeconds * beatsPerSecond;
+    
+    currentPlaybackTime += deltaTimeBeats;
 }
 
 void Instrument::sendMidiToTrack(const juce::MidiMessage& message)

@@ -276,8 +276,15 @@ void PatternEditorComponent::buttonClicked(Button* button)
                 updatePianoRollVisualization();
             }
             
+            // Get tempo from the pattern data for accurate playback tracking
+            double tempo = 120.0; // Default tempo
+            if (currentParsedChart.hasProperty("tempo"))
+            {
+                tempo = static_cast<double>(currentParsedChart["tempo"]);
+            }
+            
             // Start visual playback tracking
-            startPlaybackTracking(120.0); // Default tempo
+            startPlaybackTracking(tempo);
         }
         else
         {
