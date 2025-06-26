@@ -8,6 +8,7 @@ namespace covertracks {
 
 TestsComponent::TestsComponent()
     : titleLabel("titleLabel", "Unit Tests"),
+      testSuiteLabel("testSuiteLabel", "Test Suite:"),
       runButton("Run Tests"),
       clearButton("Clear Results"),
       audioTestLabel("audioTestLabel", "Tracktion Engine Audio Tests")
@@ -16,6 +17,20 @@ TestsComponent::TestsComponent()
     titleLabel.setFont(juce::Font(juce::FontOptions().withHeight(18.0f).withStyle("bold")));
     titleLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(titleLabel);
+    
+    // Set up test suite selector
+    testSuiteLabel.setFont(juce::Font(juce::FontOptions().withHeight(14.0f)));
+    testSuiteLabel.setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(testSuiteLabel);
+    
+    testSuiteSelector.addItem("All Tests", 1);
+    testSuiteSelector.addItem("MusicPatternSystem Feature Tests", 2);
+    testSuiteSelector.addItem("Music Pattern System", 3);
+    testSuiteSelector.addItem("Audio Engine Tests", 4);
+    testSuiteSelector.addItem("Performance Mode Tests", 5);
+    testSuiteSelector.addItem("Tracktion Integration Tests", 6);
+    testSuiteSelector.setSelectedId(2); // Default to MusicPatternSystem tests
+    addAndMakeVisible(testSuiteSelector);
     
     // Set up buttons
     runButton.addListener(this);
@@ -102,6 +117,15 @@ void TestsComponent::resized()
     // Add spacing
     leftSection.removeFromTop(10);
     
+    // Position test suite selector
+    auto selectorRow = leftSection.removeFromTop(25);
+    testSuiteLabel.setBounds(selectorRow.removeFromLeft(80));
+    selectorRow.removeFromLeft(5); // spacing
+    testSuiteSelector.setBounds(selectorRow);
+    
+    // Add spacing
+    leftSection.removeFromTop(10);
+    
     // Position buttons
     auto buttonRow = leftSection.removeFromTop(30);
     runButton.setBounds(buttonRow.removeFromLeft(100));
@@ -171,20 +195,72 @@ void TestsComponent::buttonClicked(juce::Button* button)
 
 void TestsComponent::runTests()
 {
-    resultsText.setText("Running tests...\n");
+    int selectedId = testSuiteSelector.getSelectedId();
+    String selectedSuite = testSuiteSelector.getText();
     
-    // Capture console output for display
-    std::ostringstream output;
-    std::streambuf* old_cout = std::cout.rdbuf(output.rdbuf());
+    resultsText.setText("Running " + selectedSuite + "...\n");
     
-    // Run all tests (this will print to our captured output)
-    covertracks::runAllTests();
+    // Create a custom UnitTestRunner that captures results
+    class TestResultCapture : public juce::UnitTestRunner
+    {
+    public:
+        String capturedOutput;
+        
+        void logMessage(const String& message) override
+        {
+            capturedOutput += message + "\n";
+        }
+    };
     
-    // Restore console output
-    std::cout.rdbuf(old_cout);
+    TestResultCapture runner;
     
-    // Display the captured output
-    resultsText.setText(output.str());
+    if (selectedId == 1) // All Tests
+    {
+        runner.runAllTests();
+    }
+    else if (selectedId == 2) // MusicPatternSystem Feature Tests
+    {
+        runner.runTestsInCategory("MusicPatternSystem Feature Tests");
+    }
+    else if (selectedId == 3) // Music Pattern System
+    {
+        runner.runTestsInCategory("Music Pattern System");
+    }
+    else if (selectedId == 4) // Audio Engine Tests
+    {
+        runner.runTestsInCategory("Audio Engine Tests");
+    }
+    else if (selectedId == 5) // Performance Mode Tests
+    {
+        runner.runTestsInCategory("Performance Mode Tests");
+    }
+    else if (selectedId == 6) // Tracktion Integration Tests
+    {
+        runner.runTestsInCategory("Tracktion Integration Tests");
+    }
+    
+    // Calculate and display results
+    int numTests = runner.getNumResults();
+    int numFailures = 0;
+    
+    for (int i = 0; i < numTests; ++i) {
+        auto* result = runner.getResult(i);
+        if (result && result->failures > 0) {
+            numFailures++;
+        }
+    }
+    
+    String resultsHeader;
+    if (numTests == 0) {
+        resultsHeader = "No tests found for category: " + selectedSuite + "\n\n";
+    } else if (numFailures == 0) {
+        resultsHeader = "PASS: All " + String(numTests) + " tests passed in " + selectedSuite + "!\n\n";
+    } else {
+        resultsHeader = "FAIL: " + String(numFailures) + " out of " + String(numTests) + " tests failed in " + selectedSuite + "\n\n";
+    }
+    
+    // Display results
+    resultsText.setText(resultsHeader + runner.capturedOutput);
 }
 
 void TestsComponent::generateSineWave(float frequency, float duration)

@@ -588,7 +588,11 @@ std::shared_ptr<covertracks::Bar> covertracks::PatternParser::parseBarFromJsonWi
         
         // Optional third element for velocity
         if (eventArray->size() >= 3)
-            velocity = (*eventArray)[2];
+        {
+            var velocityVar = (*eventArray)[2];
+            if (!velocityVar.isVoid())
+                velocity = static_cast<float>(static_cast<double>(velocityVar));
+        }
         
         // Optional fourth element for duration  
         if (eventArray->size() >= 4)

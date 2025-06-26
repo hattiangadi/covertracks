@@ -1,0 +1,379 @@
+{
+  "test_suite": "MusicPatternSystem Feature Tests",
+  "description": "Isolated tests for each language feature to verify correct behavior",
+  
+  "tests": {
+    
+    "1_chord_tones_basic": {
+      "title": "Test Chord Tone Resolution",
+      "description": "Verify chord tones resolve correctly for different chords",
+      "tempo": 120,
+      "chords": {
+        "C": ["C3", "E3", "G3"],
+        "F": ["F3", "A3", "C4"],
+        "Am": ["A3", "C4", "E4"]
+      },
+      "sections": {
+        "test": {
+          "bars": 3,
+          "layers": {
+            "harmony": [
+              [1.0, {"chord": "C"}, 0.7, 4.0],
+              [5.0, {"chord": "F"}, 0.7, 4.0],
+              [9.0, {"chord": "Am"}, 0.7, 4.0]
+            ],
+            "bass": [
+              [1.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+              [2.0, {"tone": 3, "octave": 2}, 0.8, 1.0],
+              [3.0, {"tone": 5, "octave": 2}, 0.8, 1.0],
+              [4.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+              
+              [5.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+              [6.0, {"tone": 3, "octave": 2}, 0.8, 1.0],
+              [7.0, {"tone": 5, "octave": 2}, 0.8, 1.0],
+              [8.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+              
+              [9.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+              [10.0, {"tone": 3, "octave": 2}, 0.8, 1.0],
+              [11.0, {"tone": 5, "octave": 2}, 0.8, 1.0],
+              [12.0, {"tone": 1, "octave": 2}, 0.8, 1.0]
+            ]
+          }
+        }
+      },
+      "expected_notes": {
+        "bar1": ["C2", "E2", "G2", "C2"],
+        "bar2": ["F2", "A2", "C3", "F2"],
+        "bar3": ["A2", "C3", "E3", "A2"]
+      }
+    },
+    
+    "2_chord_tones_no_chord": {
+      "title": "Test Chord Tones Without Chord Context",
+      "description": "Verify behavior when no chord is defined",
+      "tempo": 120,
+      "sections": {
+        "test": {
+          "bars": 1,
+          "layers": {
+            "bass": [
+              [1.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+              [2.0, {"tone": 3, "octave": 2}, 0.8, 1.0]
+            ]
+          }
+        }
+      },
+      "expected_behavior": "Should skip or use default notes"
+    },
+    
+    "3_variations_single_bar": {
+      "title": "Test Bar Variations - Single Bar Override",
+      "description": "Verify variations only affect specified bars",
+      "tempo": 120,
+      "patterns": {
+        "basic": [
+          [1.0, "kick", 0.8],
+          [3.0, "snare", 0.8]
+        ],
+        "fill": [
+          [1.0, "kick", 0.9],
+          [2.0, "snare", 0.8],
+          [3.0, "snare", 0.8],
+          [4.0, "crash", 1.0]
+        ]
+      },
+      "sections": {
+        "test": {
+          "bars": 4,
+          "layers": {
+            "drums": {
+              "basePattern": "basic",
+              "variations": {
+                "bar4": "fill"
+              }
+            }
+          }
+        }
+      },
+      "expected_behavior": {
+        "bar1": "basic pattern (2 events)",
+        "bar2": "basic pattern (2 events)",
+        "bar3": "basic pattern (2 events)",
+        "bar4": "fill pattern (4 events)"
+      }
+    },
+    
+    "4_variations_multiple_bars": {
+      "title": "Test Multiple Bar Variations",
+      "description": "Verify each variation applies to correct bar only",
+      "tempo": 120,
+      "patterns": {
+        "groove": [[1.0, "kick", 0.8]],
+        "snare_only": [[2.0, "snare", 0.9]],
+        "crash_only": [[1.0, "crash", 1.0]]
+      },
+      "sections": {
+        "test": {
+          "bars": 4,
+          "layers": {
+            "drums": {
+              "basePattern": "groove",
+              "variations": {
+                "bar2": "snare_only",
+                "bar4": "crash_only"
+              }
+            }
+          }
+        }
+      },
+      "expected_behavior": {
+        "bar1": "kick only",
+        "bar2": "snare only",
+        "bar3": "kick only (back to base)",
+        "bar4": "crash only"
+      }
+    },
+    
+    "5_timing_multi_bar": {
+      "title": "Test Multi-Bar Event Timing",
+      "description": "Verify events are assigned to correct bars",
+      "tempo": 120,
+      "sections": {
+        "test": {
+          "bars": 3,
+          "layers": {
+            "melody": [
+              [1.0, "C4", 0.8, 1.0],
+              [4.0, "D4", 0.8, 1.0],
+              [5.0, "E4", 0.8, 1.0],
+              [8.0, "F4", 0.8, 1.0],
+              [9.0, "G4", 0.8, 1.0],
+              [12.0, "A4", 0.8, 1.0]
+            ]
+          }
+        }
+      },
+      "expected_distribution": {
+        "bar1": ["C4 at 1.0", "D4 at 4.0"],
+        "bar2": ["E4 at 1.0", "F4 at 4.0"],
+        "bar3": ["G4 at 1.0", "A4 at 4.0"]
+      }
+    },
+    
+    "6_duration_boundaries": {
+      "title": "Test Duration Bar Boundary Clamping",
+      "description": "Verify notes don't extend past bar boundaries",
+      "tempo": 120,
+      "sections": {
+        "test": {
+          "bars": 2,
+          "layers": {
+            "sustain": [
+              [3.0, "C4", 0.8, 4.0],
+              [7.0, "D4", 0.8, 4.0]
+            ]
+          }
+        }
+      },
+      "expected_behavior": {
+        "bar1": "C4 duration clamped to ~2.0 beats",
+        "bar2": "D4 duration clamped to ~2.0 beats"
+      }
+    },
+    
+    "7_combined_primitives": {
+      "title": "Test Combined Primitives",
+      "description": "Verify kick+snare creates two simultaneous events",
+      "tempo": 120,
+      "sections": {
+        "test": {
+          "bars": 1,
+          "layers": {
+            "drums": [
+              [1.0, "kick+snare", 0.9],
+              [3.0, "hihat+ride", 0.7]
+            ]
+          }
+        }
+      },
+      "expected_events": [
+        "kick at 1.0",
+        "snare at 1.0",
+        "hihat at 3.0",
+        "ride at 3.0"
+      ]
+    },
+    
+    "8_velocity_formats": {
+      "title": "Test Velocity Input Formats",
+      "description": "Verify different velocity notations work",
+      "tempo": 120,
+      "sections": {
+        "test": {
+          "bars": 1,
+          "layers": {
+            "drums": [
+              [1.0, "kick", 0.9],
+              [2.0, "snare:v127"],
+              [3.0, "hihat", 0.5],
+              [4.0, "crash:v80"]
+            ]
+          }
+        }
+      },
+      "expected_velocities": {
+        "kick": 0.9,
+        "snare": 1.0,
+        "hihat": 0.5,
+        "crash": 0.63
+      }
+    },
+    
+    "9_pattern_references": {
+      "title": "Test Pattern References in Layers",
+      "description": "Verify pattern references work correctly",
+      "tempo": 120,
+      "patterns": {
+        "bassline": [
+          [1.0, "E2", 0.8, 0.5],
+          [2.0, "G2", 0.8, 0.5],
+          [3.0, "A2", 0.8, 0.5],
+          [4.0, "E2", 0.8, 0.5]
+        ]
+      },
+      "sections": {
+        "test": {
+          "bars": 2,
+          "layers": {
+            "bass": {"pattern": "bassline"}
+          }
+        }
+      },
+      "expected_behavior": "Pattern repeats in both bars"
+    },
+    
+    "10_instrument_specific_drums": {
+      "title": "Drums - Complete Feature Test",
+      "description": "Test all drum-specific features",
+      "tempo": 120,
+      "primitives": {
+        "kick": 36,
+        "snare": 38,
+        "hihat": 42,
+        "crash": 49
+      },
+      "patterns": {
+        "basic_beat": [
+          [1.0, "kick", 0.9],
+          [2.0, "snare", 0.8],
+          [2.5, "kick", 0.6],
+          [3.0, "kick", 0.8],
+          [4.0, "snare", 0.9]
+        ],
+        "fill": [
+          [3.5, "snare", 0.7],
+          [3.75, "snare", 0.8],
+          [4.0, "crash+kick", 1.0]
+        ],
+        "breakdown": [
+          [1.0, "kick", 0.9, 0.1],
+          [3.0, "snare", 0.5, 0.1]
+        ]
+      },
+      "sections": {
+        "verse": {
+          "bars": 8,
+          "layers": {
+            "drums": {
+              "basePattern": "basic_beat",
+              "variations": {
+                "bar4": "fill",
+                "bar6": "breakdown",
+                "bar8": "fill"
+              }
+            }
+          }
+        }
+      },
+      "expected_behavior": {
+        "total_bars": 8,
+        "variation_bars": [4, 6, 8],
+        "channel": 10
+      }
+    },
+    
+    "11_instrument_specific_bass": {
+      "title": "Bass - Chord Tone Test",
+      "description": "Test bass with changing chords",
+      "tempo": 120,
+      "chords": {
+        "C": ["C3", "E3", "G3"],
+        "Am": ["A2", "C3", "E3"],
+        "F": ["F2", "A2", "C3"],
+        "G": ["G2", "B2", "D3"]
+      },
+      "patterns": {
+        "walking": [
+          [1.0, {"tone": 1, "octave": 2}, 0.8, 0.9],
+          [2.0, {"tone": 3, "octave": 2}, 0.7, 0.9],
+          [3.0, {"tone": 5, "octave": 2}, 0.8, 0.9],
+          [4.0, {"tone": 1, "octave": 3}, 0.7, 0.9]
+        ]
+      },
+      "sections": {
+        "progression": {
+          "bars": 4,
+          "layers": {
+            "harmony": [
+              [1.0, {"chord": "C"}, 0.6, 4.0],
+              [5.0, {"chord": "Am"}, 0.6, 4.0],
+              [9.0, {"chord": "F"}, 0.6, 4.0],
+              [13.0, {"chord": "G"}, 0.6, 4.0]
+            ],
+            "bass": {"pattern": "walking"}
+          }
+        }
+      },
+      "expected_notes": {
+        "bar1": ["C2", "E2", "G2", "C3"],
+        "bar2": ["A2", "C3", "E3", "A3"],
+        "bar3": ["F2", "A2", "C3", "F3"],
+        "bar4": ["G2", "B2", "D3", "G3"]
+      }
+    },
+    
+    "12_instrument_specific_piano": {
+      "title": "Piano - Voicing and Rhythm Test",
+      "description": "Test piano voicings with chord changes",
+      "tempo": 120,
+      "chords": {
+        "Cmaj7": ["C3", "E3", "G3", "B3"],
+        "Dm7": ["D3", "F3", "A3", "C4"]
+      },
+      "patterns": {
+        "comp": [
+          [2.0, {"tone": 3, "octave": 4}, 0.6, 0.4],
+          [2.0, {"tone": 7, "octave": 3}, 0.5, 0.4],
+          [4.0, {"tone": 1, "octave": 4}, 0.6, 0.4],
+          [4.0, {"tone": 5, "octave": 3}, 0.5, 0.4]
+        ]
+      },
+      "sections": {
+        "test": {
+          "bars": 2,
+          "layers": {
+            "harmony": [
+              [1.0, {"chord": "Cmaj7"}, 0.6, 4.0],
+              [5.0, {"chord": "Dm7"}, 0.6, 4.0]
+            ],
+            "piano": {"pattern": "comp"}
+          }
+        }
+      },
+      "expected_voicings": {
+        "bar1": ["E4+B3", "C4+G3"],
+        "bar2": ["F4+C4", "D4+A3"]
+      }
+    }
+  }
+}

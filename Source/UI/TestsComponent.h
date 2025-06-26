@@ -27,6 +27,8 @@ public:
 private:
     // UI components
     juce::Label titleLabel;
+    juce::ComboBox testSuiteSelector;
+    juce::Label testSuiteLabel;
     juce::TextButton runButton;
     juce::TextButton clearButton;
     juce::TextEditor resultsText;

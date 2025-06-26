@@ -1,0 +1,5 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -project Covertracks.xcodeproj -scheme "Covertracks - App" -configuration Debug build
+
+2025-06-26 11:04:57.225 xcodebuild[34273:8381784] Writing error result bundle to /var/folders/03/2x97yn2n3c58md9nc_jpjhlm0000gn/T/ResultBundle_2025-26-06_11-04-0057.xcresult
+xcodebuild: error: 'Covertracks.xcodeproj' does not exist.

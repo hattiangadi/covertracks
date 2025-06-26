@@ -102,6 +102,7 @@ private:
     TextButton loadButton;
     TextButton playButton;
     TextButton stopButton;
+    TextButton oneClickButton;  // New: Parse + Load + Play in one step
     
     // Performance mode buttons
     TextButton saveButton;

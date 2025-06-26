@@ -46,18 +46,27 @@ PatternEditorComponent::PatternEditorComponent(Musician* musicianPtr, PlayerMana
     addAndMakeVisible(playerSelector);
     updatePlayerSelector();
     
-    // Set up buttons
+    // Set up buttons with clearer labels for new workflow
+    parseButton.setButtonText("1. Parse + Convert");
     parseButton.addListener(this);
     addAndMakeVisible(parseButton);
     
+    loadButton.setButtonText("2. Load to Player");
     loadButton.addListener(this);
     addAndMakeVisible(loadButton);
     
+    playButton.setButtonText("3. Play");
     playButton.addListener(this);
     addAndMakeVisible(playButton);
     
     stopButton.addListener(this);
     addAndMakeVisible(stopButton);
+    
+    // Set up one-click button (new state machine workflow)
+    oneClickButton.setButtonText("Parse + Load + Play");
+    oneClickButton.addListener(this);
+    oneClickButton.setColour(TextButton::buttonColourId, Colours::green.darker());
+    addAndMakeVisible(oneClickButton);
     
     // Set up performance mode buttons (initially hidden)
     saveButton.setButtonText("Save");
@@ -150,13 +159,22 @@ void PatternEditorComponent::resized()
     }
     else
     {
-        // Normal mode: Show only Parse, Load, Play, Stop buttons
-        auto buttonArea = area.removeFromBottom(40);
-        int buttonWidth = buttonArea.getWidth() / 4;
-        parseButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(5));
-        loadButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(5));
-        playButton.setBounds(buttonArea.removeFromLeft(buttonWidth).reduced(5));
-        stopButton.setBounds(buttonArea.reduced(5));
+        // Normal mode: Show Parse, Load, Play, Stop buttons and new One-Click button
+        auto buttonArea = area.removeFromBottom(80);  // More space for two rows
+        
+        // First row: One-click button (prominent)
+        auto oneClickRow = buttonArea.removeFromTop(35);
+        oneClickButton.setBounds(oneClickRow.reduced(5));
+        
+        buttonArea.removeFromTop(5); // Small gap
+        
+        // Second row: Individual step buttons
+        auto stepButtonRow = buttonArea.removeFromTop(35);
+        int stepButtonWidth = stepButtonRow.getWidth() / 4;
+        parseButton.setBounds(stepButtonRow.removeFromLeft(stepButtonWidth).reduced(5));
+        loadButton.setBounds(stepButtonRow.removeFromLeft(stepButtonWidth).reduced(5));
+        playButton.setBounds(stepButtonRow.removeFromLeft(stepButtonWidth).reduced(5));
+        stopButton.setBounds(stepButtonRow.reduced(5));
     }
     
     // Split remaining area between the editor and piano roll
@@ -201,6 +219,70 @@ void PatternEditorComponent::buttonClicked(Button* button)
     {
         // Cancel editing in performance mode
         listeners.call(&Listener::performancePatternCancelRequested, this);
+    }
+    else if (button == &oneClickButton)
+    {
+        // One-click workflow: Parse + Load + Play using new state machine
+        std::cout << "Starting one-click workflow (Parse + Load + Play)..." << std::endl;
+        
+        if (!selectedPlayer)
+        {
+            std::cout << "No player selected. Please select a player first." << std::endl;
+            return;
+        }
+        
+        currentPatternNotation = patternEditor.getText();
+        if (currentPatternNotation.isEmpty())
+        {
+            std::cout << "No pattern to play. Please enter a pattern first." << std::endl;
+            return;
+        }
+        
+        // Step 1: Prepare pattern
+        std::cout << "Step 1: Preparing pattern..." << std::endl;
+        if (!selectedPlayer->preparePattern(currentPatternNotation))
+        {
+            std::cout << "Failed to prepare pattern." << std::endl;
+            return;
+        }
+        
+        // Step 2: Convert to MIDI
+        std::cout << "Step 2: Converting to MIDI..." << std::endl;
+        if (!selectedPlayer->convertToMidi())
+        {
+            std::cout << "Failed to convert pattern to MIDI." << std::endl;
+            return;
+        }
+        
+        // Step 3: Load MIDI
+        std::cout << "Step 3: Loading MIDI..." << std::endl;
+        if (!selectedPlayer->loadPreparedMidi())
+        {
+            std::cout << "Failed to load MIDI into instrument." << std::endl;
+            return;
+        }
+        
+        // Step 4: Play
+        std::cout << "Step 4: Starting playback..." << std::endl;
+        if (selectedPlayer->play())
+        {
+            std::cout << "✅ One-click workflow completed successfully!" << std::endl;
+            
+            // Update visualization
+            var chartData = selectedPlayer->getLastChart();
+            if (!chartData.isVoid())
+            {
+                currentParsedChart = chartData;
+                updatePianoRollVisualization();
+            }
+            
+            // Start visual playback tracking
+            startPlaybackTracking(120.0); // Default tempo
+        }
+        else
+        {
+            std::cout << "Failed to start playback." << std::endl;
+        }
     }
 }
 
@@ -351,22 +433,43 @@ void PatternEditorComponent::parseCurrentPattern()
     
     if (!currentPatternNotation.isEmpty())
     {
-        // Convert pattern string to chart format using Player's conversion
-        // This uses the same code path as Performance Mode via the Player's internal Musician
-        var result = selectedPlayer->convertPatternStringToChart(currentPatternNotation, 120.0);
+        // Use new state machine approach: Step 1 - Prepare pattern
+        std::cout << "Preparing pattern using new state machine API..." << std::endl;
+        bool success = selectedPlayer->preparePattern(currentPatternNotation);
         
-        if (result.hasProperty("success") && static_cast<bool>(result["success"]))
+        if (success)
         {
-            // Store the parsed chart
-            currentParsedChart = result;
-            std::cout << "Pattern parsed successfully. Events: " << result["events"].size() << std::endl;
+            std::cout << "Pattern prepared successfully using state machine." << std::endl;
             
-            // Update piano roll visualization
-            updatePianoRollVisualization();
+            // Step 2: Convert to MIDI to get chart data for visualization
+            std::cout << "Converting pattern to MIDI for visualization..." << std::endl;
+            bool converted = selectedPlayer->convertToMidi();
+            
+            if (converted)
+            {
+                std::cout << "Pattern converted to MIDI successfully." << std::endl;
+                
+                // Now the chart data should be available
+                var chartData = selectedPlayer->getLastChart();
+                if (!chartData.isVoid())
+                {
+                    std::cout << "Chart data received: " << JSON::toString(chartData) << std::endl;
+                    currentParsedChart = chartData;
+                    updatePianoRollVisualization();
+                }
+                else
+                {
+                    std::cout << "No chart data available from getLastChart()" << std::endl;
+                }
+            }
+            else
+            {
+                std::cout << "Failed to convert pattern to MIDI." << std::endl;
+            }
         }
         else
         {
-            std::cout << "Failed to parse pattern" << std::endl;
+            std::cout << "Failed to prepare pattern using state machine." << std::endl;
             currentParsedChart = var();
         }
     }
@@ -428,22 +531,39 @@ void PatternEditorComponent::loadParsedPattern()
         return;
     }
     
-    if (currentParsedChart.isVoid() || !currentParsedChart.hasProperty("events"))
+    // Use new state machine approach: Step 2 & 3 - Convert to MIDI and Load
+    std::cout << "Converting prepared pattern to MIDI..." << std::endl;
+    bool converted = selectedPlayer->convertToMidi();
+    
+    if (!converted)
     {
-        std::cout << "No parsed pattern available. Parse first." << std::endl;
+        std::cout << "Failed to convert pattern to MIDI. Make sure pattern is prepared first." << std::endl;
         return;
     }
     
-    // Load the parsed chart into the selected player
-    bool loaded = selectedPlayer->loadChart(currentParsedChart);
+    std::cout << "Loading converted MIDI into instrument..." << std::endl;
+    bool loaded = selectedPlayer->loadPreparedMidi();
     
     if (loaded)
     {
-        std::cout << "Pattern loaded successfully into " << selectedPlayer->getMetadata().name << std::endl;
+        std::cout << "Pattern loaded successfully into " << selectedPlayer->getMetadata().name << " using state machine." << std::endl;
+        
+        // Update visualization with the loaded chart data
+        var chartData = selectedPlayer->getLastChart();
+        if (!chartData.isVoid())
+        {
+            currentParsedChart = chartData;
+            updatePianoRollVisualization();
+            std::cout << "Updated piano roll visualization after loading." << std::endl;
+        }
+        else
+        {
+            std::cout << "Warning: No chart data available after loading pattern." << std::endl;
+        }
     }
     else
     {
-        std::cout << "Failed to load pattern into " << selectedPlayer->getMetadata().name << std::endl;
+        std::cout << "Failed to load prepared MIDI into " << selectedPlayer->getMetadata().name << std::endl;
     }
 }
 
@@ -461,6 +581,14 @@ void PatternEditorComponent::playLoadedPattern()
     if (started)
     {
         std::cout << "Started playback on " << selectedPlayer->getMetadata().name << std::endl;
+        
+        // Update visualization with the latest chart data
+        var chartData = selectedPlayer->getLastChart();
+        if (!chartData.isVoid())
+        {
+            currentParsedChart = chartData;
+            updatePianoRollVisualization();
+        }
         
         // Get tempo from the current chart if available
         double tempo = 120.0; // Default tempo
@@ -520,9 +648,26 @@ void PatternEditorComponent::PianoRollComponent::setMidiEvents(const var& chart)
 {
     events.clear();
     
-    if (chart.hasProperty("events") && chart["events"].isArray())
+    std::cout << "PianoRoll setMidiEvents called with: " << JSON::toString(chart) << std::endl;
+    
+    var eventsArray;
+    
+    // Handle both formats: direct array or object with "events" property
+    if (chart.isArray())
     {
-        var eventsArray = chart["events"];
+        // Direct array format
+        eventsArray = chart;
+        std::cout << "Using direct array format with " << eventsArray.size() << " events" << std::endl;
+    }
+    else if (chart.hasProperty("events") && chart["events"].isArray())
+    {
+        // Object with "events" property
+        eventsArray = chart["events"];
+        std::cout << "Using events property format with " << eventsArray.size() << " events" << std::endl;
+    }
+    
+    if (!eventsArray.isVoid() && eventsArray.isArray())
+    {
         
         for (int i = 0; i < eventsArray.size(); ++i)
         {
@@ -541,11 +686,13 @@ void PatternEditorComponent::PianoRollComponent::setMidiEvents(const var& chart)
                     // MIDI charts use 1-based note numbering, so convert to 0-based for internal use
                     int adjustedNote = note - 1;
                     events.add({adjustedNote, timestamp, duration, source});
+                    std::cout << "Added note: " << adjustedNote << " at " << timestamp << " duration " << duration << std::endl;
                 }
             }
         }
     }
     
+    std::cout << "Total events processed: " << events.size() << std::endl;
     repaint();
 }
 
