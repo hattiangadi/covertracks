@@ -734,25 +734,45 @@ std::shared_ptr<covertracks::Bar> covertracks::PatternParser::parseBarFromJsonWi
         }
         
         // Optional fourth element for duration  
+        bool explicitDurationProvided = false;
         if (eventArray->size() >= 4)
         {
             var durationVar = (*eventArray)[3];
-            if (durationVar.isString())
+            if (!durationVar.isVoid() && !durationVar.toString().isEmpty())
             {
-                // Handle string durations like ".5", "1.5"
-                String durationStr = durationVar.toString();
-                duration = durationStr.getFloatValue();
-            }
-            else
-            {
-                // Handle numeric durations
-                duration = static_cast<float>(static_cast<double>(durationVar));
+                if (durationVar.isString())
+                {
+                    // Handle string durations like ".5", "1.5"
+                    String durationStr = durationVar.toString();
+                    if (durationStr.trim().isNotEmpty())
+                    {
+                        duration = durationStr.getFloatValue();
+                        explicitDurationProvided = true;
+                    }
+                }
+                else
+                {
+                    // Handle numeric durations
+                    double numericDuration = static_cast<double>(durationVar);
+                    if (numericDuration > 0.0)
+                    {
+                        duration = static_cast<float>(numericDuration);
+                        explicitDurationProvided = true;
+                    }
+                }
             }
         }
         
+        // Debug: Show all array elements
+        DBG("Event array contents:");
+        for (int i = 0; i < eventArray->size(); ++i)
+        {
+            DBG("  [" << i << "] = " << (*eventArray)[i].toString());
+        }
+        
         // Automatic duration assignment if no duration was specified
-        bool durationWasSpecified = (eventArray->size() >= 4);
-        if (!durationWasSpecified)
+        DBG("Event array size: " << eventArray->size() << ", explicit duration provided: " << (explicitDurationProvided ? "yes" : "no") << ", current duration: " << duration);
+        if (!explicitDurationProvided)
         {
             // Default to 1 beat (quarter note) for all notes missing duration
             duration = 1.0f;

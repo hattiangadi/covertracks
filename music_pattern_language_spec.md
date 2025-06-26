@@ -38,10 +38,10 @@
 
 ### Percussion Primitives
 ```json
-[1.0, "kick", 0.9]        // Duration auto-set to 0.1-0.3
+[1.0, "kick", 0.9]        // Duration auto-set to 1.0 beat
 [2.0, "snare", 0.8]
 [3.0, "kick+closed_hat"]  // Combined primitives at same position
-[4.0, "crash:v127"]       // Inline velocity notation
+[4.0, "crash", 1.0]       // Use explicit velocity parameter
 ```
 
 ### Chord References  
@@ -171,11 +171,9 @@
 ### Dynamic Velocity & Duration
 
 **Automatic Duration Assignment**:
-- Percussion: 0.1-0.3 seconds (with random variation)
-- Bass range (< MIDI 48): 0.6 seconds
-- Mid range (48-72): 0.8 seconds  
-- High range (> 72): 0.5 seconds
-- Non-percussion gets ±20% random variation
+- All notes without explicit duration: 1.0 beat (quarter note)
+- This provides predictable, musical duration for all note types
+- Users can override with explicit duration parameter when needed
 
 **Velocity Patterns**:
 ```json
