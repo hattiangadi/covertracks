@@ -347,8 +347,66 @@ std::shared_ptr<covertracks::Section> covertracks::PatternParser::parseSectionFr
                 
                 Array<var> layerEvents;
                 
+                // Check if layer uses basePattern + variations
+                if (layerJson.hasProperty("basePattern"))
+                {
+                    String basePatternName = layerJson["basePattern"].toString();
+                    var layerVariationsJson = layerJson.getProperty("variations", var());
+                    
+                    auto basePatternIt = patterns.find(basePatternName);
+                    if (basePatternIt != patterns.end())
+                    {
+                        Array<var> basePattern = basePatternIt->second;
+                        
+                        // Apply basePattern + variations to generate events for each bar
+                        for (int barIndex = 0; barIndex < numBars; ++barIndex)
+                        {
+                            Array<var> barEvents = basePattern;  // Start with base pattern
+                            
+                            // Check for variation for this bar
+                            String barKey = "bar" + String(barIndex + 1);  // bar1, bar2, etc.
+                            if (layerVariationsJson.isObject() && layerVariationsJson.hasProperty(barKey))
+                            {
+                                var variationVar = layerVariationsJson.getProperty(barKey, var());
+                                if (variationVar.isString())
+                                {
+                                    // Variation is a pattern name reference
+                                    String variationPatternName = variationVar.toString();
+                                    auto variationIt = patterns.find(variationPatternName);
+                                    if (variationIt != patterns.end())
+                                    {
+                                        barEvents = variationIt->second;  // Use variation pattern
+                                        DBG("Layer " + layerName + " bar " + String(barIndex + 1) + " using variation pattern: " + variationPatternName);
+                                    }
+                                }
+                            }
+                            
+                            // Offset events for this bar
+                            double beatOffset = barIndex * 4.0; // Each bar is 4 beats
+                            for (const auto& patternEvent : barEvents)
+                            {
+                                if (patternEvent.isArray() && patternEvent.size() >= 2)
+                                {
+                                    Array<var> offsetEventArray;
+                                    double originalBeat = static_cast<double>(patternEvent[0]);
+                                    double offsetBeat = originalBeat + beatOffset;
+                                    offsetEventArray.add(var(offsetBeat));
+                                    
+                                    // Copy other event properties
+                                    for (int i = 1; i < patternEvent.size(); ++i)
+                                    {
+                                        offsetEventArray.add(patternEvent[i]);
+                                    }
+                                    
+                                    layerEvents.add(var(offsetEventArray));
+                                }
+                            }
+                        }
+                        DBG("Layer " + layerName + " generated " + String(layerEvents.size()) + " events from basePattern + variations");
+                    }
+                }
                 // Check if layer uses a pattern reference
-                if (layerJson.hasProperty("pattern"))
+                else if (layerJson.hasProperty("pattern"))
                 {
                     String patternName = layerJson["pattern"].toString();
                     auto patternIt = patterns.find(patternName);
