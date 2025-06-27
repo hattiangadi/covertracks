@@ -1512,17 +1512,24 @@ void PlayerModeComponent::playLoadedChart()
     // Try to play the loaded chart
     bool playbackStarted = selectedPlayer->play();
     
-    // If playback failed and player was initialized, try re-initializing once (editor conflict fix)
+    // If playback failed and player was initialized, try reconnecting (preserves all state)
     if (!playbackStarted && selectedPlayer->isInitialized())
     {
-        std::cout << "Playback failed - attempting re-initialization to resolve potential editor conflicts..." << std::endl;
-        selectedPlayer->shutdown();
-        if (selectedPlayer->initialize())
+        std::cout << "Playback failed - attempting reconnection to resolve potential audio conflicts..." << std::endl;
+        
+        // Get the instrument and try reconnecting (preserves plugin state)
+        auto* instrument = selectedPlayer->getInstrument();
+        if (instrument && instrument->isRegisteredWithAudioEngine())
         {
-            playbackStarted = selectedPlayer->play();
-            if (playbackStarted)
+            // Gentle reconnect - preserves all plugin state and settings
+            instrument->disconnectFromAudioEngine();
+            if (instrument->reconnectToAudioEngine())
             {
-                std::cout << "Re-initialization resolved the issue!" << std::endl;
+                playbackStarted = selectedPlayer->play();
+                if (playbackStarted)
+                {
+                    std::cout << "Reconnection resolved the issue - all state preserved!" << std::endl;
+                }
             }
         }
     }

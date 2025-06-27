@@ -1,0 +1,27 @@
+{
+  "title": "Mode Switching Test",
+  "tempo": 100,
+  "chords": {
+    "C": ["C3", "E3", "G3"],
+    "F": ["F3", "A3", "C4"]
+  },
+  "sections": {
+    "test": {
+      "bars": 2,
+      "chordContext": ["C", "F"],
+      "layers": {
+        "melody": [
+          [1.0, "C4", 0.8, 1.0],
+          [3.0, "E4", 0.7, 1.0],
+          [5.0, "F4", 0.8, 1.0],
+          [7.0, "A4", 0.7, 1.0]
+        ],
+        "bass": [
+          [1.0, {"tone": 1, "octave": 2}, 0.8, 2.0],
+          [5.0, {"tone": 1, "octave": 2}, 0.8, 2.0]
+        ]
+      }
+    }
+  },
+  "arrangement": ["test"]
+}

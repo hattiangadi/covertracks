@@ -51,9 +51,22 @@ public:
     
     /**
      * @brief Unregister from TracktionAudioEngine
-     * Cleans up Track and audio resources
+     * Disconnects but preserves Track and all state
      */
     void unregisterFromAudioEngine();
+    
+    /**
+     * @brief Reconnect existing track to audio engine
+     * Re-enables track that was previously disconnected
+     * @return true if reconnection successful
+     */
+    bool reconnectToAudioEngine();
+    
+    /**
+     * @brief Disconnect from audio engine while preserving state
+     * Mutes and disables track but keeps all plugins and settings
+     */
+    void disconnectFromAudioEngine();
     
     /**
      * @brief Check if registered with audio engine

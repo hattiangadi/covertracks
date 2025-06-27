@@ -34,8 +34,9 @@ bool Instrument::registerWithAudioEngine()
 {
     if (myTrack != nullptr)
     {
-        DBG("Instrument " << instrumentName << " already registered");
-        return true; // Already registered
+        // Track already exists, just reconnect it
+        DBG("Instrument " << instrumentName << " already has track - reconnecting");
+        return reconnectToAudioEngine();
     }
     
     auto& audioEngine = getAudioEngine();
@@ -84,19 +85,54 @@ void Instrument::unregisterFromAudioEngine()
     if (myTrack == nullptr)
         return;
     
-    // Stop any playback first
-    stopPlayback();
+    // Disconnect but preserve track and all its state
+    disconnectFromAudioEngine();
+    DBG("Instrument " << instrumentName << " unregistered from audio engine");
+}
+
+bool Instrument::reconnectToAudioEngine()
+{
+    if (myTrack == nullptr)
+    {
+        DBG("Instrument " << instrumentName << " has no track to reconnect");
+        return false;
+    }
     
-    // Remove track from Edit
+    // Re-enable the track for audio processing
+    myTrack->setMute(false);
+    myTrack->setProcessing(true);
+    
+    // Ensure Edit transport is running for audio processing
     auto& audioEngine = getAudioEngine();
     auto* currentEdit = audioEngine.getCurrentEdit();
     if (currentEdit)
     {
-        currentEdit->deleteTrack(myTrack);
+        auto& transport = currentEdit->getTransport();
+        if (!transport.isPlaying())
+        {
+            DBG("Starting transport for reconnected instrument");
+            transport.play(false);
+        }
     }
     
-    myTrack = nullptr;
-    DBG("Instrument " << instrumentName << " unregistered from audio engine");
+    DBG("Instrument " << instrumentName << " reconnected - track preserved with all state");
+    return true;
+}
+
+void Instrument::disconnectFromAudioEngine()
+{
+    if (myTrack == nullptr)
+        return;
+    
+    // Stop any playback first
+    stopPlayback();
+    
+    // Disable track but preserve all state (plugins, settings, etc.)
+    myTrack->setMute(true);
+    myTrack->setProcessing(false);
+    
+    // Note: myTrack pointer remains valid, track stays in Edit with all state preserved
+    DBG("Instrument " << instrumentName << " disconnected - track disabled but state preserved");
 }
 
 // =========================================================================
