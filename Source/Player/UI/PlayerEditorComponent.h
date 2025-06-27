@@ -2,19 +2,19 @@
 
 #include <JuceHeader.h>
 #include "../Core/PlayerManager.h"
-#include "../../UI/GraphEditorPanel.h"
+// Note: GraphEditorPanel removed - using Tracktion track editing instead
 #include "../../Plugins/InternalPlugins.h"
 #include "../Core/Player.h"
 #include "PluginChainEditor.h"
 
 namespace covertracks {
 
-    class PlayerEditorComponent : public Component,
-    public Button::Listener,
-    public ComboBox::Listener,
-    public Timer,
-    public MidiKeyboardStateListener,
-    public MidiInputCallback
+    class PlayerEditorComponent : public juce::Component,
+    public juce::Button::Listener,
+    public juce::ComboBox::Listener,
+    public juce::Timer,
+    public juce::MidiKeyboardStateListener,
+    public juce::MidiInputCallback
 {
 public:
 // Modified constructor with engine reference
@@ -28,19 +28,17 @@ void saveAndReleaseResources();
 
 // Existing methods
 void resized() override;
-void paint(Graphics& g) override;
-void mouseDown(const MouseEvent& e) override;
-void buttonClicked(Button* button) override;
-void comboBoxChanged(ComboBox* comboBox) override;
+void paint(juce::Graphics& g) override;
+void mouseDown(const juce::MouseEvent& e) override;
+void buttonClicked(juce::Button* button) override;
+void comboBoxChanged(juce::ComboBox* comboBox) override;
 
 // Plugin creation and management
-void createPlugin(const PluginDescriptionAndPreference& desc, Point<int> pos);
-void addPluginsToMenu(PopupMenu& menu);
+void createPlugin(const juce::PluginDescription& desc, juce::Point<int> pos);
+void addPluginsToMenu(juce::PopupMenu& menu);
 
 // Player management
 Player* getPlayer() const { return player; }
-GraphDocumentComponent* getGraphEditor() const { return graphEditor.get(); }
-std::optional<PluginDescriptionAndPreference> getChosenType(int menuID) const;
 void takeOwnershipOfPlayer(std::unique_ptr<Player> newPlayer);
 bool hasOwnedPlayer() const { return ownedPlayer != nullptr; }
 std::unique_ptr<Player> releaseOwnedPlayer();
@@ -91,8 +89,7 @@ Label soundMappingLabel;
 TextEditor soundMappingEditor;
 TextButton addPresetButton;
 
-// Graph editor (old system)
-std::unique_ptr<GraphDocumentComponent> graphEditor;
+// Graph editor removed - using Tracktion track editing instead
 
 // New Player system
 std::unique_ptr<Player> playerInstance;

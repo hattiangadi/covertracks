@@ -364,33 +364,6 @@ public:
      */
     void prepareForEditing();
     
-    /**
-     * @brief Get plugin graph state (legacy compatibility)
-     * @return Plugin graph state as XML
-     */
-    std::unique_ptr<juce::XmlElement> getPluginGraphState() const;
-    
-    /**
-     * @brief Check if connected to audio engine (legacy compatibility)
-     * @return true if connected
-     */
-    bool isConnectedToAudioEngine() const;
-    
-    /**
-     * @brief Disconnect from audio engine (legacy compatibility)
-     */
-    void disconnectFromAudioEngine();
-    
-    /**
-     * @brief Release audio resources (legacy compatibility)
-     */
-    void releaseResources();
-    
-    /**
-     * @brief Load plugin graph from XML (legacy compatibility)
-     * @param graphXml XML containing plugin graph
-     */
-    void loadPluginGraph(const juce::XmlElement& graphXml);
     
     /**
      * @brief Set player state for persistence (legacy compatibility)

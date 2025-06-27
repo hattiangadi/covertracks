@@ -34,8 +34,6 @@
 
 #pragma once
 
-#include "PluginGraph.h"
-
 namespace covertracks {
 
 //==============================================================================

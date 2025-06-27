@@ -136,7 +136,7 @@ public:
 
     // Plugin-related functionality is now handled at the player level
     void addPluginsToMenu (PopupMenu&);
-    std::optional<PluginDescriptionAndPreference> getChosenType (int menuID) const;
+    std::optional<juce::PluginDescription> getChosenType (int menuID) const;
     
     // Accessor methods for shared resources - these now access through PlayerManager
     AudioPluginFormatManager& getFormatManager() const;
@@ -179,7 +179,7 @@ private:
 
     //==============================================================================
     KnownPluginList::SortMethod pluginSortMethod;
-    Array<PluginDescriptionAndPreference> pluginDescriptionsAndPreference;
+    Array<juce::PluginDescription> pluginDescriptions;
     
     class PluginListWindow;
     std::unique_ptr<PluginListWindow> pluginListWindow;

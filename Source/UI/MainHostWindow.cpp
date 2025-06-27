@@ -757,7 +757,7 @@ void MainHostWindow::menuItemSelected (int menuItemID, int /*topLevelMenuIndex*/
             }
             // If no editor is open, show the info message
             String message = "Please use the Player Editor to add plugins.\n\n"
-                            "Plugin: " + chosen->pluginDescription.name + " (" + chosen->pluginDescription.pluginFormatName + ")"; 
+                            "Plugin: " + chosen->name + " (" + chosen->pluginFormatName + ")"; 
             AlertWindow::showMessageBoxAsync(AlertWindow::InfoIcon, "Plugin Selection", message);
         }
     }
@@ -787,7 +787,7 @@ static constexpr int menuIDBase = 0x324503f4;
 static void addToMenu (const KnownPluginList::PluginTree& tree,
                        PopupMenu& m,
                        const Array<PluginDescription>& allPlugins,
-                       Array<PluginDescriptionAndPreference>& addedPlugins)
+                       Array<juce::PluginDescription>& addedPlugins)
 {
     for (auto* sub : tree.subFolders)
     {
@@ -797,9 +797,9 @@ static void addToMenu (const KnownPluginList::PluginTree& tree,
         m.addSubMenu (sub->folder, subMenu, true, nullptr, false, 0);
     }
 
-    auto addPlugin = [&] (const auto& descriptionAndPreference, const auto& pluginName)
+    auto addPlugin = [&] (const juce::PluginDescription& description, const auto& pluginName)
     {
-        addedPlugins.add (descriptionAndPreference);
+        addedPlugins.add (description);
         const auto menuID = addedPlugins.size() - 1 + menuIDBase;
         m.addItem (menuID, pluginName, true, false);
     };
@@ -811,13 +811,13 @@ static void addToMenu (const KnownPluginList::PluginTree& tree,
         if (containsDuplicateNames (tree.plugins, name))
             name << " (" << plugin.pluginFormatName << ')';
 
-        addPlugin (PluginDescriptionAndPreference { plugin, PluginDescriptionAndPreference::UseARA::no }, name);
+        addPlugin (plugin, name);
 
        #if JUCE_PLUGINHOST_ARA && (JUCE_MAC || JUCE_WINDOWS || JUCE_LINUX)
         if (plugin.hasARAExtension)
         {
             name << " (ARA)";
-            addPlugin (PluginDescriptionAndPreference { plugin }, name);
+            addPlugin (plugin, name);
         }
        #endif
     }
@@ -862,22 +862,27 @@ void covertracks::MainHostWindow::addPluginsToMenu (PopupMenu& m)
     });
 
     auto tree = KnownPluginList::createTree (pluginDescriptions, pluginSortMethod);
-    pluginDescriptionsAndPreference = {};
-    addToMenu (*tree, m, pluginDescriptions, pluginDescriptionsAndPreference);
+    
+    // Create a temporary array to store the menu plugins
+    Array<juce::PluginDescription> menuPlugins;
+    addToMenu (*tree, m, pluginDescriptions, menuPlugins);
+    
+    // Store the menu plugins for getChosenType method
+    pluginDescriptions = menuPlugins;
 }
 
-std::optional<covertracks::PluginDescriptionAndPreference> covertracks::MainHostWindow::getChosenType (const int menuID) const
+std::optional<juce::PluginDescription> covertracks::MainHostWindow::getChosenType (const int menuID) const
 {
     const auto internalIndex = menuID - 1;
 
     // Access internal types through the PlayerManager
     if (playerManager && isPositiveAndBelow(internalIndex, playerManager->getInternalPluginTypes().size()))
-        return PluginDescriptionAndPreference { playerManager->getInternalPluginTypes()[(size_t) internalIndex] };
+        return playerManager->getInternalPluginTypes()[(size_t) internalIndex];
 
     const auto externalIndex = menuID - menuIDBase;
 
-    if (isPositiveAndBelow (externalIndex, pluginDescriptionsAndPreference.size()))
-        return pluginDescriptionsAndPreference[externalIndex];
+    if (isPositiveAndBelow (externalIndex, pluginDescriptions.size()))
+        return pluginDescriptions[externalIndex];
 
     return {};
 }

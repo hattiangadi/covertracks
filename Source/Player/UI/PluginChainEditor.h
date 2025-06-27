@@ -3,7 +3,6 @@
 #include <JuceHeader.h>
 #include "../Core/Instrument.h"
 #include "../Core/Player.h"
-#include "../../Plugins/PluginGraph.h"  // For PluginDescriptionAndPreference
 #include <optional>
 #include <map>
 
@@ -64,7 +63,9 @@ private:
     
 
     
+public:
     void refreshPluginList();
+private:
     void showPluginMenu();
     void removeSelectedPlugin();
     void moveSelectedPlugin(bool moveUp);
@@ -74,7 +75,7 @@ private:
     
     // Plugin menu helpers (following existing app pattern)
     void addPluginsToMenu(juce::PopupMenu& menu);
-    std::optional<PluginDescriptionAndPreference> getChosenType(int menuID) const;
+    std::optional<juce::PluginDescription> getChosenType(int menuID) const;
     void startPluginScan();
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PluginChainEditor)

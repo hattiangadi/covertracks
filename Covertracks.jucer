@@ -194,21 +194,11 @@
               file="Source/Plugins/InternalPlugins.cpp"/>
         <FILE id="MV6AI1" name="InternalPlugins.h" compile="0" resource="0"
               file="Source/Plugins/InternalPlugins.h"/>
-        <FILE id="wwL4tB" name="IOConfigurationWindow.cpp" compile="1" resource="0"
-              file="Source/Plugins/IOConfigurationWindow.cpp"/>
-        <FILE id="wxvaJK" name="IOConfigurationWindow.h" compile="0" resource="0"
-              file="Source/Plugins/IOConfigurationWindow.h"/>
-        <FILE id="kmUcW8" name="PluginGraph.cpp" compile="1" resource="0" file="Source/Plugins/PluginGraph.cpp"/>
-        <FILE id="cbvjhb" name="PluginGraph.h" compile="0" resource="0" file="Source/Plugins/PluginGraph.h"/>
       </GROUP>
       <GROUP id="{D892BFB2-FE85-B70F-10D3-450F407E2B3D}" name="UI">
         <GROUP id="{91CDEAAE-102B-E754-E304-9469691FE86C}" name="Styling">
           <FILE id="ABq6rb" name="AppFonts.h" compile="0" resource="0" file="Source/UI/Styling/AppFonts.h"/>
         </GROUP>
-        <FILE id="wPgLS9" name="GraphEditorPanel.cpp" compile="1" resource="0"
-              file="Source/UI/GraphEditorPanel.cpp"/>
-        <FILE id="BDMvfT" name="GraphEditorPanel.h" compile="0" resource="0"
-              file="Source/UI/GraphEditorPanel.h"/>
         <FILE id="AVGs2y" name="MainHostWindow.cpp" compile="1" resource="0"
               file="Source/UI/MainHostWindow.cpp"/>
         <FILE id="Ia6Vec" name="MainHostWindow.h" compile="0" resource="0"

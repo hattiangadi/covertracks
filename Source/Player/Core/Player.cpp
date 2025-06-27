@@ -893,46 +893,6 @@ void Player::prepareForEditing()
     }
 }
 
-std::unique_ptr<juce::XmlElement> Player::getPluginGraphState() const
-{
-    // Delegate to instrument to get plugin state
-    if (instrument)
-    {
-        return instrument->getPluginState();
-    }
-    return std::make_unique<juce::XmlElement>("PluginGraph");
-}
-
-bool Player::isConnectedToAudioEngine() const
-{
-    return initialized;
-}
-
-void Player::disconnectFromAudioEngine()
-{
-    // Delegate to instrument
-    if (instrument)
-    {
-        instrument->unregisterFromAudioEngine();
-    }
-}
-
-void Player::releaseResources()
-{
-    if (instrument)
-    {
-        instrument->unregisterFromAudioEngine();
-    }
-}
-
-void Player::loadPluginGraph(const juce::XmlElement& graphXml)
-{
-    // Delegate to instrument
-    if (instrument)
-    {
-        instrument->restorePluginState(graphXml);
-    }
-}
 
 void Player::setPlayerState(const juce::var& state)
 {

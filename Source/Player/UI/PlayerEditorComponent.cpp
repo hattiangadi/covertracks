@@ -114,7 +114,9 @@ void PlayerEditorComponent::loadPlayerForEditing()
         // Prepare the player for editing
         player->prepareForEditing();
         
-        // If we have graph editor and the player has a graph state, load it
+        // TODO: Replace with Tracktion track editing interface
+        // Old GraphEditorPanel code removed - using Tracktion tracks now
+        /*
         if (graphEditor != nullptr && graphEditor->graph != nullptr)
         {
             auto graphState = player->getPluginGraphState();
@@ -186,6 +188,7 @@ void PlayerEditorComponent::loadPlayerForEditing()
                 }
             }
         }
+        */
         
         // Update the UI from player metadata
         updateUIFromPlayer();
@@ -199,51 +202,17 @@ void PlayerEditorComponent::saveAndReleaseResources()
         // Update player from UI
         updatePlayerFromUI();
         
-        // Save the graph state if we have a graph editor
-        if (graphEditor != nullptr && graphEditor->graph != nullptr)
+        // Save plugin chain state (Tracktion-based approach)
+        if (player && player->getInstrument())
         {
-            // Disconnect the graph from the AudioEngine
-            if (audioEngine != nullptr)
-            {
-                std::cout << "Disconnecting graph from AudioEngine after editing" << std::endl;
-                // Note: unregisterProcessor not needed in new AudioEngine
-            }
-            
-            // Save the current graph state to the player
-            auto graphState = graphEditor->graph->createXml();
-            if (graphState != nullptr)
-            {
-                std::cout << "Saving graph state with " << graphEditor->graph->graph.getConnections().size() << " connections" << std::endl;
-                
-                // Count nodes and connections for logging
-                int midiConnections = 0;
-                int audioConnections = 0;
-                    
-                for (auto* e : graphState->getChildWithTagNameIterator("CONNECTION"))
-                {
-                    auto srcChannel = e->getIntAttribute("srcChannel");
-                    bool isMidi = (srcChannel == 4096);
-                    
-                    if (isMidi)
-                        midiConnections++;
-                    else
-                        audioConnections++;
-                }
-                
-                std::cout << "Graph state contains " << (midiConnections + audioConnections) 
-                          << " connections (MIDI: " << midiConnections 
-                          << ", Audio: " << audioConnections << ")" << std::endl;
-                
-                // TODO: Update to use Player plugin state saving
-                // Save directly to the player's graph file
-                // player->savePluginGraphToFile(*graphState);
-            }
+            std::cout << "Saving plugin chain state for player: " << player->getName() << std::endl;
+            // Plugin state is automatically saved in Tracktion track
         }
         
-        // Disconnect from AudioEngine if connected
-        if (player->isConnectedToAudioEngine() && audioEngine != nullptr)
+        // Stop player if playing (Tracktion-based approach)
+        if (player->isPlaying())
         {
-            player->disconnectFromAudioEngine();
+            player->stop();
         }
         
         // Remove the player from our tracking map
@@ -252,8 +221,7 @@ void PlayerEditorComponent::saveAndReleaseResources()
             playerLoadedMap.erase(player);
         }
         
-        // Release resources
-        player->releaseResources();
+        // Resources are automatically managed by Tracktion
         
         std::cout << "Player resources released after editing" << std::endl;
     }
@@ -311,7 +279,9 @@ void PlayerEditorComponent::updatePlayerFromUI()
             }
         }
         
-        // Update graph state (LEGACY SYSTEM - for backwards compatibility)
+        // TODO: Replace with Tracktion track plugin updates
+        // Old GraphEditorPanel update code removed
+        /*
         if (graphEditor != nullptr && graphEditor->graph != nullptr)
         {
             auto graphXml = graphEditor->graph->createXml();
@@ -320,6 +290,7 @@ void PlayerEditorComponent::updatePlayerFromUI()
                 player->loadPluginGraph(*graphXml);
             }
         }
+        */
     }
 }
 
@@ -373,7 +344,9 @@ void PlayerEditorComponent::timerCallback()
     // If this is a subsequent call (scheduled after loading), force a UI update
     else
     {
-        // Force another UI update after a short delay
+        // TODO: Replace with Tracktion track UI updates
+        // Old timer-based GraphEditorPanel update code removed
+        /*
         if (graphEditor != nullptr && graphEditor->graphPanel != nullptr && player != nullptr)
         {
             // Load the graph state from the player
@@ -395,6 +368,7 @@ void PlayerEditorComponent::timerCallback()
             graphEditor->graphPanel->repaint();
             graphEditor->resized();
         }
+        */
         
         updateCount++;
         
@@ -406,22 +380,14 @@ void PlayerEditorComponent::timerCallback()
 
 void PlayerEditorComponent::connectMidiKeyboardToGraph()
 {
-    // Ensure MIDI input is enabled in the AudioEngine
-    if (audioEngine != nullptr && graphEditor != nullptr)
+    // Connect MIDI keyboard to player using Tracktion approach
+    if (audioEngine != nullptr && player != nullptr)
     {
         // Enable MIDI input
         audioEngine->enableMidiInput(true);
         
-        // The GraphDocumentComponent itself implements MidiInputCallback
-        // We need to use the raw pointer, not the unique_ptr
-        audioEngine->registerMidiInput("", graphEditor.get());
-        
-        // Register the processor with the AudioEngine to ensure MIDI messages are routed properly
-        if (graphEditor->graph != nullptr)
-        {
-            // Note: registerProcessor not needed in new AudioEngine
-            std::cout << "Registered processor for player in connectMidiKeyboardToGraph" << std::endl;
-        }
+        // MIDI routing is handled automatically by Tracktion tracks
+        std::cout << "MIDI keyboard connected to player via Tracktion track" << std::endl;
         
         std::cout << "Connected MIDI keyboard to graph for player" << std::endl;
     }
@@ -453,22 +419,25 @@ void PlayerEditorComponent::handleNoteOff(MidiKeyboardState* /*source*/, int mid
     }
 }
 
-void PlayerEditorComponent::createPlugin(const PluginDescriptionAndPreference& desc, Point<int> pos)
+void PlayerEditorComponent::createPlugin(const juce::PluginDescription& desc, juce::Point<int> pos)
 {
-    // Create a plugin in the graph editor
-    if (graphEditor != nullptr && graphEditor->graph != nullptr)
+    // Use the new plugin chain editor instead of old graph editor
+    if (pluginChainEditor != nullptr && player)
     {
         // Log plugin description details for debugging
-        DBG("Attempting to create plugin: " + desc.pluginDescription.name);
-        DBG("  Format: " + desc.pluginDescription.pluginFormatName);
+        DBG("Attempting to create plugin: " + desc.name);
+        DBG("  Format: " + desc.pluginFormatName);
         
-        // Add the plugin to the graph
-        graphEditor->graph->addPlugin(desc, {pos.x / (double)graphEditor->getWidth(), 
-                                          pos.y / (double)graphEditor->getHeight()});
+        // Add the plugin to the instrument's plugin chain
+        if (auto* instrument = player->getInstrument())
+        {
+            instrument->addPlugin(desc);
+            pluginChainEditor->refreshPluginList();
+        }
     }
     else
     {
-        DBG("Cannot create plugin: graphEditor or graph is null");
+        DBG("Cannot create plugin: no plugin chain editor available");
     }
 }
 
@@ -625,11 +594,10 @@ void PlayerEditorComponent::resized()
         
         std::cout << "Layout: PluginChainEditor=" << area.toString() << ", MidiKeyboard=" << keyboardArea.toString() << std::endl;
     }
-    else if (graphEditor != nullptr)
+    else
     {
-        // Fallback to old graph editor if new system not available
-        graphEditor->setBounds(area);
-        DBG("[PlayerEditorComponent::resized] graphEditor bounds: " << graphEditor->getBounds().toString());
+        // No plugin chain editor available - just clear the area
+        DBG("[PlayerEditorComponent::resized] No plugin chain editor available");
     }
 }
 
@@ -666,35 +634,7 @@ void covertracks::PlayerEditorComponent::addPluginsToMenu(PopupMenu& menu)
     }
 }
 
-std::optional<covertracks::PluginDescriptionAndPreference> covertracks::PlayerEditorComponent::getChosenType(int menuID) const
-{
-    // Use AudioEngine to access the plugin descriptions
-    if (audioEngine != nullptr)
-    {
-        // Get available plugin descriptions from the AudioEngine
-        auto& pluginList = audioEngine->getKnownPluginList();
-        
-        // Debug the menu ID and available plugins
-        DBG("PlayerEditorComponent::getChosenType - Menu ID: " + String(menuID));
-        DBG("Available plugins: " + String(pluginList.getNumTypes()));
-        
-        // Use JUCE's method to find the plugin description by menu ID
-        // This is the proper way to handle the menu IDs generated by KnownPluginList::addToMenu
-        int pluginIndex = KnownPluginList::getIndexChosenByMenu(pluginList.getTypes(), menuID);
-        
-        if (pluginIndex >= 0 && pluginIndex < pluginList.getTypes().size())
-        {
-            const auto& desc = pluginList.getTypes()[pluginIndex];
-            DBG("Found plugin: " + desc.name);
-            return PluginDescriptionAndPreference { desc };
-        }
-        
-        // If we get here, no plugin was found
-        DBG("No plugin found for menu ID: " + String(menuID));
-    }
-    
-    return std::nullopt;
-}
+// getChosenType method removed - not needed in Tracktion-based approach
 
 // This method has been removed as it's not declared in the header file
 
@@ -1018,11 +958,7 @@ void PlayerEditorComponent::setupNewPlayerSystem()
 
 void PlayerEditorComponent::switchToPluginChainEditor()
 {
-    // Hide the old graph editor if it exists
-    if (graphEditor)
-    {
-        graphEditor->setVisible(false);
-    }
+    // Old graph editor has been removed
     
     // Show the new plugin chain editor
     if (pluginChainEditor)

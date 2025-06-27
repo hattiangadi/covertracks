@@ -249,22 +249,22 @@ void PluginChainEditor::showPluginMenu()
                               auto chosen = getChosenType(result);
                               if (chosen.has_value())
                               {
-                                  std::cout << "Attempting to add plugin: " << chosen->pluginDescription.name 
-                                           << " (format: " << chosen->pluginDescription.pluginFormatName << ")" << std::endl;
+                                  std::cout << "Attempting to add plugin: " << chosen->name 
+                                           << " (format: " << chosen->pluginFormatName << ")" << std::endl;
                                   
                                   // Add plugin to instrument using the proper description
-                                  std::cout << "PluginChainEditor: About to add plugin: " << chosen->pluginDescription.name 
-                                           << " (format: " << chosen->pluginDescription.pluginFormatName << ")" << std::endl;
-                                  std::cout << "Plugin ID: " << chosen->pluginDescription.fileOrIdentifier << std::endl;
+                                  std::cout << "PluginChainEditor: About to add plugin: " << chosen->name 
+                                           << " (format: " << chosen->pluginFormatName << ")" << std::endl;
+                                  std::cout << "Plugin ID: " << chosen->fileOrIdentifier << std::endl;
                                   
-                                  if (currentInstrument->addPlugin(chosen->pluginDescription))
+                                  if (currentInstrument->addPlugin(*chosen))
                                   {
-                                      std::cout << "PluginChainEditor: Successfully added plugin: " << chosen->pluginDescription.name << std::endl;
+                                      std::cout << "PluginChainEditor: Successfully added plugin: " << chosen->name << std::endl;
                                       refreshPluginList();
                                   }
                                   else
                                   {
-                                      std::cout << "PluginChainEditor: Failed to add plugin: " << chosen->pluginDescription.name << std::endl;
+                                      std::cout << "PluginChainEditor: Failed to add plugin: " << chosen->name << std::endl;
                                   }
                               }
                               else
@@ -439,7 +439,7 @@ void PluginChainEditor::addPluginsToMenu(juce::PopupMenu& menu)
     }
 }
 
-std::optional<PluginDescriptionAndPreference> PluginChainEditor::getChosenType(int menuID) const
+std::optional<juce::PluginDescription> PluginChainEditor::getChosenType(int menuID) const
 {
     // Handle built-in plugins
     if (menuID <= 50)  // Built-in range
@@ -478,14 +478,14 @@ std::optional<PluginDescriptionAndPreference> PluginChainEditor::getChosenType(i
                 return std::nullopt;
         }
         
-        return PluginDescriptionAndPreference{desc};
+        return desc;
     }
     
     // Handle external plugins
     auto it = externalPluginMap.find(menuID);
     if (it != externalPluginMap.end())
     {
-        return PluginDescriptionAndPreference{it->second};
+        return it->second;
     }
     
     return std::nullopt;

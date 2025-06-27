@@ -37,7 +37,6 @@
 #include <juce_audio_plugin_client/juce_audio_plugin_client.h>
 
 #include "InternalPlugins.h"
-#include "PluginGraph.h"
 
 #define PIP_DEMO_UTILITIES_INCLUDED 1
 
