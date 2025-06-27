@@ -37,15 +37,13 @@
 #include <JuceHeader.h>
 #include "../Plugins/InternalPlugins.h"
 #include "../Player/UI/PlayerLibraryComponent.h"
-#include "../Player/UI/PlayerModeComponent.h"
 #include "../Audio/AudioEngineInterface.h"
 #include "../Musician/UI/Performance/PerformanceLibraryComponent.h"
 #include "../Musician/Core/PerformanceManager.h"
-#include "../Musician/UI/PatternEditorComponent.h"
 #include "../LLM/Core/LLMManager.h"
 #include "../Musician/UI/EnsembleMainPanel.h"
+#include "../Musician/UI/PatternEditorComponent.h"
 #include "../Musician/UI/Song/SongManagerComponent.h"
-#include "TestsComponent.h"
 
 namespace covertracks {
 //==============================================================================
@@ -150,12 +148,9 @@ public:
     
     // Main components
     std::unique_ptr<PlayerLibraryComponent> playerLibraryWindow;
-    std::unique_ptr<PlayerModeComponent> playerModeWindow;
     std::unique_ptr<PerformanceLibraryComponent> performanceWindow;
     std::unique_ptr<SongManagerComponent> songManagerWindow;
-    std::unique_ptr<PatternEditorComponent> patternEditorWindow;
     std::unique_ptr<EnsembleMainPanel> ensembleMainWindow;
-    std::unique_ptr<TestsComponent> testsWindow;
     std::shared_ptr<Musician> musician; // Needed for LLM and Pattern components
     
     // LLM client

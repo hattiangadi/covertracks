@@ -22,7 +22,7 @@ public:
             if (!testFile.existsAsFile()) {
                 testFile = File::getCurrentWorkingDirectory().getParentDirectory().getParentDirectory().getChildFile("Tests/MusicPatternSystem_Tests.json");
                 if (!testFile.existsAsFile()) {
-                    expectWithoutCheck(false, "Test file not found in any expected location");
+                    expect(false, "Test file not found in any expected location");
                     return;
                 }
             }
@@ -31,7 +31,7 @@ public:
         String testData = testFile.loadFileAsString();
         var testJson = JSON::parse(testData);
         if (testJson.isVoid()) {
-            expectWithoutCheck(false, "Failed to parse test JSON");
+            expect(false, "Failed to parse test JSON");
             return;
         }
         
@@ -40,7 +40,7 @@ public:
         
         var tests = testJson["tests"];
         if (!tests.isObject()) {
-            expectWithoutCheck(false, "No tests object found in JSON");
+            expect(false, "No tests object found in JSON");
             return;
         }
         

@@ -350,9 +350,6 @@ MainHostWindow::MainHostWindow()
     playerLibraryWindow = std::make_unique<PlayerLibraryComponent>(playerManager);
     DBG("MainHostWindow:  PlayerLibraryComponent created");
     
-    DBG("MainHostWindow:  Creating PlayerModeComponent");
-    playerModeWindow = std::make_unique<PlayerModeComponent>(*playerManager);
-    DBG("MainHostWindow:  PlayerModeComponent created");
     
     // Create Musician instance for LLM and Pattern components
     DBG("MainHostWindow:  Creating Musician");
@@ -454,30 +451,19 @@ MainHostWindow::MainHostWindow()
     
     DBG("MainHostWindow:  PerformanceLibraryComponent created");
     
-    // Create Pattern Editor component
-    DBG("MainHostWindow:  Creating PatternEditorComponent");
-    patternEditorWindow = std::make_unique<PatternEditorComponent>(musician.get(), playerManager.get());
-    DBG("MainHostWindow:  PatternEditorComponent created");
     
     // Create Ensemble Main Panel component
     DBG("MainHostWindow:  Creating EnsembleMainPanel");
     ensembleMainWindow = std::make_unique<EnsembleMainPanel>(playerManager.get());
     DBG("MainHostWindow:  EnsembleMainPanel created");
     
-    // Create Tests component
-    DBG("MainHostWindow:  Creating TestsComponent");
-    testsWindow = std::make_unique<TestsComponent>();
-    DBG("MainHostWindow:  TestsComponent created");
     
     // Create a tabbed component to hold all views
     auto* tabbedComponent = new TabbedComponent(TabbedButtonBar::TabsAtTop);
-    tabbedComponent->addTab("Player Library", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), playerLibraryWindow.get(), false);
-    tabbedComponent->addTab("Player Mode", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), playerModeWindow.get(), false);
+    tabbedComponent->addTab("Players", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), playerLibraryWindow.get(), false);
+    tabbedComponent->addTab("Ensembles", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), ensembleMainWindow.get(), false);
     tabbedComponent->addTab("Songs", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), songManagerWindow.get(), false);
     tabbedComponent->addTab("Performances", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), performanceWindow.get(), false);
-    tabbedComponent->addTab("Pattern Editor", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), patternEditorWindow.get(), false);
-    tabbedComponent->addTab("Ensembles", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), ensembleMainWindow.get(), false);
-    tabbedComponent->addTab("Tests", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), testsWindow.get(), false);
     
     // Set it as the main content
     DBG("MainHostWindow:  Setting content");
