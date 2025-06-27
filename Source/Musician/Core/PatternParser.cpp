@@ -263,6 +263,76 @@ std::shared_ptr<covertracks::Section> covertracks::PatternParser::parseSectionFr
     if (sectionJson.hasProperty("bars"))
         numBars = sectionJson["bars"];
     
+    // Extract chord context if present
+    Array<var> chordContext;
+    if (sectionJson.hasProperty("chordContext"))
+    {
+        var chordContextJson = sectionJson["chordContext"];
+        
+        if (chordContextJson.isArray())
+        {
+            // Simple array format: ["C", "F", "G", "C"] - one chord per bar
+            Array<var>* contextArray = chordContextJson.getArray();
+            for (int barIndex = 0; barIndex < contextArray->size() && barIndex < numBars; ++barIndex)
+            {
+                String chordName = (*contextArray)[barIndex].toString();
+                double beatPosition = (barIndex * 4) + 1.0; // Bar 0: beat 1.0, Bar 1: beat 5.0, etc.
+                
+                Array<var> chordEntry;
+                chordEntry.add(var(beatPosition));
+                chordEntry.add(var(chordName));
+                chordContext.add(var(chordEntry));
+            }
+            DBG("Parsed simple chord context array with " + String(contextArray->size()) + " chords");
+        }
+        else if (chordContextJson.isObject())
+        {
+            // Per-bar object format: {"bar1": "C", "bar2": [["1.0", "F"], ["3.0", "Fm"]]}
+            auto* contextObj = chordContextJson.getDynamicObject();
+            for (auto& barProp : contextObj->getProperties())
+            {
+                String barKey = barProp.name.toString();
+                var barChordData = barProp.value;
+                
+                // Extract bar number from "bar1", "bar2", etc.
+                int barNumber = barKey.substring(3).getIntValue(); // Skip "bar" prefix
+                if (barNumber < 1 || barNumber > numBars) continue;
+                
+                double barStartBeat = ((barNumber - 1) * 4) + 1.0; // bar1 = beat 1.0, bar2 = beat 5.0
+                
+                if (barChordData.isString())
+                {
+                    // Simple format: "bar1": "C"
+                    String chordName = barChordData.toString();
+                    Array<var> chordEntry;
+                    chordEntry.add(var(barStartBeat));
+                    chordEntry.add(var(chordName));
+                    chordContext.add(var(chordEntry));
+                }
+                else if (barChordData.isArray())
+                {
+                    // Complex format: "bar1": [[1.0, "C"], [3.0, "C7"]]
+                    Array<var>* barArray = barChordData.getArray();
+                    for (const auto& chordEntry : *barArray)
+                    {
+                        if (chordEntry.isArray() && chordEntry.size() >= 2)
+                        {
+                            // Convert relative beat to absolute beat
+                            double relativeBeat = static_cast<double>(chordEntry[0]);
+                            double absoluteBeat = barStartBeat + relativeBeat - 1.0; // Convert 1.0-4.0 to absolute
+                            
+                            Array<var> absoluteChordEntry;
+                            absoluteChordEntry.add(var(absoluteBeat));
+                            absoluteChordEntry.add(chordEntry[1]); // chord name
+                            chordContext.add(var(absoluteChordEntry));
+                        }
+                    }
+                }
+            }
+            DBG("Parsed per-bar chord context object with " + String(chordContext.size()) + " total chord changes");
+        }
+    }
+    
     // Parse layers - merge all layers into a single unified phrase
     if (sectionJson.hasProperty("layers"))
     {
@@ -309,6 +379,17 @@ std::shared_ptr<covertracks::Section> covertracks::PatternParser::parseSectionFr
                                     barEvents = variationIt->second;  // Use variation pattern
                                     DBG("Bar " + String(barIndex + 1) + " using variation pattern: " + variationPatternName);
                                 }
+                            }
+                            else if (variationVar.isArray())
+                            {
+                                // Variation is an inline array of events
+                                barEvents.clear();
+                                Array<var>* variationArray = variationVar.getArray();
+                                for (const auto& event : *variationArray)
+                                {
+                                    barEvents.add(event);
+                                }
+                                DBG("Bar " + String(barIndex + 1) + " using inline variation with " + String(barEvents.size()) + " events");
                             }
                         }
                         
@@ -378,6 +459,17 @@ std::shared_ptr<covertracks::Section> covertracks::PatternParser::parseSectionFr
                                         barEvents = variationIt->second;  // Use variation pattern
                                         DBG("Layer " + layerName + " bar " + String(barIndex + 1) + " using variation pattern: " + variationPatternName);
                                     }
+                                }
+                                else if (variationVar.isArray())
+                                {
+                                    // Variation is an inline array of events
+                                    barEvents.clear();
+                                    Array<var>* variationArray = variationVar.getArray();
+                                    for (const auto& event : *variationArray)
+                                    {
+                                        barEvents.add(event);
+                                    }
+                                    DBG("Layer " + layerName + " bar " + String(barIndex + 1) + " using inline variation with " + String(barEvents.size()) + " events");
                                 }
                             }
                             
@@ -532,7 +624,7 @@ std::shared_ptr<covertracks::Section> covertracks::PatternParser::parseSectionFr
                 // Parse the events for this bar
                 if (barEvents.size() > 0)
                 {
-                    auto parsedBar = parseBarFromJson(barEvents, primitives, chords);
+                    auto parsedBar = parseBarFromJson(barEvents, primitives, chords, chordContext);
                     if (parsedBar)
                     {
                         mergedPhrase->addBar(parsedBar);
@@ -629,7 +721,7 @@ std::shared_ptr<covertracks::Section> covertracks::PatternParser::parseSectionFr
                 }
                 
                 // Parse the events (base or variation) into the bar
-                auto bar = parseBarFromJson(eventsWithSource, primitives, chords);
+                auto bar = parseBarFromJson(eventsWithSource, primitives, chords, chordContext);
                 if (bar)
                 {
                     phrase->addBar(bar);
@@ -660,7 +752,7 @@ std::shared_ptr<covertracks::Section> covertracks::PatternParser::parseSectionFr
                         barEvents.add(event);
                     }
                     
-                    auto bar = parseBarFromJson(barEvents, primitives, chords);
+                    auto bar = parseBarFromJson(barEvents, primitives, chords, chordContext);
                     if (bar)
                     {
                         phrase->addBar(bar);
@@ -684,7 +776,7 @@ std::shared_ptr<covertracks::Section> covertracks::PatternParser::parseSectionFr
         auto phrase = std::make_shared<Phrase>();
         phrase->setName("Main");
         
-        auto bar = parseBarFromJson(events, primitives, chords);
+        auto bar = parseBarFromJson(events, primitives, chords, chordContext);
         if (bar)
         {
             phrase->addBar(bar);
@@ -699,14 +791,25 @@ std::shared_ptr<covertracks::Bar> covertracks::PatternParser::parseBarFromJson(c
                                                      const std::map<String, std::map<String, int>>& primitives,
                                                      const std::map<String, Array<String>>& chords)
 {
+    // Backward compatibility - use empty chord context
+    Array<var> emptyChordContext;
+    return parseBarFromJsonWithChordContext(eventsJson, primitives, chords, "", emptyChordContext);
+}
+
+std::shared_ptr<covertracks::Bar> covertracks::PatternParser::parseBarFromJson(const Array<var>& eventsJson,
+                                                     const std::map<String, std::map<String, int>>& primitives,
+                                                     const std::map<String, Array<String>>& chords,
+                                                     const Array<var>& chordContext)
+{
     // Use the enhanced version with chord context tracking
-    return parseBarFromJsonWithChordContext(eventsJson, primitives, chords);
+    return parseBarFromJsonWithChordContext(eventsJson, primitives, chords, "", chordContext);
 }
 
 std::shared_ptr<covertracks::Bar> covertracks::PatternParser::parseBarFromJsonWithChordContext(const Array<var>& eventsJson,
                                                      const std::map<String, std::map<String, int>>& primitives,
                                                      const std::map<String, Array<String>>& chords,
-                                                     const String& defaultChord)
+                                                     const String& defaultChord,
+                                                     const Array<var>& chordContext)
 {
     auto bar = std::make_shared<Bar>();
     
@@ -842,9 +945,17 @@ std::shared_ptr<covertracks::Bar> covertracks::PatternParser::parseBarFromJsonWi
             int toneNumber = static_cast<int>(static_cast<double>(noteData["tone"]));
             
             // Determine chord context at this beat
-            String currentChord = inferCurrentChord(beat, eventsJson, chords);
-            if (currentChord.isEmpty())
-                currentChord = defaultChord;
+            String currentChord = "";
+            if (!chordContext.isEmpty())
+            {
+                currentChord = resolveChordFromContext(beat, chordContext);
+            }
+            else
+            {
+                currentChord = inferCurrentChord(beat, eventsJson, chords);
+                if (currentChord.isEmpty())
+                    currentChord = defaultChord;
+            }
             
             if (!currentChord.isEmpty())
             {
@@ -1116,6 +1227,29 @@ int covertracks::PatternParser::resolveChordTone(int toneNumber, const String& c
     
     DBG("Resolved tone " + String(toneNumber) + " of chord " + chordName + " (" + noteName + ") to MIDI " + String(targetMidiNote));
     return targetMidiNote;
+}
+
+String covertracks::PatternParser::resolveChordFromContext(double beat, const Array<var>& chordContext)
+{
+    String currentChord = "";
+    double latestChordBeat = -1.0;
+    
+    // Look for the most recent chord change at or before this beat
+    for (const auto& chordEntry : chordContext)
+    {
+        if (chordEntry.isArray() && chordEntry.size() >= 2)
+        {
+            double chordBeat = static_cast<double>(chordEntry[0]);
+            if (chordBeat <= beat && chordBeat > latestChordBeat)
+            {
+                currentChord = chordEntry[1].toString();
+                latestChordBeat = chordBeat;
+            }
+        }
+    }
+    
+    DBG("Resolved chord at beat " + String(beat) + ": " + currentChord);
+    return currentChord;
 }
 
 String covertracks::PatternParser::inferCurrentChord(double beat, const Array<var>& eventsJson, const std::map<String, Array<String>>& chords)

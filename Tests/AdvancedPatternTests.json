@@ -1,0 +1,473 @@
+{
+  "title": "Advanced Pattern Language Feature Tests",
+  "tests": {
+    "12_complex_layers_structure": {
+      "title": "Complex Layers with Multiple BasePattern+Variations",
+      "description": "Test the full layers structure with multiple instruments using basePattern+variations like My Girl",
+      "tempo": 100,
+      "chords": {
+        "C": ["C3", "E3", "G3", "C4"],
+        "F": ["F3", "A3", "C4", "F4"],
+        "G": ["G3", "B3", "D4", "G4"]
+      },
+      "patterns": {
+        "melody_base": [
+          [1.0, "C4", 0.7, 0.5],
+          [2.0, "E4", 0.6, 0.5],
+          [3.0, "G4", 0.7, 0.5],
+          [4.0, "C4", 0.6, 0.5]
+        ],
+        "melody_variation": [
+          [1.0, "D4", 0.8, 0.5],
+          [2.0, "F4", 0.7, 0.5],
+          [3.0, "A4", 0.8, 1.0]
+        ],
+        "bass_walking": [
+          [1.0, {"tone": 1, "octave": 2}, 0.7, 1.0],
+          [2.0, {"tone": 3, "octave": 2}, 0.6, 1.0],
+          [3.0, {"tone": 5, "octave": 2}, 0.7, 1.0],
+          [4.0, {"tone": 1, "octave": 3}, 0.6, 1.0]
+        ],
+        "chord_stabs": [
+          [1.0, {"chord": "C"}, 0.5, 2.0],
+          [3.0, {"chord": "F"}, 0.5, 2.0]
+        ]
+      },
+      "sections": {
+        "verse": {
+          "bars": 4,
+          "chordContext": ["C", "F", "G", "C"],
+          "layers": {
+            "melody": {
+              "basePattern": "melody_base",
+              "variations": {
+                "bar2": "melody_variation",
+                "bar4": [[1.0, "G4", 0.9, 4.0]]
+              }
+            },
+            "bass": {
+              "basePattern": "bass_walking",
+              "variations": {
+                "bar3": [[1.0, {"tone": 5, "octave": 2}, 0.8, 1.0], [2.0, {"tone": 1, "octave": 3}, 0.7, 1.0]]
+              }
+            },
+            "harmony": {
+              "basePattern": "chord_stabs"
+            }
+          }
+        }
+      },
+      "arrangement": ["verse"]
+    },
+
+    "13_multi_bar_timing": {
+      "title": "Multi-Bar Timing with Cross-Bar Events",
+      "description": "Test events that span multiple bars and complex timing like My Girl intro",
+      "tempo": 120,
+      "sections": {
+        "multibar_section": {
+          "bars": 3,
+          "layers": {
+            "melody": [
+              [1.0, "C4", 0.8, 0.33],
+              [1.33, "D4", 0.7, 0.33], 
+              [1.67, "E4", 0.8, 0.33],
+              [2.0, "F4", 0.7, 0.33],
+              [5.0, "G4", 0.8, 2.0],
+              [7.5, "A4", 0.9, 1.5],
+              [9.0, "C5", 0.8, 4.0]
+            ],
+            "sustain": [
+              [1.0, "C3", 0.5, 12.0]
+            ]
+          }
+        }
+      }
+    },
+
+    "14_nested_chord_contexts": {
+      "title": "Nested Chord Contexts with Tone Resolution",
+      "description": "Test chord tone resolution in complex arrangements with multiple chord changes",
+      "tempo": 120,
+      "chords": {
+        "C": ["C3", "E3", "G3", "C4"],
+        "Am": ["A3", "C4", "E4", "A4"],
+        "F": ["F3", "A3", "C4", "F4"],
+        "G": ["G3", "B3", "D4", "G4"]
+      },
+      "patterns": {
+        "chord_progression": [
+          [1.0, {"chord": "C"}, 0.6, 4.0],
+          [5.0, {"chord": "Am"}, 0.6, 4.0],
+          [9.0, {"chord": "F"}, 0.6, 4.0],
+          [13.0, {"chord": "G"}, 0.6, 4.0]
+        ],
+        "adaptive_melody": [
+          [1.0, {"tone": 1, "octave": 4}, 0.8, 0.5],
+          [1.5, {"tone": 3, "octave": 4}, 0.7, 0.5],
+          [2.0, {"tone": 5, "octave": 4}, 0.8, 0.5],
+          [2.5, {"tone": 7, "octave": 4}, 0.7, 0.5],
+          [3.0, {"tone": 9, "octave": 4}, 0.8, 1.0]
+        ],
+        "walking_bass": [
+          [1.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+          [2.0, {"tone": 3, "octave": 2}, 0.7, 1.0],
+          [3.0, {"tone": 5, "octave": 2}, 0.8, 1.0],
+          [4.0, {"tone": 7, "octave": 2}, 0.7, 1.0]
+        ]
+      },
+      "sections": {
+        "progression": {
+          "bars": 16,
+          "layers": {
+            "chords": {
+              "basePattern": "chord_progression"
+            },
+            "melody": {
+              "basePattern": "adaptive_melody",
+              "variations": {
+                "bar5": "adaptive_melody",
+                "bar9": "adaptive_melody", 
+                "bar13": "adaptive_melody"
+              }
+            },
+            "bass": {
+              "basePattern": "walking_bass",
+              "variations": {
+                "bar4": [[3.5, {"tone": 7, "octave": 2}, 0.8, 0.5], [4.0, {"tone": 1, "octave": 3}, 0.9, 1.0]],
+                "bar8": [[3.5, {"tone": 7, "octave": 2}, 0.8, 0.5], [4.0, {"tone": 1, "octave": 3}, 0.9, 1.0]],
+                "bar12": [[3.5, {"tone": 7, "octave": 2}, 0.8, 0.5], [4.0, {"tone": 1, "octave": 3}, 0.9, 1.0]],
+                "bar16": [[3.5, {"tone": 7, "octave": 2}, 0.8, 0.5], [4.0, {"tone": 1, "octave": 3}, 0.9, 1.0]]
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "15_arrangement_ordering": {
+      "title": "Complex Arrangement with Section Repeats",
+      "description": "Test arrangement functionality with multiple sections and repeats",
+      "tempo": 120,
+      "patterns": {
+        "verse_pattern": [
+          [1.0, "C4", 0.8, 1.0],
+          [3.0, "E4", 0.7, 1.0]
+        ],
+        "chorus_pattern": [
+          [1.0, "G4", 0.9, 2.0],
+          [3.0, "C5", 0.8, 2.0]
+        ],
+        "bridge_pattern": [
+          [1.0, "F4", 0.7, 0.5],
+          [2.0, "A4", 0.8, 0.5],
+          [3.0, "C5", 0.9, 2.0]
+        ]
+      },
+      "sections": {
+        "verse": {
+          "bars": 4,
+          "layers": {
+            "melody": {"basePattern": "verse_pattern"}
+          }
+        },
+        "chorus": {
+          "bars": 4,
+          "layers": {
+            "melody": {"basePattern": "chorus_pattern"}
+          }
+        },
+        "bridge": {
+          "bars": 4,
+          "layers": {
+            "melody": {"basePattern": "bridge_pattern"}
+          }
+        }
+      },
+      "arrangement": ["verse", "chorus", "verse", "chorus", "bridge", "chorus", "chorus"]
+    },
+
+    "16_simultaneous_chord_events": {
+      "title": "Simultaneous Chord Events and Voicings",
+      "description": "Test multiple notes at same beat position for chord voicings",
+      "tempo": 120,
+      "chords": {
+        "Cmaj7": ["C3", "E3", "G3", "B3"],
+        "Am7": ["A3", "C4", "E4", "G4"]
+      },
+      "patterns": {
+        "piano_voicing": [
+          [1.0, {"tone": 1, "octave": 3}, 0.7, 2.0],
+          [1.0, {"tone": 3, "octave": 4}, 0.6, 2.0],
+          [1.0, {"tone": 5, "octave": 4}, 0.6, 2.0],
+          [1.0, {"tone": 7, "octave": 4}, 0.5, 2.0],
+          [3.0, {"tone": 1, "octave": 3}, 0.7, 2.0],
+          [3.0, {"tone": 3, "octave": 4}, 0.6, 2.0],
+          [3.0, {"tone": 5, "octave": 4}, 0.6, 2.0],
+          [3.0, {"tone": 7, "octave": 4}, 0.5, 2.0]
+        ],
+        "chord_context": [
+          [1.0, {"chord": "Cmaj7"}, 0.5, 4.0],
+          [5.0, {"chord": "Am7"}, 0.5, 4.0]
+        ]
+      },
+      "sections": {
+        "piano_section": {
+          "bars": 8,
+          "layers": {
+            "chords": {"basePattern": "chord_context"},
+            "piano": {
+              "basePattern": "piano_voicing",
+              "variations": {
+                "bar5": "piano_voicing"
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "17_inline_variations": {
+      "title": "Inline Variations vs Pattern References",
+      "description": "Test both inline variations and pattern reference variations in same structure",
+      "tempo": 120,
+      "patterns": {
+        "basic_rhythm": [
+          [1.0, "kick", 0.9],
+          [2.0, "snare", 0.8],
+          [3.0, "kick", 0.7],
+          [4.0, "snare", 0.8]
+        ],
+        "fill_pattern": [
+          [3.0, "tom1", 0.8],
+          [3.25, "tom2", 0.8],
+          [3.5, "tom3", 0.9],
+          [3.75, "snare", 0.9],
+          [4.0, "crash+kick", 1.0]
+        ]
+      },
+      "primitives": {
+        "drums": {
+          "kick": 36,
+          "snare": 38,
+          "tom1": 50,
+          "tom2": 47, 
+          "tom3": 43,
+          "crash": 49
+        }
+      },
+      "sections": {
+        "drum_section": {
+          "bars": 8,
+          "layers": {
+            "drums": {
+              "basePattern": "basic_rhythm",
+              "variations": {
+                "bar4": "fill_pattern",
+                "bar7": [[3.0, "snare", 0.9], [3.5, "snare", 0.8], [4.0, "kick", 0.9]],
+                "bar8": "fill_pattern"
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "18_my_girl_structure": {
+      "title": "My Girl Exact Structure Test",
+      "description": "Test the exact structure used in the My Girl pattern to isolate issues",
+      "tempo": 100,
+      "chords": {
+        "C": ["C3", "E3", "G3", "C4"],
+        "F": ["F3", "A3", "C4", "F4"]
+      },
+      "patterns": {
+        "intro_melody": [
+          [1.0, "C4", 0.7, 0.33],
+          [1.33, "C4", 0.6, 0.33],
+          [1.67, "D4", 0.6, 0.33],
+          [2.0, "E4", 0.7, 0.33],
+          [2.33, "F4", 0.7, 0.33],
+          [2.67, "G4", 0.8, 0.33],
+          [3.0, "A4", 0.8, 0.33],
+          [3.33, "G4", 0.7, 0.33],
+          [3.67, "F4", 0.7, 0.33],
+          [4.0, "E4", 0.7, 0.33],
+          [4.33, "D4", 0.6, 0.33],
+          [4.67, "C4", 0.6, 0.33]
+        ]
+      },
+      "sections": {
+        "intro": {
+          "bars": 2,
+          "layers": {
+            "melody": {
+              "basePattern": "intro_melody",
+              "variations": {
+                "bar2": [[1.0, "D4", 0.8, 2.0], [3.0, "C4", 0.8, 2.0]]
+              }
+            },
+            "harmony": {
+              "basePattern": [[1.0, {"chord": "C"}, 0.5, 4.0]],
+              "variations": {
+                "bar2": [[1.0, {"chord": "F"}, 0.5, 4.0]]
+              }
+            },
+            "bass": [
+              [1.0, {"tone": 1, "octave": 3}, 0.6, 0.25],
+              [1.5, {"tone": 3, "octave": 3}, 0.5, 0.25],
+              [2.0, {"tone": 5, "octave": 3}, 0.6, 0.25],
+              [2.5, {"tone": 3, "octave": 3}, 0.5, 0.25],
+              [3.0, {"tone": 1, "octave": 3}, 0.6, 0.5],
+              [4.0, {"tone": 5, "octave": 3}, 0.5, 0.5],
+              [5.0, {"tone": 1, "octave": 3}, 0.6, 0.25],
+              [5.5, {"tone": 3, "octave": 3}, 0.5, 0.25],
+              [6.0, {"tone": 5, "octave": 3}, 0.6, 0.25],
+              [6.5, {"tone": 3, "octave": 3}, 0.5, 0.25],
+              [7.0, {"tone": 1, "octave": 3}, 0.6, 0.5],
+              [8.0, {"tone": 5, "octave": 3}, 0.5, 0.5]
+            ]
+          }
+        }
+      },
+      "arrangement": ["intro"]
+    },
+
+    "19_chord_context_simple": {
+      "title": "Simple Array ChordContext",
+      "description": "Test simple chordContext array format with one chord per bar",
+      "tempo": 120,
+      "chords": {
+        "C": ["C3", "E3", "G3"],
+        "F": ["F3", "A3", "C4"],
+        "G": ["G3", "B3", "D4"],
+        "Am": ["A3", "C4", "E4"]
+      },
+      "sections": {
+        "test_simple": {
+          "bars": 4,
+          "chordContext": ["C", "F", "G", "Am"],
+          "layers": {
+            "bass": [
+              [1.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+              [2.0, {"tone": 3, "octave": 2}, 0.7, 1.0],
+              [3.0, {"tone": 5, "octave": 2}, 0.8, 1.0],
+              [4.0, {"tone": 1, "octave": 2}, 0.7, 1.0],
+              [5.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+              [6.0, {"tone": 3, "octave": 2}, 0.7, 1.0],
+              [7.0, {"tone": 5, "octave": 2}, 0.8, 1.0],
+              [8.0, {"tone": 1, "octave": 2}, 0.7, 1.0],
+              [9.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+              [10.0, {"tone": 3, "octave": 2}, 0.7, 1.0],
+              [11.0, {"tone": 5, "octave": 2}, 0.8, 1.0],
+              [12.0, {"tone": 1, "octave": 2}, 0.7, 1.0],
+              [13.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+              [14.0, {"tone": 3, "octave": 2}, 0.7, 1.0],
+              [15.0, {"tone": 5, "octave": 2}, 0.8, 1.0],
+              [16.0, {"tone": 1, "octave": 2}, 0.7, 1.0]
+            ]
+          }
+        }
+      }
+    },
+
+    "20_chord_context_per_bar": {
+      "title": "Per-Bar ChordContext Object",
+      "description": "Test per-bar chordContext object format with mixed simple and complex definitions",
+      "tempo": 120,
+      "chords": {
+        "C": ["C3", "E3", "G3"],
+        "C7": ["C3", "E3", "G3", "Bb3"],
+        "F": ["F3", "A3", "C4"],
+        "Fm": ["F3", "Ab3", "C4"],
+        "G": ["G3", "B3", "D4"],
+        "G7": ["G3", "B3", "D4", "F4"]
+      },
+      "sections": {
+        "test_per_bar": {
+          "bars": 4,
+          "chordContext": {
+            "bar1": "C",
+            "bar2": [[1.0, "F"], [3.0, "Fm"]],
+            "bar3": [[1.0, "G"], [3.0, "G7"]],
+            "bar4": "C"
+          },
+          "layers": {
+            "bass": [
+              [1.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+              [2.0, {"tone": 3, "octave": 2}, 0.7, 1.0],
+              [3.0, {"tone": 5, "octave": 2}, 0.8, 1.0],
+              [4.0, {"tone": 1, "octave": 2}, 0.7, 1.0],
+              [5.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+              [6.0, {"tone": 3, "octave": 2}, 0.7, 1.0],
+              [7.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+              [8.0, {"tone": 3, "octave": 2}, 0.7, 1.0],
+              [9.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+              [10.0, {"tone": 3, "octave": 2}, 0.7, 1.0],
+              [11.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+              [12.0, {"tone": 7, "octave": 2}, 0.7, 1.0],
+              [13.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+              [14.0, {"tone": 3, "octave": 2}, 0.7, 1.0],
+              [15.0, {"tone": 5, "octave": 2}, 0.8, 1.0],
+              [16.0, {"tone": 1, "octave": 2}, 0.7, 1.0]
+            ]
+          }
+        }
+      }
+    },
+
+    "21_chord_context_mixed_layers": {
+      "title": "Mixed Layer ChordContext Usage",
+      "description": "Test chordContext with layers mixing absolute notes and relative tone references",
+      "tempo": 120,
+      "chords": {
+        "Cmaj7": ["C3", "E3", "G3", "B3"],
+        "Am7": ["A3", "C4", "E4", "G4"],
+        "Fmaj7": ["F3", "A3", "C4", "E4"],
+        "G7": ["G3", "B3", "D4", "F4"]
+      },
+      "sections": {
+        "test_mixed": {
+          "bars": 4,
+          "chordContext": ["Cmaj7", "Am7", "Fmaj7", "G7"],
+          "layers": {
+            "melody": [
+              [1.0, "C5", 0.8, 1.0],
+              [2.0, "D5", 0.7, 0.5],
+              [2.5, "E5", 0.8, 1.5],
+              [5.0, "A4", 0.8, 1.0],
+              [6.0, "B4", 0.7, 0.5],
+              [6.5, "C5", 0.8, 1.5],
+              [9.0, "F4", 0.8, 1.0],
+              [10.0, "G4", 0.7, 0.5],
+              [10.5, "A4", 0.8, 1.5],
+              [13.0, "G4", 0.8, 1.0],
+              [14.0, "F4", 0.7, 0.5],
+              [14.5, "D4", 0.8, 1.5]
+            ],
+            "bass": [
+              [1.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+              [3.0, {"tone": 5, "octave": 2}, 0.7, 1.0],
+              [5.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+              [7.0, {"tone": 5, "octave": 2}, 0.7, 1.0],
+              [9.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+              [11.0, {"tone": 5, "octave": 2}, 0.7, 1.0],
+              [13.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
+              [15.0, {"tone": 5, "octave": 2}, 0.7, 1.0]
+            ],
+            "comping": [
+              [2.0, {"tone": 3, "octave": 4}, 0.6, 0.5],
+              [2.5, {"tone": 7, "octave": 4}, 0.5, 0.5],
+              [6.0, {"tone": 3, "octave": 4}, 0.6, 0.5],
+              [6.5, {"tone": 7, "octave": 4}, 0.5, 0.5],
+              [10.0, {"tone": 3, "octave": 4}, 0.6, 0.5],
+              [10.5, {"tone": 7, "octave": 4}, 0.5, 0.5],
+              [14.0, {"tone": 3, "octave": 4}, 0.6, 0.5],
+              [14.5, {"tone": 7, "octave": 4}, 0.5, 0.5]
+            ]
+          }
+        }
+      }
+    }
+  }
+}

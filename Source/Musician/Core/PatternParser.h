@@ -68,6 +68,11 @@ public:
     std::shared_ptr<Bar> parseBarFromJson(const Array<var>& eventsJson,
                                           const std::map<String, std::map<String, int>>& primitives,
                                           const std::map<String, Array<String>>& chords);
+                                          
+    std::shared_ptr<Bar> parseBarFromJson(const Array<var>& eventsJson,
+                                          const std::map<String, std::map<String, int>>& primitives,
+                                          const std::map<String, Array<String>>& chords,
+                                          const Array<var>& chordContext);
     
     /**
      * @brief Parse an LLM-generated response into a chart
@@ -87,6 +92,15 @@ public:
     
 private:
     MusicPatternSystem& patternSystem;
+    
+    /**
+     * @brief Resolve chord at a specific beat using chord context
+     * 
+     * @param beat The beat position to resolve
+     * @param chordContext Array of [beat, chordName] pairs
+     * @return String The chord name at the given beat
+     */
+    String resolveChordFromContext(double beat, const Array<var>& chordContext);
     
     // Helper functions for parsing notation
     String extractSongNotation(const String& text);
@@ -108,7 +122,8 @@ private:
     std::shared_ptr<Bar> parseBarFromJsonWithChordContext(const Array<var>& eventsJson,
                                                           const std::map<String, std::map<String, int>>& primitives,
                                                           const std::map<String, Array<String>>& chords,
-                                                          const String& defaultChord = "");
+                                                          const String& defaultChord,
+                                                          const Array<var>& chordContext);
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PatternParser)
 };

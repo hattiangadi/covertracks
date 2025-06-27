@@ -5,8 +5,8 @@
   "tests": {
     
     "1_chord_tones_basic": {
-      "title": "Test Chord Tone Resolution",
-      "description": "Verify chord tones resolve correctly for different chords",
+      "title": "Test Chord Tone Resolution with Simple ChordContext",
+      "description": "Verify chord tones resolve correctly using simple array chordContext",
       "tempo": 120,
       "chords": {
         "C": ["C3", "E3", "G3"],
@@ -16,12 +16,8 @@
       "sections": {
         "test": {
           "bars": 3,
+          "chordContext": ["C", "F", "Am"],
           "layers": {
-            "harmony": [
-              [1.0, {"chord": "C"}, 0.7, 4.0],
-              [5.0, {"chord": "F"}, 0.7, 4.0],
-              [9.0, {"chord": "Am"}, 0.7, 4.0]
-            ],
             "bass": [
               [1.0, {"tone": 1, "octave": 2}, 0.8, 1.0],
               [2.0, {"tone": 3, "octave": 2}, 0.8, 1.0],

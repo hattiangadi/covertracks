@@ -60,8 +60,74 @@
 ```
 - `tone`: 1=root, 3=third, 5=fifth, 7=seventh, 9=ninth, etc.
 - `octave`: target octave (optional, default: 4)
-- Automatically adapts to current chord context
+- **Requires chordContext** in section to resolve chord tones
 - Tones > chord size wrap around with octave transposition
+
+## Chord Context (NEW)
+
+Chord tone references (`{"tone": 1}`) require explicit chord context to resolve correctly. Use `chordContext` at the section level to define what chords are active when.
+
+### Simple Array Format (One Chord Per Bar)
+```json
+"sections": {
+  "verse": {
+    "bars": 4,
+    "chordContext": ["C", "F", "G", "C"],
+    "layers": {
+      "bass": [
+        [1.0, {"tone": 1, "octave": 2}, 0.8, 1.0],  // C2, F2, G2, C2
+        [3.0, {"tone": 5, "octave": 2}, 0.7, 1.0]   // G2, C3, D3, G2
+      ]
+    }
+  }
+}
+```
+
+### Per-Bar Object Format (Multiple Chords Per Bar)
+```json
+"sections": {
+  "bridge": {
+    "bars": 2,
+    "chordContext": {
+      "bar1": "C",                           // Simple: one chord for whole bar
+      "bar2": [[1.0, "F"], [3.0, "Fm"]]     // Complex: chord changes within bar
+    },
+    "layers": {
+      "piano": [
+        [1.0, {"tone": 1, "octave": 4}, 0.7, 1.0],   // Follows chord context
+        [5.0, {"tone": 1, "octave": 4}, 0.7, 1.0],   // F at beat 5, Fm at beat 7
+        [7.0, {"tone": 3, "octave": 4}, 0.6, 1.0]    // Ab3 (minor third of Fm)
+      ]
+    }
+  }
+}
+```
+
+### ChordContext vs Harmony Layers
+
+**Important Distinction:**
+- **chordContext**: Provides chord context for resolving tone references (`{"tone": 1}`) - doesn't play actual sounds
+- **harmony layers**: Actually play chord events (`{"chord": "C"}`) as musical notes in the arrangement
+
+```json
+"sections": {
+  "example": {
+    "chordContext": ["C", "F", "G", "C"],    // Context for tone resolution only
+    "layers": {
+      "harmony": [                           // Actually plays chord sounds
+        [1.0, {"chord": "C"}, 0.6, 4.0],
+        [5.0, {"chord": "F"}, 0.6, 4.0],
+        [9.0, {"chord": "G"}, 0.6, 4.0],
+        [13.0, {"chord": "C"}, 0.6, 4.0]
+      ],
+      "bass": [                              // Uses chordContext to resolve tones
+        [1.0, {"tone": 1, "octave": 2}, 0.8, 1.0],  // C2 (from chordContext)
+        [5.0, {"tone": 1, "octave": 2}, 0.8, 1.0]   // F2 (from chordContext)
+      ]
+    }
+  }
+}
+```
 
 ## Pattern Variations (NEW)
 
@@ -280,6 +346,10 @@
 {
   "title": "Bass Line with Harmonic Movement",
   "tempo": 120,
+  "chords": {
+    "C": ["C3", "E3", "G3"], "F": ["F3", "A3", "C4"], 
+    "G": ["G3", "B3", "D4"], "Am": ["A3", "C4", "E4"]
+  },
   "patterns": {
     "walking_foundation": [
       [1.0, {"tone": 1, "octave": 2}, 0.8, 0.9],    // Root - strong foundation
@@ -305,6 +375,7 @@
   "sections": {
     "progression": {
       "bars": 12,
+      "chordContext": ["C", "F", "G", "Am", "C", "F", "G", "Am", "C", "F", "G", "Am"],
       "layers": {
         "bass": {
           "basePattern": "walking_foundation",        // Harmonic foundation
@@ -329,6 +400,10 @@
 {
   "title": "Piano Comping Styles",
   "tempo": 120,
+  "chords": {
+    "Cmaj7": ["C3", "E3", "G3", "B3"], "Dm7": ["D3", "F3", "A3", "C4"],
+    "Em7": ["E3", "G3", "B3", "D4"], "Fmaj7": ["F3", "A3", "C4", "E4"]
+  },
   "patterns": {
     "shell_voicing": [
       [2.0, {"tone": 3, "octave": 4}, 0.6, 0.4],    // Third in right hand
@@ -356,6 +431,7 @@
   "sections": {
     "comping_section": {
       "bars": 8,
+      "chordContext": ["Cmaj7", "Dm7", "Em7", "Fmaj7", "Cmaj7", "Dm7", "Em7", "Fmaj7"],
       "layers": {
         "piano": {
           "basePattern": "shell_voicing",             // Sparse, supportive
@@ -380,6 +456,10 @@
 {
   "title": "Guitar Rhythm and Lead",
   "tempo": 120,
+  "chords": {
+    "E5": ["E2", "B2"], "A5": ["A2", "E3"], 
+    "C5": ["C3", "G3"], "D5": ["D3", "A3"]
+  },
   "patterns": {
     "power_chord_rhythm": [
       [1.0, {"tone": 1, "octave": 3}, 0.8, 0.5],    // Root of power chord
@@ -407,6 +487,7 @@
   "sections": {
     "guitar_arrangement": {
       "bars": 8,
+      "chordContext": ["E5", "A5", "C5", "D5", "E5", "A5", "C5", "D5"],
       "layers": {
         "guitar": {
           "basePattern": "power_chord_rhythm",       // Driving rhythm foundation
@@ -466,14 +547,15 @@
 
 1. **Pattern Variations**: Apply different patterns or events to specific bars
 2. **Chord Tone References**: Write patterns that adapt to any chord progression
-3. **Multi-Bar Support**: Events can span multiple bars with automatic distribution
-4. **Time Signature Flexibility**: Global or per-bar time signatures
-5. **Arrangement Control**: Define complete song structure
-6. **Intelligent Defaults**: Automatic duration and channel assignment
-7. **Combined Primitives**: Multiple sounds at same position with `+`
-8. **Inline Velocity**: Quick velocity notation with `:v`
-9. **Source Tracking**: Automatic metadata for debugging
-10. **Graceful Error Handling**: Fallbacks for missing or invalid data
+3. **Chord Context**: Explicit chord context at section level for reliable tone resolution
+4. **Multi-Bar Support**: Events can span multiple bars with automatic distribution
+5. **Time Signature Flexibility**: Global or per-bar time signatures
+6. **Arrangement Control**: Define complete song structure
+7. **Intelligent Defaults**: Automatic duration and channel assignment
+8. **Combined Primitives**: Multiple sounds at same position with `+`
+9. **Harmony vs Context**: Distinguish between playing chords and providing chord context
+10. **Source Tracking**: Automatic metadata for debugging
+11. **Graceful Error Handling**: Fallbacks for missing or invalid data
 
 ## Implementation Notes
 

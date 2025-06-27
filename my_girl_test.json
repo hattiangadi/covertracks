@@ -1,0 +1,39 @@
+{
+  "title": "My Girl - Test Version",
+  "tempo": 100,
+  "chords": {
+    "C": ["C3", "E3", "G3", "C4"],
+    "F": ["F3", "A3", "C4", "F4"]
+  },
+  "patterns": {
+    "intro_melody": [
+      [1.0, "C4", 0.7, 0.33],
+      [1.33, "C4", 0.6, 0.33],
+      [1.67, "D4", 0.6, 0.33],
+      [2.0, "E4", 0.7, 0.33]
+    ],
+    "bass_comp": [
+      [1.0, {"tone": 1, "octave": 3}, 0.6, 0.25],
+      [1.5, {"tone": 3, "octave": 3}, 0.5, 0.25],
+      [2.0, {"tone": 5, "octave": 3}, 0.6, 0.25]
+    ]
+  },
+  "sections": {
+    "intro": {
+      "bars": 2,
+      "chordContext": ["C", "F"],
+      "layers": {
+        "melody": {
+          "basePattern": "intro_melody",
+          "variations": {
+            "bar2": [[1.0, "D4", 0.8, 2.0]]
+          }
+        },
+        "bass": {
+          "basePattern": "bass_comp"
+        }
+      }
+    }
+  },
+  "arrangement": ["intro"]
+}
