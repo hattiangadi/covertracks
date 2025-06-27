@@ -39,6 +39,7 @@
   <MAINGROUP id="YdWL7hi7p" name="Covertracks">
     <GROUP id="{CFED5B3D-D1D8-0F3F-4D67-B2A810D057EF}" name="Source">
       <GROUP id="{38DF3E53-C216-ADF7-CCF5-86D5880F46C0}" name="Tests">
+        <FILE id="AHtE5p" name="SimpleTest.h" compile="0" resource="0" file="Source/Tests/SimpleTest.h"/>
         <FILE id="GQq3uV" name="PatternGeneratorTests.cpp" compile="1" resource="0"
               file="Source/Tests/PatternGeneratorTests.cpp"/>
         <FILE id="N8oly3" name="PatternParserTests.cpp" compile="1" resource="0"
@@ -211,14 +212,10 @@
       </GROUP>
       <GROUP id="{A3F7F3C9-8C9E-4F3F-8D67-B2A810D057EF}" name="Player">
         <GROUP id="{B3F7F3C9-8C9E-4F3F-8D67-B2A810D057EF}" name="Core">
-          <FILE id="KEhS5x" name="Instrument.cpp" compile="1" resource="0"
-                file="Source/Player/Core/Instrument.cpp"/>
-          <FILE id="UTcgsf" name="Instrument.h" compile="0" resource="0"
-                file="Source/Player/Core/Instrument.h"/>
-          <FILE id="CPuVCI" name="Player.cpp" compile="1" resource="0"
-                file="Source/Player/Core/Player.cpp"/>
-          <FILE id="BK2fzD" name="Player.h" compile="0" resource="0"
-                file="Source/Player/Core/Player.h"/>
+          <FILE id="KEhS5x" name="Instrument.cpp" compile="1" resource="0" file="Source/Player/Core/Instrument.cpp"/>
+          <FILE id="UTcgsf" name="Instrument.h" compile="0" resource="0" file="Source/Player/Core/Instrument.h"/>
+          <FILE id="CPuVCI" name="Player.cpp" compile="1" resource="0" file="Source/Player/Core/Player.cpp"/>
+          <FILE id="BK2fzD" name="Player.h" compile="0" resource="0" file="Source/Player/Core/Player.h"/>
           <FILE id="NEW_FILE_ID_1" name="PlayerManager.cpp" compile="1" resource="0"
                 file="Source/Player/Core/PlayerManager.cpp"/>
           <FILE id="NEW_FILE_ID_2" name="PlayerManager.h" compile="0" resource="0"

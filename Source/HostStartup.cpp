@@ -35,6 +35,7 @@
 #include <JuceHeader.h>
 #include "UI/MainHostWindow.h"
 #include "Plugins/InternalPlugins.h"
+#include "Tests/SimpleTest.h"
 
 #if ! (JUCE_PLUGINHOST_VST || JUCE_PLUGINHOST_VST3 || JUCE_PLUGINHOST_AU)
  #error "If you're building the audio plugin host, you probably want to enable VST and/or AU support"
@@ -148,6 +149,15 @@ public:
     void initialise (const String& commandLine) override
     {
         std::cout << "[PluginHostApp] Starting initialization..." << std::endl;
+        
+        // Check for test mode first
+        auto args = getCommandLineParameterArray();
+        if (args.contains("--run-tests") || args.contains("--test"))
+        {
+            runTestsAndExit();
+            return;
+        }
+        
         auto scannerSubprocess = std::make_unique<PluginScannerSubprocess>();
 
         if (scannerSubprocess->initialiseFromCommandLine (commandLine, processUID))
@@ -272,6 +282,50 @@ public:
     std::unique_ptr<ApplicationProperties> appProperties;
 
 private:
+    void runTestsAndExit()
+    {
+        std::cout << "=== Covertracks Unit Tests ===" << std::endl;
+        std::cout << "Running in CLI test mode..." << std::endl;
+        
+        // Run all registered JUCE unit tests
+        juce::UnitTestRunner runner;
+        runner.runAllTests();
+        
+        // Get results and exit with appropriate code
+        int totalTests = 0;
+        int totalFailures = 0;
+        int totalPasses = 0;
+        
+        for (int i = 0; i < runner.getNumResults(); ++i)
+        {
+            const auto* result = runner.getResult(i);
+            if (result != nullptr)
+            {
+                totalPasses += result->passes;
+                totalFailures += result->failures;
+                totalTests += (result->passes + result->failures);
+            }
+        }
+        
+        std::cout << std::endl;
+        std::cout << "=== Test Results ===" << std::endl;
+        std::cout << "Tests run: " << totalTests << std::endl;
+        std::cout << "Failures: " << totalFailures << std::endl;
+        
+        if (totalFailures == 0)
+        {
+            std::cout << "✅ All tests passed!" << std::endl;
+        }
+        else
+        {
+            std::cout << "❌ " << totalFailures << " test(s) failed" << std::endl;
+        }
+        
+        // Exit with failure code if tests failed (for CI/CD)
+        setApplicationReturnValue(totalFailures > 0 ? 1 : 0);
+        quit();
+    }
+
     std::unique_ptr<MainHostWindow> mainWindow;
     std::unique_ptr<PluginScannerSubprocess> storedScannerSubprocess;
 };

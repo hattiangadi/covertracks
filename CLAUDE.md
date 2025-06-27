@@ -1,6 +1,9 @@
 # Covertracks Development Guide
 
 ## Build & Run
+- **CLI Build Command**: `cd /Users/anand/src/covertracks/Builds/MacOSX && xcodebuild -scheme "Covertracks - App" -configuration Debug build`
+- **GUI Mode**: `./build/Debug/Covertracks.app/Contents/MacOS/Covertracks`
+- **CLI Test Mode**: `./build/Debug/Covertracks.app/Contents/MacOS/Covertracks --run-tests`
 - Use projucer/xcode to build and run
 - Build target: `"Covertracks - App"` scheme
 
@@ -16,17 +19,28 @@
 - [x] **BONUS**: Set up clang-tidy configuration with CMake compilation database
 - [ ] **BONUS**: Install clang-tidy and run first analysis
 
-**STAGE 2: Tracktion Engine Migration** 🎵 *IN PROGRESS*
+**STAGE 2: Tracktion Engine Migration** ✅ *COMPLETE*
 - [x] Implement TracktionAudioEngine singleton  
 - [x] Create working MIDI→Audio test pipeline
 - [x] Verify Tracktion built-in plugin integration
 - [x] **BREAKTHROUGH**: Confirm Tracktion Engine audio works perfectly
-- [ ] **CURRENT**: Migrate to unified Tracktion-only architecture
-- [ ] Replace Edit Mode with Tracktion track editing
-- [ ] Convert Player/Instrument to use Tracktion tracks
-- [ ] Remove custom PluginGraph and AudioProcessorGraph code
+- [x] Migrate to unified Tracktion-only architecture
+- [x] Replace Edit Mode with Tracktion track editing (using te::Track)
+- [x] Convert Player/Instrument to use Tracktion tracks
+- [x] Remove custom PluginGraph and AudioProcessorGraph code
+- [x] **BONUS**: Implement persistent tracks for seamless mode switching
+- [x] **BONUS**: Fix tempo synchronization between UI and audio
+- [x] **BONUS**: Advanced pattern features (chordContext, variations, etc.)
 
-**Next: STAGE 3 - Full Tracktion Integration**
+**STAGE 3: Full Tracktion Integration** 🚀 *IN PROGRESS*
+- [ ] **Multi-Track Coordination**: EnsembleManager for synchronized performances
+- [ ] **Advanced Plugin Management**: Leverage te::Track::pluginList features
+- [ ] **Performance Mode Enhancement**: Multiple synchronized Tracktion tracks
+- [ ] **MIDI Routing**: Advanced MIDI routing between tracks
+- [ ] **Automation**: Tracktion automation for performance parameters
+- [ ] **Mix Console**: Professional mixing interface
+- [ ] **Recording**: Multi-track recording capabilities
+- [ ] **Export**: Bounce to audio with Tracktion's engine
 
 ## Architecture Quick Reference
 - **Audio System**: TracktionAudioEngine singleton with te::Track-per-Player
@@ -39,12 +53,13 @@
 ### Architecture Status (Post-Tracktion Integration)
 1. **✅ SOLVED: Audio pipeline working** - Tracktion Engine provides professional audio quality
 2. **✅ COMPLETE: State Machine Workflow** - Clean pattern playback without data passing
-3. **📋 IDENTIFIED: Redundant systems to remove:**
-   - Custom PluginGraph class (replace with te::Track::pluginList)
-   - AudioProcessorGraph usage (replace with Tracktion tracks)  
-   - Edit Mode dual-system (merge into Tracktion DAW)
-4. **Large UI components** - PerformanceEditorComponent (2,018 lines), PlayerModeComponent (1,832 lines)
-5. **🔥 ROOT CAUSE FOUND**: Player/Instrument integration issues, NOT core audio
+3. **✅ COMPLETE: Unified Tracktion Architecture**
+   - ✅ Removed custom PluginGraph class - using te::Track::pluginList
+   - ✅ Removed AudioProcessorGraph usage - using Tracktion tracks
+   - ✅ Edit Mode now uses Tracktion track editing
+   - ✅ Persistent tracks implementation for mode switching
+4. **✅ SOLVED: Mode switching** - Instruments preserve all state with persistent tracks
+5. **✅ SOLVED: Tempo sync** - Playhead and audio use same tempo from pattern
 
 ### NEW: State Machine Workflow for Pattern Playback
 **Problem**: Complex data passing between components caused format mismatches and bugs
@@ -90,11 +105,11 @@ This ensures clean state transitions between Editor Mode and Player Mode.
 - **Performance**: EnsembleManager coordinates multiple Tracktion tracks
 - **LLM Integration**: Player + Musician + LLM (unchanged)
 
-### Systems to Remove/Replace
-- ❌ **Source/Plugins/PluginGraph.cpp** → ✅ te::Track::pluginList
-- ❌ **Edit Mode AudioProcessorGraph** → ✅ Tracktion track editing  
-- ❌ **Instrument::processorGraph** → ✅ Player as Tracktion track
-- ❌ **Dual audio routing** → ✅ Single Tracktion architecture
+### Systems Successfully Replaced
+- ✅ **Source/Plugins/PluginGraph.cpp** → Now using te::Track::pluginList
+- ✅ **Edit Mode AudioProcessorGraph** → Now using Tracktion track editing  
+- ✅ **Instrument::processorGraph** → Player uses Tracktion track
+- ✅ **Dual audio routing** → Single unified Tracktion architecture
 
 ## Development Standards
 
