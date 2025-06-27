@@ -3,7 +3,10 @@
 ## Build & Run
 - **CLI Build Command**: `cd /Users/anand/src/covertracks/Builds/MacOSX && xcodebuild -scheme "Covertracks - App" -configuration Debug build`
 - **GUI Mode**: `./build/Debug/Covertracks.app/Contents/MacOS/Covertracks`
-- **CLI Test Mode**: `./build/Debug/Covertracks.app/Contents/MacOS/Covertracks --run-tests`
+- **CLI Test Mode**: 
+  - `./build/Debug/Covertracks.app/Contents/MacOS/Covertracks --run-tests` (all tests)
+  - `./build/Debug/Covertracks.app/Contents/MacOS/Covertracks --run-tests --category="Infrastructure"` (specific category)
+  - `./build/Debug/Covertracks.app/Contents/MacOS/Covertracks --run-tests --list-categories` (show available categories)
 - Use projucer/xcode to build and run
 - Build target: `"Covertracks - App"` scheme
 

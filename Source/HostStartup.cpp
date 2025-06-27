@@ -154,7 +154,7 @@ public:
         auto args = getCommandLineParameterArray();
         if (args.contains("--run-tests") || args.contains("--test"))
         {
-            runTestsAndExit();
+            runTestsAndExit(args);
             return;
         }
         
@@ -282,14 +282,46 @@ public:
     std::unique_ptr<ApplicationProperties> appProperties;
 
 private:
-    void runTestsAndExit()
+    void runTestsAndExit(const juce::StringArray& args)
     {
         std::cout << "=== Covertracks Unit Tests ===" << std::endl;
         std::cout << "Running in CLI test mode..." << std::endl;
         
-        // Run all registered JUCE unit tests
+        // Check for list categories option
+        if (args.contains("--list-categories"))
+        {
+            listTestCategories();
+            return;
+        }
+        
+        // Check for category filter
+        juce::String categoryFilter;
+        for (int i = 0; i < args.size(); ++i)
+        {
+            if (args[i] == "--category" && i + 1 < args.size())
+            {
+                categoryFilter = args[i + 1];
+                break;
+            }
+            if (args[i].startsWith("--category="))
+            {
+                categoryFilter = args[i].fromFirstOccurrenceOf("=", false, false);
+                break;
+            }
+        }
+        
+        // Run tests with optional category filter
         juce::UnitTestRunner runner;
-        runner.runAllTests();
+        if (categoryFilter.isNotEmpty())
+        {
+            std::cout << "Filtering tests by category: " << categoryFilter << std::endl;
+            runner.runTestsInCategory(categoryFilter);
+        }
+        else
+        {
+            std::cout << "Running all test categories..." << std::endl;
+            runner.runAllTests();
+        }
         
         // Get results and exit with appropriate code
         int totalTests = 0;
@@ -323,6 +355,39 @@ private:
         
         // Exit with failure code if tests failed (for CI/CD)
         setApplicationReturnValue(totalFailures > 0 ? 1 : 0);
+        quit();
+    }
+    
+    void listTestCategories()
+    {
+        std::cout << "=== Available Test Categories ===" << std::endl;
+        
+        // Get all available test categories by running tests with dummy category
+        // and inspecting the registered tests
+        auto allTests = juce::UnitTest::getAllTests();
+        juce::StringArray categories;
+        
+        for (auto* test : allTests)
+        {
+            juce::String category = test->getCategory();
+            if (category.isNotEmpty() && !categories.contains(category))
+                categories.add(category);
+        }
+        
+        categories.sort(false);
+        
+        for (const auto& category : categories)
+        {
+            std::cout << "  " << category << std::endl;
+        }
+        
+        std::cout << std::endl;
+        std::cout << "Usage:" << std::endl;
+        std::cout << "  --run-tests                    Run all tests" << std::endl;
+        std::cout << "  --run-tests --category=NAME    Run tests in specific category" << std::endl;
+        std::cout << "  --run-tests --list-categories  Show this list" << std::endl;
+        
+        setApplicationReturnValue(0);
         quit();
     }
 
