@@ -89,9 +89,12 @@ bool Player::convertToMidi()
         return false;
     }
     
-    // Store the converted MIDI chart
+    // Store the converted MIDI chart (events only for internal use)
     preparedMidiChart = resultObj->getProperty("events");
     lastTempo = resultObj->getProperty("tempo");
+    
+    // Store complete result for UI access (includes tempo and other metadata)
+    lastGeneratedChart = midiResult;
     
     if (!preparedMidiChart.isArray())
     {
@@ -122,7 +125,7 @@ bool Player::loadPreparedMidi()
     
     // Store the pre-converted sequence
     preloadedSequence = std::move(sequence);
-    lastGeneratedChart = preparedMidiChart;
+    // Note: lastGeneratedChart already set in convertToMidi() with complete data including tempo
     
     DBG("Player " << playerName << " loaded " 
         << preloadedSequence->getNumEvents() << " MIDI events for instant playback");
