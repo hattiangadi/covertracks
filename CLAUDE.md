@@ -4,9 +4,14 @@
 - **CLI Build Command**: `cd /Users/anand/src/covertracks/Builds/MacOSX && xcodebuild -scheme "Covertracks - App" -configuration Debug build`
 - **GUI Mode**: `./build/Debug/Covertracks.app/Contents/MacOS/Covertracks`
 - **CLI Test Mode**: 
-  - `./build/Debug/Covertracks.app/Contents/MacOS/Covertracks --run-tests` (all tests)
-  - `./build/Debug/Covertracks.app/Contents/MacOS/Covertracks --run-tests --category="Infrastructure"` (specific category)
-  - `./build/Debug/Covertracks.app/Contents/MacOS/Covertracks --run-tests --list-categories` (show available categories)
+  - `./run_tests_clean.sh` (all tests, clean output - failures only)
+  - `./run_tests_clean.sh "Music Pattern System"` (specific category, clean output)
+  - `./run_tests_clean.sh "Performance System"` (Performance & EnsembleManager tests)
+  - `./run_tests_clean.sh "Song Backend"` (Song image processing tests)
+  - `./run_tests_clean.sh "Audio Engine"` (TracktionAudioEngine tests)
+  - `./Builds/MacOSX/build/Debug/Covertracks.app/Contents/MacOS/Covertracks --run-tests --list-categories` (show available categories)
+  - `./Builds/MacOSX/build/Debug/Covertracks.app/Contents/MacOS/Covertracks --run-tests --category="Infrastructure"` (raw verbose output)
+- **Recommended**: Use `./run_tests_clean.sh` for clean output that shows only failures and summaries
 - Use projucer/xcode to build and run
 - Build target: `"Covertracks - App"` scheme
 

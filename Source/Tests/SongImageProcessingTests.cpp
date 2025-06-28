@@ -12,10 +12,24 @@ class MockLLMClient : public LLMClient
 public:
     MockLLMClient() = default;
     
+    LLMClient* clone() const override
+    {
+        return new MockLLMClient();
+    }
+    
     void sendMessage(const juce::String& message, ResponseCallback callback) override
     {
         // Simple mock response
         callback(true, "Mock LLM response");
+    }
+    
+    void sendMessageWithHistory(const juce::String& message, 
+                              const juce::Array<std::pair<juce::String, juce::String>>& history,
+                              ResponseCallback callback) override
+    {
+        // Mock response incorporating history
+        juce::String mockResponse = "Mock response to: " + message + " (with " + juce::String(history.size()) + " history items)";
+        callback(true, mockResponse);
     }
     
     void sendMessageWithImage(const juce::String& message, 
@@ -42,6 +56,16 @@ public:
         })";
         
         callback(true, mockResponse);
+    }
+    
+    bool isConnected() const override
+    {
+        return true; // Mock client is always "connected"
+    }
+    
+    juce::String getServiceName() const override
+    {
+        return "MockLLM";
     }
 };
 

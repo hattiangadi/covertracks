@@ -29,11 +29,15 @@ private:
         auto& engine = TracktionAudioEngine::getInstance();
         
         // Test basic properties
-        expect(&engine.getTracktionEngine() != nullptr, "Tracktion engine should be accessible");
-        expect(&engine.getAudioDeviceManager() != nullptr, "Audio device manager should be accessible");
+        // getTracktionEngine() returns a reference, so it's always valid
+        logMessage("Tracktion engine is accessible");
+        
+        // getDeviceManager() returns a reference, so it's always valid
+        logMessage("Audio device manager is accessible");
         
         // Test engine state
-        expect(engine.isInitialized(), "Engine should be initialized");
+        expect(engine.isAudioQualityGood(), "Audio quality should be good");
+        expect(engine.getCpuUsage() >= 0.0, "CPU usage should be non-negative");
     }
     
     void testMultiplePlayerManagement()
@@ -42,19 +46,24 @@ private:
         
         auto& engine = TracktionAudioEngine::getInstance();
         
-        // Create test players
+        // Create test players using proper constructor
+        auto& formatManager = engine.getFormatManager();
+        auto& knownPluginList = engine.getKnownPluginList();
+        
         std::vector<std::unique_ptr<Player>> players;
         for (int i = 0; i < 5; ++i)
         {
-            auto player = std::make_unique<Player>("Test Player " + juce::String(i + 1));
+            juce::String playerId = "player_" + juce::String(i + 1);
+            juce::String playerName = "Test Player " + juce::String(i + 1);
+            auto player = std::make_unique<Player>(playerId, playerName, formatManager, knownPluginList);
             players.push_back(std::move(player));
         }
         
         // Test player registration (conceptual - actual implementation depends on Player integration)
-        expect(true, "Multiple players should be manageable");
+        expect(players.size() == 5, "Should have created 5 players");
         
         // Test that engine remains stable with multiple players
-        expect(engine.isInitialized(), "Engine should remain initialized with multiple players");
+        expect(engine.isAudioQualityGood(), "Audio quality should remain good with multiple players");
     }
     
     void testDeviceHandling()
@@ -62,10 +71,10 @@ private:
         beginTest("Audio device handling robustness");
         
         auto& engine = TracktionAudioEngine::getInstance();
-        auto& deviceManager = engine.getAudioDeviceManager();
+        auto& deviceManager = engine.getDeviceManager();
         
-        // Test device manager state
-        expect(&deviceManager != nullptr, "Device manager should be available");
+        // Test device manager state (reference is always valid)
+        logMessage("Device manager is available");
         
         // Test current device setup
         auto* currentDevice = deviceManager.getCurrentAudioDevice();
@@ -84,7 +93,7 @@ private:
         }
         
         // Test device availability
-        auto audioDeviceTypes = deviceManager.getAvailableDeviceTypes();
+        const auto& audioDeviceTypes = deviceManager.getAvailableDeviceTypes();
         expect(audioDeviceTypes.size() > 0, "Should have at least one audio device type");
     }
     
@@ -98,21 +107,22 @@ private:
         // Note: We don't actually shut down the singleton here as it would affect other tests
         
         // Test stopping all audio processing
-        auto& deviceManager = engine.getAudioDeviceManager();
+        auto& deviceManager = engine.getDeviceManager();
         auto* currentDevice = deviceManager.getCurrentAudioDevice();
         
         if (currentDevice != nullptr)
         {
             // Test that we can query device state safely
-            bool isOpen = currentDevice->isOpen();
-            expect(true, "Device state should be queryable"); // Always pass as we just want to test it doesn't crash
+            currentDevice->isOpen(); // Just test it doesn't crash
+            expect(true, "Device state should be queryable");
             
             // Test audio callback state
             expect(true, "Engine should handle audio callback queries safely");
         }
         
         // Test engine remains functional after shutdown attempts
-        expect(engine.isInitialized(), "Engine should remain initialized");
+        expect(engine.isAudioQualityGood(), "Audio quality should remain good");
+        expect(engine.getBufferUnderruns() >= 0, "Buffer underruns should be non-negative");
     }
 };
 
@@ -136,7 +146,7 @@ private:
         beginTest("MIDI device detection");
         
         auto& engine = TracktionAudioEngine::getInstance();
-        auto& deviceManager = engine.getAudioDeviceManager();
+        auto& deviceManager = engine.getDeviceManager();
         
         // Test MIDI input detection
         auto midiInputs = juce::MidiInput::getAvailableDevices();
@@ -147,8 +157,8 @@ private:
         expect(true, "MIDI output detection should not crash"); // Always pass, just test it doesn't crash
         
         // Log available devices for debugging
-        DBG("Available MIDI inputs: " + juce::String(midiInputs.size()));
-        DBG("Available MIDI outputs: " + juce::String(midiOutputs.size()));
+        logMessage("Available MIDI inputs: " + juce::String(midiInputs.size()));
+        logMessage("Available MIDI outputs: " + juce::String(midiOutputs.size()));
     }
     
     void testMidiMessageHandling()

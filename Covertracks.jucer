@@ -60,6 +60,12 @@
               resource="0" file="Source/Tests/PerformanceManagementTests.cpp"/>
         <FILE id="TracktionAudioEngineTests" name="TracktionAudioEngineTests.cpp" compile="1"
               resource="0" file="Source/Tests/TracktionAudioEngineTests.cpp"/>
+        <FILE id="PatternParsingRobustnessTests" name="PatternParsingRobustnessTests.cpp" compile="1"
+              resource="0" file="Source/Tests/PatternParsingRobustnessTests.cpp"/>
+        <FILE id="MusicLanguageAdvancedTests" name="MusicLanguageAdvancedTests.cpp" compile="1"
+              resource="0" file="Source/Tests/MusicLanguageAdvancedTests.cpp"/>
+        <FILE id="PatternParsingStressTests" name="PatternParsingStressTests.cpp" compile="1"
+              resource="0" file="Source/Tests/PatternParsingStressTests.cpp"/>
       </GROUP>
       <GROUP id="{TRACKTION-ENGINE-GROUP}" name="Tracktion Engine"/>
       <GROUP id="{C05A6CB8-92D3-46E6-AD2E-B13D7347AC80}" name="Musician">

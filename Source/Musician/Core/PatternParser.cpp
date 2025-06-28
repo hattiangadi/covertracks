@@ -64,6 +64,13 @@ std::shared_ptr<covertracks::Chart> covertracks::PatternParser::parseChart(const
 
 std::shared_ptr<covertracks::Chart> covertracks::PatternParser::parseChartFromJson(const var& json)
 {
+    // Validate that we have a proper JSON object
+    if (!json.isObject() || json.isVoid())
+    {
+        DBG("Invalid JSON: not an object");
+        return nullptr;
+    }
+    
     auto chart = std::make_shared<Chart>();
     
     // Extract basic properties
@@ -98,28 +105,55 @@ std::shared_ptr<covertracks::Chart> covertracks::PatternParser::parseChartFromJs
     }
     
     // Now add any primitives defined in the JSON (these will override system primitives if there are conflicts)
-    if (json.hasProperty("primitives"))
+    try
     {
-        var primitivesJson = json["primitives"];
-        if (primitivesJson.isObject())
+        if (json.hasProperty("primitives"))
         {
-            for (auto& instrumentProp : primitivesJson.getDynamicObject()->getProperties())
+            var primitivesJson = json["primitives"];
+            // Make sure it's an object and not an array or other type
+            if (primitivesJson.isObject() && !primitivesJson.isArray())
             {
-                String instrumentName = instrumentProp.name.toString();
-                var instrumentPrimitives = instrumentProp.value;
-                
-                if (instrumentPrimitives.isObject())
+                auto* primitivesObj = primitivesJson.getDynamicObject();
+                if (primitivesObj != nullptr)
                 {
-                    for (auto& primitiveProp : instrumentPrimitives.getDynamicObject()->getProperties())
+                    try
                     {
-                        String primitiveName = primitiveProp.name.toString();
-                        int midiNote = primitiveProp.value;
-                        primitives[instrumentName][primitiveName] = midiNote;
-                        DBG("JSON Primitive: " + instrumentName + "." + primitiveName + " = " + String(midiNote));
+                        for (auto& instrumentProp : primitivesObj->getProperties())
+                        {
+                            String instrumentName = instrumentProp.name.toString();
+                            var instrumentPrimitives = instrumentProp.value;
+                            
+                            if (instrumentPrimitives.isObject() && !instrumentPrimitives.isArray())
+                            {
+                                auto* instrumentObj = instrumentPrimitives.getDynamicObject();
+                                if (instrumentObj != nullptr)
+                                {
+                                    for (auto& primitiveProp : instrumentObj->getProperties())
+                                    {
+                                        String primitiveName = primitiveProp.name.toString();
+                                        int midiNote = primitiveProp.value;
+                                        primitives[instrumentName][primitiveName] = midiNote;
+                                        DBG("JSON Primitive: " + instrumentName + "." + primitiveName + " = " + String(midiNote));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (...)
+                    {
+                        DBG("Error parsing primitives properties");
                     }
                 }
             }
+            else if (primitivesJson.isArray())
+            {
+                DBG("Primitives is an array, expected object - skipping");
+            }
         }
+    }
+    catch (...)
+    {
+        DBG("Error accessing primitives from JSON");
     }
     
     // Extract chords
@@ -129,8 +163,11 @@ std::shared_ptr<covertracks::Chart> covertracks::PatternParser::parseChartFromJs
         var chordsJson = json["chords"];
         if (chordsJson.isObject())
         {
-            for (auto& chordProp : chordsJson.getDynamicObject()->getProperties())
+            auto* chordsObj = chordsJson.getDynamicObject();
+            if (chordsObj != nullptr)
             {
+                for (auto& chordProp : chordsObj->getProperties())
+                {
                 String chordName = chordProp.name.toString();
                 var chordNotes = chordProp.value;
                 
@@ -150,6 +187,7 @@ std::shared_ptr<covertracks::Chart> covertracks::PatternParser::parseChartFromJs
                     }
                     DBG("Chord: " + chordName + " = " + noteList);
                 }
+                }
             }
         }
     }
@@ -161,8 +199,11 @@ std::shared_ptr<covertracks::Chart> covertracks::PatternParser::parseChartFromJs
         var patternsJson = json["patterns"];
         if (patternsJson.isObject())
         {
-            for (auto& patternProp : patternsJson.getDynamicObject()->getProperties())
+            auto* patternsObj = patternsJson.getDynamicObject();
+            if (patternsObj != nullptr)
             {
+                for (auto& patternProp : patternsObj->getProperties())
+                {
                 String patternName = patternProp.name.toString();
                 var patternEvents = patternProp.value;
                 
@@ -175,6 +216,7 @@ std::shared_ptr<covertracks::Chart> covertracks::PatternParser::parseChartFromJs
                     }
                     patterns[patternName] = eventArray;
                     DBG("Pattern: " + patternName + " with " + String(eventArray.size()) + " events");
+                }
                 }
             }
         }

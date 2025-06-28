@@ -4,6 +4,7 @@
 #include "../Player/Core/PlayerManager.h"
 #include "../Player/Core/Player.h"
 #include "../Musician/Core/Song.h"
+#include "../Audio/TracktionAudioEngine.h"
 
 namespace covertracks {
 
@@ -50,7 +51,6 @@ private:
         expect(performance.getStyle() == "Jazz", "Style should be set");
         
         // Test state management
-        expect(!performance.isGenerating(), "Should not be generating initially");
         expect(!performance.isPlaying(), "Should not be playing initially");
     }
     
@@ -60,10 +60,13 @@ private:
         
         // Create player manager and players
         PlayerManager playerManager;
+        auto& engine = TracktionAudioEngine::getInstance();
+        auto& formatManager = engine.getFormatManager();
+        auto& knownPluginList = engine.getKnownPluginList();
         
-        auto player1 = std::make_unique<Player>("Guitar Player");
-        auto player2 = std::make_unique<Player>("Bass Player");
-        auto player3 = std::make_unique<Player>("Drum Player");
+        auto player1 = std::make_unique<Player>("guitar-1", "Guitar Player", formatManager, knownPluginList);
+        auto player2 = std::make_unique<Player>("bass-1", "Bass Player", formatManager, knownPluginList);
+        auto player3 = std::make_unique<Player>("drums-1", "Drum Player", formatManager, knownPluginList);
         
         Player* guitarPtr = player1.get();
         Player* bassPtr = player2.get();
@@ -111,10 +114,13 @@ private:
         
         PlayerManager playerManager;
         EnsembleManager ensemble(&playerManager, nullptr, "sync-test");
+        auto& engine = TracktionAudioEngine::getInstance();
+        auto& formatManager = engine.getFormatManager();
+        auto& knownPluginList = engine.getKnownPluginList();
         
         // Add players without actual initialization (for testing)
-        auto player1 = std::make_unique<Player>("Test Player 1");
-        auto player2 = std::make_unique<Player>("Test Player 2");
+        auto player1 = std::make_unique<Player>("test-1", "Test Player 1", formatManager, knownPluginList);
+        auto player2 = std::make_unique<Player>("test-2", "Test Player 2", formatManager, knownPluginList);
         
         Player* p1 = player1.get();
         Player* p2 = player2.get();
@@ -153,7 +159,6 @@ private:
         originalPerformance.setEnsembleName("Test Ensemble");
         originalPerformance.setStyle("Rock");
         originalPerformance.setCharacter("Energetic");
-        originalPerformance.setCoordination("Tight");
         
         // Test serialization
         juce::var serializedData = originalPerformance.toVar();

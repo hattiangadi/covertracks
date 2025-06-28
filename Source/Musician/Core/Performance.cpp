@@ -190,6 +190,7 @@ juce::var Performance::toVar() const
     if (song)
     {
         obj->setProperty("songId", song->getUniqueID());
+        obj->setProperty("song", song->getUniqueID()); // For backward compatibility
     }
     
     // Save chart ID if we have a chart
@@ -205,6 +206,8 @@ juce::var Performance::toVar() const
     obj->setProperty("key", key);
     obj->setProperty("genre", genre);
     obj->setProperty("mood", mood);
+    obj->setProperty("style", style);
+    obj->setProperty("character", character);
     
     // Save generated charts (legacy support)
     juce::DynamicObject* chartsObj = new juce::DynamicObject();
@@ -300,6 +303,16 @@ std::shared_ptr<Performance> Performance::fromVar(const juce::var& v)
         if (obj->hasProperty("mood"))
         {
             performance->mood = obj->getProperty("mood").toString();
+        }
+        
+        if (obj->hasProperty("style"))
+        {
+            performance->style = obj->getProperty("style").toString();
+        }
+        
+        if (obj->hasProperty("character"))
+        {
+            performance->character = obj->getProperty("character").toString();
         }
         
         // Load generated charts (legacy support)
