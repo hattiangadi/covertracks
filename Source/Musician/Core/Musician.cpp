@@ -602,6 +602,128 @@ var Musician::midiMessageSequenceToVar(const MidiMessageSequence& sequence, doub
     return events;
 }
 
+juce::Result Musician::processPatternNotation(const juce::String& patternNotation, Player* player)
+{
+    if (!player)
+    {
+        return juce::Result::fail("No player provided for pattern processing");
+    }
+    
+    if (patternNotation.isEmpty())
+    {
+        return juce::Result::fail("Pattern notation is empty");
+    }
+    
+    // Use Player's state machine approach: Step 1 - Prepare pattern
+    std::cout << "[Musician] Preparing pattern using Player state machine..." << std::endl;
+    bool success = player->preparePattern(patternNotation);
+    
+    if (!success)
+    {
+        return juce::Result::fail("Failed to prepare pattern using Player state machine");
+    }
+    
+    // Step 2: Convert to MIDI to get chart data for visualization
+    std::cout << "[Musician] Converting pattern to MIDI for visualization..." << std::endl;
+    bool converted = player->convertToMidi();
+    
+    if (!converted)
+    {
+        return juce::Result::fail("Failed to convert pattern to MIDI");
+    }
+    
+    std::cout << "[Musician] Pattern processed successfully" << std::endl;
+    return juce::Result::ok();
+}
+
+juce::Result Musician::loadPatternIntoPlayer(Player* player)
+{
+    if (!player)
+    {
+        return juce::Result::fail("No player provided for pattern loading");
+    }
+    
+    // Use Player state machine approach: Step 3 - Load prepared MIDI
+    std::cout << "[Musician] Loading converted MIDI into player instrument..." << std::endl;
+    bool loaded = player->loadPreparedMidi();
+    
+    if (!loaded)
+    {
+        return juce::Result::fail("Failed to load prepared MIDI into player. Make sure pattern is processed first.");
+    }
+    
+    std::cout << "[Musician] Pattern loaded successfully into " << player->getMetadata().name << std::endl;
+    return juce::Result::ok();
+}
+
+juce::Result Musician::startPatternPlayback(Player* player, std::function<void(double tempo)> startTrackingCallback)
+{
+    if (!player)
+    {
+        return juce::Result::fail("No player provided for pattern playback");
+    }
+    
+    // Start playback on the player
+    bool started = player->play();
+    
+    if (!started)
+    {
+        return juce::Result::fail("Failed to start playback on " + player->getMetadata().name);
+    }
+    
+    std::cout << "[Musician] Started playback on " << player->getMetadata().name << std::endl;
+    
+    // Get tempo from the current chart if available and notify UI
+    if (startTrackingCallback)
+    {
+        double tempo = 120.0; // Default tempo
+        var chartData = player->getLastChart();
+        if (chartData.hasProperty("tempo"))
+        {
+            tempo = static_cast<double>(chartData["tempo"]);
+        }
+        
+        startTrackingCallback(tempo);
+    }
+    
+    return juce::Result::ok();
+}
+
+juce::Result Musician::executeCompletePatternWorkflow(const juce::String& patternNotation, Player* player, 
+                                                    std::function<void(double tempo)> startTrackingCallback)
+{
+    if (!player)
+    {
+        return juce::Result::fail("No player provided for complete pattern workflow");
+    }
+    
+    std::cout << "[Musician] Executing complete pattern workflow for " << player->getMetadata().name << std::endl;
+    
+    // Step 1: Process pattern notation
+    auto processResult = processPatternNotation(patternNotation, player);
+    if (processResult.failed())
+    {
+        return processResult;
+    }
+    
+    // Step 2: Load pattern into player
+    auto loadResult = loadPatternIntoPlayer(player);
+    if (loadResult.failed())
+    {
+        return loadResult;
+    }
+    
+    // Step 3: Start playback
+    auto playResult = startPatternPlayback(player, startTrackingCallback);
+    if (playResult.failed())
+    {
+        return playResult;
+    }
+    
+    std::cout << "[Musician] Complete pattern workflow executed successfully" << std::endl;
+    return juce::Result::ok();
+}
+
 var Musician::toVar() const
 {
     DynamicObject* obj = new DynamicObject();

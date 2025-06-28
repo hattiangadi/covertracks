@@ -231,51 +231,42 @@ void PlayerEditorComponent::updatePlayerFromUI()
 {
     if (player != nullptr)
     {
-        // Update metadata
-        auto& metadata = player->getMetadata();
-        metadata.name = nameEditor.getText();
-        // Get the category from the combo box
+        // Get category from the combo box
+        juce::String category;
         int categoryId = categoryEditor.getSelectedId();
         switch (categoryId) {
-            case 1: metadata.category = "Keyboard"; break;
-            case 2: metadata.category = "Drums"; break;
-            case 3: metadata.category = "Bass"; break;
-            case 4: metadata.category = "Guitar"; break;
-            case 5: metadata.category = "Other"; break;
-            default: metadata.category = "Other"; break;
+            case 1: category = "Keyboard"; break;
+            case 2: category = "Drums"; break;
+            case 3: category = "Bass"; break;
+            case 4: category = "Guitar"; break;
+            case 5: category = "Other"; break;
+            default: category = "Other"; break;
         }
-        metadata.description = descriptionEditor.getText();
-        metadata.lastModified = Time::getCurrentTime();
         
-        // Update capabilities from UI
-        updateCapabilitiesFromUI();
+        // Use backend method to update metadata
+        player->updateMetadataFromUI(nameEditor.getText(), category, descriptionEditor.getText());
         
-        // Transfer plugin state from playerInstance to player (NEW SYSTEM)
-        // Note: PlayerEditorComponent uses a dual-player architecture:
-        // - `player`: Original Player object from PlayerManager (for persistence)
-        // - `playerInstance`: Working copy for editing plugins/capabilities
-        // Plugin changes are made to playerInstance, then transferred back to player for saving
-        if (playerInstance != nullptr && playerInstance->getInstrument() != nullptr)
+        // Use backend method to update capabilities
+        player->updateCapabilitiesFromUI(
+            instrumentTypeCombo.getText(),
+            capabilityTypeCombo.getSelectedId(),
+            (int)minNoteSlider.getValue(),
+            (int)maxNoteSlider.getValue(),
+            soundMappingEditor.getText()
+        );
+        
+        // Transfer plugin state from playerInstance to player using backend method
+        if (playerInstance != nullptr)
         {
             std::cout << "Transferring plugin state from playerInstance to player..." << std::endl;
             
-            // Get the complete instrument state from playerInstance
-            auto instrumentState = playerInstance->getInstrument()->saveInstrumentState();
-            
-            if (!instrumentState.isVoid() && player->getInstrument() != nullptr)
+            if (player->transferPluginStateFrom(playerInstance.get()))
             {
-                // Load this state into the main player's instrument
-                bool success = player->getInstrument()->loadInstrumentState(instrumentState);
-                
-                if (success)
-                {
-                    std::cout << "Plugin state transfer successful! Plugin count: " 
-                              << player->getInstrument()->getPluginCount() << std::endl;
-                }
-                else
-                {
-                    std::cerr << "Failed to transfer plugin state to main player" << std::endl;
-                }
+                std::cout << "Plugin state transfer completed successfully" << std::endl;
+            }
+            else
+            {
+                std::cerr << "Failed to transfer plugin state to main player" << std::endl;
             }
         }
         
@@ -816,42 +807,7 @@ void PlayerEditorComponent::updateCapabilitiesUIVisibility()
     soundMappingEditor.setVisible(isMapping);
 }
 
-void PlayerEditorComponent::updateCapabilitiesFromUI()
-{
-    if (!player) return;
-    
-    InstrumentCapabilities capabilities;
-    capabilities.instrumentType = instrumentTypeCombo.getText();
-    capabilities.type = (capabilityTypeCombo.getSelectedId() == 2) ? 
-                       InstrumentCapabilityType::Mapping : InstrumentCapabilityType::NoteRange;
-    
-    if (capabilities.type == InstrumentCapabilityType::Mapping)
-    {
-        // Parse sound mappings from text editor
-        capabilities.soundMappings.clear();
-        StringArray lines = StringArray::fromLines(soundMappingEditor.getText());
-        for (const auto& line : lines)
-        {
-            StringArray parts = StringArray::fromTokens(line, ":", "");
-            if (parts.size() == 2)
-            {
-                String soundName = parts[0].trim();
-                int midiNote = parts[1].getIntValue();
-                if (midiNote >= 0 && midiNote <= 127)
-                {
-                    capabilities.soundMappings[soundName] = midiNote;
-                }
-            }
-        }
-    }
-    else
-    {
-        capabilities.minNote = (int)minNoteSlider.getValue();
-        capabilities.maxNote = (int)maxNoteSlider.getValue();
-    }
-    
-    player->setInstrumentCapabilities(capabilities);
-}
+// updateCapabilitiesFromUI method removed - now using Player::updateCapabilitiesFromUI backend method
 
 void PlayerEditorComponent::updateCapabilitiesInUI()
 {

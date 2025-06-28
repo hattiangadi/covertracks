@@ -1,6 +1,8 @@
 #include "Performance.h"
 #include "../../Player/Core/PlayerManager.h"
 #include "../../Player/Core/Player.h"
+#include "../../LLM/Core/LLMClient.h"
+#include "../../LLM/Core/PromptManager.h"
 #include <iostream>
 
 namespace covertracks {
@@ -706,5 +708,227 @@ bool Performance::startPlaybackForLoadedRoles()
 }
 
 // Legacy method removed - Player is now provided directly in MusicianRole
+
+// =========================================================================
+// Chart Generation Methods (NEW: Extracted from UI)
+// =========================================================================
+
+bool Performance::generateChartForRole(const juce::String& roleName, 
+                                      const MusicianRole& role,
+                                      LLMClient* llmClient,
+                                      const juce::String& styleOverride,
+                                      const juce::String& characterOverride,
+                                      std::function<void(bool, const juce::String&)> callback)
+{
+    if (!llmClient)
+    {
+        if (callback) callback(false, "No LLM client available");
+        return false;
+    }
+    
+    if (!role.player)
+    {
+        if (callback) callback(false, "No player assigned to role " + roleName);
+        return false;
+    }
+    
+    // Check if already generating for this role
+    if (generatingRoles.count(roleName) > 0)
+    {
+        if (callback) callback(false, "Already generating pattern for " + roleName);
+        return false;
+    }
+    
+    // Mark as generating
+    generatingRoles.insert(roleName);
+    setStatusMessage(roleName, "Generating LLM pattern...");
+    
+    // Use provided overrides or fall back to performance settings
+    String currentStyle = styleOverride.isNotEmpty() ? styleOverride : style;
+    String currentCharacter = characterOverride.isNotEmpty() ? characterOverride : character;
+    
+    // Default style if none set
+    if (currentStyle.isEmpty()) currentStyle = "jazz";
+    
+    // Get tempo from song or use default
+    int tempo = 120; // Default
+    if (song)
+    {
+        tempo = static_cast<int>(song->getTempo());
+    }
+    
+    // Create comprehensive description for the LLM
+    String generationDescription = "Generate a " + role.getInstrumentName() + " chart for the role '" + roleName + "'";
+    
+    if (song)
+    {
+        generationDescription += " for the song '" + song->getTitle() + "'";
+        
+        String songStructure = song->getSourceStructureJson();
+        if (songStructure.isNotEmpty())
+        {
+            generationDescription += ". Song structure: " + songStructure;
+        }
+    }
+    
+    if (instructions.isNotEmpty())
+    {
+        generationDescription += ". Performance instructions: " + instructions;
+    }
+    
+    if (key.isNotEmpty())
+    {
+        generationDescription += ". Key: " + key;
+    }
+    
+    if (mood.isNotEmpty())
+    {
+        generationDescription += ". Mood: " + mood;
+    }
+    
+    // Use PromptManager to create the prompt
+    PromptManager promptManager;
+    String prompt = promptManager.createMusicGenerationPrompt(
+        currentStyle,
+        currentCharacter,
+        role.player,
+        roleName, // Use role name as role definition
+        tempo,
+        generationDescription
+    );
+    
+    // Send LLM request with callback
+    llmClient->sendMessage(prompt, [this, roleName, callback](bool success, const String& response)
+    {
+        // Ensure we're on the message thread for thread safety
+        MessageManager::callAsync([this, roleName, success, response, callback]()
+        {
+            // Clear the generating flag
+            generatingRoles.erase(roleName);
+            
+            if (success)
+            {
+                // Validate response isn't too large
+                if (response.length() > 100000) // 100KB limit
+                {
+                    setStatusMessage(roleName, "Response too large");
+                    if (callback) callback(false, "LLM response too large");
+                    return;
+                }
+                
+                // Extract JSON from response (handle markdown formatting)
+                String jsonContent = response.trim();
+                
+                // Handle markdown code blocks
+                if (jsonContent.startsWith("```json") || jsonContent.startsWith("```"))
+                {
+                    int startIndex = jsonContent.indexOf("\n");
+                    if (startIndex >= 0)
+                    {
+                        jsonContent = jsonContent.substring(startIndex + 1);
+                        int endIndex = jsonContent.lastIndexOf("```");
+                        if (endIndex >= 0)
+                        {
+                            jsonContent = jsonContent.substring(0, endIndex);
+                        }
+                    }
+                    jsonContent = jsonContent.trim();
+                }
+                
+                // Find JSON object boundaries if not markdown
+                if (!jsonContent.startsWith("{"))
+                {
+                    int jsonStart = jsonContent.indexOf("{");
+                    if (jsonStart >= 0)
+                    {
+                        jsonContent = jsonContent.substring(jsonStart);
+                    }
+                }
+                
+                if (!jsonContent.endsWith("}"))
+                {
+                    int jsonEnd = jsonContent.lastIndexOf("}");
+                    if (jsonEnd >= 0)
+                    {
+                        jsonContent = jsonContent.substring(0, jsonEnd + 1);
+                    }
+                }
+                
+                // Final validation
+                if (!jsonContent.startsWith("{") || !jsonContent.endsWith("}"))
+                {
+                    setStatusMessage(roleName, "Invalid JSON");
+                    if (callback) callback(false, "Invalid JSON response");
+                    return;
+                }
+                
+                // Store the extracted JSON pattern
+                setLLMPattern(roleName, jsonContent);
+                setStatusMessage(roleName, "LLM pattern ready");
+                if (callback) callback(true, "LLM pattern generated successfully");
+            }
+            else
+            {
+                setStatusMessage(roleName, "Generation Failed");
+                if (callback) callback(false, "Failed to generate LLM pattern");
+            }
+        });
+    });
+    
+    return true;
+}
+
+bool Performance::prepareChartForRole(const juce::String& roleName, 
+                                     const MusicianRole& role,
+                                     double tempoOverride)
+{
+    if (!role.player)
+    {
+        setStatusMessage(roleName, "No player available");
+        return false;
+    }
+    
+    // Check if LLM pattern exists
+    String llmPattern = getLLMPattern(roleName);
+    if (llmPattern.isEmpty())
+    {
+        setStatusMessage(roleName, "No LLM pattern to prep");
+        return false;
+    }
+    
+    // Get tempo from override, song, or default
+    double tempo = 120.0; // Default
+    if (tempoOverride > 0.0)
+    {
+        tempo = tempoOverride;
+    }
+    else if (song)
+    {
+        tempo = song->getTempo();
+    }
+    
+    // Apply the role's level setting to the player
+    role.player->setLevel(role.level);
+    
+    // Convert LLM pattern to MIDI chart
+    auto midiChart = role.player->convertPatternStringToChart(llmPattern, tempo);
+    
+    if (midiChart.hasProperty("success") && static_cast<bool>(midiChart["success"]))
+    {
+        setMIDIChart(roleName, midiChart);
+        setStatusMessage(roleName, "MIDI chart ready");
+        return true;
+    }
+    else
+    {
+        setStatusMessage(roleName, "Prep failed");
+        return false;
+    }
+}
+
+bool Performance::isRoleGenerating(const juce::String& roleName) const
+{
+    return generatingRoles.count(roleName) > 0;
+}
 
 } // namespace covertracks

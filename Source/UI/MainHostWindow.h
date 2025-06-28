@@ -155,7 +155,7 @@ public:
     
     // LLM client
     LLMClient* llmClient; // Raw pointer for compatibility with older code
-    std::shared_ptr<LLMClient> llmClientShared; // Shared pointer for LLMConversationComponent
+    std::shared_ptr<LLMClient> llmClientShared; // Shared pointer for LLM operations
     
     // Performance manager for performance system
     std::unique_ptr<PerformanceManager> performanceManager;

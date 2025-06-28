@@ -143,8 +143,7 @@ PerformanceEditorComponent::PerformanceEditorComponent(PerformanceManager* pm,
 
 PerformanceEditorComponent::~PerformanceEditorComponent()
 {
-    // Clear any pending generations to prevent callbacks on destroyed object
-    generatingRoles.clear();
+    // Note: Generation state is now managed by the Performance class
     
     nameEditor.removeListener(this);
     descriptionEditor.removeListener(this);
@@ -454,290 +453,74 @@ void PerformanceEditorComponent::saveCurrentPerformance()
 
 void PerformanceEditorComponent::generateChartForPlayer(int playerIndex)
 {
-    DBG("DEBUG: generateChartForPlayer called with playerIndex: " << playerIndex);
-    
     if (!currentPerformance)
     {
-        DBG("DEBUG: No performance available");
         statusDisplay.setText("No performance available");
         return;
     }
     
-    if (!playerManager)
-    {
-        DBG("DEBUG: No player manager available");
-        statusDisplay.setText("No player manager available");
-        return;
-    }
-    
     auto ensemble = getPerformanceEnsemble();
-    DBG("DEBUG: Ensemble size: " << ensemble.size());
     if (playerIndex < 0 || playerIndex >= ensemble.size())
     {
-        DBG("DEBUG: Invalid player index: " << playerIndex << " (ensemble size: " << ensemble.size() << ")");
         statusDisplay.setText("Invalid player index: " + String(playerIndex));
         return;
     }
     
     const auto role = ensemble[playerIndex];
-    DBG("DEBUG: Role found: " << role.getName() << " with instrument: " << role.getInstrumentName());
-    statusDisplay.setText("Generating chart for " + role.getName() + "...");
+    String roleName = role.getName();
     
-    // Use the player assigned to this role in the ensemble
-    Player* player = role.player;
-    DBG("DEBUG: Role " << role.getName() << " (" << role.getInstrumentName() << ") player pointer: " << (player ? "exists" : "null"));
-    
-    if (!player)
+    // Ensure player is initialized before generation
+    if (role.player)
     {
-        DBG("DEBUG: No player assigned to role: " << role.getName());
-        statusDisplay.setText("No player assigned to role " + role.getName() + " (" + role.getInstrumentName() + ")");
-        return;
-    }
-    
-    // Ensure this player has the LLM client set
-    if (llmClient)
-    {
-        player->setLLMClient(llmClient);
-        DBG("DEBUG: Set LLM client on player: " << player->getMetadata().name);
-    }
-    
-    DBG("DEBUG: Player found, proceeding with chart generation");
-    
-    // Ensure the player is initialized before generating charts
-    if (!player->initialize())
-    {
-        DBG("DEBUG: Failed to initialize player: " << player->getMetadata().name);
-        statusDisplay.setText("Failed to initialize player " + role.getName());
-        return;
-    }
-    DBG("DEBUG: Player initialized successfully");
-    
-    // Create parameters for chart generation
-    var parameters = var(new DynamicObject());
-    
-    // Set instruments as array
-    var instrumentsArray = var(Array<var>());
-    instrumentsArray.append(var(role.getInstrumentName()));
-    parameters.getDynamicObject()->setProperty("instruments", instrumentsArray);
-    
-    // Set style from selector
-    String style = styleSelector.getText();
-    if (style.isEmpty()) style = "jazz";
-    parameters.getDynamicObject()->setProperty("style", style);
-    
-    // Set tempo
-    int tempo = 120; // Default
-    if (auto song = currentPerformance->getSong())
-    {
-        tempo = static_cast<int>(song->getTempo());
-    }
-    parameters.getDynamicObject()->setProperty("tempo", tempo);
-    
-    // Create comprehensive description for the LLM
-    String description = "Generate a " + role.getInstrumentName() + " chart for the role '" + role.getName() + "'";
-    
-    if (auto song = currentPerformance->getSong())
-    {
-        description += " for the song '" + song->getTitle() + "'";
-        
-        String songStructure = song->getSourceStructureJson();
-        if (songStructure.isNotEmpty())
+        if (llmClient)
         {
-            description += ". Song structure: " + songStructure;
+            role.player->setLLMClient(llmClient);
+        }
+        
+        if (!role.player->initialize())
+        {
+            statusDisplay.setText("Failed to initialize player " + roleName);
+            return;
         }
     }
     
-    String instructions = currentPerformance->getInstructions();
-    if (instructions.isNotEmpty())
-    {
-        description += ". Performance instructions: " + instructions;
-    }
-    
-    String key = currentPerformance->getKey();
-    if (key.isNotEmpty())
-    {
-        description += ". Key: " + key;
-    }
-    
-    String mood = currentPerformance->getMood();
-    if (mood.isNotEmpty())
-    {
-        description += ". Mood: " + mood;
-    }
-    
-    parameters.getDynamicObject()->setProperty("description", description);
-    
-    // Generate LLM pattern directly using LLM client
-    String roleName = role.getName();
-    DBG("DEBUG: About to generate LLM pattern for role: " << roleName);
-    
-    // Check if already generating for this role
-    if (generatingRoles.count(roleName) > 0)
-    {
-        statusDisplay.setText("Already generating pattern for " + roleName);
-        DBG("DEBUG: Already generating for " << roleName << ", skipping request");
-        return;
-    }
-    
-    if (!llmClient)
-    {
-        statusDisplay.setText("No LLM client available");
-        currentPerformance->setStatusMessage(roleName, "No LLM client");
-        return;
-    }
-    
-    // Mark as generating
-    generatingRoles.insert(roleName);
-    
-    // Use PromptManager to create the prompt with new format
-    String promptStyle = parameters.getDynamicObject()->getProperty("style").toString();
-    int promptTempo = static_cast<int>(parameters.getDynamicObject()->getProperty("tempo"));
+    // Set performance style and character from UI
+    String style = styleSelector.getText();
     String character = characterEditor.getText();
-    String instrumentRoleDefinition = roleName; // Use role name as role definition for now
+    currentPerformance->setStyle(style);
+    currentPerformance->setCharacter(character);
     
-    // Create PromptManager instance to use the new method
-    PromptManager promptManager;
-    
-    String prompt = promptManager.createMusicGenerationPrompt(
-        promptStyle,
-        character,
-        player,  // Pass the player object instead of instrument name
-        instrumentRoleDefinition,
-        promptTempo,
-        description
-    );
-    
-    // Store that we're generating for this role
-    currentPerformance->setStatusMessage(roleName, "Generating LLM pattern...");
-    if (playerTable)
-        playerTable->updateContent();
-    
-    DBG("DEBUG: Sending LLM request for " << roleName << " - prompt length: " << prompt.length());
-    
-    llmClient->sendMessage(prompt, [this, roleName](bool success, const String& response)
-    {
-        DBG("DEBUG: LLM response received for " << roleName << " - success: " << (success ? "true" : "false") << " - response length: " << response.length());
-        
-        // Ensure we're on the message thread for UI updates
-        MessageManager::callAsync([this, roleName, success, response]()
+    // Use the clean backend method
+    bool started = currentPerformance->generateChartForRole(
+        roleName,
+        role,
+        llmClient.get(),
+        "", // Use performance style
+        "", // Use performance character  
+        [this, roleName](bool success, const String& message)
         {
-            DBG("DEBUG: Processing LLM response on message thread for " << roleName);
+            // UI callback - just update display
+            statusDisplay.setText(message);
             
-            // Clear the generating flag
-            generatingRoles.erase(roleName);
-            
-            if (success && currentPerformance)
+            if (success)
             {
-                // Validate response isn't too large (potential infinite generation)
-                if (response.length() > 100000) // 100KB limit
-                {
-                    DBG("WARNING: LLM response too large (" << response.length() << " chars) for " << roleName);
-                    statusDisplay.setText("LLM response too large for " + roleName);
-                    if (currentPerformance)
-                        currentPerformance->setStatusMessage(roleName, "Response too large");
-                    return;
-                }
-                
-                // Extract JSON from response (handle markdown formatting)
-                String jsonContent = response.trim();
-                
-                // Check for markdown code block
-                if (jsonContent.startsWith("```json"))
-                {
-                    int startIndex = jsonContent.indexOf("\n");
-                    if (startIndex >= 0)
-                    {
-                        jsonContent = jsonContent.substring(startIndex + 1);
-                        int endIndex = jsonContent.lastIndexOf("```");
-                        if (endIndex >= 0)
-                        {
-                            jsonContent = jsonContent.substring(0, endIndex);
-                        }
-                    }
-                    jsonContent = jsonContent.trim();
-                }
-                else if (jsonContent.startsWith("```"))
-                {
-                    int startIndex = jsonContent.indexOf("\n");
-                    if (startIndex >= 0)
-                    {
-                        jsonContent = jsonContent.substring(startIndex + 1);
-                        int endIndex = jsonContent.lastIndexOf("```");
-                        if (endIndex >= 0)
-                        {
-                            jsonContent = jsonContent.substring(0, endIndex);
-                        }
-                    }
-                    jsonContent = jsonContent.trim();
-                }
-                
-                // Find JSON object boundaries if not markdown
-                if (!jsonContent.startsWith("{"))
-                {
-                    int jsonStart = jsonContent.indexOf("{");
-                    if (jsonStart >= 0)
-                    {
-                        jsonContent = jsonContent.substring(jsonStart);
-                    }
-                }
-                
-                if (!jsonContent.endsWith("}"))
-                {
-                    int jsonEnd = jsonContent.lastIndexOf("}");
-                    if (jsonEnd >= 0)
-                    {
-                        jsonContent = jsonContent.substring(0, jsonEnd + 1);
-                    }
-                }
-                
-                // Check if JSON is incomplete (likely due to token limit)
-                if (jsonContent.startsWith("{") && !jsonContent.endsWith("}"))
-                {
-                    // JSON started but didn't finish - likely hit token limit
-                    DBG("INFO: Incomplete JSON detected for " << roleName << " - requesting continuation");
-                    statusDisplay.setText("JSON incomplete for " + roleName + " - requesting continuation...");
-                    
-                    // Request continuation
-                    requestJsonContinuation(roleName, jsonContent);
-                    return;
-                }
-                
-                // Final validation
-                if (!jsonContent.startsWith("{") || !jsonContent.endsWith("}"))
-                {
-                    DBG("WARNING: Could not extract valid JSON for " << roleName);
-                    DBG("Original response preview: " << response.substring(0, 200));
-                    DBG("Extracted content preview: " << jsonContent.substring(0, 200));
-                    statusDisplay.setText("Invalid JSON response for " + roleName);
-                    if (currentPerformance)
-                        currentPerformance->setStatusMessage(roleName, "Invalid JSON");
-                    return;
-                }
-                
-                // Store the extracted JSON pattern
-                currentPerformance->setLLMPattern(roleName, jsonContent);
-                currentPerformance->setStatusMessage(roleName, "LLM pattern ready");
                 statusDisplay.setText("LLM pattern generated for " + roleName + " - ready to prep");
-                DBG("DEBUG: Successfully stored LLM pattern for " << roleName << " (" << jsonContent.length() << " chars)");
             }
             else
             {
-                statusDisplay.setText("Failed to generate LLM pattern for " + roleName);
-                if (currentPerformance)
-                {
-                    currentPerformance->setStatusMessage(roleName, "Generation Failed");
-                }
-                DBG("DEBUG: Generation failed for " << roleName);
+                statusDisplay.setText("Failed to generate pattern for " + roleName + ": " + message);
             }
             
             // Update the player table to show new status
             if (playerTable)
-            {
-                DBG("DEBUG: Updating player table after LLM response for " << roleName);
                 playerTable->updateContent();
-            }
-        });
-    });
+        }
+    );
+    
+    if (!started)
+    {
+        statusDisplay.setText("Could not start generation for " + roleName);
+    }
 }
 
 void PerformanceEditorComponent::loadChartForPlayer(int playerIndex)
@@ -891,9 +674,9 @@ void PerformanceEditorComponent::playPlayer(int playerIndex)
 
 void PerformanceEditorComponent::prepChartForPlayer(int playerIndex)
 {
-    if (!currentPerformance || !playerManager)
+    if (!currentPerformance)
     {
-        statusDisplay.setText("No performance or player manager available");
+        statusDisplay.setText("No performance available");
         return;
     }
     
@@ -905,47 +688,20 @@ void PerformanceEditorComponent::prepChartForPlayer(int playerIndex)
     }
     
     const auto role = ensemble[playerIndex];
-    statusDisplay.setText("Prepping pattern for " + role.getName() + "...");
+    String roleName = role.getName();
     
-    // Check if LLM pattern exists
-    String llmPattern = currentPerformance->getLLMPattern(role.getName());
-    if (llmPattern.isEmpty())
+    statusDisplay.setText("Prepping pattern for " + roleName + "...");
+    
+    // Use the clean backend method
+    bool success = currentPerformance->prepareChartForRole(roleName, role);
+    
+    if (success)
     {
-        statusDisplay.setText("No LLM pattern to prep for " + role.getName());
-        currentPerformance->setStatusMessage(role.getName(), "No LLM pattern to prep");
-        return;
-    }
-    
-    // Convert LLM pattern to MIDI chart
-    Player* player = role.player;
-    if (!player)
-    {
-        statusDisplay.setText("No player assigned to role " + role.getName());
-        currentPerformance->setStatusMessage(role.getName(), "No player available");
-        return;
-    }
-    
-    DBG("DEBUG: About to prep pattern for " << role.getName());
-    DBG("DEBUG: LLM pattern length: " << llmPattern.length());
-    DBG("DEBUG: LLM pattern preview: " << llmPattern.substring(0, 200) << "...");
-    
-    // Apply the role's level setting to the player
-    player->setLevel(role.level);
-    
-    auto midiChart = player->convertPatternStringToChart(llmPattern, 120.0);
-    
-    if (midiChart.hasProperty("success") && static_cast<bool>(midiChart["success"]))
-    {
-        currentPerformance->setMIDIChart(role.getName(), midiChart);
-        currentPerformance->setStatusMessage(role.getName(), "MIDI chart ready");
-        statusDisplay.setText("Successfully prepped pattern for " + role.getName());
-        DBG("DEBUG: Successfully prepped pattern for " << role.getName());
+        statusDisplay.setText("Successfully prepped pattern for " + roleName);
     }
     else
     {
-        currentPerformance->setStatusMessage(role.getName(), "Prep failed");
-        statusDisplay.setText("Failed to prep pattern for " + role.getName());
-        DBG("DEBUG: Prep failed for " << role.getName() << ". MIDI chart: " << JSON::toString(midiChart, true));
+        statusDisplay.setText("Failed to prep pattern for " + roleName);
     }
     
     // Update the player table to reflect new status
@@ -1023,10 +779,39 @@ void PerformanceEditorComponent::generateAllCharts()
     int generated = 0;
     int total = ensemble.size();
     
-    for (int i = 0; i < ensemble.size(); ++i)
+    // Use backend method for each role
+    for (const auto& role : ensemble)
     {
-        generateChartForPlayer(i);
-        generated++;
+        String roleName = role.getName();
+        
+        bool started = currentPerformance->generateChartForRole(
+            roleName,
+            role,
+            llmClient.get(),
+            "", // Use performance style
+            "", // Use performance character
+            [this, roleName](bool success, const String& message)
+            {
+                // UI callback - just update display
+                if (success)
+                {
+                    statusDisplay.setText("LLM pattern generated for " + roleName + " - ready to prep");
+                }
+                else
+                {
+                    statusDisplay.setText("Failed to generate pattern for " + roleName + ": " + message);
+                }
+                
+                // Update the player table
+                if (playerTable)
+                    playerTable->updateContent();
+            }
+        );
+        
+        if (started)
+        {
+            generated++;
+        }
     }
     
     statusDisplay.setText("Started generation for " + String(generated) + " of " + String(total) + " players");
@@ -1056,37 +841,15 @@ void PerformanceEditorComponent::prepAllCharts()
     int prepped = 0;
     int total = ensemble.size();
     
-    for (int i = 0; i < ensemble.size(); ++i)
+    // Use backend method for each role
+    for (const auto& role : ensemble)
     {
-        const auto role = ensemble[i];
+        String roleName = role.getName();
         
-        // Check if LLM pattern exists
-        String llmPattern = currentPerformance->getLLMPattern(role.getName());
-        if (!llmPattern.isEmpty())
+        // Use the backend preparation method
+        if (currentPerformance->prepareChartForRole(roleName, role, 0.0))
         {
-            // Convert LLM pattern to MIDI chart
-            if (role.player)
-            {
-                // Apply the role's level setting to the player
-                role.player->setLevel(role.level);
-                
-                auto midiChart = role.player->convertPatternStringToChart(llmPattern, 120.0);
-                
-                if (midiChart.hasProperty("success") && static_cast<bool>(midiChart["success"]))
-                {
-                    currentPerformance->setMIDIChart(role.getName(), midiChart);
-                    currentPerformance->setStatusMessage(role.getName(), "MIDI chart ready");
-                    prepped++;
-                }
-                else
-                {
-                    currentPerformance->setStatusMessage(role.getName(), "Prep failed");
-                }
-            }
-        }
-        else
-        {
-            currentPerformance->setStatusMessage(role.getName(), "No LLM pattern to prep");
+            prepped++;
         }
     }
     

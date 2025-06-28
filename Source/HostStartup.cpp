@@ -208,7 +208,7 @@ public:
         File fileToOpen;
 
        #if JUCE_ANDROID || JUCE_IOS
-        fileToOpen = PluginGraph::getDefaultGraphDocumentOnMobile();
+        // In the Tracktion architecture, default documents are handled by Player loading
        #else
         for (int i = 0; i < getCommandLineParameterArray().size(); ++i)
         {

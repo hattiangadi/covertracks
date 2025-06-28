@@ -1,7 +1,6 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include <set>
 #include "../../Core/Performance.h"
 #include "../../Core/PerformanceManager.h"
 #include "../../Core/EnsembleManager.h"
@@ -89,7 +88,6 @@ private:
     Performance* currentPerformance = nullptr;
     bool isNewPerformance = false;
     std::function<void()> backCallback;
-    std::set<String> generatingRoles; // Track which roles are currently generating
     
     // Pattern editing mode
     bool isInPatternEditMode = false;

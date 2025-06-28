@@ -430,7 +430,7 @@ MainHostWindow::MainHostWindow()
         auto dummyClient = std::make_shared<DummyLLMClient>();
         llmClient = dummyClient.get();
         
-        // Store the shared_ptr for use with LLMConversationComponent
+        // Store the shared_ptr for use with components that need it
         llmClientShared = dummyClient;
     }
     // Create Song Manager component

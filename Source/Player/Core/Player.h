@@ -355,6 +355,32 @@ public:
      */
     void setInstrumentCapabilities(const InstrumentCapabilities& capabilities);
     
+    /**
+     * @brief Update player metadata from UI data (backend method)
+     * @param name Player name from UI
+     * @param category Category from UI
+     * @param description Description from UI
+     */
+    void updateMetadataFromUI(const juce::String& name, const juce::String& category, const juce::String& description);
+    
+    /**
+     * @brief Update instrument capabilities from UI data (backend method)
+     * @param instrumentType Instrument type from combo box
+     * @param capabilityType Capability type (1=NoteRange, 2=Mapping)
+     * @param minNote Minimum note value (for NoteRange)
+     * @param maxNote Maximum note value (for NoteRange)
+     * @param soundMappingText Sound mapping text (for Mapping)
+     */
+    void updateCapabilitiesFromUI(const juce::String& instrumentType, int capabilityType, 
+                                 int minNote, int maxNote, const juce::String& soundMappingText);
+    
+    /**
+     * @brief Transfer plugin state from a working Player instance (backend method)
+     * @param sourcePlayer Source player with plugin state to transfer
+     * @return bool True if transfer was successful
+     */
+    bool transferPluginStateFrom(const Player* sourcePlayer);
+    
     // =========================================================================
     // Legacy Player Compatibility Methods (for PlayerEditorComponent)
     // =========================================================================

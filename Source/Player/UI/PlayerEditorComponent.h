@@ -110,7 +110,6 @@ void updateUIFromPlayer();
 // Instrument capabilities methods
 void setupCapabilitiesUI();
 void updateCapabilitiesUIVisibility();
-void updateCapabilitiesFromUI();
 void updateCapabilitiesInUI();
 
 // Timer callback

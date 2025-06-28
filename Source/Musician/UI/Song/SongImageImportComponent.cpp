@@ -1,4 +1,5 @@
 #include "SongImageImportComponent.h"
+#include "../../Core/Song.h"
 
 namespace covertracks {
 
@@ -262,269 +263,47 @@ void SongImageImportComponent::processImageWithLLM()
     cancelButton.setEnabled(false);
     repaint();
     
-    // Preprocess the image to reduce size (Claude has a 5MB limit)
-    juce::Image processedImage = preprocessImageForLLM(loadedImage);
-    
-    // Convert image to base64 for sending to LLM
-    juce::MemoryOutputStream mos;
-    juce::JPEGImageFormat jpegFormat;
-    
-    // Start with moderate quality
-    float quality = 0.7f;
-    jpegFormat.setQuality(quality);
-    jpegFormat.writeImageToStream(processedImage, mos);
-    
-    // Check size and log
-    size_t imageDataSize = mos.getDataSize();
-    std::cout << "Image size before base64 encoding: " << (imageDataSize / 1024) << " KB" << std::endl;
-    
-    // Claude has a 5MB limit, which is about 3.75MB before base64 encoding
-    // If the image is still too large, try reducing quality or dimensions further
-    const size_t maxSizeBytes = 3 * 1024 * 1024; // 3MB safety margin
-    
-    if (imageDataSize > maxSizeBytes)
-    {
-        std::cout << "Image still too large, applying additional compression..." << std::endl;
-        
-        // Try with lower quality first
-        for (quality = 0.5f; quality >= 0.2f && imageDataSize > maxSizeBytes; quality -= 0.1f)
-        {
-            mos.reset();
-            jpegFormat.setQuality(quality);
-            jpegFormat.writeImageToStream(processedImage, mos);
-            imageDataSize = mos.getDataSize();
-            std::cout << "Reduced quality to " << quality << ", new size: " << (imageDataSize / 1024) << " KB" << std::endl;
-        }
-        
-        // If still too large, reduce dimensions further
-        if (imageDataSize > maxSizeBytes)
-        {
-            std::cout << "Still too large, reducing dimensions further..." << std::endl;
-            
-            // Create a smaller image
-            int newWidth = processedImage.getWidth() / 2;
-            int newHeight = processedImage.getHeight() / 2;
-            
-            juce::Image smallerImage(processedImage.getFormat(), newWidth, newHeight, true);
-            juce::Graphics g(smallerImage);
-            g.drawImage(processedImage, 0, 0, newWidth, newHeight, 
-                       0, 0, processedImage.getWidth(), processedImage.getHeight());
-            
-            // Try again with the smaller image
-            mos.reset();
-            jpegFormat.setQuality(0.5f); // Reset quality to a reasonable value
-            jpegFormat.writeImageToStream(smallerImage, mos);
-            imageDataSize = mos.getDataSize();
-            std::cout << "Reduced dimensions to " << newWidth << "x" << newHeight 
-                      << ", new size: " << (imageDataSize / 1024) << " KB" << std::endl;
-            
-            // If it's still too large, give up and let the ClaudeClient handle the error
-        }
-    }
-    
-    juce::String base64Image = juce::Base64::toBase64(mos.getData(), mos.getDataSize());
-    std::cout << "Base64 encoded size: " << (base64Image.length() / 1024) << " KB" << std::endl;
-    
-    // Prepare the prompt for the LLM
-    juce::String prompt = 
-        "You are a musician's assistant, performing the first step of converting the given image to a detailed lead sheet "
-        "that will later be used to generate an improvised midi performance. Please convert this to json in as much detail as possible, "
-        "following this example. Use the following convention for notes: \"1:3\" would be play this note on the first count "
-        "(of 4 for 4/4) for 3(of the 4) notes. Indicate rests by setting the note to r. Provide only the complete json in the response, "
-        "no additional preamble or final details. Indicate sections with variations to describe the form of the piece at the beginning "
-        "(A1, A2, B, A1) A1: 1-4, A2 1-4 measure 4 Chords/notes, B, A1)\n\n"
-        "{\n"
-        "\"title\": \"Take the \\\"A\\\" Train\",\n"
-        "\"composer\": \"Billy Strayhorn\",\n"
-        "\"key\": \"C\",\n"
-        "\"timeSignature\": \"4/4\",\n"
-        "\"tempo\": 132,\n"
-        "\"style\": \"Medium Swing\",\n"
-        "  \"measures\": [\n"
-        "    {\n"
-        "      \"meas\": 1,\n"
-        "      \"ch\": \"C6\",\n"
-        "      \"mel\": {\n"
-        "        \"nts\": [\"G4\"],\n"
-        "        \"dur\": [\"1:4\"]\n"
-        "      },\n"
-        "      \"lyr\": \"You-\"\n"
-        "    },\n"
-        "    {\n"
-        "      \"meas\": 2,\n"
-        "      \"ch\": \"\",\n"
-        "      \"mel\": {\n"
-        "        \"nts\": [\"G4\",\"E4\", \"G4\", \"C4\"],\n"
-        "        \"dur\": [\"1:.5\", \"1.5:1.5\", \"3:1\", \"4:1\"]\n"
-        "      },\n"
-        "      \"lyr\": \"-ou must take the\"\n"
-        "    }\n"
-        "  ]\n"
-        "}\n\n"
-        "If you cannot determine some information, use null or empty values. For sheet music, focus on extracting the melody, "
-        "chords, time signature, key, and any other musical elements visible in the image.";
-    
-    // Send the request to the LLM using the new image-specific method
-    llmClient->sendMessageWithImage(prompt, base64Image, "image/jpeg", [this](bool success, const juce::String& responseText) {
+    // Use backend method for image processing
+    auto result = Song::processImageForStructure(loadedImage, llmClient, [this](bool success, const juce::var& extractedJson) {
         // Reset processing state
-        isProcessing = false;
-        processButton.setEnabled(true);
-        cancelButton.setEnabled(true);
-        
-        if (!success)
-        {
-            // Handle error
-            juce::MessageManager::callAsync([this]() {
-                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
-                                                      "Error",
-                                                      "Failed to process image with LLM.");
-                repaint();
-            });
-            return;
-        }
-        
-        // Try to parse the response as JSON
-        juce::var parsedJson;
-        
-        // Log the raw response for debugging
-        std::cout << "Raw Claude response: " << responseText << std::endl;
-        
-        // Extract JSON from the response text
-        // Claude 4 responses are structured differently with content blocks
-        juce::String jsonStr = responseText;
-        
-        // First check if this is a Claude API response with content blocks
-        if (responseText.contains("\"content\":[{\"type\":\"text\",\"text\":\""))
-        {
-            // This is a Claude API response with the new format
-            juce::var apiResponse;
-            juce::Result apiResult = juce::JSON::parse(responseText, apiResponse);
+        juce::MessageManager::callAsync([this, success, extractedJson]() {
+            isProcessing = false;
+            processButton.setEnabled(true);
+            cancelButton.setEnabled(true);
             
-            if (!apiResult.failed() && apiResponse.isObject())
+            if (success)
             {
-                // Extract the text content from the first content block
-                if (apiResponse.hasProperty("content") && apiResponse["content"].isArray())
-                {
-                    auto contentArray = apiResponse["content"].getArray();
-                    if (contentArray && contentArray->size() > 0)
-                    {
-                        auto firstContent = contentArray->getReference(0);
-                        if (firstContent.hasProperty("text"))
-                        {
-                            jsonStr = firstContent["text"].toString();
-                            std::cout << "Extracted JSON from content block: " << jsonStr << std::endl;
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Now extract the actual JSON object from the text
-        int jsonStart = jsonStr.indexOf("{");
-        int jsonEnd = jsonStr.lastIndexOf("}");
-        
-        if (jsonStart >= 0 && jsonEnd >= 0 && jsonEnd > jsonStart)
-        {
-            jsonStr = jsonStr.substring(jsonStart, jsonEnd + 1);
-            std::cout << "Extracted JSON object: " << jsonStr << std::endl;
-        }
-        
-        juce::Result result = juce::JSON::parse(jsonStr, parsedJson);
-        
-        if (result.failed())
-        {
-            // Handle parsing error
-            juce::MessageManager::callAsync([this, responseText]() {
-                // If JSON parsing failed, we'll just pass the raw text to the callback
-                // and let the SongEditorComponent handle it
-                juce::var rawResponse;
-                rawResponse.getDynamicObject()->setProperty("rawText", responseText);
-                
-                // Call the callback with the raw response
+                // Call the callback with the extracted structure
                 if (structureExtractedCallback)
                 {
-                    structureExtractedCallback(rawResponse);
+                    structureExtractedCallback(extractedJson);
                 }
                 
                 // Reset the component
                 reset();
-                repaint();
-            });
-            return;
-        }
-        
-        // Call the callback with the parsed JSON
-        juce::MessageManager::callAsync([this, parsedJson]() {
-            if (structureExtractedCallback)
+            }
+            else
             {
-                structureExtractedCallback(parsedJson);
+                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
+                                                      "Processing Failed",
+                                                      "Failed to extract song structure from image.");
             }
             
-            // Reset the component
-            reset();
             repaint();
         });
     });
-}
-
-juce::Image SongImageImportComponent::preprocessImageForLLM(const juce::Image& sourceImage)
-{
-    // Claude has a 5MB limit for images, so we need to ensure our image is under this limit
-    // First, check if the image is already grayscale, if not convert it
-    juce::Image processedImage;
     
-    if (sourceImage.getFormat() != juce::Image::PixelFormat::SingleChannel)
+    if (result.failed())
     {
-        // Convert to grayscale (single channel) for sheet music
-        // Sheet music is typically black and white, so this preserves quality while reducing size
-        processedImage = juce::Image(juce::Image::PixelFormat::SingleChannel, 
-                                   sourceImage.getWidth(), 
-                                   sourceImage.getHeight(), 
-                                   true);
+        isProcessing = false;
+        processButton.setEnabled(true);
+        cancelButton.setEnabled(true);
         
-        juce::Graphics g(processedImage);
-        g.drawImageAt(sourceImage, 0, 0);
+        juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
+                                              "Error",
+                                              result.getErrorMessage());
+        repaint();
     }
-    else
-    {
-        // Already grayscale, just use as is
-        processedImage = sourceImage;
-    }
-    
-    // Check if we need to resize the image
-    // A good rule of thumb is to keep the total pixel count under 2 million for sheet music
-    // This preserves enough detail while keeping file size reasonable
-    const int maxPixels = 2000000; // 2 million pixels (e.g., ~1400x1400)
-    const int currentPixels = processedImage.getWidth() * processedImage.getHeight();
-    
-    if (currentPixels > maxPixels)
-    {
-        // Calculate the scale factor to reduce to target size
-        float scaleFactor = std::sqrt(static_cast<float>(maxPixels) / currentPixels);
-        
-        int newWidth = static_cast<int>(processedImage.getWidth() * scaleFactor);
-        int newHeight = static_cast<int>(processedImage.getHeight() * scaleFactor);
-        
-        // Ensure dimensions are at least 100 pixels
-        newWidth = std::max(100, newWidth);
-        newHeight = std::max(100, newHeight);
-        
-        // Create the resized image
-        juce::Image resizedImage(processedImage.getFormat(), newWidth, newHeight, true);
-        juce::Graphics g(resizedImage);
-        
-        // Use high quality resampling for sheet music to preserve details
-        g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
-        g.drawImage(processedImage, 0, 0, newWidth, newHeight, 
-                   0, 0, processedImage.getWidth(), processedImage.getHeight());
-        
-        processedImage = resizedImage;
-        
-        std::cout << "Resized image from " << sourceImage.getWidth() << "x" << sourceImage.getHeight() 
-                  << " to " << newWidth << "x" << newHeight << std::endl;
-    }
-    
-    return processedImage;
 }
 
 void SongImageImportComponent::setLLMClient(std::shared_ptr<LLMClient> client)

@@ -54,6 +54,12 @@
               resource="0" file="Source/Tests/TracktionAudioTest.cpp"/>
         <FILE id="TracktionAudioTestH" name="TracktionAudioTest.h" compile="0"
               resource="0" file="Source/Tests/TracktionAudioTest.h"/>
+        <FILE id="SongImageProcessingTests" name="SongImageProcessingTests.cpp" compile="1"
+              resource="0" file="Source/Tests/SongImageProcessingTests.cpp"/>
+        <FILE id="PerformanceManagementTests" name="PerformanceManagementTests.cpp" compile="1"
+              resource="0" file="Source/Tests/PerformanceManagementTests.cpp"/>
+        <FILE id="TracktionAudioEngineTests" name="TracktionAudioEngineTests.cpp" compile="1"
+              resource="0" file="Source/Tests/TracktionAudioEngineTests.cpp"/>
       </GROUP>
       <GROUP id="{TRACKTION-ENGINE-GROUP}" name="Tracktion Engine"/>
       <GROUP id="{C05A6CB8-92D3-46E6-AD2E-B13D7347AC80}" name="Musician">
@@ -132,10 +138,6 @@
                 file="Source/Musician/UI/PatternEditorComponent.cpp"/>
           <FILE id="SERDET" name="PatternEditorComponent.h" compile="0" resource="0"
                 file="Source/Musician/UI/PatternEditorComponent.h"/>
-          <FILE id="U14a7y" name="PerformanceComponent.cpp" compile="1" resource="0"
-                file="Source/Musician/UI/PerformanceComponent.cpp"/>
-          <FILE id="TD8JIZ" name="PerformanceComponent.h" compile="0" resource="0"
-                file="Source/Musician/UI/PerformanceComponent.h"/>
         </GROUP>
       </GROUP>
       <GROUP id="{CE2ADCC9-E18C-3DDD-3381-B0826D1E92A1}" name="LLM">

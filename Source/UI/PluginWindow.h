@@ -51,7 +51,7 @@ inline String getFormatSuffix (const AudioProcessor* plugin)
     return format.isNotEmpty() ? (" (" + format + ")") : format;
 }
 
-class PluginGraph;
+// Forward declarations no longer needed for PluginGraph in Tracktion architecture
 
 /**
     A window that shows a log of parameter change messages sent by the plugin.

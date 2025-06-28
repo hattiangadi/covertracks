@@ -198,6 +198,39 @@ public:
     var toVar() const;
     
     /**
+     * @brief Process pattern notation with a player (backend method)
+     * @param patternNotation Pattern notation string from UI
+     * @param player Player to use for processing
+     * @return juce::Result Success/failure with error message and chart data
+     */
+    juce::Result processPatternNotation(const juce::String& patternNotation, Player* player);
+    
+    /**
+     * @brief Load processed pattern into player (backend method)
+     * @param player Player to load pattern into
+     * @return juce::Result Success/failure with error message
+     */
+    juce::Result loadPatternIntoPlayer(Player* player);
+    
+    /**
+     * @brief Start pattern playback with tracking (backend method)
+     * @param player Player to start playback on
+     * @param startTrackingCallback Callback to start UI tracking with tempo
+     * @return juce::Result Success/failure with error message and tempo
+     */
+    juce::Result startPatternPlayback(Player* player, std::function<void(double tempo)> startTrackingCallback = nullptr);
+    
+    /**
+     * @brief Complete pattern workflow: parse + load + play (backend method)
+     * @param patternNotation Pattern notation string
+     * @param player Player to use
+     * @param startTrackingCallback Callback to start UI tracking with tempo
+     * @return juce::Result Success/failure with error message
+     */
+    juce::Result executeCompletePatternWorkflow(const juce::String& patternNotation, Player* player, 
+                                              std::function<void(double tempo)> startTrackingCallback = nullptr);
+    
+    /**
      * @brief Create a Musician from JSON
      * 
      * @param v JSON representation

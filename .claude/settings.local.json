@@ -46,7 +46,8 @@
       "Bash(jq:*)",
       "Bash(cp:*)",
       "Bash(/dev/null)",
-      "Bash(/Applications/JUCE/Projucer.app/Contents/MacOS/Projucer --resave Covertracks.jucer)"
+      "Bash(/Applications/JUCE/Projucer.app/Contents/MacOS/Projucer --resave Covertracks.jucer)",
+      "Bash(./Builds/MacOSX/build/Debug/Covertracks.app/Contents/MacOS/Covertracks:*)"
     ],
     "deny": []
   }

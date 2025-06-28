@@ -111,6 +111,46 @@ public:
      */
     static std::shared_ptr<Song> fromVar(const juce::var& v);
     
+    /**
+     * @brief Update song from UI editor data (backend method)
+     * @param title Title from UI editor
+     * @param tempo Tempo from UI editor
+     * @param structureJson Structure JSON from UI editor
+     * @return juce::Result Success/failure with error message
+     */
+    juce::Result updateFromUIData(const juce::String& newTitle, double newTempo, const juce::String& structureJson);
+    
+    /**
+     * @brief Process and update song from extracted structure JSON (backend method)
+     * @param extractedJson JSON structure extracted from image/LLM
+     * @return juce::Result Success/failure with error message
+     */
+    juce::Result processExtractedStructure(const juce::var& extractedJson);
+    
+    /**
+     * @brief Process image to extract song structure using LLM (backend method)
+     * @param image The image to process
+     * @param llmClient The LLM client to use
+     * @param callback Callback for completion (success, extracted JSON)
+     * @return juce::Result Success/failure with error message
+     */
+    static juce::Result processImageForStructure(const juce::Image& image, 
+                                                std::shared_ptr<class LLMClient> llmClient,
+                                                std::function<void(bool, const juce::var&)> callback);
+    
+    /**
+     * @brief Preprocess image for LLM processing (backend method)
+     * @param sourceImage The source image
+     * @return juce::Image The preprocessed image ready for LLM
+     */
+    static juce::Image preprocessImageForLLM(const juce::Image& sourceImage);
+    
+    /**
+     * @brief Create a deep copy of this song (backend method)
+     * @return std::shared_ptr<Song> Cloned song instance
+     */
+    std::shared_ptr<Song> clone() const;
+    
 private:
     juce::String uniqueID;
     juce::String title;

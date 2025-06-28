@@ -236,7 +236,7 @@ void SongEditorComponent::buttonClicked(juce::Button* button)
     if (button == &saveButton)
     {
         // Save changes to the song
-        auto oldSong = cloneSong(currentSong);
+        auto oldSong = currentSong ? currentSong->clone() : nullptr;
         applySongChanges();
         
         // Add to undo manager
@@ -378,56 +378,26 @@ void SongEditorComponent::showImageImportDialog()
     tabbedComponent.setCurrentTabIndex(2);
 }
 
-std::shared_ptr<Song> SongEditorComponent::cloneSong(std::shared_ptr<Song> sourceSong)
-{
-    if (!sourceSong)
-        return nullptr;
-    
-    // Create a new song with the same title and tempo
-    auto clonedSong = std::make_shared<Song>(sourceSong->getTitle(), sourceSong->getTempo());
-    
-    // Copy the structure JSON
-    clonedSong->setSourceStructureJson(sourceSong->getSourceStructureJson());
-    
-    return clonedSong;
-}
+// cloneSong method removed - now using Song::clone() backend method
 
 void SongEditorComponent::processSongStructureFromJson(const juce::var& json)
 {
     // Create a backup of the current song for undo
-    auto oldSong = cloneSong(currentSong);
+    auto oldSong = currentSong ? currentSong->clone() : nullptr;
     
     // Create a new song from the extracted structure
     auto newSong = std::make_shared<Song>();
     
-    // Handle different types of input
-    if (!json.isObject())
+    // Use backend method to process extracted structure
+    juce::Result result = newSong->processExtractedStructure(json);
+    
+    if (result.failed())
     {
-        // If it's not a valid JSON object, check if it's raw text
-        if (json.hasProperty("rawText"))
-        {
-            // Just update the structure editor with the raw text
-            structureEditor.setText(json["rawText"].toString());
-            structureJson = json["rawText"].toString();
-        }
-        else
-        {
-            // Invalid input
-            juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
-                                                "Error",
-                                                "Failed to parse song structure from image.");
-            return;
-        }
-    }
-    else
-    {
-        // Set basic properties from the JSON
-        newSong->setTitle(json.getProperty("title", "New Song").toString());
-        newSong->setTempo(json.getProperty("tempo", 120.0));
-        
-        // Display the pretty-printed JSON in the structure editor
-        // (structureJson was already set in handleExtractedStructure)
-        structureEditor.setText(structureJson);
+        // Show error message from backend processing
+        juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
+                                            "Error",
+                                            result.getErrorMessage());
+        return;
     }
     
     // Switch to the structure tab
@@ -436,9 +406,13 @@ void SongEditorComponent::processSongStructureFromJson(const juce::var& json)
     // Update the current song
     currentSong = newSong;
     
-    // Update the editor fields
+    // Update the editor fields from the processed song
     titleEditor.setText(currentSong->getTitle());
     tempoEditor.setText(juce::String(currentSong->getTempo()));
+    structureEditor.setText(currentSong->getSourceStructureJson());
+    
+    // Store for UI state
+    structureJson = currentSong->getSourceStructureJson();
     
     // Add to undo stack
     undoManager.beginNewTransaction();
@@ -451,7 +425,7 @@ void SongEditorComponent::processSongStructureFromJson(const juce::var& json)
 void SongEditorComponent::setSong(std::shared_ptr<Song> song)
 {
     // Store the current song for undo
-    auto oldSong = cloneSong(currentSong);
+    auto oldSong = currentSong ? currentSong->clone() : nullptr;
     
     // Update the current song
     currentSong = song;
@@ -544,34 +518,27 @@ void SongEditorComponent::applySongChanges()
         currentSong = std::make_shared<Song>();
     }
     
-    // Update basic properties
-    currentSong->setTitle(titleEditor.getText());
-    currentSong->setTempo(tempoEditor.getText().getDoubleValue());
-    
-    // Get the JSON structure from the editor
-    juce::String jsonText = structureEditor.getText();
-    
-    // Validate the JSON to ensure it's valid
-    juce::var parsedJson;
-    juce::Result result = juce::JSON::parse(jsonText, parsedJson);
+    // Use backend method to update from UI data
+    juce::Result result = currentSong->updateFromUIData(
+        titleEditor.getText(),
+        tempoEditor.getText().getDoubleValue(),
+        structureEditor.getText()
+    );
     
     if (result.failed())
     {
-        // If parsing failed, show an error message
+        // Show error message from backend validation
         juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
                                              "Error",
-                                             "Invalid JSON structure: " + result.getErrorMessage());
+                                             result.getErrorMessage());
         return;
     }
     
-    // Store the JSON text in our component
-    structureJson = jsonText;
-    
-    // Save the JSON structure to the Song object
-    currentSong->setSourceStructureJson(jsonText);
+    // Store the JSON text in our component for UI state
+    structureJson = structureEditor.getText();
     
     // Log what we're saving
-    DBG("Saving song with source structure JSON: " + jsonText.substring(0, 100) + "...");
+    DBG("Saving song with source structure JSON: " + structureJson.substring(0, 100) + "...");
 }
 
 } // namespace covertracks

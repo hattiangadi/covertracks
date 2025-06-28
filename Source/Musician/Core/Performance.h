@@ -1,6 +1,8 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include <set>
+#include <functional>
 #include "MusicPatternComponents.h"
 #include "Song.h"
 #include "EnsembleManager.h"
@@ -264,6 +266,72 @@ public:
     void cleanupStaleStatusMessages();
     
     /**
+     * @brief Generate LLM chart for a specific role
+     * 
+     * @param roleName The name of the role to generate for
+     * @param role The MusicianRole containing player and instrument info
+     * @param llmClient The LLM client to use for generation
+     * @param styleOverride Optional style override (uses performance style if empty)
+     * @param characterOverride Optional character override (uses performance character if empty)
+     * @param callback Callback function called when generation completes (success, response)
+     * @return bool True if generation was started successfully, false if already generating
+     */
+    bool generateChartForRole(const juce::String& roleName, 
+                             const MusicianRole& role,
+                             class LLMClient* llmClient,
+                             const juce::String& styleOverride = "",
+                             const juce::String& characterOverride = "",
+                             std::function<void(bool, const juce::String&)> callback = nullptr);
+    
+    /**
+     * @brief Prepare (convert) LLM pattern to MIDI chart for a role
+     * 
+     * @param roleName The name of the role
+     * @param role The MusicianRole containing player info
+     * @param tempoOverride Optional tempo override (uses performance/song tempo if 0)
+     * @return bool True if preparation was successful
+     */
+    bool prepareChartForRole(const juce::String& roleName, 
+                            const MusicianRole& role,
+                            double tempoOverride = 0.0);
+    
+    /**
+     * @brief Check if a role is currently generating
+     * 
+     * @param roleName The role name to check
+     * @return bool True if currently generating
+     */
+    bool isRoleGenerating(const juce::String& roleName) const;
+    
+    /**
+     * @brief Get the current style (from UI or performance)
+     * 
+     * @return juce::String The style to use for generation
+     */
+    juce::String getStyle() const { return style; }
+    
+    /**
+     * @brief Set the style for chart generation
+     * 
+     * @param newStyle The style (e.g., "jazz", "rock", "pop")
+     */
+    void setStyle(const juce::String& newStyle) { style = newStyle; }
+    
+    /**
+     * @brief Get the current character (from UI or performance)
+     * 
+     * @return juce::String The character description
+     */
+    juce::String getCharacter() const { return character; }
+    
+    /**
+     * @brief Set the character for chart generation
+     * 
+     * @param newCharacter The character description
+     */
+    void setCharacter(const juce::String& newCharacter) { character = newCharacter; }
+    
+    /**
      * @brief Serialize the performance to a var object
      * 
      * @return juce::var The serialized performance
@@ -361,6 +429,11 @@ private:
     juce::String key;
     juce::String genre;
     juce::String mood;
+    juce::String style;
+    juce::String character;
+    
+    // Chart generation tracking
+    std::set<juce::String> generatingRoles;
     
     // Maps musician role names to their generated charts (legacy support)
     std::map<juce::String, juce::var> generatedCharts;

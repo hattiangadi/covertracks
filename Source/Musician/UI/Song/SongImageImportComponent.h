@@ -94,16 +94,6 @@ private:
      */
     void processImageWithLLM();
     
-    /**
-     * @brief Preprocess an image to make it suitable for LLM analysis
-     * 
-     * Resizes and optimizes the image to stay under Claude's 5MB limit
-     * while preserving enough quality for sheet music analysis.
-     * 
-     * @param sourceImage The original image
-     * @return juce::Image The processed image
-     */
-    juce::Image preprocessImageForLLM(const juce::Image& sourceImage);
     
     /**
      * @brief Reset the component to its initial state

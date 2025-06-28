@@ -863,6 +863,80 @@ void Player::setInstrumentCapabilities(const InstrumentCapabilities& capabilitie
     instrumentCapabilities = capabilities;
 }
 
+void Player::updateMetadataFromUI(const juce::String& name, const juce::String& category, const juce::String& description)
+{
+    metadata.name = name;
+    metadata.category = category;
+    metadata.description = description;
+    metadata.lastModified = juce::Time::getCurrentTime();
+}
+
+void Player::updateCapabilitiesFromUI(const juce::String& instrumentType, int capabilityType, 
+                                     int minNote, int maxNote, const juce::String& soundMappingText)
+{
+    InstrumentCapabilities capabilities;
+    capabilities.instrumentType = instrumentType;
+    capabilities.type = (capabilityType == 2) ? InstrumentCapabilityType::Mapping : InstrumentCapabilityType::NoteRange;
+    
+    if (capabilities.type == InstrumentCapabilityType::Mapping)
+    {
+        // Parse sound mappings from text
+        capabilities.soundMappings.clear();
+        juce::StringArray lines = juce::StringArray::fromLines(soundMappingText);
+        for (const auto& line : lines)
+        {
+            juce::StringArray parts = juce::StringArray::fromTokens(line, ":", "");
+            if (parts.size() == 2)
+            {
+                juce::String soundName = parts[0].trim();
+                int midiNote = parts[1].getIntValue();
+                if (midiNote >= 0 && midiNote <= 127)
+                {
+                    capabilities.soundMappings[soundName] = midiNote;
+                }
+            }
+        }
+    }
+    else
+    {
+        capabilities.minNote = minNote;
+        capabilities.maxNote = maxNote;
+    }
+    
+    setInstrumentCapabilities(capabilities);
+}
+
+bool Player::transferPluginStateFrom(const Player* sourcePlayer)
+{
+    if (!sourcePlayer || !sourcePlayer->instrument || !getInstrument())
+    {
+        return false;
+    }
+    
+    // Get the complete instrument state from source player
+    auto instrumentState = sourcePlayer->instrument->saveInstrumentState();
+    
+    if (!instrumentState.isVoid())
+    {
+        // Load this state into this player's instrument
+        bool success = getInstrument()->loadInstrumentState(instrumentState);
+        
+        if (success)
+        {
+            std::cout << "[Player] Plugin state transfer successful! Plugin count: " 
+                      << getInstrument()->getPluginCount() << std::endl;
+        }
+        else
+        {
+            std::cerr << "[Player] Failed to transfer plugin state" << std::endl;
+        }
+        
+        return success;
+    }
+    
+    return false;
+}
+
 PlayerMetadata Player::getMetadata() const
 {
     return metadata;

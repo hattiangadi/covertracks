@@ -158,8 +158,7 @@ private:
     void showImageImportDialog();
     void processSongStructureFromJson(const juce::var& json);
     
-    // Helper method to clone a Song (since Song doesn't have a copy constructor)
-    std::shared_ptr<Song> cloneSong(std::shared_ptr<Song> sourceSong);
+    // Helper method removed - now using Song::clone() backend method
     
     // Undo/redo actions
     class SongEditAction : public juce::UndoableAction

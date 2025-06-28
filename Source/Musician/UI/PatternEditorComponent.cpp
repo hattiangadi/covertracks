@@ -222,12 +222,18 @@ void PatternEditorComponent::buttonClicked(Button* button)
     }
     else if (button == &oneClickButton)
     {
-        // One-click workflow: Parse + Load + Play using new state machine
-        std::cout << "Starting one-click workflow (Parse + Load + Play)..." << std::endl;
+        // One-click workflow using backend method
+        std::cout << "Starting one-click workflow (Parse + Load + Play) using backend..." << std::endl;
         
         if (!selectedPlayer)
         {
             std::cout << "No player selected. Please select a player first." << std::endl;
+            return;
+        }
+        
+        if (!musician)
+        {
+            std::cout << "No musician available for workflow." << std::endl;
             return;
         }
         
@@ -238,35 +244,19 @@ void PatternEditorComponent::buttonClicked(Button* button)
             return;
         }
         
-        // Step 1: Prepare pattern
-        std::cout << "Step 1: Preparing pattern..." << std::endl;
-        if (!selectedPlayer->preparePattern(currentPatternNotation))
-        {
-            std::cout << "Failed to prepare pattern." << std::endl;
-            return;
-        }
+        // Use backend method for complete workflow
+        juce::Result result = musician->executeCompletePatternWorkflow(
+            currentPatternNotation, 
+            selectedPlayer, 
+            [this](double tempo) {
+                // UI callback to start visual tracking
+                startPlaybackTracking(tempo);
+            }
+        );
         
-        // Step 2: Convert to MIDI
-        std::cout << "Step 2: Converting to MIDI..." << std::endl;
-        if (!selectedPlayer->convertToMidi())
+        if (result.wasOk())
         {
-            std::cout << "Failed to convert pattern to MIDI." << std::endl;
-            return;
-        }
-        
-        // Step 3: Load MIDI
-        std::cout << "Step 3: Loading MIDI..." << std::endl;
-        if (!selectedPlayer->loadPreparedMidi())
-        {
-            std::cout << "Failed to load MIDI into instrument." << std::endl;
-            return;
-        }
-        
-        // Step 4: Play
-        std::cout << "Step 4: Starting playback..." << std::endl;
-        if (selectedPlayer->play())
-        {
-            std::cout << "✅ One-click workflow completed successfully!" << std::endl;
+            std::cout << "✅ One-click workflow completed successfully using backend!" << std::endl;
             
             // Update visualization
             var chartData = selectedPlayer->getLastChart();
@@ -275,20 +265,10 @@ void PatternEditorComponent::buttonClicked(Button* button)
                 currentParsedChart = chartData;
                 updatePianoRollVisualization();
             }
-            
-            // Get tempo from the pattern data for accurate playback tracking
-            double tempo = 120.0; // Default tempo
-            if (currentParsedChart.hasProperty("tempo"))
-            {
-                tempo = static_cast<double>(currentParsedChart["tempo"]);
-            }
-            
-            // Start visual playback tracking
-            startPlaybackTracking(tempo);
         }
         else
         {
-            std::cout << "Failed to start playback." << std::endl;
+            std::cout << "❌ One-click workflow failed: " << result.getErrorMessage() << std::endl;
         }
     }
 }
@@ -438,45 +418,37 @@ void PatternEditorComponent::parseCurrentPattern()
         return;
     }
     
+    if (!musician)
+    {
+        std::cout << "No musician available for pattern processing." << std::endl;
+        return;
+    }
+    
     if (!currentPatternNotation.isEmpty())
     {
-        // Use new state machine approach: Step 1 - Prepare pattern
-        std::cout << "Preparing pattern using new state machine API..." << std::endl;
-        bool success = selectedPlayer->preparePattern(currentPatternNotation);
+        // Use backend method for pattern processing
+        juce::Result result = musician->processPatternNotation(currentPatternNotation, selectedPlayer);
         
-        if (success)
+        if (result.wasOk())
         {
-            std::cout << "Pattern prepared successfully using state machine." << std::endl;
+            std::cout << "Pattern processed successfully using backend method." << std::endl;
             
-            // Step 2: Convert to MIDI to get chart data for visualization
-            std::cout << "Converting pattern to MIDI for visualization..." << std::endl;
-            bool converted = selectedPlayer->convertToMidi();
-            
-            if (converted)
+            // Get chart data for visualization
+            var chartData = selectedPlayer->getLastChart();
+            if (!chartData.isVoid())
             {
-                std::cout << "Pattern converted to MIDI successfully." << std::endl;
-                
-                // Now the chart data should be available
-                var chartData = selectedPlayer->getLastChart();
-                if (!chartData.isVoid())
-                {
-                    std::cout << "Chart data received: " << JSON::toString(chartData) << std::endl;
-                    currentParsedChart = chartData;
-                    updatePianoRollVisualization();
-                }
-                else
-                {
-                    std::cout << "No chart data available from getLastChart()" << std::endl;
-                }
+                std::cout << "Chart data received: " << JSON::toString(chartData) << std::endl;
+                currentParsedChart = chartData;
+                updatePianoRollVisualization();
             }
             else
             {
-                std::cout << "Failed to convert pattern to MIDI." << std::endl;
+                std::cout << "No chart data available from getLastChart()" << std::endl;
             }
         }
         else
         {
-            std::cout << "Failed to prepare pattern using state machine." << std::endl;
+            std::cout << "Failed to process pattern: " << result.getErrorMessage() << std::endl;
             currentParsedChart = var();
         }
     }
@@ -538,22 +510,18 @@ void PatternEditorComponent::loadParsedPattern()
         return;
     }
     
-    // Use new state machine approach: Step 2 & 3 - Convert to MIDI and Load
-    std::cout << "Converting prepared pattern to MIDI..." << std::endl;
-    bool converted = selectedPlayer->convertToMidi();
-    
-    if (!converted)
+    if (!musician)
     {
-        std::cout << "Failed to convert pattern to MIDI. Make sure pattern is prepared first." << std::endl;
+        std::cout << "No musician available for pattern loading." << std::endl;
         return;
     }
     
-    std::cout << "Loading converted MIDI into instrument..." << std::endl;
-    bool loaded = selectedPlayer->loadPreparedMidi();
+    // Use backend method for pattern loading
+    juce::Result result = musician->loadPatternIntoPlayer(selectedPlayer);
     
-    if (loaded)
+    if (result.wasOk())
     {
-        std::cout << "Pattern loaded successfully into " << selectedPlayer->getMetadata().name << " using state machine." << std::endl;
+        std::cout << "Pattern loaded successfully using backend method." << std::endl;
         
         // Update visualization with the loaded chart data
         var chartData = selectedPlayer->getLastChart();
@@ -570,7 +538,7 @@ void PatternEditorComponent::loadParsedPattern()
     }
     else
     {
-        std::cout << "Failed to load prepared MIDI into " << selectedPlayer->getMetadata().name << std::endl;
+        std::cout << "Failed to load pattern: " << result.getErrorMessage() << std::endl;
     }
 }
 
@@ -582,12 +550,21 @@ void PatternEditorComponent::playLoadedPattern()
         return;
     }
     
-    // Start playback on the selected player
-    bool started = selectedPlayer->play();
-    
-    if (started)
+    if (!musician)
     {
-        std::cout << "Started playback on " << selectedPlayer->getMetadata().name << std::endl;
+        std::cout << "No musician available for playback." << std::endl;
+        return;
+    }
+    
+    // Use backend method for pattern playback with UI tracking callback
+    juce::Result result = musician->startPatternPlayback(selectedPlayer, [this](double tempo) {
+        // UI callback to start visual tracking
+        startPlaybackTracking(tempo);
+    });
+    
+    if (result.wasOk())
+    {
+        std::cout << "Pattern playback started successfully using backend method." << std::endl;
         
         // Update visualization with the latest chart data
         var chartData = selectedPlayer->getLastChart();
@@ -596,20 +573,10 @@ void PatternEditorComponent::playLoadedPattern()
             currentParsedChart = chartData;
             updatePianoRollVisualization();
         }
-        
-        // Get tempo from the current chart if available
-        double tempo = 120.0; // Default tempo
-        if (currentParsedChart.hasProperty("tempo"))
-        {
-            tempo = static_cast<double>(currentParsedChart["tempo"]);
-        }
-        
-        // Start visual playback tracking
-        startPlaybackTracking(tempo);
     }
     else
     {
-        std::cout << "Failed to start playback on " << selectedPlayer->getMetadata().name << std::endl;
+        std::cout << "Failed to start playback: " << result.getErrorMessage() << std::endl;
     }
 }
 
