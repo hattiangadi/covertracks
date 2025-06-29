@@ -49,7 +49,9 @@
       "Bash(/Applications/JUCE/Projucer.app/Contents/MacOS/Projucer --resave Covertracks.jucer)",
       "Bash(./Builds/MacOSX/build/Debug/Covertracks.app/Contents/MacOS/Covertracks:*)",
       "Bash(\"/Users/anand/src/covertracks/Builds/MacOSX/build/Debug/Covertracks.app/Contents/MacOS/Covertracks\" --run-tests)",
-      "Bash(./run_tests_clean.sh:*)"
+      "Bash(./run_tests_clean.sh:*)",
+      "Bash(git stash:*)",
+      "Bash(git submodule:*)"
     ],
     "deny": []
   }
