@@ -39,12 +39,16 @@ std::unique_ptr<MusicalContainer> UniversalMusicParser::parseJSON(const juce::St
     
     // Parse patterns (must be parsed before sections that reference them)
     if (parsedJson.hasProperty("patterns")) {
+        DBG("Parsing root patterns");
         parsePatternsInto(*container, parsedJson["patterns"]);
+        DBG("Root patterns count after parsing: " << container->patterns.size());
     }
     
-    // Parse sections
+    // Parse sections (and propagate root patterns to them)
     if (parsedJson.hasProperty("sections")) {
         parseSectionsInto(*container, parsedJson["sections"]);
+        // Propagate root patterns to all child containers
+        propagatePatterns(*container);
     }
     
     // Parse direct events
@@ -304,6 +308,41 @@ MusicalContainer UniversalMusicParser::parseContainer(const juce::var& container
     }
     
     return container;
+}
+
+void UniversalMusicParser::propagatePatterns(MusicalContainer& container)
+{
+    // Recursively propagate root patterns to all child containers
+    for (auto& [sectionName, section] : container.sections) {
+        propagatePatternsTo(section, container.patterns);
+    }
+    for (auto& [layerName, layer] : container.layers) {
+        propagatePatternsTo(layer, container.patterns);
+    }
+    for (auto& [varName, variation] : container.variations) {
+        propagatePatternsTo(variation, container.patterns);
+    }
+}
+
+void UniversalMusicParser::propagatePatternsTo(MusicalContainer& child, const std::map<juce::String, MusicalContainer>& rootPatterns)
+{
+    // Copy root patterns to child (if child doesn't already have the pattern)
+    for (const auto& [patternName, pattern] : rootPatterns) {
+        if (child.patterns.find(patternName) == child.patterns.end()) {
+            child.patterns[patternName] = pattern;
+        }
+    }
+    
+    // Recursively propagate to grandchildren
+    for (auto& [sectionName, section] : child.sections) {
+        propagatePatternsTo(section, rootPatterns);
+    }
+    for (auto& [layerName, layer] : child.layers) {
+        propagatePatternsTo(layer, rootPatterns);
+    }
+    for (auto& [varName, variation] : child.variations) {
+        propagatePatternsTo(variation, rootPatterns);
+    }
 }
 
 } // namespace covertracks

@@ -187,6 +187,7 @@ private:
     EventStream renderLayers(const Context& resolvedContext, int bar, int totalBars) const;
     EventStream renderVariations(const Context& resolvedContext, int bar) const;
     EventStream renderPatterns(const Context& resolvedContext, int bar, int totalBars) const;
+    EventStream renderSections(const Context& resolvedContext, int bar, int totalBars) const;
     
     // Context resolution
     Context resolveContext(const Context& parentContext) const;

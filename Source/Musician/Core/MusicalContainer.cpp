@@ -10,18 +10,22 @@ Context Context::merge(const Context& child) const
 {
     Context result = *this;
     
-    // Child values override parent values
+    // Special handling for octave: only override if child has non-default octave
+    // This prevents variations with default octave=4 from overriding parent octave=2
     if (child.octave != 4) result.octave = child.octave;
-    if (child.velocity != 0.8f) result.velocity = child.velocity;
-    if (child.chord != "C") result.chord = child.chord;
-    if (child.key != "C major") result.key = child.key;
-    if (child.dynamics != "mf") result.dynamics = child.dynamics;
-    if (child.articulation != "normal") result.articulation = child.articulation;
-    if (!child.chordContext.isEmpty()) result.chordContext = child.chordContext;
-    if (!child.processorChain.isEmpty()) result.processorChain = child.processorChain;
-    if (child.complexity != 0.5f) result.complexity = child.complexity;
-    if (child.energy != 0.5f) result.energy = child.energy;
-    if (child.style != "default") result.style = child.style;
+    
+    // For other attributes: child overrides parent when they differ
+    // This ensures explicit overrides work (e.g., root velocity=0.8 overrides global velocity=0.6)
+    if (child.velocity != velocity) result.velocity = child.velocity;
+    if (child.chord != chord) result.chord = child.chord;
+    if (child.key != key) result.key = child.key;
+    if (child.dynamics != dynamics) result.dynamics = child.dynamics;
+    if (child.articulation != articulation) result.articulation = child.articulation;
+    if (child.chordContext != chordContext) result.chordContext = child.chordContext;
+    if (child.processorChain != processorChain) result.processorChain = child.processorChain;
+    if (child.complexity != complexity) result.complexity = child.complexity;
+    if (child.energy != energy) result.energy = child.energy;
+    if (child.style != style) result.style = child.style;
     
     return result;
 }
@@ -166,8 +170,13 @@ MusicalContainer::~MusicalContainer()
 
 EventStream MusicalContainer::render(const Context& parentContext, int currentBar, int totalBars) const
 {
+    // Debug context inheritance
+    DBG("Render: parentContext.velocity=" << parentContext.velocity << ", octave=" << parentContext.octave << ", local.velocity=" << context.velocity << ", octave=" << context.octave);
+    
     // Resolve context by merging parent with local
     Context resolvedContext = resolveContext(parentContext);
+    
+    DBG("Render: resolvedContext.velocity=" << resolvedContext.velocity << ", octave=" << resolvedContext.octave);
     
     EventStream result;
     
@@ -182,6 +191,9 @@ EventStream MusicalContainer::render(const Context& parentContext, int currentBa
     
     // 4. Render pattern references
     result.merge(renderPatterns(resolvedContext, currentBar, totalBars));
+    
+    // 5. Render sections
+    result.merge(renderSections(resolvedContext, currentBar, totalBars));
     
     return result;
 }
@@ -307,13 +319,30 @@ EventStream MusicalContainer::renderPatterns(const Context& resolvedContext, int
         return EventStream();
     }
     
+    DBG("Resolving pattern reference: " << reference);
+    
     // Find pattern by reference
     const MusicalContainer* pattern = resolvePattern(reference);
     if (pattern != nullptr) {
+        DBG("Pattern found, rendering: " << reference);
         return pattern->render(resolvedContext, bar, totalBars);
     }
     
+    DBG("Pattern NOT found: " << reference);
     return EventStream();
+}
+
+EventStream MusicalContainer::renderSections(const Context& resolvedContext, int bar, int totalBars) const
+{
+    EventStream stream;
+    
+    // Render all sections simultaneously (like layers)
+    for (const auto& [sectionName, section] : sections) {
+        auto sectionStream = section.render(resolvedContext, bar, totalBars);
+        stream.merge(sectionStream);
+    }
+    
+    return stream;
 }
 
 Context MusicalContainer::resolveContext(const Context& parentContext) const
@@ -323,13 +352,17 @@ Context MusicalContainer::resolveContext(const Context& parentContext) const
 
 const MusicalContainer* MusicalContainer::resolvePattern(const juce::String& patternName) const
 {
+    DBG("Resolving pattern: " << patternName << ", local patterns count: " << patterns.size());
+    
     // First check local patterns
     auto it = patterns.find(patternName);
     if (it != patterns.end()) {
+        DBG("Found pattern locally: " << patternName);
         return &it->second;
     }
     
     // TODO: Check parent patterns (for now return nullptr)
+    DBG("Pattern not found locally: " << patternName);
     return nullptr;
 }
 
@@ -339,7 +372,8 @@ void MusicalContainer::applyExpression(Event& event, const Context& context) con
     // If event doesn't specify attribute (default value), use context
     
     // Debug output for failing test
-    // DBG("Applying expression: event.velocity=" << event.velocity << ", context.velocity=" << context.velocity);
+    DBG("Applying expression: event.velocity=" << event.velocity << ", context.velocity=" << context.velocity << ", context.octave=" << context.octave);
+    DBG("Applying expression: event.resolvedOctave=" << event.resolvedOctave << " (before), context.octave=" << context.octave);
     
     // For octave: use event value if specified, otherwise context
     event.resolvedOctave = (event.resolvedOctave != 4) ? event.resolvedOctave : context.octave;
@@ -351,8 +385,28 @@ void MusicalContainer::applyExpression(Event& event, const Context& context) con
     // For chord: use event chord if specified, otherwise context
     event.resolvedChord = (!event.chord.isEmpty()) ? event.chord : context.chord;
     
+    // For dynamics: check expression map first, then direct field, then context
+    juce::String resolvedDynamics = context.dynamics;
+    if (event.expression.count("dynamics") > 0) {
+        resolvedDynamics = event.expression["dynamics"].toString();
+    } else if (!event.dynamics.isEmpty()) {
+        resolvedDynamics = event.dynamics;
+    }
+    event.dynamics = resolvedDynamics; // Store resolved value back in event
+    
+    // For articulation: check expression map first, then direct field, then context  
+    juce::String resolvedArticulation = context.articulation;
+    if (event.expression.count("articulation") > 0) {
+        resolvedArticulation = event.expression["articulation"].toString();
+    } else if (!event.articulation.isEmpty()) {
+        resolvedArticulation = event.articulation;
+    }
+    event.articulation = resolvedArticulation; // Store resolved value back in event
+    
     // Debug output
-    // DBG("Result: resolvedVelocity=" << event.resolvedVelocity << ", resolvedOctave=" << event.resolvedOctave << ", resolvedChord=" << event.resolvedChord);
+    DBG("Applying expression: event.resolvedOctave=" << event.resolvedOctave << " (after), context.octave=" << context.octave);
+    DBG("Result: resolvedVelocity=" << event.resolvedVelocity << ", resolvedOctave=" << event.resolvedOctave << ", resolvedChord=" << event.resolvedChord);
+    DBG("Result: dynamics=" << event.dynamics << ", articulation=" << event.articulation);
     
     // Resolve chord degrees if needed
     if (event.degree > 0) {

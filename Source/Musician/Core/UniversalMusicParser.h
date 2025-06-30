@@ -75,6 +75,10 @@ private:
     
     // Error state
     static juce::String lastError;
+    
+    // Pattern propagation helpers
+    static void propagatePatterns(MusicalContainer& container);
+    static void propagatePatternsTo(MusicalContainer& child, const std::map<juce::String, MusicalContainer>& rootPatterns);
 };
 
 /**
