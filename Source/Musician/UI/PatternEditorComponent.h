@@ -26,10 +26,9 @@ public:
     /**
      * @brief Construct a new Pattern Editor Component
      * 
-     * @param musician The musician to use for pattern handling
      * @param playerManager The player manager for player selection
      */
-    PatternEditorComponent(Musician* musician, PlayerManager* playerManager = nullptr);
+    PatternEditorComponent(PlayerManager* playerManager = nullptr);
     
     /**
      * @brief Destroy the Pattern Editor Component
@@ -141,7 +140,6 @@ private:
     std::unique_ptr<PianoRollComponent> pianoRoll;
     
     // References
-    Musician* musician;
     PlayerManager* playerManager;
     Player* selectedPlayer;
     

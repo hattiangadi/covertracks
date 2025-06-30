@@ -115,7 +115,7 @@ PerformanceEditorComponent::PerformanceEditorComponent(PerformanceManager* pm,
     addAndMakeVisible(statusDisplay);
     
     // Set up pattern editor (initially hidden)
-    patternEditor = std::make_unique<PatternEditorComponent>(nullptr, playerManager);
+    patternEditor = std::make_unique<PatternEditorComponent>(playerManager);
     patternEditor->addListener(this);
     patternEditor->setVisible(false);
     addAndMakeVisible(*patternEditor);
@@ -1082,6 +1082,8 @@ void PerformanceEditorComponent::ensembleSelectionChanged()
     if (selectedEnsemble == "No Ensemble Selected")
     {
         statusDisplay.setText("No ensemble selected");
+        // Clear the ensemble manager when no ensemble is selected
+        ensembleManager.reset();
         if (currentPerformance)
         {
             currentPerformance->setEnsembleName("");
@@ -1519,10 +1521,12 @@ void PerformanceEditorComponent::refreshPerformanceEnsembleCache()
     
     for (const auto& file : ensembleFiles)
     {
-        auto ensemble = EnsembleManager::loadFromFile(file, playerManager); // Pass PlayerManager!
-        if (ensemble && ensemble->getName() == ensembleName)
+        auto tempEnsemble = EnsembleManager::loadFromFile(file, playerManager); // Pass PlayerManager!
+        if (tempEnsemble && tempEnsemble->getName() == ensembleName)
         {
-            cachedEnsembleRoles = ensemble->getMusicianRoles();
+            // Found the right ensemble - store it as our main ensemble manager
+            ensembleManager = std::move(tempEnsemble);
+            cachedEnsembleRoles = ensembleManager->getMusicianRoles();
             DBG("PerformanceEditorComponent: Loaded ensemble '" << ensembleName << "' with " << cachedEnsembleRoles.size() << " roles");
             
             // Debug player assignments
@@ -1532,6 +1536,7 @@ void PerformanceEditorComponent::refreshPerformanceEnsembleCache()
             }
             break;
         }
+        // tempEnsemble will be destroyed here if it's not the right one
     }
 }
 
@@ -1735,11 +1740,21 @@ void PerformanceEditorComponent::updateRoleLevel(int roleIndex, float level)
                     Array<File> ensembleFiles = EnsembleManager::getEnsembleFiles();
                     for (const auto& file : ensembleFiles)
                     {
-                        auto loadedEnsembleManager = EnsembleManager::loadFromFile(file, playerManager);
-                        if (loadedEnsembleManager && loadedEnsembleManager->getName() == ensembleName)
+                        // Use existing ensemble manager if it matches, otherwise load temporarily
+                        bool shouldUseExisting = (ensembleManager && ensembleManager->getName() == ensembleName);
+                        auto* workingEnsemble = shouldUseExisting ? ensembleManager.get() : nullptr;
+                        std::unique_ptr<EnsembleManager> tempEnsemble;
+                        
+                        if (!shouldUseExisting)
+                        {
+                            tempEnsemble = EnsembleManager::loadFromFile(file, playerManager);
+                            workingEnsemble = tempEnsemble.get();
+                        }
+                        
+                        if (workingEnsemble && workingEnsemble->getName() == ensembleName)
                         {
                             // Update the role level in the ensemble
-                            auto& roles = loadedEnsembleManager->getMusicianRoles();
+                            auto& roles = workingEnsemble->getMusicianRoles();
                             for (auto& role : roles)
                             {
                                 if (role.getName() == roleName)
@@ -1752,7 +1767,7 @@ void PerformanceEditorComponent::updateRoleLevel(int roleIndex, float level)
                             }
                             
                             // Save the updated ensemble
-                            loadedEnsembleManager->saveToFile(file);
+                            workingEnsemble->saveToFile(file);
                             
                             // Refresh our cache
                             refreshPerformanceEnsembleCache();
