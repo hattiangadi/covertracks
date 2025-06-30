@@ -54,24 +54,28 @@
               resource="0" file="Source/Tests/TracktionAudioTest.cpp"/>
         <FILE id="TracktionAudioTestH" name="TracktionAudioTest.h" compile="0"
               resource="0" file="Source/Tests/TracktionAudioTest.h"/>
-        <FILE id="SongImageProcessingTests" name="SongImageProcessingTests.cpp" compile="1"
-              resource="0" file="Source/Tests/SongImageProcessingTests.cpp"/>
-        <FILE id="PerformanceManagementTests" name="PerformanceManagementTests.cpp" compile="1"
-              resource="0" file="Source/Tests/PerformanceManagementTests.cpp"/>
-        <FILE id="TracktionAudioEngineTests" name="TracktionAudioEngineTests.cpp" compile="1"
-              resource="0" file="Source/Tests/TracktionAudioEngineTests.cpp"/>
-        <FILE id="PatternParsingRobustnessTests" name="PatternParsingRobustnessTests.cpp" compile="1"
-              resource="0" file="Source/Tests/PatternParsingRobustnessTests.cpp"/>
-        <FILE id="MusicLanguageAdvancedTests" name="MusicLanguageAdvancedTests.cpp" compile="1"
-              resource="0" file="Source/Tests/MusicLanguageAdvancedTests.cpp"/>
-        <FILE id="PatternParsingStressTests" name="PatternParsingStressTests.cpp" compile="1"
-              resource="0" file="Source/Tests/PatternParsingStressTests.cpp"/>
-        <FILE id="TDDRecursiveGrammarTests" name="TDDRecursiveGrammarTests.cpp" compile="1"
-              resource="0" file="Source/Tests/TDDRecursiveGrammarTests.cpp"/>
+        <FILE id="SongImageProcessingTests" name="SongImageProcessingTests.cpp"
+              compile="1" resource="0" file="Source/Tests/SongImageProcessingTests.cpp"/>
+        <FILE id="PerformanceManagementTests" name="PerformanceManagementTests.cpp"
+              compile="1" resource="0" file="Source/Tests/PerformanceManagementTests.cpp"/>
+        <FILE id="TracktionAudioEngineTests" name="TracktionAudioEngineTests.cpp"
+              compile="1" resource="0" file="Source/Tests/TracktionAudioEngineTests.cpp"/>
+        <FILE id="PatternParsingRobustnessTests" name="PatternParsingRobustnessTests.cpp"
+              compile="1" resource="0" file="Source/Tests/PatternParsingRobustnessTests.cpp"/>
+        <FILE id="MusicLanguageAdvancedTests" name="MusicLanguageAdvancedTests.cpp"
+              compile="1" resource="0" file="Source/Tests/MusicLanguageAdvancedTests.cpp"/>
+        <FILE id="PatternParsingStressTests" name="PatternParsingStressTests.cpp"
+              compile="1" resource="0" file="Source/Tests/PatternParsingStressTests.cpp"/>
+        <FILE id="TDDRecursiveGrammarTests" name="TDDRecursiveGrammarTests.cpp"
+              compile="1" resource="0" file="Source/Tests/TDDRecursiveGrammarTests.cpp"/>
       </GROUP>
       <GROUP id="{TRACKTION-ENGINE-GROUP}" name="Tracktion Engine"/>
       <GROUP id="{C05A6CB8-92D3-46E6-AD2E-B13D7347AC80}" name="Musician">
         <GROUP id="{34D9D57E-F198-9FB2-4C66-8742C66AFBE3}" name="Core">
+          <FILE id="gxHsHx" name="UniversalMusicParser.h" compile="0" resource="0"
+                file="Source/Musician/Core/UniversalMusicParser.h"/>
+          <FILE id="cZ5eVZ" name="UniversalMusicParser.cpp" compile="1" resource="0"
+                file="Source/Musician/Core/UniversalMusicParser.cpp"/>
           <FILE id="mfdozh" name="EnsembleManager.cpp" compile="1" resource="0"
                 file="Source/Musician/Core/EnsembleManager.cpp"/>
           <FILE id="AYHlDq" name="EnsembleManager.h" compile="0" resource="0"
@@ -101,8 +105,10 @@
                 file="Source/Musician/Core/PerformanceManager.h"/>
           <FILE id="zdzoJA" name="Song.cpp" compile="1" resource="0" file="Source/Musician/Core/Song.cpp"/>
           <FILE id="yVQC67" name="Song.h" compile="0" resource="0" file="Source/Musician/Core/Song.h"/>
-          <FILE id="MusicalContainer_cpp" name="MusicalContainer.cpp" compile="1" resource="0" file="Source/Musician/Core/MusicalContainer.cpp"/>
-          <FILE id="MusicalContainer_h" name="MusicalContainer.h" compile="0" resource="0" file="Source/Musician/Core/MusicalContainer.h"/>
+          <FILE id="MusicalContainer_cpp" name="MusicalContainer.cpp" compile="1"
+                resource="0" file="Source/Musician/Core/MusicalContainer.cpp"/>
+          <FILE id="MusicalContainer_h" name="MusicalContainer.h" compile="0"
+                resource="0" file="Source/Musician/Core/MusicalContainer.h"/>
         </GROUP>
         <GROUP id="{CC170D46-B578-C879-6E1F-FDC0D2EB6DC0}" name="UI">
           <GROUP id="{8A17FE2D-2E3E-6D8B-BD15-D0DAD03795B9}" name="New Group"/>

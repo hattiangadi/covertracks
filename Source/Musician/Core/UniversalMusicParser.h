@@ -53,6 +53,7 @@ private:
     static void parseLayersInto(MusicalContainer& container, const juce::var& layersJson);
     static void parseVariationsInto(MusicalContainer& container, const juce::var& variationsJson);
     static void parsePatternsInto(MusicalContainer& container, const juce::var& patternsJson);
+    static void parseSectionsInto(MusicalContainer& container, const juce::var& sectionsJson);
     
     // Expression parsing helpers
     static void parseExpressionInto(Event& event, const juce::var& expressionJson);

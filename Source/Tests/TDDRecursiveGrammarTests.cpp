@@ -1,6 +1,6 @@
 #include <JuceHeader.h>
 #include "../Musician/Core/MusicalContainer.h"
-// #include "../Musician/Core/UniversalMusicParser.h"  // TODO: Implement in later TDD phase
+#include "../Musician/Core/UniversalMusicParser.h"
 
 namespace covertracks {
 
@@ -23,9 +23,9 @@ public:
         testRecursiveLayerNesting();
         testContextInheritanceChain();
         testUnifiedVariationSystem();
-        // TODO: Enable these tests when UniversalMusicParser is implemented
-        // testJSONParsingToContainers();
-        // testExpressionFeatures();
+        testJSONParsingToContainers();
+        testExpressionFeatures();
+        // TODO: Enable these tests when shorthand notation is implemented
         // testShorthandNotation();
         // testAdvancedExamples();
     }
@@ -177,9 +177,24 @@ private:
             }
         })";
         
-        // TODO: Implement when UniversalMusicParser is ready
-        // auto container = UniversalMusicParser::parseJSON(jsonPattern);
-        // expect(container != nullptr, "Should parse JSON successfully");
+        auto container = UniversalMusicParser::parseJSON(jsonPattern);
+        expect(container != nullptr, "Should parse JSON successfully");
+        
+        if (container) {
+            expect(container->hasSection("verse"), "Should have verse section");
+            
+            auto& verse = container->getSection("verse");
+            expect(verse.hasLayer("drums"), "Verse should have drums layer");
+            
+            auto& drums = verse.getLayer("drums");
+            expect(drums.getReference() == "rock", "Drums should reference rock pattern");
+            expect(drums.hasVariation("bar4"), "Drums should have bar4 variation");
+            
+            // Test rendering
+            Context context;
+            auto stream = container->render(context, 1, 4);
+            expect(!stream.isEmpty(), "Should render events");
+        }
     }
     
     void testExpressionFeatures()
@@ -207,8 +222,19 @@ private:
             ]
         })";
         
-        // TODO: Implement when UniversalMusicParser is ready
-        // auto container = UniversalMusicParser::parseJSON(jsonPattern);
+        auto container = UniversalMusicParser::parseJSON(jsonPattern);
+        Context context;
+        auto stream = container->render(context, 1, 4);
+        
+        auto event1 = stream.getEventAt(1.0);
+        auto event2 = stream.getEventAt(2.0);
+        
+        expect(event1.dynamics == "ff", "Should override dynamics");
+        expect(event1.articulation == "staccato", "Should override articulation");
+        expect(event1.hasExpression("vibrato"), "Should have vibrato expression");
+        
+        expect(event2.dynamics == "mf", "Should inherit context dynamics");
+        expect(event2.hasProcessor("reverb"), "Should have reverb processor");
     }
     
     void testShorthandNotation()
