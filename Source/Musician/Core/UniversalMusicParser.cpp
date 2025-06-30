@@ -74,8 +74,22 @@ Context UniversalMusicParser::parseContext(const juce::var& contextJson)
     
     if (contextJson.hasProperty("octave"))
         context.octave = contextJson["octave"];
-    if (contextJson.hasProperty("velocity"))
-        context.velocity = contextJson["velocity"];
+    if (contextJson.hasProperty("velocity")) {
+        auto velocityVar = contextJson["velocity"];
+        if (velocityVar.isString()) {
+            // Convert dynamic strings to velocity values
+            juce::String dynamics = velocityVar.toString();
+            if (dynamics == "pp") context.velocity = 0.3f;
+            else if (dynamics == "p") context.velocity = 0.4f;
+            else if (dynamics == "mp") context.velocity = 0.5f;
+            else if (dynamics == "mf") context.velocity = 0.6f;
+            else if (dynamics == "f") context.velocity = 0.8f;
+            else if (dynamics == "ff") context.velocity = 1.0f;
+            else context.velocity = 0.6f; // Default to mf
+        } else {
+            context.velocity = velocityVar;
+        }
+    }
     if (contextJson.hasProperty("chord"))
         context.chord = contextJson["chord"].toString();
     if (contextJson.hasProperty("key"))

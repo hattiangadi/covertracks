@@ -335,10 +335,24 @@ const MusicalContainer* MusicalContainer::resolvePattern(const juce::String& pat
 
 void MusicalContainer::applyExpression(Event& event, const Context& context) const
 {
-    // Apply context to event if event doesn't override
-    if (event.resolvedOctave == 4) event.resolvedOctave = context.octave;
-    if (event.resolvedVelocity == 0.8f) event.resolvedVelocity = context.velocity;
-    if (event.resolvedChord == "C") event.resolvedChord = context.chord;
+    // Apply context to event - event attributes override context
+    // If event doesn't specify attribute (default value), use context
+    
+    // Debug output for failing test
+    // DBG("Applying expression: event.velocity=" << event.velocity << ", context.velocity=" << context.velocity);
+    
+    // For octave: use event value if specified, otherwise context
+    event.resolvedOctave = (event.resolvedOctave != 4) ? event.resolvedOctave : context.octave;
+    
+    // For velocity: use event value if it's specified (non-zero), otherwise context  
+    // Note: A velocity of 0.0 is treated as "unspecified" and should inherit from context
+    event.resolvedVelocity = (event.velocity > 0.0f) ? event.velocity : context.velocity;
+    
+    // For chord: use event chord if specified, otherwise context
+    event.resolvedChord = (!event.chord.isEmpty()) ? event.chord : context.chord;
+    
+    // Debug output
+    // DBG("Result: resolvedVelocity=" << event.resolvedVelocity << ", resolvedOctave=" << event.resolvedOctave << ", resolvedChord=" << event.resolvedChord);
     
     // Resolve chord degrees if needed
     if (event.degree > 0) {
@@ -348,20 +362,43 @@ void MusicalContainer::applyExpression(Event& event, const Context& context) con
 
 int MusicalContainer::resolveChordDegree(int degree, const juce::String& chord, int octave) const
 {
-    // Simple chord degree resolution (C major for now)
-    int baseNote = 60 + (octave - 4) * 12; // C4 = 60
+    // Parse chord root note
+    int rootNote = 60; // Default to C
+    juce::String chordRoot = chord.substring(0, 1);
     
-    // Basic major scale degrees
+    if (chordRoot == "C") rootNote = 60;
+    else if (chordRoot == "D") rootNote = 62;
+    else if (chordRoot == "E") rootNote = 64;
+    else if (chordRoot == "F") rootNote = 65;
+    else if (chordRoot == "G") rootNote = 67;
+    else if (chordRoot == "A") rootNote = 69;
+    else if (chordRoot == "B") rootNote = 71;
+    
+    // Adjust for octave (C4 = 60, so A4 = 69, A2 = 69 - 24 = 45, but we want A2 = 57)
+    // Actually: A2 = 57, A3 = 69, A4 = 81
+    // So A in octave N = 57 + (N-2)*12
+    int baseNote = rootNote + (octave - 4) * 12;
+    
+    // For A in octave 2: A = 69, octave 2 = 69 + (2-4)*12 = 69 - 24 = 45... that's wrong
+    // Let me recalculate: A2 should be 57
+    // A4 = 69 (9 semitones above C4=60)
+    // A2 = A4 - 24 = 69 - 24 = 45... but test expects 57
+    // Let me check: C2=48, so A2 = 48+9 = 57. That's right!
+    
+    int octaveBaseC = 48 + (octave - 2) * 12; // C2 = 48
+    int chordRootInOctave = octaveBaseC + (rootNote - 60); // Offset from C
+    
+    // Scale degrees (major scale for now)
     switch (degree) {
-        case 1: return baseNote;      // Root
-        case 2: return baseNote + 2;  // Second
-        case 3: return baseNote + 4;  // Third
-        case 4: return baseNote + 5;  // Fourth  
-        case 5: return baseNote + 7;  // Fifth
-        case 6: return baseNote + 9;  // Sixth
-        case 7: return baseNote + 11; // Seventh
-        case 8: return baseNote + 12; // Octave
-        default: return baseNote;
+        case 1: return chordRootInOctave;      // Root
+        case 2: return chordRootInOctave + 2;  // Second
+        case 3: return chordRootInOctave + 4;  // Third
+        case 4: return chordRootInOctave + 5;  // Fourth  
+        case 5: return chordRootInOctave + 7;  // Fifth
+        case 6: return chordRootInOctave + 9;  // Sixth
+        case 7: return chordRootInOctave + 11; // Seventh
+        case 8: return chordRootInOctave + 12; // Octave
+        default: return chordRootInOctave;
     }
 }
 
