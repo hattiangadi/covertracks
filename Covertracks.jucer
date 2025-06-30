@@ -66,6 +66,8 @@
               resource="0" file="Source/Tests/MusicLanguageAdvancedTests.cpp"/>
         <FILE id="PatternParsingStressTests" name="PatternParsingStressTests.cpp" compile="1"
               resource="0" file="Source/Tests/PatternParsingStressTests.cpp"/>
+        <FILE id="TDDRecursiveGrammarTests" name="TDDRecursiveGrammarTests.cpp" compile="1"
+              resource="0" file="Source/Tests/TDDRecursiveGrammarTests.cpp"/>
       </GROUP>
       <GROUP id="{TRACKTION-ENGINE-GROUP}" name="Tracktion Engine"/>
       <GROUP id="{C05A6CB8-92D3-46E6-AD2E-B13D7347AC80}" name="Musician">
@@ -99,6 +101,8 @@
                 file="Source/Musician/Core/PerformanceManager.h"/>
           <FILE id="zdzoJA" name="Song.cpp" compile="1" resource="0" file="Source/Musician/Core/Song.cpp"/>
           <FILE id="yVQC67" name="Song.h" compile="0" resource="0" file="Source/Musician/Core/Song.h"/>
+          <FILE id="MusicalContainer_cpp" name="MusicalContainer.cpp" compile="1" resource="0" file="Source/Musician/Core/MusicalContainer.cpp"/>
+          <FILE id="MusicalContainer_h" name="MusicalContainer.h" compile="0" resource="0" file="Source/Musician/Core/MusicalContainer.h"/>
         </GROUP>
         <GROUP id="{CC170D46-B578-C879-6E1F-FDC0D2EB6DC0}" name="UI">
           <GROUP id="{8A17FE2D-2E3E-6D8B-BD15-D0DAD03795B9}" name="New Group"/>

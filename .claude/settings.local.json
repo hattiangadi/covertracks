@@ -51,7 +51,8 @@
       "Bash(\"/Users/anand/src/covertracks/Builds/MacOSX/build/Debug/Covertracks.app/Contents/MacOS/Covertracks\" --run-tests)",
       "Bash(./run_tests_clean.sh:*)",
       "Bash(git stash:*)",
-      "Bash(git submodule:*)"
+      "Bash(git submodule:*)",
+      "Bash(git branch:*)"
     ],
     "deny": []
   }
