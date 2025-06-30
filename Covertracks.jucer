@@ -39,6 +39,14 @@
   <MAINGROUP id="YdWL7hi7p" name="Covertracks">
     <GROUP id="{CFED5B3D-D1D8-0F3F-4D67-B2A810D057EF}" name="Source">
       <GROUP id="{38DF3E53-C216-ADF7-CCF5-86D5880F46C0}" name="Tests">
+        <FILE id="PsGjhD" name="MyGirlLiveTest.cpp" compile="1" resource="0"
+              file="Source/Tests/MyGirlLiveTest.cpp"/>
+        <FILE id="FUODbY" name="QuickMyGirlTest.cpp" compile="1" resource="0"
+              file="Source/Tests/QuickMyGirlTest.cpp"/>
+        <FILE id="aZXG8H" name="MusicJson2RealWorldTests.cpp" compile="1" resource="0"
+              file="Source/Tests/MusicJson2RealWorldTests.cpp"/>
+        <FILE id="edBwJD" name="MusicJson2IntegrationTest.cpp" compile="1"
+              resource="0" file="Source/Tests/MusicJson2IntegrationTest.cpp"/>
         <FILE id="f8audt" name="MusicPatternSystemTests.cpp" compile="1" resource="0"
               file="Source/Tests/MusicPatternSystemTests.cpp"/>
         <FILE id="AHtE5p" name="SimpleTest.h" compile="0" resource="0" file="Source/Tests/SimpleTest.h"/>

@@ -1,0 +1,347 @@
+{
+  "description": "JSON 2.0 equivalent of AdvancedPatternTests.json - Complex multi-instrument patterns",
+  "tests": [
+    {
+      "name": "Complex Multi-Instrument Arrangement",
+      "format": "JSON 2.0",
+      "pattern": {
+        "version": "2.0",
+        "meta": {
+          "title": "Complex Jazz Pattern",
+          "tempo": 120,
+          "timeSignature": "4/4"
+        },
+        "context": {
+          "key": "C major",
+          "velocity": 0.7,
+          "dynamics": "mf"
+        },
+        "patterns": {
+          "jazzDrums": {
+            "events": [
+              {"t": 1.0, "n": "kick", "v": 0.8, "dur": 0.25},
+              {"t": 1.33, "n": "hihat", "v": 0.4, "dur": 0.1},
+              {"t": 2.0, "n": "snare", "v": 0.7, "dur": 0.25},
+              {"t": 2.67, "n": "hihat", "v": 0.4, "dur": 0.1},
+              {"t": 3.0, "n": "kick", "v": 0.6, "dur": 0.25},
+              {"t": 3.33, "n": "hihat", "v": 0.4, "dur": 0.1},
+              {"t": 4.0, "n": "snare", "v": 0.7, "dur": 0.25},
+              {"t": 4.67, "n": "hihat", "v": 0.4, "dur": 0.1}
+            ]
+          },
+          "walkingBass": {
+            "context": {"octave": 2},
+            "events": [
+              {"t": 1.0, "d": 1, "dur": 1.0},
+              {"t": 2.0, "d": 5, "dur": 1.0},
+              {"t": 3.0, "d": 3, "dur": 1.0},
+              {"t": 4.0, "d": 7, "dur": 1.0}
+            ]
+          },
+          "pianoShell": {
+            "context": {"octave": 4},
+            "events": [
+              {"t": 1.0, "d": 3, "dur": 2.0, "v": 0.6},
+              {"t": 1.0, "d": 7, "dur": 2.0, "v": 0.6},
+              {"t": 3.0, "d": 3, "dur": 2.0, "v": 0.6},
+              {"t": 3.0, "d": 7, "dur": 2.0, "v": 0.6}
+            ]
+          },
+          "drumFill": {
+            "events": [
+              {"t": 3.0, "n": "snare", "v": 0.6, "dur": 0.25},
+              {"t": 3.25, "n": "snare", "v": 0.7, "dur": 0.25},
+              {"t": 3.5, "n": "tom1", "v": 0.8, "dur": 0.25},
+              {"t": 3.75, "n": "tom2", "v": 0.9, "dur": 0.25},
+              {"t": 4.0, "n": "crash", "v": 1.0, "dur": 0.5},
+              {"t": 4.0, "n": "kick", "v": 0.9, "dur": 0.25}
+            ]
+          }
+        },
+        "sections": {
+          "verse": {
+            "context": {
+              "chordProgression": ["C", "Am", "F", "G"]
+            },
+            "layers": {
+              "drums": {
+                "pattern": "jazzDrums",
+                "variations": {
+                  "bar4": {
+                    "pattern": "drumFill"
+                  }
+                }
+              },
+              "bass": {
+                "pattern": "walkingBass",
+                "variations": {
+                  "bar2": {
+                    "context": {"chord": "Am"},
+                    "events": [
+                      {"t": 5.0, "d": 1, "dur": 1.0},
+                      {"t": 6.0, "d": 3, "dur": 1.0},
+                      {"t": 7.0, "d": 5, "dur": 1.0},
+                      {"t": 8.0, "d": 7, "dur": 1.0}
+                    ]
+                  },
+                  "bar3": {
+                    "context": {"chord": "F"},
+                    "events": [
+                      {"t": 9.0, "d": 1, "dur": 1.0},
+                      {"t": 10.0, "d": 3, "dur": 1.0},
+                      {"t": 11.0, "d": 5, "dur": 1.0},
+                      {"t": 12.0, "d": 1, "dur": 1.0}
+                    ]
+                  },
+                  "bar4": {
+                    "context": {"chord": "G"},
+                    "events": [
+                      {"t": 13.0, "d": 1, "dur": 1.0},
+                      {"t": 14.0, "d": 3, "dur": 1.0},
+                      {"t": 15.0, "d": 5, "dur": 1.0},
+                      {"t": 16.0, "d": 7, "dur": 1.0}
+                    ]
+                  }
+                }
+              },
+              "piano": {
+                "pattern": "pianoShell",
+                "variations": {
+                  "bar2": {
+                    "context": {"chord": "Am"},
+                    "events": [
+                      {"t": 5.0, "d": 3, "dur": 2.0, "v": 0.6},
+                      {"t": 5.0, "d": 7, "dur": 2.0, "v": 0.6},
+                      {"t": 7.0, "d": 3, "dur": 2.0, "v": 0.6},
+                      {"t": 7.0, "d": 7, "dur": 2.0, "v": 0.6}
+                    ]
+                  }
+                }
+              },
+              "melody": {
+                "context": {"octave": 5, "velocity": 0.8},
+                "events": [
+                  {"t": 1.5, "n": "E", "dur": 1.5, "dynamics": "f"},
+                  {"t": 3.0, "n": "D", "dur": 1.0, "dynamics": "mf"},
+                  {"t": 4.0, "n": "C", "dur": 1.0, "dynamics": "mf"}
+                ],
+                "variations": {
+                  "bar2": {
+                    "context": {"chord": "Am"},
+                    "events": [
+                      {"t": 5.5, "n": "C", "dur": 1.5},
+                      {"t": 7.0, "n": "E", "dur": 1.0},
+                      {"t": 8.0, "n": "A", "dur": 1.0}
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "chorus": {
+            "context": {
+              "chordProgression": ["F", "C", "G", "Am"],
+              "velocity": 0.9,
+              "dynamics": "f"
+            },
+            "layers": {
+              "drums": {
+                "pattern": "jazzDrums",
+                "context": {"velocity": 0.9}
+              },
+              "bass": {
+                "context": {"octave": 2, "chord": "F"},
+                "events": [
+                  {"t": 1.0, "d": 1, "dur": 1.0, "v": 0.8},
+                  {"t": 2.0, "d": 3, "dur": 1.0, "v": 0.8},
+                  {"t": 3.0, "d": 5, "dur": 1.0, "v": 0.8},
+                  {"t": 4.0, "d": 1, "dur": 1.0, "v": 0.8}
+                ]
+              },
+              "piano": {
+                "context": {"octave": 4},
+                "events": [
+                  {"t": 1.0, "d": 1, "dur": 0.5, "v": 0.8},
+                  {"t": 1.0, "d": 3, "dur": 0.5, "v": 0.8},
+                  {"t": 1.0, "d": 5, "dur": 0.5, "v": 0.8},
+                  {"t": 2.0, "d": 1, "dur": 0.5, "v": 0.8},
+                  {"t": 2.0, "d": 3, "dur": 0.5, "v": 0.8},
+                  {"t": 2.0, "d": 5, "dur": 0.5, "v": 0.8}
+                ]
+              }
+            }
+          }
+        },
+        "arrangement": ["verse", "chorus", "verse", "chorus"]
+      }
+    },
+    {
+      "name": "My Girl Style Pattern",
+      "format": "JSON 2.0",
+      "pattern": {
+        "version": "2.0",
+        "meta": {
+          "title": "My Girl Style",
+          "tempo": 100,
+          "style": "classic soul"
+        },
+        "context": {
+          "key": "C major",
+          "velocity": 0.75
+        },
+        "patterns": {
+          "soulBeat": {
+            "events": [
+              {"t": 1.0, "n": "kick", "v": 0.8, "dur": 0.25},
+              {"t": 2.0, "n": "snare", "v": 0.7, "dur": 0.25},
+              {"t": 2.5, "n": "hihat", "v": 0.4, "dur": 0.1},
+              {"t": 3.0, "n": "kick", "v": 0.6, "dur": 0.25},
+              {"t": 4.0, "n": "snare", "v": 0.7, "dur": 0.25},
+              {"t": 4.5, "n": "hihat", "v": 0.4, "dur": 0.1}
+            ]
+          },
+          "bassLine": {
+            "context": {"octave": 2},
+            "events": [
+              {"t": 1.0, "d": 1, "dur": 1.0},
+              {"t": 2.0, "d": 1, "dur": 0.5},
+              {"t": 2.5, "d": 3, "dur": 0.5},
+              {"t": 3.0, "d": 5, "dur": 1.0},
+              {"t": 4.0, "d": 3, "dur": 1.0}
+            ]
+          }
+        },
+        "sections": {
+          "intro": {
+            "context": {"dynamics": "mp"},
+            "layers": {
+              "bass": {
+                "pattern": "bassLine"
+              }
+            }
+          },
+          "verse": {
+            "context": {
+              "chordProgression": ["C", "F", "G", "C"],
+              "dynamics": "mf"
+            },
+            "layers": {
+              "drums": {
+                "pattern": "soulBeat"
+              },
+              "bass": {
+                "pattern": "bassLine",
+                "variations": {
+                  "bar2": {
+                    "context": {"chord": "F"},
+                    "events": [
+                      {"t": 5.0, "d": 1, "dur": 1.0},
+                      {"t": 6.0, "d": 5, "dur": 1.0},
+                      {"t": 7.0, "d": 3, "dur": 1.0},
+                      {"t": 8.0, "d": 1, "dur": 1.0}
+                    ]
+                  }
+                }
+              },
+              "melody": {
+                "context": {"octave": 4, "velocity": 0.8},
+                "events": [
+                  {"t": 1.5, "n": "G", "dur": 1.0, "articulation": "legato"},
+                  {"t": 2.5, "n": "E", "dur": 1.0, "articulation": "legato"},
+                  {"t": 3.5, "n": "C", "dur": 1.5, "articulation": "legato"}
+                ]
+              }
+            }
+          }
+        },
+        "arrangement": ["intro", "verse", "verse"]
+      }
+    },
+    {
+      "name": "Twinkle Complex Arrangement",
+      "format": "JSON 2.0",
+      "pattern": {
+        "version": "2.0",
+        "meta": {
+          "title": "Twinkle Twinkle Complex",
+          "tempo": 120
+        },
+        "context": {
+          "key": "C major",
+          "velocity": 0.7
+        },
+        "patterns": {
+          "melody": {
+            "context": {"octave": 4},
+            "events": [
+              {"t": 1.0, "n": "C", "dur": 1.0},
+              {"t": 2.0, "n": "C", "dur": 1.0},
+              {"t": 3.0, "n": "G", "dur": 1.0},
+              {"t": 4.0, "n": "G", "dur": 1.0},
+              {"t": 5.0, "n": "A", "dur": 1.0},
+              {"t": 6.0, "n": "A", "dur": 1.0},
+              {"t": 7.0, "n": "G", "dur": 2.0}
+            ]
+          },
+          "harmony": {
+            "context": {"octave": 3},
+            "events": [
+              {"t": 1.0, "n": "C", "dur": 4.0},
+              {"t": 5.0, "n": "F", "dur": 2.0},
+              {"t": 7.0, "n": "G", "dur": 2.0}
+            ]
+          },
+          "walkingBass": {
+            "context": {"octave": 2},
+            "events": [
+              {"t": 1.0, "n": "C", "dur": 1.0},
+              {"t": 2.0, "n": "E", "dur": 1.0},
+              {"t": 3.0, "n": "G", "dur": 1.0},
+              {"t": 4.0, "n": "C", "dur": 1.0}
+            ]
+          }
+        },
+        "sections": {
+          "A": {
+            "layers": {
+              "melody": {
+                "pattern": "melody"
+              },
+              "harmony": {
+                "pattern": "harmony"
+              },
+              "bass": {
+                "pattern": "walkingBass"
+              }
+            }
+          },
+          "B": {
+            "context": {"dynamics": "f"},
+            "layers": {
+              "melody": {
+                "context": {"octave": 5},
+                "events": [
+                  {"t": 1.0, "n": "F", "dur": 1.0},
+                  {"t": 2.0, "n": "F", "dur": 1.0},
+                  {"t": 3.0, "n": "E", "dur": 1.0},
+                  {"t": 4.0, "n": "E", "dur": 1.0},
+                  {"t": 5.0, "n": "D", "dur": 1.0},
+                  {"t": 6.0, "n": "D", "dur": 1.0},
+                  {"t": 7.0, "n": "C", "dur": 2.0}
+                ]
+              },
+              "harmony": {
+                "context": {"octave": 4},
+                "events": [
+                  {"t": 1.0, "n": "F", "dur": 4.0},
+                  {"t": 5.0, "n": "G", "dur": 4.0}
+                ]
+              }
+            }
+          }
+        },
+        "arrangement": ["A", "A", "B", "A"]
+      }
+    }
+  ]
+}

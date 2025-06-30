@@ -3,6 +3,7 @@
 #include "MusicPatternSystem.h"
 #include "PatternGenerator.h"
 #include "PatternParser.h"
+#include "UniversalMusicParser.h"
 #include "../../LLM/Core/PromptManager.h"
 #include "../../Player/Core/Player.h"
 #include <iostream>
@@ -428,37 +429,97 @@ var Musician::convertNotationToMidiEvents(const String& notation, double tempo)
     // Create result object
     DynamicObject::Ptr result = new DynamicObject();
     
-    // Parse the notation to create a chart
-    auto parser = PatternParser(*patternSystem);
+    // Detect JSON format version by parsing and checking for "version" field
+    var parsedJson = JSON::parse(notation);
+    String formatVersion = "1.0"; // Default to JSON 1.0 format
     
-    // Register standard instrument capabilities with the parser for better note mapping
-    auto drumCapabilities = Player::createDrumCapabilities();
-    parser.registerInstrumentCapabilities("drums", drumCapabilities);
-    
-    auto chart = parser.parseLLMResponse(notation);
-    
-    if (chart)
-    {
-        // Set the tempo if not already set
-        if (chart->getTempo() <= 0)
-            chart->setTempo(tempo);
-        
-        // Convert the chart to MIDI events
-        var midiEvents = midiMessageSequenceToVar(*chart->toMidiSequence(), chart->getTempo());
-        
-        // Create success response
-        result->setProperty("success", true);
-        result->setProperty("tempo", chart->getTempo());
-        result->setProperty("events", midiEvents);
-        
-        return var(result.get());
+    if (parsedJson.isObject() && parsedJson.hasProperty("version")) {
+        formatVersion = parsedJson["version"].toString();
     }
     
-    // Create failure response
+    DBG("Pattern parsing: detected format version " << formatVersion);
+    
+    std::shared_ptr<Chart> chart;
+    
+    if (formatVersion == "2.0") {
+        // Use new UniversalMusicParser for Music JSON 2.0
+        DBG("Using UniversalMusicParser for JSON 2.0 format");
+        
+        auto container = UniversalMusicParser::parseJSON(notation);
+        if (container) {
+            // Convert MusicalContainer to MIDI events via EventStream
+            Context globalContext;
+            globalContext.velocity = 0.8f; // Default velocity
+            globalContext.octave = 4;      // Default octave
+            
+            auto eventStream = container->render(globalContext, 1, 4);
+            
+            // Convert EventStream to var format for Player compatibility
+            Array<var> events;
+            for (const auto& event : eventStream) {
+                DynamicObject::Ptr eventObj = new DynamicObject();
+                eventObj->setProperty("type", "note_on");
+                eventObj->setProperty("timestamp", event.time);
+                eventObj->setProperty("note", event.resolvedNote > 0 ? event.resolvedNote : 60); // Default to C4
+                eventObj->setProperty("velocity", event.resolvedVelocity);
+                eventObj->setProperty("channel", 1);
+                
+                // Add duration/note_off if available
+                if (event.duration > 0) {
+                    eventObj->setProperty("duration", event.duration);
+                }
+                
+                events.add(var(eventObj.get()));
+            }
+            
+            // Create success response for Music JSON 2.0
+            result->setProperty("success", true);
+            result->setProperty("tempo", tempo); // Use provided tempo for now
+            result->setProperty("events", events);
+            
+            DBG("UniversalMusicParser: converted " << events.size() << " events");
+            return var(result.get());
+        } else {
+            DBG("UniversalMusicParser: failed to parse JSON 2.0 format");
+        }
+    } else {
+        // Use legacy PatternParser for JSON 1.0 format
+        DBG("Using PatternParser for JSON 1.0 format");
+        
+        auto parser = PatternParser(*patternSystem);
+        
+        // Register standard instrument capabilities with the parser for better note mapping
+        auto drumCapabilities = Player::createDrumCapabilities();
+        parser.registerInstrumentCapabilities("drums", drumCapabilities);
+        
+        chart = parser.parseLLMResponse(notation);
+        
+        if (chart) {
+            // Set the tempo if not already set
+            if (chart->getTempo() <= 0)
+                chart->setTempo(tempo);
+            
+            // Convert the chart to MIDI events
+            var midiEvents = midiMessageSequenceToVar(*chart->toMidiSequence(), chart->getTempo());
+            
+            // Create success response
+            result->setProperty("success", true);
+            result->setProperty("tempo", chart->getTempo());
+            result->setProperty("events", midiEvents);
+            
+            DBG("PatternParser: successfully converted chart to MIDI events");
+            return var(result.get());
+        } else {
+            DBG("PatternParser: failed to parse JSON 1.0 format");
+        }
+    }
+    
+    // Create failure response if both parsers failed
     result->setProperty("success", false);
     result->setProperty("tempo", tempo);
     result->setProperty("events", Array<var>());
     
+    DBG("Pattern parsing: both parsers failed, returning failure response");
     return var(result.get());
 }
 

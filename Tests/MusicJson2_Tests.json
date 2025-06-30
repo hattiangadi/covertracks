@@ -1,0 +1,217 @@
+{
+  "description": "JSON 2.0 equivalent of MusicPatternSystem_Tests.json - Complete feature test coverage",
+  "tests": [
+    {
+      "name": "Basic Drum Pattern",
+      "format": "JSON 2.0",
+      "pattern": {
+        "version": "2.0",
+        "meta": {
+          "title": "Basic Drums",
+          "tempo": 120
+        },
+        "context": {
+          "velocity": 0.8,
+          "dynamics": "mf"
+        },
+        "events": [
+          {"t": 1.0, "n": "kick", "v": 0.8, "dur": 0.25},
+          {"t": 2.0, "n": "snare", "v": 0.7, "dur": 0.25},
+          {"t": 3.0, "n": "kick", "v": 0.8, "dur": 0.25},
+          {"t": 4.0, "n": "snare", "v": 0.7, "dur": 0.25}
+        ]
+      }
+    },
+    {
+      "name": "Chord Tone Resolution",
+      "format": "JSON 2.0", 
+      "pattern": {
+        "version": "2.0",
+        "context": {
+          "chord": "C",
+          "octave": 2,
+          "velocity": 0.7
+        },
+        "events": [
+          {"t": 1.0, "d": 1, "dur": 1.0},
+          {"t": 2.0, "d": 3, "dur": 1.0},
+          {"t": 3.0, "d": 5, "dur": 1.0},
+          {"t": 4.0, "d": 1, "dur": 1.0}
+        ]
+      }
+    },
+    {
+      "name": "Pattern Variations",
+      "format": "JSON 2.0",
+      "pattern": {
+        "version": "2.0",
+        "patterns": {
+          "basicBeat": {
+            "events": [
+              {"t": 1.0, "n": "kick", "v": 0.8},
+              {"t": 3.0, "n": "snare", "v": 0.7}
+            ]
+          },
+          "fillPattern": {
+            "events": [
+              {"t": 3.0, "n": "kick", "v": 0.9},
+              {"t": 3.5, "n": "snare", "v": 0.8},
+              {"t": 4.0, "n": "crash", "v": 1.0}
+            ]
+          }
+        },
+        "sections": {
+          "main": {
+            "layers": {
+              "drums": {
+                "pattern": "basicBeat",
+                "variations": {
+                  "bar4": {
+                    "pattern": "fillPattern"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Multi-Bar Events",
+      "format": "JSON 2.0",
+      "pattern": {
+        "version": "2.0",
+        "context": {
+          "octave": 3,
+          "velocity": 0.7
+        },
+        "events": [
+          {"t": 1.0, "n": "C", "dur": 4.0},
+          {"t": 5.0, "n": "F", "dur": 4.0},
+          {"t": 9.0, "n": "G", "dur": 4.0},
+          {"t": 13.0, "n": "C", "dur": 4.0}
+        ]
+      }
+    },
+    {
+      "name": "Combined Primitives", 
+      "format": "JSON 2.0",
+      "pattern": {
+        "version": "2.0",
+        "events": [
+          {"t": 1.0, "n": "kick", "v": 0.8},
+          {"t": 1.0, "n": "snare", "v": 0.7},
+          {"t": 3.0, "n": "kick", "v": 0.8},
+          {"t": 3.0, "n": "hihat", "v": 0.5}
+        ]
+      }
+    },
+    {
+      "name": "Velocity Formats",
+      "format": "JSON 2.0",
+      "pattern": {
+        "version": "2.0",
+        "events": [
+          {"t": 1.0, "n": "kick", "v": 0.9, "dynamics": "f"},
+          {"t": 2.0, "n": "snare", "v": 0.3, "dynamics": "pp"},
+          {"t": 3.0, "n": "kick", "v": 0.7, "dynamics": "mf"},
+          {"t": 4.0, "n": "snare", "v": 1.0, "dynamics": "ff"}
+        ]
+      }
+    },
+    {
+      "name": "Expression Features",
+      "format": "JSON 2.0",
+      "pattern": {
+        "version": "2.0",
+        "context": {
+          "dynamics": "mf",
+          "articulation": "legato"
+        },
+        "events": [
+          {
+            "t": 1.0, "n": "C4", "v": 0.8,
+            "expression": {
+              "dynamics": "ff",
+              "articulation": "staccato",
+              "vibrato": {"rate": 5, "depth": 0.2}
+            }
+          },
+          {
+            "t": 2.0, "n": "D4", "v": 0.7,
+            "processors": {
+              "reverb": {"room": 0.5, "decay": 3.0}
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Nested Layers",
+      "format": "JSON 2.0",
+      "pattern": {
+        "version": "2.0",
+        "sections": {
+          "verse": {
+            "context": {"velocity": 0.7},
+            "layers": {
+              "rhythm": {
+                "layers": {
+                  "kick": {
+                    "events": [
+                      {"t": 1.0, "n": "kick", "v": 0.8},
+                      {"t": 3.0, "n": "kick", "v": 0.8}
+                    ]
+                  },
+                  "snare": {
+                    "events": [
+                      {"t": 2.0, "n": "snare", "v": 0.7},
+                      {"t": 4.0, "n": "snare", "v": 0.7}
+                    ]
+                  }
+                }
+              },
+              "melody": {
+                "context": {"octave": 4},
+                "events": [
+                  {"t": 1.0, "n": "C", "dur": 2.0},
+                  {"t": 3.0, "n": "E", "dur": 2.0}
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Context Inheritance Chain",
+      "format": "JSON 2.0",
+      "pattern": {
+        "version": "2.0",
+        "context": {
+          "velocity": 0.6,
+          "octave": 4,
+          "dynamics": "mp"
+        },
+        "sections": {
+          "section1": {
+            "context": {"velocity": 0.8, "dynamics": "mf"},
+            "layers": {
+              "bass": {
+                "context": {"octave": 2},
+                "variations": {
+                  "bar4": {
+                    "context": {"chord": "Am"},
+                    "events": [
+                      {"t": 4.0, "d": 1, "v": 0.9}
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

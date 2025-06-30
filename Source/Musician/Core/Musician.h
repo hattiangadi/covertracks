@@ -168,6 +168,9 @@ public:
     /**
      * @brief Convert LLM_RESPONSE_TEXT to MIDI_EVENT_CHART
      * 
+     * Supports both JSON 1.0 (legacy PatternParser) and JSON 2.0 (UniversalMusicParser) formats.
+     * Auto-detects format version from JSON "version" field.
+     * 
      * @param notation LLM_RESPONSE_TEXT (JSON string from LLM)
      * @param tempo Tempo in BPM
      * @return var MIDI_EVENT_CHART (Player-compatible format)
