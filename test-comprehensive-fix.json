@@ -1,0 +1,50 @@
+{
+  "version": "2.0",
+  "meta": {"title": "Comprehensive Fix Test"},
+  
+  "patterns": {
+    "jazzComping": {
+      "events": [
+        {"t": 1.5, "n": "E3", "dur": 0.5},
+        {"t": 2.5, "n": "G3", "dur": 0.5}
+      ]
+    }
+  },
+  
+  "sections": {
+    "intro": {
+      "bars": {
+        "1": {"events": [{"t": 1, "n": "C4"}]},
+        "2": {"events": [{"t": 1, "n": "D4"}]},
+        "3": {"events": [{"t": 1, "n": "E4"}]},
+        "4": {"events": [{"t": 1, "n": "F4"}]}
+      }
+    },
+    
+    "head": {
+      "layers": {
+        "melody": {
+          "bars": {
+            "1": {"events": [{"t": 1, "n": "G4"}]},
+            "2": {"events": [{"t": 1, "n": "A4"}]},
+            "3": {"events": [{"t": 1, "n": "B4"}]},
+            "4": {"events": [{"t": 1, "n": "C5"}]}
+          }
+        },
+        "comping": {
+          "bars": {
+            "1-4": {"pattern": "jazzComping"}
+          }
+        }
+      }
+    },
+    
+    "outro": {
+      "bars": {
+        "1": {"events": [{"t": 1, "n": "Bb3", "dur": 4.0}]}
+      }
+    }
+  },
+  
+  "arrangement": ["intro", "head", "outro"]
+}

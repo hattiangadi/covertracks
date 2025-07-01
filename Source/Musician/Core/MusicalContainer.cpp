@@ -168,6 +168,46 @@ MusicalContainer::~MusicalContainer()
     // Default destructor
 }
 
+MusicalContainer::MusicalContainer(const MusicalContainer& other)
+    : events(other.events)
+    , layers(other.layers)
+    , variations(other.variations)
+    , patterns(other.patterns)
+    , sections(other.sections)
+    , context(other.context)
+    , reference(other.reference)
+    , arrangement(other.arrangement)
+    , shortcuts(other.shortcuts)
+    , transforms(other.transforms)
+    , chordProgression(other.chordProgression)
+    , processorChains(other.processorChains)
+    , constraints(other.constraints)
+    , performance(other.performance)
+{
+    // Copy constructor
+}
+
+MusicalContainer& MusicalContainer::operator=(const MusicalContainer& other)
+{
+    if (this != &other) {
+        events = other.events;
+        layers = other.layers;
+        variations = other.variations;
+        patterns = other.patterns;
+        sections = other.sections;
+        context = other.context;
+        reference = other.reference;
+        arrangement = other.arrangement;
+        shortcuts = other.shortcuts;
+        transforms = other.transforms;
+        chordProgression = other.chordProgression;
+        processorChains = other.processorChains;
+        constraints = other.constraints;
+        performance = other.performance;
+    }
+    return *this;
+}
+
 EventStream MusicalContainer::render(const Context& parentContext, int currentBar, int totalBars) const
 {
     // Debug context inheritance
@@ -336,10 +376,76 @@ EventStream MusicalContainer::renderSections(const Context& resolvedContext, int
 {
     EventStream stream;
     
-    // Render all sections simultaneously (like layers)
-    for (const auto& [sectionName, section] : sections) {
-        auto sectionStream = section.render(resolvedContext, bar, totalBars);
-        stream.merge(sectionStream);
+    // Check if we have an arrangement - if so, render sections sequentially in arrangement order
+    if (!arrangement.empty()) {
+        DBG("Rendering sections in arrangement order: " << arrangement.size() << " sections");
+        
+        double currentTime = 0.0;
+        for (const auto& sectionName : arrangement) {
+            DBG("Processing arrangement section: " << sectionName);
+            auto sectionIt = sections.find(sectionName);
+            if (sectionIt != sections.end()) {
+                DBG("Rendering arranged section: " << sectionName << " at time offset " << currentTime);
+                
+                // Render the section fully - calculate how many bars it contains
+                int sectionBars = calculateSectionBars(sectionIt->second);
+                DBG("Section " << sectionName << " contains " << sectionBars << " bars");
+                
+                // Render all bars in the section sequentially
+                EventStream sectionStream;
+                for (int bar = 1; bar <= sectionBars; ++bar) {
+                    auto barStream = sectionIt->second.render(resolvedContext, bar, sectionBars);
+                    
+                    // Offset bar events by (bar-1) * beatsPerBar
+                    double barOffset = (bar - 1) * 4.0; // Assume 4 beats per bar
+                    for (auto& event : barStream) {
+                        event.time += barOffset;
+                    }
+                    
+                    sectionStream.merge(barStream);
+                }
+                
+                DBG("Section " << sectionName << " generated " << sectionStream.size() << " events");
+                
+                // Offset all events in the section by currentTime
+                for (auto& event : sectionStream) {
+                    DBG("Original event time: " << event.time << ", adding offset: " << currentTime);
+                    event.time += currentTime;
+                    DBG("Final event time: " << event.time << ", note: " << event.resolvedNote);
+                }
+                
+                stream.merge(sectionStream);
+                
+                // Advance time for next section based on actual section duration
+                double sectionDuration = 4.0; // Default to 4 beats/1 bar
+                if (!sectionStream.isEmpty()) {
+                    // Find the last event time relative to section start (subtract currentTime offset)
+                    double maxRelativeTime = 0.0;
+                    for (const auto& event : sectionStream) {
+                        double relativeTime = (event.time - currentTime) + event.duration;
+                        maxRelativeTime = std::max(maxRelativeTime, relativeTime);
+                    }
+                    if (maxRelativeTime > 0.0) {
+                        sectionDuration = maxRelativeTime;
+                    }
+                }
+                currentTime += sectionDuration;
+                DBG("Advanced currentTime by " << sectionDuration << " to: " << currentTime);
+            } else {
+                DBG("Warning: Section '" << sectionName << "' in arrangement not found in sections map");
+                DBG("Available sections in map:");
+                for (const auto& availableSection : sections) {
+                    DBG("  - " << availableSection.first);
+                }
+            }
+        }
+    } else {
+        // Fallback: render all sections simultaneously (like layers) - original behavior
+        DBG("No arrangement found, rendering all sections simultaneously");
+        for (const auto& [sectionName, section] : sections) {
+            auto sectionStream = section.render(resolvedContext, bar, totalBars);
+            stream.merge(sectionStream);
+        }
     }
     
     return stream;
@@ -403,15 +509,21 @@ void MusicalContainer::applyExpression(Event& event, const Context& context) con
     }
     event.articulation = resolvedArticulation; // Store resolved value back in event
     
-    // Debug output
-    DBG("Applying expression: event.resolvedOctave=" << event.resolvedOctave << " (after), context.octave=" << context.octave);
-    DBG("Result: resolvedVelocity=" << event.resolvedVelocity << ", resolvedOctave=" << event.resolvedOctave << ", resolvedChord=" << event.resolvedChord);
-    DBG("Result: dynamics=" << event.dynamics << ", articulation=" << event.articulation);
+    // Resolve note name to MIDI number if needed
+    if (!event.note.isEmpty() && event.resolvedNote == 60) { // Only resolve if not already resolved
+        event.resolvedNote = parseMusicalNoteName(event.note);
+        DBG("Resolved note name '" << event.note << "' to MIDI " << event.resolvedNote);
+    }
     
-    // Resolve chord degrees if needed
+    // Resolve chord degrees if needed  
     if (event.degree > 0) {
         event.resolvedNote = resolveChordDegree(event.degree, event.resolvedChord, event.resolvedOctave);
     }
+    
+    // Debug output
+    DBG("Applying expression: event.resolvedOctave=" << event.resolvedOctave << " (after), context.octave=" << context.octave);
+    DBG("Result: resolvedVelocity=" << event.resolvedVelocity << ", resolvedOctave=" << event.resolvedOctave << ", resolvedChord=" << event.resolvedChord);
+    DBG("Result: dynamics=" << event.dynamics << ", articulation=" << event.articulation << ", resolvedNote=" << event.resolvedNote);
 }
 
 int MusicalContainer::resolveChordDegree(int degree, const juce::String& chord, int octave) const
@@ -458,14 +570,86 @@ int MusicalContainer::resolveChordDegree(int degree, const juce::String& chord, 
 
 bool MusicalContainer::matchesBar(const juce::String& varName, int bar) const
 {
-    // Simple bar matching for now
+    // Handle both "bar1" and "1" formats
     if (varName.startsWith("bar")) {
         juce::String barNumberStr = varName.substring(3);
         int varBar = barNumberStr.getIntValue();
         return varBar == bar;
     }
     
+    // Handle simple numeric names like "1", "2", "3"
+    if (varName.containsOnly("0123456789")) {
+        int varBar = varName.getIntValue();
+        return varBar == bar;
+    }
+    
     return false;
+}
+
+int MusicalContainer::parseMusicalNoteName(const juce::String& noteName) const
+{
+    // Parse standard musical note names like "C4", "F#5", "Bb3"
+    if (noteName.length() < 2)
+        return -1; // Invalid note name
+    
+    juce::String noteStr = noteName.trim().toUpperCase();
+    
+    // Extract note name (C, D, E, F, G, A, B)
+    char noteLetter = noteStr[0];
+    int noteIndex = -1;
+    
+    switch (noteLetter)
+    {
+        case 'C': noteIndex = 0; break;
+        case 'D': noteIndex = 2; break;
+        case 'E': noteIndex = 4; break;
+        case 'F': noteIndex = 5; break;
+        case 'G': noteIndex = 7; break;
+        case 'A': noteIndex = 9; break;
+        case 'B': noteIndex = 11; break;
+        default: return -1; // Invalid note
+    }
+    
+    // Check for sharp or flat
+    int accidentalOffset = 0;
+    int octaveStartIndex = 1;
+    
+    if (noteStr.length() > 1)
+    {
+        if (noteStr[1] == '#' || noteStr[1] == 'S') // Sharp
+        {
+            accidentalOffset = 1;
+            octaveStartIndex = 2;
+        }
+        else if (noteStr[1] == 'B' && noteStr.length() > 2 && noteStr[2] != '0') // Flat (but not B0)
+        {
+            accidentalOffset = -1;
+            octaveStartIndex = 2;
+        }
+    }
+    
+    // Extract octave number
+    if (noteStr.length() <= octaveStartIndex)
+        return -1; // No octave specified
+    
+    juce::String octaveStr = noteStr.substring(octaveStartIndex);
+    int octave = octaveStr.getIntValue();
+    
+    // Validate octave range (MIDI supports 0-10, but typically we use 0-8)
+    if (octave < 0 || octave > 10)
+        return -1;
+    
+    // Calculate MIDI note number
+    // MIDI note 60 = C4 (Middle C), which means octave 4 starts at MIDI note 60
+    // In scientific pitch notation: C0=12, C1=24, C2=36, C3=48, C4=60, etc.
+    // Each octave spans 12 semitones
+    int midiNote = ((octave + 1) * 12) + noteIndex + accidentalOffset;
+    
+    // Ensure MIDI note is in valid range (0-127)
+    if (midiNote < 0 || midiNote > 127)
+        return -1;
+    
+    return midiNote;
 }
 
 void MusicalContainer::applyShorthand(EventStream& stream) const
@@ -478,6 +662,66 @@ void MusicalContainer::applyTransforms(EventStream& stream) const
 {
     // TODO: Implement transform processing  
     (void)stream; // Suppress unused parameter warning
+}
+
+int MusicalContainer::calculateSectionBars(const MusicalContainer& section) const
+{
+    // Find the highest numbered bar in the section
+    int maxBar = 0;
+    
+    // Function to extract bar number from a name
+    auto extractBarNumber = [](const juce::String& name) -> int {
+        // Check if this is a numeric bar name like "1", "2", "3"
+        if (name.containsOnly("0123456789")) {
+            return name.getIntValue();
+        }
+        // Check if this is a "bar1" format name
+        else if (name.startsWith("bar")) {
+            juce::String barNumberStr = name.substring(3);
+            if (barNumberStr.containsOnly("0123456789")) {
+                return barNumberStr.getIntValue();
+            }
+        }
+        // Check if this is a range like "1-4" or "5-8"
+        else if (name.contains("-")) {
+            int dashIndex = name.indexOfChar('-');
+            if (dashIndex > 0 && dashIndex < name.length() - 1) {
+                juce::String endStr = name.substring(dashIndex + 1);
+                if (endStr.containsOnly("0123456789")) {
+                    return endStr.getIntValue();
+                }
+            }
+        }
+        return 0;
+    };
+    
+    // Check variations (where bars are usually stored)
+    for (const auto& [varName, variation] : section.variations) {
+        int barNum = extractBarNumber(varName);
+        maxBar = std::max(maxBar, barNum);
+    }
+    
+    // Also check patterns in case bars are stored there
+    for (const auto& [patternName, pattern] : section.patterns) {
+        int barNum = extractBarNumber(patternName);
+        maxBar = std::max(maxBar, barNum);
+    }
+    
+    // Check layers (in case there are nested bars in layers)
+    for (const auto& [layerName, layer] : section.layers) {
+        for (const auto& [varName, variation] : layer.variations) {
+            int barNum = extractBarNumber(varName);
+            maxBar = std::max(maxBar, barNum);
+        }
+    }
+    
+    DBG("calculateSectionBars: found max bar " << maxBar << " in section with " 
+        << section.variations.size() << " variations, " 
+        << section.patterns.size() << " patterns, " 
+        << section.layers.size() << " layers");
+    
+    // Default to 1 bar if no bars found
+    return std::max(1, maxBar);
 }
 
 } // namespace covertracks

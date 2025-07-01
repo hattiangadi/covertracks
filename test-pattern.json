@@ -1,0 +1,1 @@
+{"version":"2.0","patterns":{"test":{"events":[{"t":1,"n":"C4"}]}},"sections":{"intro":{"bars":{"1":{"pattern":"test"},"2":{"pattern":"test"},"3":{"pattern":"test"},"4":{"pattern":"test"}}},"verse":{"bars":{"1":{"events":[{"t":1,"n":"F4"}]},"2":{"events":[{"t":1,"n":"G4"}]}}}},"arrangement":["intro","verse"]}

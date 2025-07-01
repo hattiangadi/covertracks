@@ -2,6 +2,68 @@
 
 **A Unified Architecture for Musical Expression and Robust Parsing**
 
+## Core Concepts
+
+### Container Aliasing System
+
+While everything is a MusicalContainer at the implementation level, we use semantic aliases to describe the musical hierarchy:
+
+- **Arrangement**: A container that contains sections (sequential playback order)
+- **Section**: A container that contains phrases (verse, chorus, bridge, etc.)
+- **Phrase**: A container that contains bars (musical sentences)
+- **Bar**: A container that contains beats (measures)
+- **Beat**: A container that contains events (notes, rests)
+
+This aliasing provides:
+1. **Semantic Clarity**: Musicians understand "section" better than "container"
+2. **Universal Implementation**: All aliases map to the same MusicalContainer class
+3. **Flexible Nesting**: Any level can contain any other level when needed
+4. **Context Inheritance**: Each level inherits and can override parent context
+
+Example:
+```json
+{
+  "arrangement": {  // Container with sections
+    "intro": {     // Section container
+      "phrase1": { // Phrase container
+        "bar1": {  // Bar container
+          "beat1": {  // Beat container
+            "events": [{"n": "C4", "t": 1.0}]
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### Unified Container Architecture
+
+Instead of different types (layers, variations, patterns, sections), we have one MusicalContainer with aliased relationships:
+
+```json
+{
+  // Traditional approach with type-specific fields
+  "sections": { "verse": {...} },
+  "layers": { "piano": {...} },
+  "variations": { "bar4": {...} },
+  
+  // Unified approach with semantic aliases
+  "arrangement": {              // Top-level container
+    "verse": {                  // Section container
+      "simultaneous": {         // Layers become simultaneous containers
+        "piano": {...},
+        "bass": {...}
+      },
+      "sequential": {           // Variations become sequential containers
+        "bar1": {...},
+        "bar2": {...}
+      }
+    }
+  }
+}
+```
+
 ## Executive Summary
 
 This document proposes a comprehensive redesign of the Covertracks music language to address two critical needs:

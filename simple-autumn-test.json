@@ -1,0 +1,19 @@
+{
+  "version": "2.0",
+  "meta": {"title": "Simple Autumn Test"},
+  "patterns": {
+    "simpleRiff": {
+      "events": [{"t": 1, "n": "C4", "dur": 1.0}]
+    }
+  },
+  "sections": {
+    "test": {
+      "bars": {
+        "1": {"pattern": "simpleRiff"},
+        "2": {"pattern": "simpleRiff"},
+        "3": {"pattern": "simpleRiff"}
+      }
+    }
+  },
+  "arrangement": ["test"]
+}

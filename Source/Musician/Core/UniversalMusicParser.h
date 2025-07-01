@@ -48,12 +48,53 @@ public:
     static juce::String getLastError();
     
 private:
+    // Temporal relationship types for containers
+    enum class TemporalRelationship {
+        Simultaneous,  // Layers, instruments (play together)
+        Sequential,    // Variations, bars (play one after another)
+        Named,         // Patterns, templates (reusable)
+        Structure      // Sections, movements (organizational)
+    };
+    
+    // Self-describing alias definition with quantitative relationships
+    struct AliasDefinition {
+        TemporalRelationship type;
+        juce::String contains;          // What this container holds
+        juce::var count;               // How many (int, "variable", "free", "infinite", {min,max})
+        juce::String pattern;          // Layout pattern ("AABA", "AAB", etc.)
+        double defaultDuration;        // Fallback duration if count unavailable
+        juce::var metadata;           // Additional properties
+        
+        AliasDefinition() 
+            : type(TemporalRelationship::Sequential), defaultDuration(4.0) {}
+        AliasDefinition(TemporalRelationship t, const juce::String& c = {}, const juce::var& cnt = 1) 
+            : type(t), contains(c), count(cnt), defaultDuration(4.0) {}
+    };
+    
+    // Dynamic alias registry populated from pattern
+    static std::map<juce::String, AliasDefinition> currentAliases;
+    
     // Internal parsing methods
     static MusicalContainer parseRecursiveStructure(const juce::var& json);
     static void parseLayersInto(MusicalContainer& container, const juce::var& layersJson);
     static void parseVariationsInto(MusicalContainer& container, const juce::var& variationsJson);
     static void parsePatternsInto(MusicalContainer& container, const juce::var& patternsJson);
     static void parseSectionsInto(MusicalContainer& container, const juce::var& sectionsJson);
+    
+    // Universal container parsing
+    static void parseContainerInto(MusicalContainer& parent, 
+                                  const juce::var& containersJson,
+                                  const juce::String& semanticType);
+    static TemporalRelationship getTemporalRelationship(const juce::String& semanticType);
+    
+    // Self-describing alias support
+    static void parseAliases(const juce::var& aliasesJson);
+    static void clearAliases();
+    static TemporalRelationship getRelationshipForAlias(const juce::String& alias);
+    static bool hasAlias(const juce::String& alias);
+    static double calculateContainerDuration(const juce::String& containerType, 
+                                           const MusicalContainer& container);
+    static int getExpectedChildCount(const juce::String& containerType);
     
     // Expression parsing helpers
     static void parseExpressionInto(Event& event, const juce::var& expressionJson);

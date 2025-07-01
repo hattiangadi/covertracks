@@ -52,7 +52,8 @@
       "Bash(./run_tests_clean.sh:*)",
       "Bash(git stash:*)",
       "Bash(git submodule:*)",
-      "Bash(git branch:*)"
+      "Bash(git branch:*)",
+      "Bash(./run_test_categories.sh:*)"
     ],
     "deny": []
   }

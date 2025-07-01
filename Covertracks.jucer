@@ -39,6 +39,26 @@
   <MAINGROUP id="YdWL7hi7p" name="Covertracks">
     <GROUP id="{CFED5B3D-D1D8-0F3F-4D67-B2A810D057EF}" name="Source">
       <GROUP id="{38DF3E53-C216-ADF7-CCF5-86D5880F46C0}" name="Tests">
+        <FILE id="BOwpqf" name="RangeNotationDebugTest.cpp" compile="1" resource="0"
+              file="Source/Tests/RangeNotationDebugTest.cpp"/>
+        <FILE id="XOVCst" name="LayerTimingDebugTest.cpp" compile="1" resource="0"
+              file="Source/Tests/LayerTimingDebugTest.cpp"/>
+        <FILE id="Ke0Fap" name="AliasingDemoTest.cpp" compile="1" resource="0"
+              file="Source/Tests/AliasingDemoTest.cpp"/>
+        <FILE id="I6tPlP" name="AutumnJazzDebugTest.cpp" compile="1" resource="0"
+              file="Source/Tests/AutumnJazzDebugTest.cpp"/>
+        <FILE id="mm1IE7" name="ContainerAliasingTest.cpp" compile="1" resource="0"
+              file="Source/Tests/ContainerAliasingTest.cpp"/>
+        <FILE id="JIHgcq" name="FlexibleQuantityTest.cpp" compile="1" resource="0"
+              file="Source/Tests/FlexibleQuantityTest.cpp"/>
+        <FILE id="CD2JLi" name="MusicJson2ArrangementTests.cpp" compile="1"
+              resource="0" file="Source/Tests/MusicJson2ArrangementTests.cpp"/>
+        <FILE id="y1joyv" name="MusicJson2TimingTests.cpp" compile="1" resource="0"
+              file="Source/Tests/MusicJson2TimingTests.cpp"/>
+        <FILE id="eeLHMw" name="QuantitativeAliasTest.cpp" compile="1" resource="0"
+              file="Source/Tests/QuantitativeAliasTest.cpp"/>
+        <FILE id="G3o9oZ" name="SelfDescribingAliasTest.cpp" compile="1" resource="0"
+              file="Source/Tests/SelfDescribingAliasTest.cpp"/>
         <FILE id="PsGjhD" name="MyGirlLiveTest.cpp" compile="1" resource="0"
               file="Source/Tests/MyGirlLiveTest.cpp"/>
         <FILE id="FUODbY" name="QuickMyGirlTest.cpp" compile="1" resource="0"

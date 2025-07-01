@@ -135,6 +135,10 @@ public:
     MusicalContainer();
     ~MusicalContainer();
     
+    // Copy constructor and assignment operator
+    MusicalContainer(const MusicalContainer& other);
+    MusicalContainer& operator=(const MusicalContainer& other);
+    
     // Core recursive structure
     std::vector<Event> events;                              // Direct events
     std::map<juce::String, MusicalContainer> layers;       // Simultaneous sub-containers
@@ -145,6 +149,7 @@ public:
     // Container properties
     Context context;                    // Local context overrides
     juce::String reference;             // Pattern reference
+    std::vector<juce::String> arrangement;  // Section playback order
     
     // Expression features (from complete grammar)
     std::map<juce::String, juce::String> shortcuts;        // Shorthand notation
@@ -203,8 +208,14 @@ private:
     // Harmony resolution
     int resolveChordDegree(int degree, const juce::String& chord, int octave = 4) const;
     
+    // Note name parsing
+    int parseMusicalNoteName(const juce::String& noteName) const;
+    
     // Variation matching
     bool matchesBar(const juce::String& varName, int bar) const;
+    
+    // Section analysis
+    int calculateSectionBars(const MusicalContainer& section) const;
 };
 
 } // namespace covertracks

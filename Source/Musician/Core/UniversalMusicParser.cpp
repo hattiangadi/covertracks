@@ -3,8 +3,9 @@
 
 namespace covertracks {
 
-// Static member definition
+// Static member definitions
 juce::String UniversalMusicParser::lastError;
+std::map<juce::String, UniversalMusicParser::AliasDefinition> UniversalMusicParser::currentAliases;
 
 std::unique_ptr<MusicalContainer> UniversalMusicParser::parseJSON(const juce::String& jsonString)
 {
@@ -25,6 +26,12 @@ std::unique_ptr<MusicalContainer> UniversalMusicParser::parseJSON(const juce::St
             DBG("Unsupported version: " << version);
             return nullptr;
         }
+    }
+    
+    // Parse aliases first (they guide the rest of the parsing)
+    clearAliases();
+    if (parsedJson.hasProperty("aliases")) {
+        parseAliases(parsedJson["aliases"]);
     }
     
     // Parse global context
@@ -67,6 +74,45 @@ std::unique_ptr<MusicalContainer> UniversalMusicParser::parseJSON(const juce::St
     // Parse variations at root level
     if (parsedJson.hasProperty("variations")) {
         parseVariationsInto(*container, parsedJson["variations"]);
+    }
+    
+    // Parse aliased container types using universal method
+    // First check defined aliases, then fall back to known types
+    for (const auto& aliasEntry : currentAliases) {
+        const juce::String& aliasName = aliasEntry.first;
+        if (parsedJson.hasProperty(aliasName)) {
+            DBG("Found root-level aliased container: " << aliasName);
+            parseContainerInto(*container, parsedJson.getProperty(aliasName, {}), aliasName);
+        }
+    }
+    
+    // Also check hardcoded aliased types for backward compatibility
+    const juce::StringArray aliasedTypes = {
+        "movements", "stanzas", "phrases", "bars", "beats",
+        "instruments", "parts", "voices", "grooves"
+    };
+    
+    for (int i = 0; i < aliasedTypes.size(); ++i) {
+        const juce::String& alias = aliasedTypes[i];
+        if (parsedJson.hasProperty(alias) && !hasAlias(alias)) {
+            // Only parse if not already handled by defined aliases
+            parseContainerInto(*container, parsedJson.getProperty(alias, {}), alias);
+        }
+    }
+    
+    // Parse arrangement field
+    if (parsedJson.hasProperty("arrangement")) {
+        auto arrangementJson = parsedJson["arrangement"];
+        if (arrangementJson.isArray()) {
+            auto arrangementArray = arrangementJson.getArray();
+            if (arrangementArray) {
+                for (const auto& sectionName : *arrangementArray) {
+                    container->arrangement.push_back(sectionName.toString());
+                    DBG("Arrangement: added section " << sectionName.toString());
+                }
+                DBG("Arrangement: total sections " << container->arrangement.size());
+            }
+        }
     }
     
     return container;
@@ -126,7 +172,7 @@ std::vector<Event> UniversalMusicParser::parseEvents(const juce::var& eventsJson
         
         // Parse basic event properties
         if (eventJson.hasProperty("t"))
-            event.time = eventJson["t"];
+            event.time = (double)eventJson["t"] - 1.0;  // Convert musical beat (1-based) to MIDI timestamp (0-based)
         if (eventJson.hasProperty("n"))
             event.note = eventJson["n"].toString();
         if (eventJson.hasProperty("v"))
@@ -281,6 +327,27 @@ MusicalContainer UniversalMusicParser::parseContainer(const juce::var& container
         parseSectionsInto(container, containerJson["sections"]);
     }
     
+    // Parse aliased container types - check defined aliases first
+    for (const auto& aliasEntry : currentAliases) {
+        const juce::String& aliasName = aliasEntry.first;
+        if (containerJson.hasProperty(aliasName)) {
+            parseContainerInto(container, containerJson.getProperty(aliasName, {}), aliasName);
+        }
+    }
+    
+    // Parse hardcoded aliased container types for backward compatibility
+    const juce::StringArray aliasedTypes = {
+        "movements", "stanzas", "phrases", "bars", "beats",
+        "instruments", "parts", "voices", "grooves", "motifs"
+    };
+    
+    for (int i = 0; i < aliasedTypes.size(); ++i) {
+        const juce::String& alias = aliasedTypes[i];
+        if (containerJson.hasProperty(alias) && !hasAlias(alias)) {
+            parseContainerInto(container, containerJson.getProperty(alias, {}), alias);
+        }
+    }
+    
     // Parse expression features
     if (containerJson.hasProperty("shortcuts")) {
         auto shortcutsJson = containerJson["shortcuts"];
@@ -343,6 +410,259 @@ void UniversalMusicParser::propagatePatternsTo(MusicalContainer& child, const st
     for (auto& [varName, variation] : child.variations) {
         propagatePatternsTo(variation, rootPatterns);
     }
+}
+
+void UniversalMusicParser::parseContainerInto(MusicalContainer& parent, 
+                                              const juce::var& containersJson,
+                                              const juce::String& semanticType)
+{
+    if (!containersJson.isObject()) return;
+    
+    auto containersObj = containersJson.getDynamicObject();
+    if (!containersObj) return;
+    
+    // Determine temporal relationship - check aliases first, then defaults
+    TemporalRelationship relationship = getRelationshipForAlias(semanticType);
+    
+    DBG("Parsing container type: " << semanticType << " with relationship: " << (int)relationship
+        << " (" << containersObj->getProperties().size() << " children)");
+    
+    for (const auto& item : containersObj->getProperties()) {
+        juce::String itemName = item.name.toString();
+        
+        // Check if this is a range notation like "1-4", "5-8", etc.
+        if (itemName.contains("-") && semanticType == "bars") {
+            // Parse range notation
+            int dashIndex = itemName.indexOfChar('-');
+            if (dashIndex > 0 && dashIndex < itemName.length() - 1) {
+                juce::String startStr = itemName.substring(0, dashIndex);
+                juce::String endStr = itemName.substring(dashIndex + 1);
+                
+                if (startStr.containsOnly("0123456789") && endStr.containsOnly("0123456789")) {
+                    int startBar = startStr.getIntValue();
+                    int endBar = endStr.getIntValue();
+                    
+                    DBG("Expanding range " << itemName << " to individual bars " << startBar << "-" << endBar);
+                    
+                    // Expand range to individual bars
+                    for (int barNum = startBar; barNum <= endBar; barNum++) {
+                        MusicalContainer child = parseContainer(item.value);
+                        
+                        // Add alias information to child context if we have it
+                        if (hasAlias(semanticType)) {
+                            auto aliasIt = currentAliases.find(semanticType);
+                            if (aliasIt != currentAliases.end()) {
+                                double expectedDuration = calculateContainerDuration(semanticType, child);
+                                if (expectedDuration > 0) {
+                                    child.context.complexity = expectedDuration;
+                                }
+                            }
+                        }
+                        
+                        juce::String barName = juce::String(barNum);
+                        parent.variations[barName] = child;
+                        DBG("  Expanded to variations: " << barName);
+                    }
+                    continue; // Skip normal processing for this item
+                }
+            }
+        }
+        
+        // Normal processing for non-range items
+        MusicalContainer child = parseContainer(item.value);
+        
+        // Add alias information to child context if we have it
+        if (hasAlias(semanticType)) {
+            auto aliasIt = currentAliases.find(semanticType);
+            if (aliasIt != currentAliases.end()) {
+                // Store expected duration based on alias
+                double expectedDuration = calculateContainerDuration(semanticType, child);
+                if (expectedDuration > 0) {
+                    child.context.complexity = expectedDuration; // Temporary storage
+                }
+            }
+        }
+        
+        // Store in appropriate map based on temporal relationship
+        switch (relationship) {
+            case TemporalRelationship::Simultaneous:
+                parent.layers[itemName] = child;
+                DBG("  Added to layers: " << itemName);
+                break;
+                
+            case TemporalRelationship::Sequential:
+                parent.variations[itemName] = child;
+                DBG("  Added to variations: " << itemName);
+                break;
+                
+            case TemporalRelationship::Named:
+                parent.patterns[itemName] = child;
+                DBG("  Added to patterns: " << itemName);
+                break;
+                
+            case TemporalRelationship::Structure:
+                parent.sections[itemName] = child;
+                DBG("  Added to sections: " << itemName);
+                break;
+        }
+    }
+}
+
+UniversalMusicParser::TemporalRelationship 
+UniversalMusicParser::getTemporalRelationship(const juce::String& semanticType)
+{
+    // Simultaneous containers (play together)
+    if (semanticType == "layers" || semanticType == "instruments" || 
+        semanticType == "parts" || semanticType == "voices") {
+        return TemporalRelationship::Simultaneous;
+    }
+    
+    // Sequential containers (play one after another)  
+    if (semanticType == "variations" || semanticType == "bars" || 
+        semanticType == "beats" || semanticType == "measures") {
+        return TemporalRelationship::Sequential;
+    }
+    
+    // Named templates (reusable patterns)
+    if (semanticType == "patterns" || semanticType == "templates" || 
+        semanticType == "phrases" || semanticType == "motifs") {
+        return TemporalRelationship::Named;
+    }
+    
+    // Structural containers (sections of a piece)
+    if (semanticType == "sections" || semanticType == "movements" || 
+        semanticType == "arrangement" || semanticType == "structure") {
+        return TemporalRelationship::Structure;
+    }
+    
+    // Default to sequential for unknown types
+    return TemporalRelationship::Sequential;
+}
+
+void UniversalMusicParser::parseAliases(const juce::var& aliasesJson)
+{
+    if (!aliasesJson.isObject()) return;
+    
+    auto aliasesObj = aliasesJson.getDynamicObject();
+    if (!aliasesObj) return;
+    
+    DBG("Parsing aliases: " << aliasesObj->getProperties().size() << " definitions");
+    
+    for (const auto& alias : aliasesObj->getProperties()) {
+        juce::String aliasName = alias.name.toString();
+        juce::var aliasData = alias.value;
+        
+        if (!aliasData.isObject()) continue;
+        
+        AliasDefinition definition;
+        
+        // Parse temporal relationship type
+        if (aliasData.hasProperty("type")) {
+            juce::String typeStr = aliasData["type"].toString();
+            if (typeStr == "simultaneous") definition.type = TemporalRelationship::Simultaneous;
+            else if (typeStr == "sequential") definition.type = TemporalRelationship::Sequential;
+            else if (typeStr == "named") definition.type = TemporalRelationship::Named;
+            else if (typeStr == "structure") definition.type = TemporalRelationship::Structure;
+            else definition.type = TemporalRelationship::Sequential; // Default
+        }
+        
+        // Parse what this container contains
+        if (aliasData.hasProperty("contains")) {
+            definition.contains = aliasData["contains"].toString();
+        }
+        
+        // Parse count specification
+        if (aliasData.hasProperty("count")) {
+            definition.count = aliasData["count"];
+        }
+        
+        // Parse pattern specification
+        if (aliasData.hasProperty("pattern")) {
+            definition.pattern = aliasData["pattern"].toString();
+        }
+        
+        // Parse default duration
+        if (aliasData.hasProperty("defaultDuration")) {
+            definition.defaultDuration = aliasData["defaultDuration"];
+        }
+        
+        // Store additional metadata
+        definition.metadata = aliasData;
+        
+        currentAliases[aliasName] = definition;
+        
+        DBG("Registered alias: " << aliasName << " -> " << definition.contains 
+            << " (" << (int)definition.type << ", count: " << definition.count.toString() << ")");
+    }
+}
+
+void UniversalMusicParser::clearAliases()
+{
+    currentAliases.clear();
+}
+
+UniversalMusicParser::TemporalRelationship 
+UniversalMusicParser::getRelationshipForAlias(const juce::String& alias)
+{
+    auto it = currentAliases.find(alias);
+    if (it != currentAliases.end()) {
+        return it->second.type;
+    }
+    
+    // Fall back to hardcoded defaults
+    return getTemporalRelationship(alias);
+}
+
+bool UniversalMusicParser::hasAlias(const juce::String& alias)
+{
+    return currentAliases.find(alias) != currentAliases.end();
+}
+
+double UniversalMusicParser::calculateContainerDuration(const juce::String& containerType, 
+                                                       const MusicalContainer& container)
+{
+    // Check for explicit duration override
+    if (container.context.has("duration")) {
+        return (double)container.context.get("duration");
+    }
+    
+    // Use alias definition if available
+    auto it = currentAliases.find(containerType);
+    if (it != currentAliases.end()) {
+        const AliasDefinition& alias = it->second;
+        
+        if (alias.count.isInt()) {
+            int childCount = alias.count;
+            double childDuration = 4.0; // Default beat duration
+            
+            // Try to get child duration from alias
+            if (!alias.contains.isEmpty()) {
+                auto childIt = currentAliases.find(alias.contains);
+                if (childIt != currentAliases.end() && childIt->second.count.isInt()) {
+                    childDuration = (double)childIt->second.count;
+                }
+            }
+            
+            return childCount * childDuration;
+        }
+        
+        return alias.defaultDuration;
+    }
+    
+    // Fallback: analyze actual content or use default
+    return 4.0;
+}
+
+int UniversalMusicParser::getExpectedChildCount(const juce::String& containerType)
+{
+    auto it = currentAliases.find(containerType);
+    if (it != currentAliases.end()) {
+        if (it->second.count.isInt()) {
+            return it->second.count;
+        }
+    }
+    
+    return -1; // Variable/unknown count
 }
 
 } // namespace covertracks
