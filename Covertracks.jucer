@@ -39,6 +39,12 @@
   <MAINGROUP id="YdWL7hi7p" name="Covertracks">
     <GROUP id="{CFED5B3D-D1D8-0F3F-4D67-B2A810D057EF}" name="Source">
       <GROUP id="{38DF3E53-C216-ADF7-CCF5-86D5880F46C0}" name="Tests">
+        <FILE id="LSCTests_cpp" name="LeadSheetConverterTests.cpp" compile="1"
+              resource="0" file="Source/Tests/LeadSheetConverterTests.cpp"/>
+        <FILE id="MCxE5p" name="ChordContextInheritanceTest.cpp" compile="1"
+              resource="0" file="Source/Tests/ChordContextInheritanceTest.cpp"/>
+        <FILE id="gn2Trj" name="ChordContextDebugTest.cpp.disabled" compile="0" resource="0"
+              file="Source/Tests/ChordContextDebugTest.cpp.disabled"/>
         <FILE id="BOwpqf" name="RangeNotationDebugTest.cpp" compile="1" resource="0"
               file="Source/Tests/RangeNotationDebugTest.cpp"/>
         <FILE id="XOVCst" name="LayerTimingDebugTest.cpp" compile="1" resource="0"
@@ -96,6 +102,26 @@
               compile="1" resource="0" file="Source/Tests/PatternParsingStressTests.cpp"/>
         <FILE id="TDDRecursiveGrammarTests" name="TDDRecursiveGrammarTests.cpp"
               compile="1" resource="0" file="Source/Tests/TDDRecursiveGrammarTests.cpp"/>
+        <FILE id="MJ3TypesTests" name="MusicJson3TypesTests.cpp" compile="1"
+              resource="0" file="Source/Tests/MusicJson3TypesTests.cpp"/>
+        <FILE id="MJ3LoaderTests" name="MusicJson3LoaderTests.cpp" compile="1"
+              resource="0" file="Source/Tests/MusicJson3LoaderTests.cpp"/>
+        <FILE id="MJ3ExpanderTests" name="MusicJson3ExpanderTests.cpp" compile="1"
+              resource="0" file="Source/Tests/MusicJson3ExpanderTests.cpp"/>
+        <FILE id="MJ3ModifierTests" name="MusicJson3ModifierTests.cpp" compile="1"
+              resource="0" file="Source/Tests/MusicJson3ModifierTests.cpp"/>
+        <FILE id="MJ3InheritorTests" name="MusicJson3InheritorTests.cpp" compile="1"
+              resource="0" file="Source/Tests/MusicJson3InheritorTests.cpp"/>
+        <FILE id="MJ3ResolverTests" name="MusicJson3ResolverTests.cpp" compile="1"
+              resource="0" file="Source/Tests/MusicJson3ResolverTests.cpp"/>
+        <FILE id="MJ3FlattenerTests" name="MusicJson3FlattenerTests.cpp" compile="1"
+              resource="0" file="Source/Tests/MusicJson3FlattenerTests.cpp"/>
+        <FILE id="MJ3IntegrationTests" name="MusicJson3IntegrationTests.cpp" compile="1"
+              resource="0" file="Source/Tests/MusicJson3IntegrationTests.cpp"/>
+        <FILE id="MJ3IncrementalTests" name="MusicJson3IncrementalTests.cpp" compile="1"
+              resource="0" file="Source/Tests/MusicJson3IncrementalTests.cpp"/>
+        <FILE id="MJ3LibraryTests" name="MusicJson3LibraryTests.cpp" compile="1"
+              resource="0" file="Source/Tests/MusicJson3LibraryTests.cpp"/>
       </GROUP>
       <GROUP id="{TRACKTION-ENGINE-GROUP}" name="Tracktion Engine"/>
       <GROUP id="{C05A6CB8-92D3-46E6-AD2E-B13D7347AC80}" name="Musician">
@@ -137,6 +163,52 @@
                 resource="0" file="Source/Musician/Core/MusicalContainer.cpp"/>
           <FILE id="MusicalContainer_h" name="MusicalContainer.h" compile="0"
                 resource="0" file="Source/Musician/Core/MusicalContainer.h"/>
+          <GROUP id="{MJ3_GROUP_001}" name="MusicJson3">
+            <FILE id="MJ3Types_h" name="MJ3Types.h" compile="0" resource="0"
+                  file="Source/Musician/Core/MusicJson3/MJ3Types.h"/>
+            <FILE id="MJ3Types_cpp" name="MJ3Types.cpp" compile="1" resource="0"
+                  file="Source/Musician/Core/MusicJson3/MJ3Types.cpp"/>
+            <FILE id="MJ3Loader_h" name="MJ3Loader.h" compile="0" resource="0"
+                  file="Source/Musician/Core/MusicJson3/MJ3Loader.h"/>
+            <FILE id="MJ3Loader_cpp" name="MJ3Loader.cpp" compile="1" resource="0"
+                  file="Source/Musician/Core/MusicJson3/MJ3Loader.cpp"/>
+            <FILE id="MJ3Expander_h" name="MJ3Expander.h" compile="0" resource="0"
+                  file="Source/Musician/Core/MusicJson3/MJ3Expander.h"/>
+            <FILE id="MJ3Expander_cpp" name="MJ3Expander.cpp" compile="1" resource="0"
+                  file="Source/Musician/Core/MusicJson3/MJ3Expander.cpp"/>
+            <FILE id="MJ3Modifier_h" name="MJ3Modifier.h" compile="0" resource="0"
+                  file="Source/Musician/Core/MusicJson3/MJ3Modifier.h"/>
+            <FILE id="MJ3Modifier_cpp" name="MJ3Modifier.cpp" compile="1" resource="0"
+                  file="Source/Musician/Core/MusicJson3/MJ3Modifier.cpp"/>
+            <FILE id="MJ3Inheritor_h" name="MJ3Inheritor.h" compile="0" resource="0"
+                  file="Source/Musician/Core/MusicJson3/MJ3Inheritor.h"/>
+            <FILE id="MJ3Inheritor_cpp" name="MJ3Inheritor.cpp" compile="1" resource="0"
+                  file="Source/Musician/Core/MusicJson3/MJ3Inheritor.cpp"/>
+            <FILE id="MJ3Resolver_h" name="MJ3Resolver.h" compile="0" resource="0"
+                  file="Source/Musician/Core/MusicJson3/MJ3Resolver.h"/>
+            <FILE id="MJ3Resolver_cpp" name="MJ3Resolver.cpp" compile="1" resource="0"
+                  file="Source/Musician/Core/MusicJson3/MJ3Resolver.cpp"/>
+            <FILE id="MJ3Flattener_h" name="MJ3Flattener.h" compile="0" resource="0"
+                  file="Source/Musician/Core/MusicJson3/MJ3Flattener.h"/>
+            <FILE id="MJ3Flattener_cpp" name="MJ3Flattener.cpp" compile="1" resource="0"
+                  file="Source/Musician/Core/MusicJson3/MJ3Flattener.cpp"/>
+            <FILE id="MJ3MidiOutput_h" name="MJ3MidiOutput.h" compile="0" resource="0"
+                  file="Source/Musician/Core/MusicJson3/MJ3MidiOutput.h"/>
+            <FILE id="MJ3MidiOutput_cpp" name="MJ3MidiOutput.cpp" compile="1" resource="0"
+                  file="Source/Musician/Core/MusicJson3/MJ3MidiOutput.cpp"/>
+            <FILE id="MJ3Parser_h" name="MJ3Parser.h" compile="0" resource="0"
+                  file="Source/Musician/Core/MusicJson3/MJ3Parser.h"/>
+            <FILE id="MJ3Parser_cpp" name="MJ3Parser.cpp" compile="1" resource="0"
+                  file="Source/Musician/Core/MusicJson3/MJ3Parser.cpp"/>
+            <FILE id="MJ3LibraryLoader_h" name="MJ3LibraryLoader.h" compile="0" resource="0"
+                  file="Source/Musician/Core/MusicJson3/MJ3LibraryLoader.h"/>
+            <FILE id="MJ3LibraryLoader_cpp" name="MJ3LibraryLoader.cpp" compile="1" resource="0"
+                  file="Source/Musician/Core/MusicJson3/MJ3LibraryLoader.cpp"/>
+            <FILE id="LeadSheetConverter_h" name="LeadSheetConverter.h" compile="0" resource="0"
+                  file="Source/Musician/Core/MusicJson3/LeadSheetConverter.h"/>
+            <FILE id="LeadSheetConverter_cpp" name="LeadSheetConverter.cpp" compile="1" resource="0"
+                  file="Source/Musician/Core/MusicJson3/LeadSheetConverter.cpp"/>
+          </GROUP>
         </GROUP>
         <GROUP id="{CC170D46-B578-C879-6E1F-FDC0D2EB6DC0}" name="UI">
           <GROUP id="{8A17FE2D-2E3E-6D8B-BD15-D0DAD03795B9}" name="New Group"/>

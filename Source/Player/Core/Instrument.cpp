@@ -969,11 +969,27 @@ std::unique_ptr<juce::MidiMessageSequence> Instrument::convertChartToMidiSequenc
     
     if (!chart.isArray())
     {
-        std::cerr << "Expected chart to be an array of MIDI events" << std::endl;
+        std::cerr << "Expected chart to be an array of MIDI events, got: " << juce::JSON::toString(chart).substring(0, 200) << std::endl;
         return sequence;
     }
-    
+
     auto* eventArray = chart.getArray();
+
+    // Check if chart has explicit note_off events (2.0 format) — if so, skip auto-generating from duration
+    bool hasExplicitNoteOffs = false;
+    for (const auto& ev : *eventArray)
+    {
+        if (auto* obj = ev.getDynamicObject())
+        {
+            juce::String t = obj->getProperty("type").toString();
+            if (t == "note_off" || t == "noteOff")
+            {
+                hasExplicitNoteOffs = true;
+                break;
+            }
+        }
+    }
+
     for (const auto& eventVar : *eventArray)
     {
         if (!eventVar.isObject())
@@ -996,29 +1012,36 @@ std::unique_ptr<juce::MidiMessageSequence> Instrument::convertChartToMidiSequenc
         int velocity = static_cast<int>(velocityFloat * 127.0);
         velocity = juce::jlimit(1, 127, velocity); // Ensure non-zero velocity for NoteOn
         
-        // Debug: Log the MIDI event details
-        DBG("MIDI Event: type='" << type << "' note=" << note << " velocity=" << velocityFloat << " (MIDI: " << velocity << ") time=" << time);
-        
         // Create appropriate MIDI message - handle both formats
         juce::MidiMessage message;
         if ((type == "noteOn" || type == "note_on") && velocity > 0)
         {
             message = juce::MidiMessage::noteOn(1, note, static_cast<juce::uint8>(velocity));
-            DBG("Created NoteOn: Note=" << note << " Vel=" << velocity);
+            message.setTimeStamp(time);
+            sequence->addEvent(message);
+
+            // Auto-generate NoteOff from duration if chart has no explicit note_off events (MJ3 format)
+            if (!hasExplicitNoteOffs)
+            {
+                double duration = eventObj->getProperty("duration");
+                if (duration > 0)
+                {
+                    auto noteOff = juce::MidiMessage::noteOff(1, note);
+                    noteOff.setTimeStamp(time + duration);
+                    sequence->addEvent(noteOff);
+                }
+            }
         }
         else if (type == "noteOff" || type == "note_off" || ((type == "noteOn" || type == "note_on") && velocity == 0))
         {
             message = juce::MidiMessage::noteOff(1, note, static_cast<juce::uint8>(velocity));
-            DBG("Created NoteOff: Note=" << note << " Vel=" << velocity);
+            message.setTimeStamp(time);
+            sequence->addEvent(message);
         }
         else
         {
-            DBG("Skipped unknown event type: '" << type << "'");
             continue; // Skip unknown event types
         }
-        
-        message.setTimeStamp(time);
-        sequence->addEvent(message);
     }
     
     sequence->updateMatchedPairs();

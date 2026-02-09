@@ -9,6 +9,17 @@ LLMManager& LLMManager::getInstance()
     return instance;
 }
 
+LLMManager::~LLMManager()
+{
+    shutdown();
+}
+
+void LLMManager::shutdown()
+{
+    clients.clear();
+    defaultClient.reset();
+}
+
 LLMManager::LLMManager()
 {
     // Create log directory
@@ -23,21 +34,17 @@ LLMManager::LLMManager()
 
 void LLMManager::loadApiKeys()
 {
-    const char* envKey = std::getenv("CLAUDE_API_KEY");
+    const char* envKey = std::getenv("ANTHROPIC_API_KEY");
     if (envKey != nullptr) {
         claudeApiKey = juce::String(envKey);
     } else {
-        claudeApiKey = juce::SystemStats::getEnvironmentVariable("CLAUDE_API_KEY", "");
+        claudeApiKey = juce::SystemStats::getEnvironmentVariable("ANTHROPIC_API_KEY", "");
     }
-    
-    // For development purposes, use a hardcoded key if the environment variable is not set
+
     if (claudeApiKey.isEmpty()) {
-        // This is just for development and should be removed in production
-        claudeApiKey = "sk-ant-api03-_QjNPG-Uj9jTKQZGbU_fXw-EiPUzYEDnVVUZvR9-uxFEL6_dDYzxrjh9IQVS-9BwIQ-5HtIgAAAAGGADIwAQ";
-        
-        std::cout << "[LLMManager] Using hardcoded API key for development" << std::endl;
+        std::cout << "[LLMManager] WARNING: ANTHROPIC_API_KEY not set" << std::endl;
     } else {
-        std::cout << "[LLMManager] Using API key from environment variable" << std::endl;
+        std::cout << "[LLMManager] Using API key from ANTHROPIC_API_KEY" << std::endl;
     }
     
     std::cout << "[LLMManager] API key length: " << claudeApiKey.length() << std::endl;

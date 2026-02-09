@@ -177,6 +177,7 @@ MusicalContainer::MusicalContainer(const MusicalContainer& other)
     , context(other.context)
     , reference(other.reference)
     , arrangement(other.arrangement)
+    , numBars(other.numBars)
     , shortcuts(other.shortcuts)
     , transforms(other.transforms)
     , chordProgression(other.chordProgression)
@@ -198,6 +199,7 @@ MusicalContainer& MusicalContainer::operator=(const MusicalContainer& other)
         context = other.context;
         reference = other.reference;
         arrangement = other.arrangement;
+        numBars = other.numBars;
         shortcuts = other.shortcuts;
         transforms = other.transforms;
         chordProgression = other.chordProgression;
@@ -210,14 +212,9 @@ MusicalContainer& MusicalContainer::operator=(const MusicalContainer& other)
 
 EventStream MusicalContainer::render(const Context& parentContext, int currentBar, int totalBars) const
 {
-    // Debug context inheritance
-    DBG("Render: parentContext.velocity=" << parentContext.velocity << ", octave=" << parentContext.octave << ", local.velocity=" << context.velocity << ", octave=" << context.octave);
-    
     // Resolve context by merging parent with local
     Context resolvedContext = resolveContext(parentContext);
-    
-    DBG("Render: resolvedContext.velocity=" << resolvedContext.velocity << ", octave=" << resolvedContext.octave);
-    
+
     EventStream result;
     
     // 1. Render direct events
@@ -331,13 +328,15 @@ EventStream MusicalContainer::renderEvents(const Context& resolvedContext) const
 EventStream MusicalContainer::renderLayers(const Context& resolvedContext, int bar, int totalBars) const
 {
     EventStream stream;
-    
+
     // Render all layers simultaneously
     for (const auto& [layerName, layer] : layers) {
         auto layerStream = layer.render(resolvedContext, bar, totalBars);
+        if (bar == 1) // Only log on first bar to avoid spam
+            DBG("  Layer '" << layerName << "' bar " << bar << ": " << layerStream.size() << " events, ref='" << layer.reference << "'");
         stream.merge(layerStream);
     }
-    
+
     return stream;
 }
 
@@ -358,17 +357,19 @@ EventStream MusicalContainer::renderPatterns(const Context& resolvedContext, int
     if (reference.isEmpty()) {
         return EventStream();
     }
-    
-    DBG("Resolving pattern reference: " << reference);
-    
+
     // Find pattern by reference
     const MusicalContainer* pattern = resolvePattern(reference);
     if (pattern != nullptr) {
-        DBG("Pattern found, rendering: " << reference);
-        return pattern->render(resolvedContext, bar, totalBars);
+        auto result = pattern->render(resolvedContext, bar, totalBars);
+        if (bar == 1)
+            DBG("    Pattern '" << reference << "': " << result.size() << " events rendered");
+        return result;
     }
-    
-    DBG("Pattern NOT found: " << reference);
+
+    DBG("*** Pattern NOT found: '" << reference << "' (available: " << patterns.size() << " patterns)");
+    for (const auto& [name, _] : patterns)
+        DBG("      available: '" << name << "'");
     return EventStream();
 }
 
@@ -476,11 +477,7 @@ void MusicalContainer::applyExpression(Event& event, const Context& context) con
 {
     // Apply context to event - event attributes override context
     // If event doesn't specify attribute (default value), use context
-    
-    // Debug output for failing test
-    DBG("Applying expression: event.velocity=" << event.velocity << ", context.velocity=" << context.velocity << ", context.octave=" << context.octave);
-    DBG("Applying expression: event.resolvedOctave=" << event.resolvedOctave << " (before), context.octave=" << context.octave);
-    
+
     // For octave: use event value if specified, otherwise context
     event.resolvedOctave = (event.resolvedOctave != 4) ? event.resolvedOctave : context.octave;
     
@@ -512,59 +509,60 @@ void MusicalContainer::applyExpression(Event& event, const Context& context) con
     // Resolve note name to MIDI number if needed
     if (!event.note.isEmpty() && event.resolvedNote == 60) { // Only resolve if not already resolved
         event.resolvedNote = parseMusicalNoteName(event.note);
-        DBG("Resolved note name '" << event.note << "' to MIDI " << event.resolvedNote);
     }
-    
-    // Resolve chord degrees if needed  
+
+    // Resolve chord degrees if needed
     if (event.degree > 0) {
         event.resolvedNote = resolveChordDegree(event.degree, event.resolvedChord, event.resolvedOctave);
     }
-    
-    // Debug output
-    DBG("Applying expression: event.resolvedOctave=" << event.resolvedOctave << " (after), context.octave=" << context.octave);
-    DBG("Result: resolvedVelocity=" << event.resolvedVelocity << ", resolvedOctave=" << event.resolvedOctave << ", resolvedChord=" << event.resolvedChord);
-    DBG("Result: dynamics=" << event.dynamics << ", articulation=" << event.articulation << ", resolvedNote=" << event.resolvedNote);
 }
 
 int MusicalContainer::resolveChordDegree(int degree, const juce::String& chord, int octave) const
 {
-    // Parse chord root note
-    int rootNote = 60; // Default to C
-    juce::String chordRoot = chord.substring(0, 1);
-    
-    if (chordRoot == "C") rootNote = 60;
-    else if (chordRoot == "D") rootNote = 62;
-    else if (chordRoot == "E") rootNote = 64;
-    else if (chordRoot == "F") rootNote = 65;
-    else if (chordRoot == "G") rootNote = 67;
-    else if (chordRoot == "A") rootNote = 69;
-    else if (chordRoot == "B") rootNote = 71;
-    
-    // Adjust for octave (C4 = 60, so A4 = 69, A2 = 69 - 24 = 45, but we want A2 = 57)
-    // Actually: A2 = 57, A3 = 69, A4 = 81
-    // So A in octave N = 57 + (N-2)*12
-    int baseNote = rootNote + (octave - 4) * 12;
-    
-    // For A in octave 2: A = 69, octave 2 = 69 + (2-4)*12 = 69 - 24 = 45... that's wrong
-    // Let me recalculate: A2 should be 57
-    // A4 = 69 (9 semitones above C4=60)
-    // A2 = A4 - 24 = 69 - 24 = 45... but test expects 57
-    // Let me check: C2=48, so A2 = 48+9 = 57. That's right!
-    
-    int octaveBaseC = 48 + (octave - 2) * 12; // C2 = 48
-    int chordRootInOctave = octaveBaseC + (rootNote - 60); // Offset from C
-    
-    // Scale degrees (major scale for now)
+    // Parse chord root note as semitone offset from C (0-11)
+    int rootSemitone = 0; // Default to C
+    int pos = 0;
+
+    if (chord.isNotEmpty()) {
+        char first = chord[0];
+        switch (first) {
+            case 'C': rootSemitone = 0; break;
+            case 'D': rootSemitone = 2; break;
+            case 'E': rootSemitone = 4; break;
+            case 'F': rootSemitone = 5; break;
+            case 'G': rootSemitone = 7; break;
+            case 'A': rootSemitone = 9; break;
+            case 'B': rootSemitone = 11; break;
+            default: break;
+        }
+        pos = 1;
+
+        // Handle sharps and flats in chord root (e.g., Bb, F#, Eb)
+        if (pos < chord.length()) {
+            if (chord[pos] == 'b' || chord[pos] == 0x266D) { // flat
+                rootSemitone = (rootSemitone + 11) % 12; // -1 mod 12
+                pos++;
+            } else if (chord[pos] == '#' || chord[pos] == 0x266F) { // sharp
+                rootSemitone = (rootSemitone + 1) % 12;
+                pos++;
+            }
+        }
+    }
+
+    // Calculate MIDI note: C(N) = (N+1)*12, matching parseMusicalNoteName
+    int chordRoot = (octave + 1) * 12 + rootSemitone;
+
+    // Scale degrees (major scale intervals)
     switch (degree) {
-        case 1: return chordRootInOctave;      // Root
-        case 2: return chordRootInOctave + 2;  // Second
-        case 3: return chordRootInOctave + 4;  // Third
-        case 4: return chordRootInOctave + 5;  // Fourth  
-        case 5: return chordRootInOctave + 7;  // Fifth
-        case 6: return chordRootInOctave + 9;  // Sixth
-        case 7: return chordRootInOctave + 11; // Seventh
-        case 8: return chordRootInOctave + 12; // Octave
-        default: return chordRootInOctave;
+        case 1: return chordRoot;          // Root
+        case 2: return chordRoot + 2;      // Second
+        case 3: return chordRoot + 4;      // Major third
+        case 4: return chordRoot + 5;      // Fourth
+        case 5: return chordRoot + 7;      // Fifth
+        case 6: return chordRoot + 9;      // Sixth
+        case 7: return chordRoot + 11;     // Major seventh
+        case 8: return chordRoot + 12;     // Octave
+        default: return chordRoot;
     }
 }
 
@@ -666,6 +664,12 @@ void MusicalContainer::applyTransforms(EventStream& stream) const
 
 int MusicalContainer::calculateSectionBars(const MusicalContainer& section) const
 {
+    // Use explicit bar count if set (e.g., "bars": 8 in LLM-generated JSON)
+    if (section.numBars > 0) {
+        DBG("calculateSectionBars: using explicit numBars = " << section.numBars);
+        return section.numBars;
+    }
+
     // Find the highest numbered bar in the section
     int maxBar = 0;
     

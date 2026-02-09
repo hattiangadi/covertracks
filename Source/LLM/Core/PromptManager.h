@@ -84,7 +84,10 @@ public:
                                      Player* player,
                                      const String& instrumentRoleDefinition,
                                      int tempo,
-                                     const String& description);
+                                     const String& description,
+                                     const String& skeleton = "",
+                                     const String& melodyReference = "",
+                                     const String& ensembleList = "");
     
     /**
      * @brief Create a prompt for modifying an existing pattern

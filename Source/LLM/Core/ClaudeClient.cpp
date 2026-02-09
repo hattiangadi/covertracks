@@ -117,13 +117,14 @@ void ClaudeClient::run()
     {
         // Wait for a message to process
         waitEvent.wait(-1);
-        
+
         if (threadShouldExit())
             break;
-        
+
         // Process all messages in the queue
         while (!threadShouldExit())
         {
+            JUCE_AUTORELEASEPOOL
             MessageRequest request;
             
             {
@@ -329,12 +330,12 @@ var ClaudeClient::createRequestBody(const String& message,
     // Set the model
     requestObj->setProperty("model", model);
     
-    // Set max tokens
-    requestObj->setProperty("max_tokens", 4000);
-    
+    // Set max tokens — music charts can be large
+    requestObj->setProperty("max_tokens", 16000);
+
     // Create messages array
     Array<var> messagesArray;
-    
+
     // Add history messages
     for (auto& turn : history)
     {
@@ -361,10 +362,13 @@ var ClaudeClient::createRequestBody(const String& message,
     requestObj->setProperty("messages", messagesArray);
     
     // Add system prompt for music generation
-    requestObj->setProperty("system", "You are an AI assistant specialized in music theory and composition. "
-                                    "Help the user generate musical patterns, understand music theory concepts, "
-                                    "and create interesting musical ideas. When asked to generate patterns, "
-                                    "provide them in a clear, structured format that can be parsed by a music system.");
+    requestObj->setProperty("system", "You are a professional musician and composer. "
+                                    "Generate music in Music JSON 3.0 format. "
+                                    "Use \"define\" for reusable patterns and \"root\" for arrangement. "
+                                    "Use \"degree\" (not \"note\") for bass/comp so they follow chord changes. "
+                                    "Set \"context\": {\"mode\": \"ChordName\"} per section for harmony. "
+                                    "Keep patterns short (1-2 bars) and use \"repeat\" to fill sections. "
+                                    "Respond with ONLY valid JSON — no markdown fences, no explanations.");
     
     // Set temperature
     requestObj->setProperty("temperature", 0.7);

@@ -242,21 +242,27 @@ juce::Result Song::processImageForStructure(const juce::Image& image,
     // Convert to base64
     juce::String base64Image = juce::Base64::toBase64(mos.getData(), mos.getDataSize());
     
-    // Create the prompt for structure extraction
-    juce::String prompt = "Please analyze this sheet music image and extract the song structure. "
-                         "Provide a JSON response with the following format:\n"
+    // Create the prompt for structure extraction — per-measure lead sheet format
+    juce::String prompt = "Analyze this sheet music image and extract the complete lead sheet. "
+                         "Output one entry per measure with the chord symbol and melody notes.\n"
+                         "Provide a JSON response with EXACTLY this format:\n"
                          "{\n"
                          "  \"title\": \"Song Title\",\n"
                          "  \"tempo\": 120,\n"
-                         "  \"sections\": [\n"
-                         "    {\n"
-                         "      \"name\": \"intro\",\n"
-                         "      \"measures\": 4,\n"
-                         "      \"chords\": [\"C\", \"Am\", \"F\", \"G\"]\n"
-                         "    }\n"
+                         "  \"measures\": [\n"
+                         "    {\"meas\": 1, \"ch\": \"C\", \"mel\": {\"nts\": [\"C4\", \"C4\", \"G4\", \"G4\"], \"dur\": [\"1:1\", \"2:1\", \"3:1\", \"4:1\"]}},\n"
+                         "    {\"meas\": 2, \"ch\": \"F\", \"mel\": {\"nts\": [\"A4\", \"A4\", \"G4\"], \"dur\": [\"1:1\", \"2:1\", \"3:2\"]}}\n"
                          "  ]\n"
                          "}\n\n"
-                         "Focus on identifying sections like intro, verse, chorus, bridge, outro and their chord progressions.";
+                         "Rules:\n"
+                         "- One entry per measure (bar) in order — do NOT skip or merge measures\n"
+                         "- \"ch\": the chord symbol above that measure (e.g. \"C\", \"Dm7\", \"G7\", \"FMaj7\"). "
+                         "If no chord is written, leave empty string and the previous chord continues.\n"
+                         "- \"mel\": melody notes in that measure. \"nts\" = note names with octave (e.g. \"C4\", \"Eb5\"), "
+                         "\"dur\" = \"beat:duration\" pairs where beat is position in measure (1-based) and duration is in beats (1=quarter, 0.5=eighth, 2=half). "
+                         "Use \"r\" for rests.\n"
+                         "- Estimate tempo from the style if not marked\n"
+                         "- Output raw JSON only, no markdown fences or explanations";
     
     // Send to LLM with image
     llmClient->sendMessageWithImage(prompt, base64Image, "image/jpeg", [callback](bool success, const juce::String& responseText) {
@@ -309,9 +315,9 @@ juce::Result Song::processImageForStructure(const juce::Image& image,
         if (result.failed())
         {
             // If JSON parsing failed, pass raw text
-            juce::var rawResponse;
-            rawResponse.getDynamicObject()->setProperty("rawText", responseText);
-            callback(true, rawResponse);
+            auto* obj = new juce::DynamicObject();
+            obj->setProperty("rawText", responseText);
+            callback(true, juce::var(obj));
         }
         else
         {

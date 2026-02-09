@@ -333,6 +333,88 @@ Any musical concept can be defined through aliases:
 - Mixed time signatures and pickup bars
 - Nested variations within sections
 
+## Chord Context and Inheritance
+
+### Hierarchical Chord Context
+Chord progressions should be defined at the structural level and inherited by all layers:
+
+#### **CORRECT: Define chords at section/bar level**
+```json
+{
+  "sections": {
+    "verse": {
+      "context": {"velocity": 0.8},
+      "bars": {
+        "1": {"context": {"chord": "CMaj7"}},  // All layers use CMaj7
+        "2": {"context": {"chord": "FMaj7"}},  // All layers use FMaj7
+        "3": {
+          "context": {"chord": "Dm7"},  // Default chord for bar
+          "events": [
+            {"t": 1.0, "context": {"chord": "Dm7"}},     // First half
+            {"t": 3.0, "context": {"chord": "G7"}}       // Second half - ii-V
+          ]
+        }
+      },
+      "layers": {
+        "melody": {
+          "bars": {
+            "1": {"events": [{"t": 1, "n": "E4"}]},  // Inherits CMaj7
+            "2": {"events": [{"t": 1, "n": "A4"}]}   // Inherits FMaj7
+          }
+        },
+        "bass": {
+          "bars": {
+            "1": {"pattern": "walkingBass"},  // Pattern uses inherited CMaj7
+            "2": {"pattern": "walkingBass"}   // Pattern uses inherited FMaj7
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+#### **INCORRECT: Duplicating chords in each layer** ❌
+```json
+{
+  "layers": {
+    "melody": {
+      "bars": {
+        "1": {"context": {"chord": "CMaj7"}, "events": [...]}  // ❌ Redundant
+      }
+    },
+    "bass": {
+      "bars": {
+        "1": {"context": {"chord": "CMaj7"}, "pattern": "..."}  // ❌ Duplicated
+      }
+    }
+  }
+}
+```
+
+### Context Inheritance Rules
+
+1. **Section Level**: Sets defaults for tempo feel, dynamics, articulation
+2. **Bar Level**: Primary chord and time-based contexts
+3. **Event Level**: Specific overrides for individual notes
+
+### Sub-Bar Chord Changes
+Use empty events as chord markers for mid-bar changes:
+
+```json
+"bars": {
+  "1": {
+    "context": {"chord": "CMaj7"},  // Default
+    "events": [
+      {"t": 1.0, "context": {"chord": "CMaj7"}},    // Explicit first half
+      {"t": 2.5, "context": {"chord": "C#dim7"}},   // Passing chord
+      {"t": 3.0, "context": {"chord": "Dm7"}},      // Target chord
+      {"t": 4.0, "context": {"chord": "G7"}}        // Turnaround
+    ]
+  }
+}
+```
+
 ## Bar Numbering Rules
 
 ### **CONTAINER-LOCAL BAR NUMBERING** (CORRECT)
@@ -418,7 +500,7 @@ Bar numbers restart at 1 within each container that contains bars:
 2. **Use Patterns**: Create reusable musical elements before building sections
 3. **Layer Thoughtfully**: Use simultaneous layers for ensemble texture
 4. **Sequence Logically**: Use sequential containers for temporal progression
-5. **Context Inheritance**: Let child elements inherit and override parent context
+5. **Context Inheritance**: Define chords at section/bar level, let layers inherit
 6. **Cultural Adaptation**: Adjust aliases and terminology for different musical traditions
 7. **Container-Local Bar Numbering**: Always restart bar numbers at 1 within each container
 
@@ -430,6 +512,8 @@ Bar numbers restart at 1 within each container that contains bars:
 4. **Structural Balance**: Create proportional sections with logical transitions
 5. **Pattern Variation**: Reuse patterns with contextual modifications for coherence
 6. **Bar Numbering**: Never use global sequential numbering - always container-local
+7. **Chord Progressions**: Define at section/bar level, not duplicated in layers
+8. **Degree Notation**: Use `d:` with proper chord context for harmonic flexibility
 
 ### Common Mistakes to Avoid:
 
@@ -437,5 +521,7 @@ Bar numbers restart at 1 within each container that contains bars:
 2. **❌ Missing Arrangement**: Always define the arrangement field to sequence sections
 3. **❌ Range Confusion**: "1-4" means bars 1-4 within the current container context
 4. **❌ Pattern Scope**: Patterns are global, containers are local - don't mix these concepts
+5. **❌ Chord Duplication**: Don't repeat chord info in each layer - define once at bar level
+6. **❌ Missing Chord Context**: Patterns using `d:` notation need inherited chord context
 
 This system enables AI to generate sophisticated, culturally-appropriate musical content across any genre or tradition while maintaining technical precision and expressive depth.

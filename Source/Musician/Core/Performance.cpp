@@ -3,6 +3,7 @@
 #include "../../Player/Core/Player.h"
 #include "../../LLM/Core/LLMClient.h"
 #include "../../LLM/Core/PromptManager.h"
+#include "MusicJson3/LeadSheetConverter.h"
 #include <iostream>
 
 namespace covertracks {
@@ -634,17 +635,19 @@ bool Performance::loadChartsForRoles(const juce::Array<MusicianRole>& roles, Pla
         
         if (midiChart.isVoid())
         {
-            std::cerr << "[Performance] No chart available for role: " << role.getName() << std::endl;
-            
+            std::cerr << "[Performance] No chart available for role: '" << role.getName() << "'" << std::endl;
+
             // Debug: Show what charts are actually available
-            auto availableRoles = getGeneratedChartRoleNames();
-            std::cout << "[Performance] Available chart roles: ";
-            for (const auto& availableRole : availableRoles)
-            {
-                std::cout << "'" << availableRole << "' ";
-            }
+            std::cout << "[Performance] Available midiCharts keys: ";
+            for (const auto& pair : midiCharts)
+                std::cout << "'" << pair.first << "' ";
             std::cout << std::endl;
-            
+
+            std::cout << "[Performance] Available generatedCharts keys: ";
+            for (const auto& pair : generatedCharts)
+                std::cout << "'" << pair.first << "' ";
+            std::cout << std::endl;
+
             continue;
         }
         
@@ -772,33 +775,61 @@ bool Performance::generateChartForRole(const juce::String& roleName,
     
     // Create comprehensive description for the LLM
     String generationDescription = "Generate a " + role.getInstrumentName() + " chart for the role '" + roleName + "'";
-    
+
+    // Convert lead sheet to 3.0 skeleton if song has structure data
+    String skeletonJson;
+    String melodyRef;
+
     if (song)
     {
         generationDescription += " for the song '" + song->getTitle() + "'";
-        
+
         String songStructure = song->getSourceStructureJson();
         if (songStructure.isNotEmpty())
         {
-            generationDescription += ". Song structure: " + songStructure;
+            auto converted = mj3::LeadSheetConverter::convert(songStructure);
+            if (converted.totalBars > 0)
+            {
+                skeletonJson = converted.skeleton;
+                if (converted.melodyReference.isNotEmpty())
+                    melodyRef = "Original melody to interpret in your style:\n" + converted.melodyReference;
+                generationDescription += " (" + String(converted.totalBars) + " bars)";
+            }
+            else
+            {
+                generationDescription += ". Song structure: " + songStructure;
+            }
         }
     }
-    
+
     if (instructions.isNotEmpty())
     {
         generationDescription += ". Performance instructions: " + instructions;
     }
-    
+
     if (key.isNotEmpty())
     {
         generationDescription += ". Key: " + key;
     }
-    
+
     if (mood.isNotEmpty())
     {
         generationDescription += ". Mood: " + mood;
     }
-    
+
+    // Build ensemble list from cached roles (excluding current role)
+    String ensembleList;
+    {
+        auto ensemble = getEnsemble();
+        juce::StringArray otherRoles;
+        for (const auto& r : ensemble)
+        {
+            if (r.getName() != roleName)
+                otherRoles.add(r.getName());
+        }
+        ensembleList = otherRoles.joinIntoString(", ");
+    }
+
     // Use PromptManager to create the prompt
     PromptManager promptManager;
     String prompt = promptManager.createMusicGenerationPrompt(
@@ -807,7 +838,10 @@ bool Performance::generateChartForRole(const juce::String& roleName,
         role.player,
         roleName, // Use role name as role definition
         tempo,
-        generationDescription
+        generationDescription,
+        skeletonJson,
+        melodyRef,
+        ensembleList
     );
     
     // Send LLM request with callback

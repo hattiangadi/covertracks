@@ -169,8 +169,34 @@ std::vector<Event> UniversalMusicParser::parseEvents(const juce::var& eventsJson
     
     for (const auto& eventJson : *eventsArray) {
         Event event;
-        
-        // Parse basic event properties
+
+        // Handle array-format events: [beat, pitch, velocity, duration]
+        // LLM often generates this compact format
+        if (eventJson.isArray()) {
+            auto* arr = eventJson.getArray();
+            if (arr && arr->size() >= 2) {
+                event.time = (double)(*arr)[0] - 1.0;  // 1-based to 0-based
+
+                // Pitch can be string ("G4") or object ({"t": 1, "o": 3} for chord tone)
+                auto pitch = (*arr)[1];
+                if (pitch.isString()) {
+                    event.note = pitch.toString();
+                } else if (pitch.isObject() && pitch.hasProperty("t")) {
+                    event.degree = (int)pitch["t"];
+                    if (pitch.hasProperty("o"))
+                        event.resolvedOctave = (int)pitch["o"];
+                }
+
+                if (arr->size() >= 3)
+                    event.velocity = (float)(*arr)[2];
+                if (arr->size() >= 4)
+                    event.duration = (double)(*arr)[3];
+            }
+            events.push_back(event);
+            continue;
+        }
+
+        // Parse basic event properties (standard object format)
         if (eventJson.hasProperty("t"))
             event.time = (double)eventJson["t"] - 1.0;  // Convert musical beat (1-based) to MIDI timestamp (0-based)
         if (eventJson.hasProperty("n"))
@@ -361,6 +387,12 @@ MusicalContainer UniversalMusicParser::parseContainer(const juce::var& container
         }
     }
     
+    // Store explicit bar count (e.g., "bars": 8 means repeat pattern for 8 bars)
+    if (containerJson.hasProperty("bars") && !containerJson["bars"].isObject() && !containerJson["bars"].isArray()) {
+        container.numBars = (int)containerJson["bars"];
+        DBG("parseContainer: stored numBars = " << container.numBars);
+    }
+
     // Parse chord progression
     if (containerJson.hasProperty("chordProgression")) {
         auto chordProgJson = containerJson["chordProgression"];

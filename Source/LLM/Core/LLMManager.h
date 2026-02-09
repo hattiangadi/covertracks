@@ -18,7 +18,12 @@ public:
      * @return LLMManager& The singleton instance
      */
     static LLMManager& getInstance();
-    
+
+    /** Shut down all clients (call before app exit to avoid static destruction crashes) */
+    void shutdown();
+
+    ~LLMManager();
+
     /**
      * @brief Get the default LLM client
      * 

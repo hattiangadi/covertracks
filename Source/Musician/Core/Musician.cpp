@@ -4,6 +4,7 @@
 #include "PatternGenerator.h"
 #include "PatternParser.h"
 #include "UniversalMusicParser.h"
+#include "MusicJson3/MJ3Parser.h"
 #include "../../LLM/Core/PromptManager.h"
 #include "../../Player/Core/Player.h"
 #include <iostream>
@@ -428,31 +429,106 @@ var Musician::convertNotationToMidiEvents(const String& notation, double tempo)
 {
     // Create result object
     DynamicObject::Ptr result = new DynamicObject();
-    
+
+    // Clean the notation: strip markdown fences, extract JSON object
+    String cleanedNotation = notation.trim();
+
+    // Strip markdown code fences (```json ... ``` or ``` ... ```)
+    if (cleanedNotation.startsWith("```"))
+    {
+        int firstNewline = cleanedNotation.indexOfChar('\n');
+        if (firstNewline > 0)
+            cleanedNotation = cleanedNotation.substring(firstNewline + 1);
+    }
+    if (cleanedNotation.endsWith("```"))
+        cleanedNotation = cleanedNotation.substring(0, cleanedNotation.length() - 3).trimEnd();
+
+    // Find the JSON object boundaries (first '{' to last '}')
+    int firstBrace = cleanedNotation.indexOfChar('{');
+    int lastBrace = cleanedNotation.lastIndexOfChar('}');
+    if (firstBrace >= 0 && lastBrace > firstBrace)
+        cleanedNotation = cleanedNotation.substring(firstBrace, lastBrace + 1);
+
     // Detect JSON format version by parsing and checking for "version" field
-    var parsedJson = JSON::parse(notation);
+    var parsedJson = JSON::parse(cleanedNotation);
+    if (!parsedJson.isObject())
+    {
+        DBG("JSON parse failed on cleaned notation, trying original");
+        parsedJson = JSON::parse(notation);
+    }
     String formatVersion = "1.0"; // Default to JSON 1.0 format
     
     if (parsedJson.isObject() && parsedJson.hasProperty("version")) {
         formatVersion = parsedJson["version"].toString();
+    }
+    // Auto-detect 3.0 format by structure: define + root = 3.0
+    else if (parsedJson.isObject() && parsedJson.hasProperty("define") && parsedJson.hasProperty("root")) {
+        formatVersion = "3.0";
+        DBG("Pattern parsing: auto-detected 3.0 format from define/root structure");
+    }
+    // Auto-detect 2.0 format by structure: sections + patterns = 2.0
+    else if (parsedJson.isObject() && parsedJson.hasProperty("sections") && parsedJson.hasProperty("patterns")) {
+        formatVersion = "2.0";
+        DBG("Pattern parsing: auto-detected 2.0 format from sections/patterns structure");
     }
     
     DBG("Pattern parsing: detected format version " << formatVersion);
     
     std::shared_ptr<Chart> chart;
     
-    if (formatVersion == "2.0") {
+    if (formatVersion == "3.0") {
+        // Use MJ3Parser for Music JSON 3.0
+        DBG("Using MJ3Parser for JSON 3.0 format");
+        auto mj3Result = mj3::MJ3Parser::parseVar(parsedJson, tempo);
+        if (mj3Result.isObject() && (bool)mj3Result["success"]) {
+            DBG("MJ3Parser: converted " << mj3Result["events"].size() << " events");
+            return mj3Result;
+        } else {
+            DBG("MJ3Parser: failed to parse JSON 3.0 format");
+        }
+    } else if (formatVersion == "2.0") {
         // Use new UniversalMusicParser for Music JSON 2.0
         DBG("Using UniversalMusicParser for JSON 2.0 format");
         
         auto container = UniversalMusicParser::parseJSON(notation);
         if (container) {
+            // Extract tempo from JSON if provided
+            if (parsedJson.hasProperty("tempo")) {
+                double jsonTempo = (double)parsedJson["tempo"];
+                if (jsonTempo > 0) tempo = jsonTempo;
+            }
+
+            // Log parsed structure summary
+            DBG("=== Parsed 2.0 Structure ===");
+            DBG("  Patterns: " << container->patterns.size());
+            for (const auto& [name, pat] : container->patterns)
+                DBG("    Pattern '" << name << "': " << pat.events.size() << " events");
+            DBG("  Sections: " << container->sections.size());
+            for (const auto& [name, sec] : container->sections) {
+                DBG("    Section '" << name << "': " << sec.layers.size() << " layers, numBars=" << sec.numBars);
+                for (const auto& [ln, layer] : sec.layers)
+                    DBG("      Layer '" << ln << "': ref='" << layer.reference
+                        << "', events=" << layer.events.size()
+                        << ", patterns_available=" << layer.patterns.size());
+            }
+            DBG("  Arrangement: " << container->arrangement.size() << " entries");
+
             // Convert MusicalContainer to MIDI events via EventStream
             Context globalContext;
             globalContext.velocity = 0.8f; // Default velocity
             globalContext.octave = 4;      // Default octave
-            
-            auto eventStream = container->render(globalContext, 1, 4);
+
+            // Extract key from JSON context if provided
+            if (parsedJson.hasProperty("context")) {
+                auto ctx = parsedJson["context"];
+                if (ctx.hasProperty("key"))
+                    globalContext.key = ctx["key"].toString();
+                if (ctx.hasProperty("chord"))
+                    globalContext.chord = ctx["chord"].toString();
+            }
+
+            auto eventStream = container->render(globalContext, 1, 1);
+            DBG("=== Render Result: " << eventStream.size() << " total events ===");
             
             // Convert EventStream to var format for Player compatibility
             Array<var> events;

@@ -150,6 +150,7 @@ public:
     Context context;                    // Local context overrides
     juce::String reference;             // Pattern reference
     std::vector<juce::String> arrangement;  // Section playback order
+    int numBars = 0;                    // Explicit bar count (e.g., "bars": 8 in section)
     
     // Expression features (from complete grammar)
     std::map<juce::String, juce::String> shortcuts;        // Shorthand notation
