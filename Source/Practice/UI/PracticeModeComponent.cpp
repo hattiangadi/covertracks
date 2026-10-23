@@ -196,6 +196,9 @@ PracticeModeComponent::~PracticeModeComponent()
     auto& engine = TracktionAudioEngine::getInstance();
     if (engine.getAudioInputListener() == this)
         engine.setAudioInputListener (nullptr);
+
+    takeActive.store (false);
+    waitForAudioThreadToLeavePush();
 }
 
 void PracticeModeComponent::paint (juce::Graphics& g)
@@ -645,6 +648,7 @@ void PracticeModeComponent::startTake()
     // Make sure the audio thread isn't mid-push into whatever tracker we
     // currently have before we potentially replace or reset it.
     takeActive.store (false);
+    waitForAudioThreadToLeavePush();
 
     auto sampleRate = TracktionAudioEngine::getInstance().getSampleRate();
 
@@ -677,8 +681,22 @@ void PracticeModeComponent::audioInputBlock (const float* const* inputChannels, 
     if (! takeActive.load())
         return;
 
-    if (pitchTracker != nullptr)
+    audioThreadInPush.store (true);
+
+    // Re-check after raising the flag: startTake() clears takeActive first and
+    // then waits for this flag, so either we see the clear here and bail, or
+    // startTake() sees our flag and waits for us to finish.
+    if (takeActive.load() && pitchTracker != nullptr)
         pitchTracker->pushInterleavedOrMultichannel (inputChannels, numInputChannels, numSamples);
+
+    audioThreadInPush.store (false);
+}
+
+void PracticeModeComponent::waitForAudioThreadToLeavePush()
+{
+    // Bounded: a callback is a few ms; 50 ms is far more than one block.
+    for (int i = 0; i < 50 && audioThreadInPush.load(); ++i)
+        juce::Thread::sleep (1);
 }
 
 void PracticeModeComponent::ingestPitchSamples (const std::vector<PitchSample>& samples)

@@ -159,6 +159,10 @@ private:
     // so the audio thread never sees a half-constructed tracker.
     std::unique_ptr<PitchTracker> pitchTracker;
     std::atomic<bool> takeActive { false };
+    // Set by the audio thread for the duration of a push so the message thread
+    // can wait out an in-flight callback before resetting/replacing the tracker.
+    std::atomic<bool> audioThreadInPush { false };
+    void waitForAudioThreadToLeavePush();
     double takeStartBeat = 0.0;
     double takeStartTempoBpm = 120.0; // tempo at take start; intentionally NOT re-read mid-take (see pitchSampleToPoint)
     std::vector<PitchPoint> currentTrace;
