@@ -41,6 +41,8 @@
       <GROUP id="{38DF3E53-C216-ADF7-CCF5-86D5880F46C0}" name="Tests">
         <FILE id="LSCTests_cpp" name="LeadSheetConverterTests.cpp" compile="1"
               resource="0" file="Source/Tests/LeadSheetConverterTests.cpp"/>
+        <FILE id="PracticeLessonTests_cpp" name="PracticeLessonTests.cpp" compile="1"
+              resource="0" file="Source/Tests/PracticeLessonTests.cpp"/>
         <FILE id="MCxE5p" name="ChordContextInheritanceTest.cpp" compile="1"
               resource="0" file="Source/Tests/ChordContextInheritanceTest.cpp"/>
         <FILE id="gn2Trj" name="ChordContextDebugTest.cpp.disabled" compile="0" resource="0"
@@ -360,6 +362,16 @@
                 resource="0" file="Source/Player/UI/PlayerEditor.cpp"/>
           <FILE id="TracktionPlayerEditorH" name="PlayerEditor.h" compile="0"
                 resource="0" file="Source/Player/UI/PlayerEditor.h"/>
+        </GROUP>
+      </GROUP>
+      <GROUP id="{D4A1B2C3-E5F6-A7B8-C9D0-E2B7A1B2C3D4}" name="Practice">
+        <GROUP id="{D4A1B2C3-E5F6-A7B8-C9D0-E2B8A1B2C3D4}" name="Core">
+          <FILE id="PracticeLesson_h" name="PracticeLesson.h" compile="0" resource="0"
+                file="Source/Practice/Core/PracticeLesson.h"/>
+          <FILE id="LessonLoader_h" name="LessonLoader.h" compile="0" resource="0"
+                file="Source/Practice/Core/LessonLoader.h"/>
+          <FILE id="LessonLoader_cpp" name="LessonLoader.cpp" compile="1" resource="0"
+                file="Source/Practice/Core/LessonLoader.cpp"/>
         </GROUP>
       </GROUP>
       <FILE id="OmIhwQ" name="HostStartup.cpp" compile="1" resource="0" file="Source/HostStartup.cpp"/>

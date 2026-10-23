@@ -69,7 +69,10 @@ target_sources(Covertracks PRIVATE
     Source/Player/Core/Instrument.cpp
     Source/Player/Core/Player.cpp
     Source/Player/Core/PlayerManager.cpp
-    
+
+    # Practice system - Core
+    Source/Practice/Core/LessonLoader.cpp
+
     # Player system - UI
     Source/Player/UI/PlayerEditorComponent.cpp
     Source/Player/UI/PlayerLibraryComponent.cpp
@@ -93,6 +96,7 @@ target_sources(Covertracks PRIVATE
     Source/Tests/PatternGeneratorTests.cpp
     Source/Tests/PatternParserTests.cpp
     Source/Tests/PlayerTests.cpp
+    Source/Tests/PracticeLessonTests.cpp
     Source/Tests/TestRunner.cpp
 )
 
@@ -177,13 +181,15 @@ if(BUILD_TESTS)
         Source/Player/Core/PlayerManager.cpp
         Source/Plugins/InternalPlugins.cpp
         Source/Plugins/PluginGraph.cpp
-        
+        Source/Practice/Core/LessonLoader.cpp
+
         # Test files
         Source/Tests/MusicianAdvancedTests.cpp
         Source/Tests/MusicianTests.cpp
         Source/Tests/PatternGeneratorTests.cpp
         Source/Tests/PatternParserTests.cpp
         Source/Tests/PlayerTests.cpp
+        Source/Tests/PracticeLessonTests.cpp
         Source/Tests/TestRunner.cpp
         
         # Test main
