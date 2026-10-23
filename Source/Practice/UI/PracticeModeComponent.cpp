@@ -47,6 +47,15 @@ juce::File findLessonsDirectory (const juce::File& startFrom)
     return juce::File();
 }
 
+PitchPoint pitchSampleToPoint (const PitchSample& sample, double takeStartBeat, double tempoBpm, double micLatencySeconds)
+{
+    PitchPoint point;
+    point.beat = takeStartBeat + (sample.timeSeconds - micLatencySeconds) * tempoBpm / 60.0;
+    point.midiPitch = sample.midiPitch;
+    point.confidence = sample.voiced ? sample.confidence : 0.0f;
+    return point;
+}
+
 std::vector<juce::File> listLessonFiles (const juce::File& dir)
 {
     std::vector<juce::File> result;
@@ -163,17 +172,30 @@ PracticeModeComponent::PracticeModeComponent (PlayerManager* playerManagerToUse)
 
     addAndMakeVisible (pianoRoll);
 
+    addAndMakeVisible (micToggle);
+    micToggle.setToggleState (true, juce::dontSendNotification);
+    micToggle.onClick = [this] { onMicToggleChanged(); };
+
+    addAndMakeVisible (pitchReadout);
+    pitchReadout.setText (juce::String::fromUTF8 ("\xe2\x80\x94"), juce::dontSendNotification);
+    pitchReadout.setJustificationType (juce::Justification::centredLeft);
+
     lastOpenDirectory = getLessonsDirectory();
 
     refreshPlayerSelector();
     refreshLessonSelector();
     recreateAccompanimentPlayerForSelectedPlayer();
     updateStatusLabel();
+    updateMicListenerRegistration();
 }
 
 PracticeModeComponent::~PracticeModeComponent()
 {
     stopTimer();
+
+    auto& engine = TracktionAudioEngine::getInstance();
+    if (engine.getAudioInputListener() == this)
+        engine.setAudioInputListener (nullptr);
 }
 
 void PracticeModeComponent::paint (juce::Graphics& g)
@@ -213,6 +235,10 @@ void PracticeModeComponent::resized()
     rewindButton.setBounds (row3.removeFromLeft (36));
     row3.removeFromLeft (4);
     playButton.setBounds (row3.removeFromLeft (90));
+    row3.removeFromLeft (16);
+    micToggle.setBounds (row3.removeFromLeft (130));
+    row3.removeFromLeft (8);
+    pitchReadout.setBounds (row3.removeFromLeft (100));
 
     area.removeFromTop (4);
     statusLabel.setBounds (area.removeFromTop (22));
@@ -229,6 +255,12 @@ void PracticeModeComponent::timerCallback()
     auto beats = accompanimentPlayer->getPositionBeats();
     pianoRoll.setPlayheadBeat (beats);
     updateStatusLabel();
+
+    if (takeActive.load() && pitchTracker != nullptr)
+    {
+        pitchTracker->analyse();
+        ingestPitchSamples (pitchTracker->takeNewSamples());
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -542,9 +574,11 @@ void PracticeModeComponent::onPlayButtonClicked()
     {
         accompanimentPlayer->stop();
         stopTimer();
+        endTake();
     }
     else
     {
+        startTake();
         accompanimentPlayer->play();
         startTimer (30);
     }
@@ -555,6 +589,8 @@ void PracticeModeComponent::onPlayButtonClicked()
 
 void PracticeModeComponent::onRewindButtonClicked()
 {
+    endTake();
+
     if (accompanimentPlayer == nullptr)
         return;
 
@@ -568,8 +604,100 @@ void PracticeModeComponent::onRewindButtonClicked()
 void PracticeModeComponent::onPlaybackFinished()
 {
     stopTimer();
+    endTake();
     updatePlayButtonText();
     onRewindButtonClicked();
+}
+
+// -----------------------------------------------------------------------------
+// Mic / pitch tracking (step 4)
+// -----------------------------------------------------------------------------
+
+void PracticeModeComponent::onMicToggleChanged()
+{
+    updateMicListenerRegistration();
+
+    if (! micToggle.getToggleState())
+        endTake();
+}
+
+void PracticeModeComponent::updateMicListenerRegistration()
+{
+    auto& engine = TracktionAudioEngine::getInstance();
+
+    if (micToggle.getToggleState())
+        engine.setAudioInputListener (this);
+    else if (engine.getAudioInputListener() == this)
+        engine.setAudioInputListener (nullptr);
+}
+
+double PracticeModeComponent::getMicLatencySeconds() const
+{
+    auto ms = getPracticeProperties().getDoubleValue ("practice.micLatencyMs", 0.0);
+    return ms / 1000.0;
+}
+
+void PracticeModeComponent::startTake()
+{
+    if (! micToggle.getToggleState())
+        return;
+
+    // Make sure the audio thread isn't mid-push into whatever tracker we
+    // currently have before we potentially replace or reset it.
+    takeActive.store (false);
+
+    auto sampleRate = TracktionAudioEngine::getInstance().getSampleRate();
+
+    if (pitchTracker == nullptr || ! juce::approximatelyEqual (pitchTracker->getSampleRate(), sampleRate))
+        pitchTracker = std::make_unique<PitchTracker> (sampleRate);
+
+    pitchTracker->reset();
+
+    takeStartBeat = accompanimentPlayer != nullptr ? accompanimentPlayer->getPositionBeats() : 0.0;
+    takeStartTempoBpm = accompanimentPlayer != nullptr ? accompanimentPlayer->getTempoBpm() : 120.0;
+
+    currentTrace.clear();
+    pianoRoll.clearPitchTrace();
+    pitchReadout.setText (juce::String::fromUTF8 ("\xe2\x80\x94"), juce::dontSendNotification);
+
+    // Published last: the audio thread only touches pitchTracker while this
+    // is true, and by now the tracker is fully built and reset.
+    takeActive.store (true);
+}
+
+void PracticeModeComponent::endTake()
+{
+    takeActive.store (false);
+}
+
+void PracticeModeComponent::audioInputBlock (const float* const* inputChannels, int numInputChannels, int numSamples, double sampleRate)
+{
+    juce::ignoreUnused (sampleRate);
+
+    if (! takeActive.load())
+        return;
+
+    if (pitchTracker != nullptr)
+        pitchTracker->pushInterleavedOrMultichannel (inputChannels, numInputChannels, numSamples);
+}
+
+void PracticeModeComponent::ingestPitchSamples (const std::vector<PitchSample>& samples)
+{
+    if (samples.empty())
+        return;
+
+    auto micLatencySeconds = getMicLatencySeconds();
+
+    for (auto& sample : samples)
+        currentTrace.push_back (pitchSampleToPoint (sample, takeStartBeat, takeStartTempoBpm, micLatencySeconds));
+
+    pianoRoll.setPitchTrace (currentTrace);
+
+    auto& last = samples.back();
+    if (last.voiced)
+        pitchReadout.setText (covertracks::practice::PitchDetector::noteNameWithCents (last.midiPitch), juce::dontSendNotification);
+    else
+        pitchReadout.setText (juce::String::fromUTF8 ("\xe2\x80\x94"), juce::dontSendNotification);
 }
 
 void PracticeModeComponent::updatePlayButtonText()

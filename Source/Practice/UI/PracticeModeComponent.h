@@ -3,10 +3,13 @@
 #include <optional>
 #include <memory>
 #include <vector>
+#include <atomic>
 #include "PracticePianoRoll.h"
 #include "../Core/PracticeLesson.h"
 #include "../Core/AccompanimentPlayer.h"
+#include "../Core/PitchTracker.h"
 #include "../../Player/Core/PlayerManager.h"
+#include "../../Audio/TracktionAudioEngine.h"
 
 namespace covertracks {
 namespace practice {
@@ -24,12 +27,26 @@ juce::File findLessonsDirectory (const juce::File& startFrom);
     empty vector if dir does not exist. */
 std::vector<juce::File> listLessonFiles (const juce::File& dir);
 
+/** Converts one time-stamped pitch-tracker result into a piano-roll overlay
+    point. The beat conversion uses the TAKE-START tempo (tempoBpm), not
+    whatever the live tempo is at the time the sample arrives: if the user
+    changes tempo mid-take, already-converted and new overlay points keep
+    using the tempo that was in effect when the take started, so the trace
+    doesn't warp retroactively. micLatencySeconds shifts the sample's
+    timestamp earlier to compensate for input monitoring/round-trip latency
+    before converting to a beat position. An unvoiced sample always reports
+    confidence 0, regardless of the detector's raw confidence value. */
+PitchPoint pitchSampleToPoint (const PitchSample& sample, double takeStartBeat, double tempoBpm, double micLatencySeconds);
+
 /**
     Top-level UI for Practice mode: pick a lesson and a Player, control
     tempo/transpose/count-in/loop, play/stop, and watch progress on a
-    PracticePianoRoll.
+    PracticePianoRoll (including a live overlay of the sung pitch, captured
+    from the microphone while a "take" - the span between pressing Play and
+    the playback stopping - is active).
 */
 class PracticeModeComponent : public juce::Component,
+                               public TracktionAudioEngine::AudioInputListener,
                                private juce::Timer
 {
 public:
@@ -55,6 +72,19 @@ public:
     // added for testability (see final report).
     const juce::Label& getStatusLabel() const { return statusLabel; }
     const PracticePianoRoll& getPianoRoll() const { return pianoRoll; }
+
+    const juce::ToggleButton& getMicToggle() const { return micToggle; }
+    const std::vector<PitchPoint>& getCurrentTrace() const { return currentTrace; }
+
+    /** TracktionAudioEngine::AudioInputListener. Called on the AUDIO THREAD:
+        forwards raw input to the pitch tracker only while a take is active.
+        Must stay lock-free/allocation-free. */
+    void audioInputBlock (const float* const* inputChannels, int numInputChannels, int numSamples, double sampleRate) override;
+
+    /** Test hook: applies the same conversion/append/push path the 30ms
+        timer uses for live pitch-tracker output, without needing real
+        audio. Message thread only. */
+    void ingestPitchSamples (const std::vector<PitchSample>& samples);
 
 private:
     void timerCallback() override;
@@ -83,6 +113,12 @@ private:
     juce::File getLessonsDirectory() const;
     void rememberLessonsDirectory (const juce::File& dir);
 
+    void onMicToggleChanged();
+    void updateMicListenerRegistration();
+    void startTake();
+    void endTake();
+    double getMicLatencySeconds() const;
+
     PlayerManager* playerManager = nullptr;
 
     juce::ComboBox lessonSelector;
@@ -109,8 +145,23 @@ private:
 
     PracticePianoRoll pianoRoll;
 
+    juce::ToggleButton micToggle { "Listen to mic" };
+    juce::Label pitchReadout;
+
     std::optional<PracticeLesson> currentLesson;
     std::unique_ptr<AccompanimentPlayer> accompanimentPlayer;
+
+    // Pitch tracking (step 4): pitchTracker is created/recreated on the
+    // message thread when a take starts, sized to the engine's current
+    // sample rate. takeActive gates audioInputBlock() (audio thread) from
+    // touching it; it is only flipped to true once the tracker is fully
+    // (re)built and reset, and is flipped back to false before any rebuild,
+    // so the audio thread never sees a half-constructed tracker.
+    std::unique_ptr<PitchTracker> pitchTracker;
+    std::atomic<bool> takeActive { false };
+    double takeStartBeat = 0.0;
+    double takeStartTempoBpm = 120.0; // tempo at take start; intentionally NOT re-read mid-take (see pitchSampleToPoint)
+    std::vector<PitchPoint> currentTrace;
 
     std::vector<juce::File> lessonFiles;
     juce::File lastOpenDirectory;

@@ -625,10 +625,18 @@ void TracktionAudioEngine::audioDeviceIOCallbackWithContext(const float* const* 
                                                            int numSamples,
                                                            const juce::AudioIODeviceCallbackContext& context)
 {
-    juce::ignoreUnused(context, inputChannelData, numInputChannels);
-    
+    juce::ignoreUnused(context);
+
     auto startTime = std::chrono::high_resolution_clock::now();
-    
+
+    // Audio input tap: forward raw input audio to any registered listener
+    // before output buffers are touched. Lock-free, allocation-free.
+    if (auto* listener = audioInputListener.load())
+    {
+        if (numInputChannels > 0 && inputChannelData != nullptr)
+            listener->audioInputBlock (inputChannelData, numInputChannels, numSamples, currentSampleRate.load());
+    }
+
     // Clear output buffers
     for (int i = 0; i < numOutputChannels; ++i) {
         juce::FloatVectorOperations::clear(outputChannelData[i], numSamples);
@@ -703,6 +711,20 @@ void TracktionAudioEngine::changeListenerCallback(juce::ChangeBroadcaster* sourc
         auto& transport = currentEdit->getTransport();
         DBG("INFO: Transport state changed - Playing: " << (transport.isPlaying() ? "Yes" : "No"));
     }
+}
+
+//==============================================================================
+// Audio Input Tap
+//==============================================================================
+
+void TracktionAudioEngine::setAudioInputListener(AudioInputListener* listener)
+{
+    audioInputListener.store(listener);
+}
+
+TracktionAudioEngine::AudioInputListener* TracktionAudioEngine::getAudioInputListener() const
+{
+    return audioInputListener.load();
 }
 
 //==============================================================================

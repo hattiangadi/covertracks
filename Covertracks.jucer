@@ -8,7 +8,8 @@
                sendAppleEventsPermissionNeeded="1" sendAppleEventsPermissionText="This is required for some third-party plug-ins to function correctly."
                customXcodeResourceFolders="BinaryData" applicationCategory="public.app-category.developer-tools"
                extraDefs="JUCE_SILENCE_XCODE_15_LINKER_WARNING=1" extraLinkerFlags="-Wl,-weak_reference_mismatches,weak"
-               xcodeValidArchs="arm64">
+               xcodeValidArchs="arm64" microphonePermissionNeeded="1"
+               microphonePermissionsText="Covertracks listens to your singing in Practice mode to show your pitch against the score.">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" isDebug="1" targetName="Covertracks" recommendedWarnings="LLVM"/>
         <CONFIGURATION name="Release" isDebug="0" optimisation="2" targetName="Covertracks"
@@ -47,6 +48,8 @@
               resource="0" file="Source/Tests/AccompanimentPlayerTests.cpp"/>
         <FILE id="PracticeUITests_cpp" name="PracticeUITests.cpp" compile="1"
               resource="0" file="Source/Tests/PracticeUITests.cpp"/>
+        <FILE id="PitchTrackingTests_cpp" name="PitchTrackingTests.cpp" compile="1"
+              resource="0" file="Source/Tests/PitchTrackingTests.cpp"/>
         <FILE id="MCxE5p" name="ChordContextInheritanceTest.cpp" compile="1"
               resource="0" file="Source/Tests/ChordContextInheritanceTest.cpp"/>
         <FILE id="gn2Trj" name="ChordContextDebugTest.cpp.disabled" compile="0" resource="0"
@@ -380,6 +383,14 @@
                 file="Source/Practice/Core/AccompanimentPlayer.h"/>
           <FILE id="AccompanimentPlayer_cpp" name="AccompanimentPlayer.cpp" compile="1" resource="0"
                 file="Source/Practice/Core/AccompanimentPlayer.cpp"/>
+          <FILE id="PitchDetector_h" name="PitchDetector.h" compile="0" resource="0"
+                file="Source/Practice/Core/PitchDetector.h"/>
+          <FILE id="PitchDetector_cpp" name="PitchDetector.cpp" compile="1" resource="0"
+                file="Source/Practice/Core/PitchDetector.cpp"/>
+          <FILE id="PitchTracker_h" name="PitchTracker.h" compile="0" resource="0"
+                file="Source/Practice/Core/PitchTracker.h"/>
+          <FILE id="PitchTracker_cpp" name="PitchTracker.cpp" compile="1" resource="0"
+                file="Source/Practice/Core/PitchTracker.cpp"/>
         </GROUP>
         <GROUP id="{D4A1B2C3-E5F6-A7B8-C9D0-E2D9A1B2C3D4}" name="UI">
           <FILE id="PracticePianoRoll_h" name="PracticePianoRoll.h" compile="0" resource="0"

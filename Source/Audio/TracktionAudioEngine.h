@@ -283,12 +283,31 @@ public:
     
     void audioDeviceAboutToStart(juce::AudioIODevice* device) override;
     void audioDeviceStopped() override;
-    
+
     // =========================================================================
-    // ChangeListener Implementation  
+    // ChangeListener Implementation
     // =========================================================================
-    
+
     void changeListenerCallback(juce::ChangeBroadcaster* source) override;
+
+    // =========================================================================
+    // Audio Input Tap (for Practice mode pitch tracking, etc.)
+    // =========================================================================
+
+    /** Receives raw input audio directly from the device callback, before any
+        output processing. Called on the audio thread - implementations must
+        be lock-free and allocation-free. */
+    struct AudioInputListener
+    {
+        virtual ~AudioInputListener() = default;
+        virtual void audioInputBlock (const float* const* inputChannels, int numInputChannels, int numSamples, double sampleRate) = 0;
+    };
+
+    /** Sets (or clears, with nullptr) the single current input listener.
+        Thread-safe, lock-free atomic pointer swap; safe to call from any
+        thread, including concurrently with the audio callback. */
+    void setAudioInputListener (AudioInputListener* listener);
+    AudioInputListener* getAudioInputListener() const;
 
 private:
     // Private constructor for singleton
@@ -317,6 +336,9 @@ private:
     // Thread-safe player-track registry
     mutable juce::CriticalSection playerTrackMutex;
     std::map<Player*, std::unique_ptr<PlayerTrackInfo>> playerTracks;
+
+    // Audio input tap listener (lock-free atomic pointer; see setAudioInputListener).
+    std::atomic<AudioInputListener*> audioInputListener { nullptr };
     
     // =========================================================================
     // Tracktion Engine Resources
