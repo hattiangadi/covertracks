@@ -43,6 +43,8 @@
               resource="0" file="Source/Tests/LeadSheetConverterTests.cpp"/>
         <FILE id="PracticeLessonTests_cpp" name="PracticeLessonTests.cpp" compile="1"
               resource="0" file="Source/Tests/PracticeLessonTests.cpp"/>
+        <FILE id="AccompanimentPlayerTests_cpp" name="AccompanimentPlayerTests.cpp" compile="1"
+              resource="0" file="Source/Tests/AccompanimentPlayerTests.cpp"/>
         <FILE id="MCxE5p" name="ChordContextInheritanceTest.cpp" compile="1"
               resource="0" file="Source/Tests/ChordContextInheritanceTest.cpp"/>
         <FILE id="gn2Trj" name="ChordContextDebugTest.cpp.disabled" compile="0" resource="0"
@@ -372,6 +374,10 @@
                 file="Source/Practice/Core/LessonLoader.h"/>
           <FILE id="LessonLoader_cpp" name="LessonLoader.cpp" compile="1" resource="0"
                 file="Source/Practice/Core/LessonLoader.cpp"/>
+          <FILE id="AccompanimentPlayer_h" name="AccompanimentPlayer.h" compile="0" resource="0"
+                file="Source/Practice/Core/AccompanimentPlayer.h"/>
+          <FILE id="AccompanimentPlayer_cpp" name="AccompanimentPlayer.cpp" compile="1" resource="0"
+                file="Source/Practice/Core/AccompanimentPlayer.cpp"/>
         </GROUP>
       </GROUP>
       <FILE id="OmIhwQ" name="HostStartup.cpp" compile="1" resource="0" file="Source/HostStartup.cpp"/>
