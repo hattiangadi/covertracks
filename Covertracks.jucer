@@ -45,6 +45,8 @@
               resource="0" file="Source/Tests/PracticeLessonTests.cpp"/>
         <FILE id="AccompanimentPlayerTests_cpp" name="AccompanimentPlayerTests.cpp" compile="1"
               resource="0" file="Source/Tests/AccompanimentPlayerTests.cpp"/>
+        <FILE id="PracticeUITests_cpp" name="PracticeUITests.cpp" compile="1"
+              resource="0" file="Source/Tests/PracticeUITests.cpp"/>
         <FILE id="MCxE5p" name="ChordContextInheritanceTest.cpp" compile="1"
               resource="0" file="Source/Tests/ChordContextInheritanceTest.cpp"/>
         <FILE id="gn2Trj" name="ChordContextDebugTest.cpp.disabled" compile="0" resource="0"
@@ -378,6 +380,16 @@
                 file="Source/Practice/Core/AccompanimentPlayer.h"/>
           <FILE id="AccompanimentPlayer_cpp" name="AccompanimentPlayer.cpp" compile="1" resource="0"
                 file="Source/Practice/Core/AccompanimentPlayer.cpp"/>
+        </GROUP>
+        <GROUP id="{D4A1B2C3-E5F6-A7B8-C9D0-E2D9A1B2C3D4}" name="UI">
+          <FILE id="PracticePianoRoll_h" name="PracticePianoRoll.h" compile="0" resource="0"
+                file="Source/Practice/UI/PracticePianoRoll.h"/>
+          <FILE id="PracticePianoRoll_cpp" name="PracticePianoRoll.cpp" compile="1" resource="0"
+                file="Source/Practice/UI/PracticePianoRoll.cpp"/>
+          <FILE id="PracticeModeComponent_h" name="PracticeModeComponent.h" compile="0" resource="0"
+                file="Source/Practice/UI/PracticeModeComponent.h"/>
+          <FILE id="PracticeModeComponent_cpp" name="PracticeModeComponent.cpp" compile="1" resource="0"
+                file="Source/Practice/UI/PracticeModeComponent.cpp"/>
         </GROUP>
       </GROUP>
       <FILE id="OmIhwQ" name="HostStartup.cpp" compile="1" resource="0" file="Source/HostStartup.cpp"/>

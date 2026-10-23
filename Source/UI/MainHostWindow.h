@@ -44,6 +44,7 @@
 #include "../Musician/UI/EnsembleMainPanel.h"
 #include "../Musician/UI/PatternEditorComponent.h"
 #include "../Musician/UI/Song/SongManagerComponent.h"
+#include "../Practice/UI/PracticeModeComponent.h"
 
 namespace covertracks {
 //==============================================================================
@@ -151,6 +152,7 @@ public:
     std::unique_ptr<PerformanceLibraryComponent> performanceWindow;
     std::unique_ptr<SongManagerComponent> songManagerWindow;
     std::unique_ptr<EnsembleMainPanel> ensembleMainWindow;
+    std::unique_ptr<practice::PracticeModeComponent> practiceWindow;
     std::shared_ptr<Musician> musician; // Needed for LLM and Pattern components
     
     // LLM client

@@ -456,15 +456,22 @@ MainHostWindow::MainHostWindow()
     DBG("MainHostWindow:  Creating EnsembleMainPanel");
     ensembleMainWindow = std::make_unique<EnsembleMainPanel>(playerManager.get());
     DBG("MainHostWindow:  EnsembleMainPanel created");
-    
-    
+
+
+    // Create Practice Mode component
+    DBG("MainHostWindow:  Creating PracticeModeComponent");
+    practiceWindow = std::make_unique<practice::PracticeModeComponent>(playerManager.get());
+    DBG("MainHostWindow:  PracticeModeComponent created");
+
+
     // Create a tabbed component to hold all views
     auto* tabbedComponent = new TabbedComponent(TabbedButtonBar::TabsAtTop);
     tabbedComponent->addTab("Players", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), playerLibraryWindow.get(), false);
     tabbedComponent->addTab("Ensembles", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), ensembleMainWindow.get(), false);
     tabbedComponent->addTab("Songs", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), songManagerWindow.get(), false);
     tabbedComponent->addTab("Performances", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), performanceWindow.get(), false);
-    
+    tabbedComponent->addTab("Practice", getLookAndFeel().findColour(ResizableWindow::backgroundColourId), practiceWindow.get(), false);
+
     // Set it as the main content
     DBG("MainHostWindow:  Setting content");
     setContentOwned(tabbedComponent, true);

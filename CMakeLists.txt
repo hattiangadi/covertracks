@@ -74,6 +74,10 @@ target_sources(Covertracks PRIVATE
     Source/Practice/Core/LessonLoader.cpp
     Source/Practice/Core/AccompanimentPlayer.cpp
 
+    # Practice system - UI
+    Source/Practice/UI/PracticePianoRoll.cpp
+    Source/Practice/UI/PracticeModeComponent.cpp
+
     # Player system - UI
     Source/Player/UI/PlayerEditorComponent.cpp
     Source/Player/UI/PlayerLibraryComponent.cpp
@@ -99,6 +103,7 @@ target_sources(Covertracks PRIVATE
     Source/Tests/PlayerTests.cpp
     Source/Tests/PracticeLessonTests.cpp
     Source/Tests/AccompanimentPlayerTests.cpp
+    Source/Tests/PracticeUITests.cpp
     Source/Tests/TestRunner.cpp
 )
 
@@ -185,6 +190,8 @@ if(BUILD_TESTS)
         Source/Plugins/PluginGraph.cpp
         Source/Practice/Core/LessonLoader.cpp
         Source/Practice/Core/AccompanimentPlayer.cpp
+        Source/Practice/UI/PracticePianoRoll.cpp
+        Source/Practice/UI/PracticeModeComponent.cpp
 
         # Test files
         Source/Tests/MusicianAdvancedTests.cpp
@@ -194,6 +201,7 @@ if(BUILD_TESTS)
         Source/Tests/PlayerTests.cpp
         Source/Tests/PracticeLessonTests.cpp
         Source/Tests/AccompanimentPlayerTests.cpp
+        Source/Tests/PracticeUITests.cpp
         Source/Tests/TestRunner.cpp
         
         # Test main
